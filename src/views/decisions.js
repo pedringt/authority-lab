@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor } from '../store.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -23,7 +23,7 @@ export function decisionsListView(state) {
       <td><a href="#/decisions/${x.id}"><strong>Authority change #${String(x.number).padStart(2, '0')}</strong></a></td>
       <td>${getCapability(state, x.capabilityId).name}</td>
       <td>${fmtDate(x.date)}</td>
-      <td>${authorityLabel(x.previous, { short: true })} → ${authorityLabel(x.next, { short: true })}${x.next.level < x.previous.level ? html` <span class="badge badge-restricted">Down</span>` : ''}</td>
+      <td>${x.previous ? html`${authorityLabel(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityLabel(x.next, { short: true })}${x.previous && x.next.level < x.previous.level ? html` <span class="badge badge-restricted">Down</span>` : ''}</td>
       <td>${optionLabel(x.option)}</td>
       <td>${person(x.authorizedBy).name}</td>
     </tr>`)}</tbody>
@@ -46,7 +46,7 @@ export function decisionRecordView(state, id) {
   ${auto ? notice('fail', 'This change was made by a software rule, not by a person.', 'The rule was authorized in advance as part of the expansion decision. Humans authorize expanded authority; software may reduce it when a predefined condition is triggered.') : ''}
   <div class="card record">
     <div class="record-change">
-      <div><span class="fact-label">Previous</span>${authorityBadge(x.previous)}</div>
+      <div><span class="fact-label">Previous</span>${x.previous ? authorityBadge(x.previous) : html`<span class="muted">None (new capability)</span>`}</div>
       <span class="record-arrow" aria-hidden="true">→</span>
       <div><span class="fact-label">New</span>${authorityBadge(x.next)}</div>
       <div><span class="fact-label">Decision</span><strong>${optionLabel(x.option)}</strong></div>
@@ -65,9 +65,9 @@ export function decisionRecordView(state, id) {
         ${x.conditions.noChargeback ? html`<li>no active chargeback</li>` : ''}
       </ul>`]] : []),
     ])}
-    ${x.versions ? html`<div class="record-foot"><span class="fact-label">Based on</span><div class="based-on">${VERSIONED_KINDS.map((k) => html`<a href="#/capabilities/${cap.id}/versions?kind=${k}&version=${x.versions[k]}">${KIND_LABELS[k]} v${x.versions[k]}</a>`)}</div></div>` : ''}
+    ${x.versions ? html`<div class="record-foot"><span class="fact-label">Based on</span><div class="based-on">${VERSIONED_KINDS.map((k) => x.versions[k] ? html`<a href="#/capabilities/${cap.id}/versions?kind=${k}&version=${x.versions[k]}">${KIND_LABELS[k]} v${x.versions[k]}</a>` : html`<span class="muted">${KIND_LABELS[k]}: none yet</span>`)}</div></div>` : ''}
     ${amendedNote(state, x)}
-    <p class="muted small record-foot">Record ${x.id}, written ${fmtDateYear(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was.</p>
+    <p class="muted small record-foot">Record ${x.id}${x.sequence ? html`, record ${x.sequence} for ${cap.name}` : ''}, written ${fmtDateYear(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was.</p>
   </div>`;
 }
 
@@ -126,7 +126,7 @@ export function decisionWorkspaceView(state, capabilityId) {
   const stakeholders = current(state, cap.id, 'stakeholders');
   const criteriaRows = criteria.map((s) => html`<tr><td>${s.name}</td><td>${s.target}</td><td>${s.current}</td><td>${badge(s.status)}</td></tr>`);
   const stakeholderTone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient' };
-  const authorizer = person(cap.owner);
+  const authorizer = person(actor(state, cap.id));
 
   return html`<div class="page-head">
     <div>

@@ -20,6 +20,7 @@ export function capabilitiesView(state) {
       <h1>Authority map</h1>
       <p class="lede">What the AI is allowed to do in this workflow, one capability at a time. Authority is earned per capability. Not every capability should reach Level 4; two here are intended to stay where they are.</p>
     </div>
+    <div class="page-actions"><a class="btn btn-primary" href="#/capabilities/new">Add capability</a></div>
   </div>
   <div class="card table-card">
     <table class="table">

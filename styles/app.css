@@ -393,3 +393,29 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .version-sub { font-size: 13px; margin: 14px 0 4px; }
 .version-raw { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; background: var(--neutral-bg); padding: 10px; border-radius: 4px; margin: 6px 0 0; }
 .based-on { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+
+/* Acting-as picker, add-capability form, setup checklist, empty states ---- */
+.acting { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.acting-label { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.acting select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface); max-width: 220px; }
+.setup-form .field input[type="text"], .setup-form select, .setup-form textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; }
+.setup-form .field-stack { margin-bottom: 12px; }
+.setup-form .field-stack > span:first-child { margin-bottom: 4px; display: block; }
+.form-hint { margin: -6px 0 12px; color: var(--watch); }
+.three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.check-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 12px; margin: 6px 0 14px; }
+.setup-form .option-list { margin-bottom: 12px; }
+.setup-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.setup-step.is-next { border-color: var(--decide); box-shadow: inset 0 0 0 1px var(--decide); }
+.setup-step.is-focus { background: var(--decide-bg); }
+.setup-step.is-done { opacity: 0.85; }
+.setup-step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.setup-step .req-mark { background: var(--neutral-bg); color: var(--text-2); border: 1px solid var(--border-strong); }
+.setup-step.is-done .req-mark { background: var(--pass-bg); color: var(--pass); border-color: var(--pass-bd); }
+.setup-step p { margin-bottom: 6px; }
+.empty-state { border-style: dashed; text-align: left; margin-bottom: 14px; }
+.empty-state p:last-child { margin: 0; }
+@media (max-width: 720px) {
+  .three-col, .check-grid { grid-template-columns: 1fr; }
+  .acting select { max-width: 150px; }
+}

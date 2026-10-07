@@ -167,6 +167,7 @@ export const capabilities = [
 ];
 
 export const STATUS_LABELS = {
+  setup: 'In setup',
   stable: 'Stable',
   pilot: 'Pilot',
   'decision-required': 'Decision required',
@@ -618,7 +619,7 @@ export const stakeholderSummary = {
 
 export const decisionRecords = [
   {
-    id: 'AC-01', number: 1, capabilityId: 'ticket-classification', date: '2026-08-19',
+    id: 'AC-01', number: 1, sequence: 1, capabilityId: 'ticket-classification', date: '2026-08-19',
     previous: { level: 2, limited: false }, next: { level: 3, limited: false },
     option: 'expand', authorizedBy: 'priya',
     versions: { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 },
@@ -628,7 +629,7 @@ export const decisionRecords = [
     openCondition: 'Misroute rate above 10% over 7 days returns the capability to Draft automatically.',
   },
   {
-    id: 'AC-02', number: 2, capabilityId: 'refund-recommendation', date: '2026-09-02',
+    id: 'AC-02', number: 2, sequence: 1, capabilityId: 'refund-recommendation', date: '2026-09-02',
     previous: { level: 1, limited: false }, next: { level: 2, limited: false },
     option: 'expand', authorizedBy: 'maya',
     versions: { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 },
@@ -638,7 +639,7 @@ export const decisionRecords = [
     openCondition: 'Limited pilot runs Oct 1 to Oct 6 with a target of 200 cases.',
   },
   {
-    id: 'AC-03', number: 3, capabilityId: 'refund-execution-high-value', date: '2026-09-24',
+    id: 'AC-03', number: 3, sequence: 1, capabilityId: 'refund-execution-high-value', date: '2026-09-24',
     previous: { level: 2, limited: false }, next: { level: 1, limited: false },
     option: 'restrict', authorizedBy: 'daniel',
     versions: { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 },

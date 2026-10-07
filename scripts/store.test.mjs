@@ -8,6 +8,7 @@ import {
   focusCapability, conditionsPreview, createStore, STORAGE_KEY,
   amend, currentVersion, versionsInForce, performanceResultsSeen, isSurfaced, VERSIONED_KINDS,
   activityEvents, amendmentsAfterEvidenceFor, versionFor, SURFACED_KINDS, current, versionList,
+  addCapability, actor, setActingAs, vagueNameWarning, slugify,
 } from '../src/store.js';
 import { diffValues } from '../src/diff.js';
 
@@ -45,8 +46,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 4);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v4');
+  assert.equal(s.version, 5);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v5');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(cap(s).decisionRequired, true);
@@ -236,7 +237,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 3, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 4, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -278,6 +279,7 @@ test('every seeded activity event has a kind and a surfaced flag that matches th
   assert.deepEqual(quiet, ['ACT-03'], 'only "criteria defined" is a setup-type event in the seed');
   for (const r of s.decisionRecords) {
     assert.deepEqual(r.versions, { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 }, r.id);
+    assert.equal(r.sequence, 1, `${r.id} is its capability's first record`);
   }
 });
 
@@ -480,4 +482,109 @@ test('the capability object carries no versioned content, and current() falls ba
   assert.deepEqual(current(s, 'no-such', 'criteria'), []);
   assert.equal(current(s, 'no-such', 'risk').impact, '');
   assert.deepEqual(versionList(s, 'no-such', 'contract'), []);
+});
+
+// ---------------------------------------------------------------------------
+// Add capability, acting as (#4, PR B)
+// ---------------------------------------------------------------------------
+
+const LOW_RISK = { impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only', failureTypes: ['Wrong answer'] };
+
+test('adding a capability writes its first record with real dates, risk v1, and nothing above Level 1', () => {
+  let s = initialState();
+  const before = s.decisionRecords.length;
+  s = addCapability(s, { name: 'Order status lookup', summary: 'Answers where an order is.', owner: 'priya', risk: LOW_RISK, startingLevel: 1, by: 'priya' });
+  const c = s.capabilities[s.capabilities.length - 1];
+  assert.equal(c.id, 'order-status-lookup');
+  assert.equal(c.name, 'Order status lookup');
+  assert.deepEqual(c.authority, { level: 1, limited: false });
+  assert.equal(c.status, 'setup');
+  assert.equal(c.definedOn, seed.TODAY);
+  assert.equal(c.added, true);
+  assert.deepEqual(Object.keys(c).filter((k) => ['contract', 'risk', 'criteria'].includes(k)), []);
+  // Risk profile is version 1; the other objects have no version until authored.
+  assert.equal(versionList(s, c.id, 'risk').length, 1);
+  assert.equal(current(s, c.id, 'risk').impact, 'Low');
+  assert.equal(currentVersion(s, c.id, 'risk').date, seed.TODAY);
+  assert.equal(versionList(s, c.id, 'contract').length, 0);
+  assert.deepEqual(current(s, c.id, 'contract').may, []);
+  assert.deepEqual(readiness(s, c.id), { met: 0, total: 0, unmet: [] });
+  // Record #01 for this capability.
+  assert.equal(s.decisionRecords.length, before + 1);
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.equal(rec.sequence, 1);
+  assert.equal(rec.capabilityId, c.id);
+  assert.equal(rec.previous, null);
+  assert.deepEqual(rec.next, { level: 1, limited: false });
+  assert.equal(rec.option, 'define');
+  assert.equal(rec.authorizedBy, 'priya');
+  assert.equal(rec.date, seed.TODAY);
+  assert.deepEqual(rec.versions, { contract: 0, criteria: 0, requirements: 0, risk: 1, stakeholders: 0 });
+  assert.equal(s.activity[0].kind, 'authority');
+  assert.equal(s.activity[0].capabilityId, c.id);
+  // Starting above Level 1 is refused.
+  assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: LOW_RISK, startingLevel: 2 }), /Level 0 or Level 1/);
+  assert.throws(() => addCapability(initialState(), { name: '', owner: 'priya', risk: LOW_RISK, startingLevel: 0 }), /name/);
+  assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'nobody', risk: LOW_RISK, startingLevel: 0 }), /owner/);
+  assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: { impact: 'High' }, startingLevel: 0 }), /reversibility/);
+  // The seeded demo is untouched.
+  assert.equal(cap(s).decisionRequired, true);
+  assert.equal(focusCapability(s).id, RR);
+});
+
+test('"not delegated, by design" needs a rationale and is recorded as a decision', () => {
+  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /rationale/);
+  const s = addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High', reversibility: 'Difficult to reverse' }, notDelegated: true, rationale: 'Deletion is irreversible and rare. A person does it.', by: 'daniel' });
+  const c = s.capabilities[s.capabilities.length - 1];
+  assert.equal(c.status, 'not-delegated');
+  assert.deepEqual(c.authority, { level: 0, limited: false });
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.equal(rec.option, 'not-delegated');
+  assert.equal(rec.rationale, 'Deletion is irreversible and rare. A person does it.');
+});
+
+test('duplicate names get distinct ids; the second record for a capability is sequence 2', () => {
+  let s = addCapability(initialState(), { name: 'Ticket classification', owner: 'priya', risk: LOW_RISK, startingLevel: 0 });
+  assert.equal(s.capabilities[s.capabilities.length - 1].id, 'ticket-classification-2');
+  assert.equal(slugify('  Draft & send replies!! '), 'draft-send-replies');
+  // Authorize a hold on the seeded refund capability: that is its second record.
+  s = authorize(selectDecision(s, RR, 'hold'), RR);
+  assert.equal(s.decisionRecords[s.decisionRecords.length - 1].sequence, 2);
+});
+
+test('vague-name warning is non-blocking and only fires on process words or two actions', () => {
+  assert.match(vagueNameWarning('Handle refunds'), /whole process/);
+  assert.match(vagueNameWarning('Manage returns'), /whole process/);
+  assert.match(vagueNameWarning('Draft and send replies'), /two actions/);
+  assert.equal(vagueNameWarning('Refund recommendation'), null);
+  assert.equal(vagueNameWarning(''), null);
+  // The store still accepts a vague name.
+  const s = addCapability(initialState(), { name: 'Handle refunds', owner: 'priya', risk: LOW_RISK, startingLevel: 0 });
+  assert.equal(s.capabilities[s.capabilities.length - 1].name, 'Handle refunds');
+});
+
+test('acting as: defaults to the capability owner, can be overridden, and is the author on records', () => {
+  let s = initialState();
+  assert.equal(actor(s, RR), 'maya');
+  assert.equal(actor(s, TC), 'priya');
+  assert.equal(actor(s), 'maya', 'no capability in context: the focus capability owner');
+  s = setActingAs(s, 'daniel');
+  assert.equal(actor(s, RR), 'daniel');
+  assert.equal(actor(s, TC), 'daniel');
+  assert.throws(() => setActingAs(s, 'nobody'), /Unknown person/);
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR, { by: actor(s, RR) });
+  assert.equal(s.decisionRecords[s.decisionRecords.length - 1].authorizedBy, 'daniel');
+  s = setActingAs(s, null);
+  assert.equal(actor(s, TC), 'priya');
+  assert.equal(s.actingAs, null);
+});
+
+test('reset removes added capabilities and the acting-as choice', () => {
+  let s = addCapability(initialState(), { name: 'Order status lookup', owner: 'priya', risk: LOW_RISK, startingLevel: 1 });
+  s = setActingAs(s, 'elena');
+  assert.equal(s.capabilities.length, 6);
+  s = reset(s);
+  assert.equal(s.capabilities.length, 5);
+  assert.equal(s.actingAs, null);
+  assert.deepEqual(s, initialState());
 });

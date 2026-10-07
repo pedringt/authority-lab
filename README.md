@@ -42,6 +42,10 @@ The tests cover the state transitions: running the suite, authorizing each decis
 8. **Capability → Monitoring → Simulate threshold breach**: severe errors exceed 5% of the rolling 50; software returns the capability to Draft, creates an alert, an activity event and a restriction record, and locks expansion until a review is recorded.
 9. **Reset demo** (top right) restores the seeded state.
 
+## Adding a capability
+
+**Capabilities → Add capability** defines a new capability (name, summary, owner), its risk profile, and its starting authority: Level 0, Level 1, or "Not delegated, by design" with a rationale. It writes the capability's first decision record and lands on its **Setup** checklist. Every tab is always visible; empty tabs say what is missing and link to the next setup step. The **Acting as** picker in the top bar (default: the capability owner) is the author on records. Reset demo removes added capabilities.
+
 ## Structure
 
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).
