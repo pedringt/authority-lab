@@ -373,3 +373,23 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
   .position-list li { grid-template-columns: 1fr; gap: 2px; }
   .notice { flex-direction: column; align-items: flex-start; }
 }
+
+/* Activity: full history, amendments, versions -------------------------- */
+.activity-item.is-quiet { opacity: 0.85; }
+.activity-head .muted { margin-left: auto; }
+.amendment { margin: 6px 0 8px; }
+.amendment summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
+.amendment summary .badge { margin-left: 6px; }
+.table-diff { margin-top: 8px; font-size: 13px; }
+.table-diff td { vertical-align: top; }
+.diff-before { color: var(--fail); }
+.diff-after { color: var(--pass); }
+.diff-added .diff-before, .diff-removed .diff-after { color: var(--muted); }
+.version + .version { margin-top: 12px; }
+.version.is-highlight { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.version-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.version-head h3 { margin-top: 2px; }
+.version-badges { display: flex; gap: 6px; }
+.version-sub { font-size: 13px; margin: 14px 0 4px; }
+.version-raw { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; background: var(--neutral-bg); padding: 10px; border-radius: 4px; margin: 6px 0 0; }
+.based-on { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }

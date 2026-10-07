@@ -84,6 +84,7 @@ export const capabilities = [
     proposed: { level: 3, limited: true },
     decisionRequired: true,
     owner: 'maya',
+    definedOn: '2026-09-02',
     lastEvaluated: '2026-10-06',
     risk: {
       impact: 'High',
@@ -668,7 +669,7 @@ export const activity = [
     body: 'Refund execution > $50 moved from Draft to Recommend after a duplicate execution incident. Authorized by Daniel Okafor.', capabilityId: 'refund-execution-high-value', link: '#/decisions/AC-03' },
   { id: 'ACT-04', date: '2026-09-02', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Refund recommendation moved from Recommend to Draft. Authorized by Maya Chen.', capabilityId: 'refund-recommendation', link: '#/decisions/AC-02' },
-  { id: 'ACT-03', date: '2026-09-02', kind: 'criteria', surfaced: true, title: 'Success criteria defined',
+  { id: 'ACT-03', date: '2026-09-02', kind: 'criteria', surfaced: false, title: 'Success criteria defined',
     body: 'Seven criteria and six evidence requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=criteria' },
   { id: 'ACT-02', date: '2026-08-19', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Ticket classification moved from Draft to Act Within Limits. Authorized by Priya Natarajan.', capabilityId: 'ticket-classification', link: '#/decisions/AC-01' },

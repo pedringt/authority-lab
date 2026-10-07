@@ -46,8 +46,9 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).
 - `src/store.js`: pure state transitions plus a small persisted store. Everything that belongs to one capability (criteria, requirements, scenarios, pilot, evidence, stakeholders, test run, pending decision, monitoring) lives under `state.capabilityData[capabilityId]`, and every transition takes a capability id.
-- Records come in three tiers: **decision records** (authority changes only, by a named person or by a software rule), **amendments** (versioned edits to the contract, criteria, evidence requirements, risk profile and stakeholders, each with author, reason, before/after and an "after evidence" flag), and the **activity log** (every event, with a `kind` and a `surfaced` flag). Version lists live under `capabilityData[id].versions`; `amend()` writes a new version and never edits an old one.
+- Records come in three tiers: **decision records** (authority changes only, by a named person or by a software rule), **amendments** (versioned edits to the contract, criteria, evidence requirements, risk profile and stakeholders, each with author, reason, before/after and an "after evidence" flag), and the **activity log** (every event, with a `kind` and a `surfaced` flag; Activity shows surfaced events by default and everything under "Full history"). Version lists live under `capabilityData[id].versions`; `amend()` writes a new version and never edits an old one.
 - `src/views/*.js`: one module per screen. Views render from state; they never mutate it.
+- `src/diff.js`: a small structural diff used for amendment before/after tables and the Versions page.
 - `src/ui.js`: escaping template tag and shared components (badges, authority labels, level scale, notices).
 - `styles/app.css`: the design system. Color carries state (pass / watch / fail / insufficient / restricted / decision required) and is always paired with a label.
 

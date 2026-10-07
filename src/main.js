@@ -7,6 +7,7 @@ import { testsView } from './views/tests.js';
 import { evidenceView } from './views/evidence.js';
 import { decisionsListView, decisionWorkspaceView, decisionRecordView } from './views/decisions.js';
 import { activityView } from './views/activity.js';
+import { versionsView } from './views/versions.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -55,6 +56,7 @@ function render() {
   switch (root) {
     case 'capabilities':
       if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub); title = 'Authority decision'; }
+      else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'Versions'; }
       else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
       break;
@@ -64,7 +66,7 @@ function render() {
       if (sub) { view = decisionRecordView(state, sub); title = 'Decision record'; }
       else { view = decisionsListView(state); title = 'Decisions'; }
       break;
-    case 'activity': view = activityView(state); title = 'Activity'; break;
+    case 'activity': view = activityView(state, query); title = 'Activity'; break;
     default: view = overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
