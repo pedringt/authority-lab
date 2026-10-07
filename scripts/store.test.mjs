@@ -6,6 +6,7 @@ import {
   initialState, startTestRun, advanceTestRun, selectDecision, setCondition, setRationale,
   canAuthorize, authorize, simulateBreach, reset, readiness, testSummary, getCapability, capData,
   focusCapability, conditionsPreview, createStore, STORAGE_KEY,
+  amend, currentVersion, versionsInForce, hasEvidence, isSurfaced, VERSIONED_KINDS,
 } from '../src/store.js';
 
 const RR = 'refund-recommendation';
@@ -42,8 +43,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 2);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v2');
+  assert.equal(s.version, 3);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v3');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(cap(s).decisionRequired, true);
@@ -81,7 +82,8 @@ test('test suite runs to completion for one capability and updates its evidence 
   assert.equal(ev.value, '24 of 26 passed');
   assert.equal(ev.date, seed.TODAY);
   assert.match(ev.detail, /H-04/);
-  assert.equal(s.activity[0].type, 'test');
+  assert.equal(s.activity[0].kind, 'test');
+  assert.equal(s.activity[0].surfaced, true);
   assert.equal(s.activity[0].capabilityId, RR);
   assert.equal(capData(s, TC).evidence.length, 0);
   // A capability without scenarios cannot start a run.
@@ -120,7 +122,7 @@ test('expand with limits: authority changes, record is written with snapshot and
   const d = capData(s, RR);
   assert.ok(d.monitoring && d.monitoring.breached === false);
   assert.equal(d.decision.recordId, 'AC-04');
-  assert.equal(s.activity[0].type, 'authority');
+  assert.equal(s.activity[0].kind, 'authority');
   // Other capabilities are untouched.
   assert.deepEqual(cap(s, TC).authority, { level: 3, limited: false });
   assert.equal(capData(s, TC).monitoring, null);
@@ -156,8 +158,9 @@ test('threshold breach restricts automatically, creates alert, event, record, re
   assert.equal(rec.authorizedBy, 'system');
   assert.equal(rec.option, 'auto-restrict');
   assert.equal(rec.next.level, 2);
-  assert.equal(s.activity[0].type, 'restriction');
-  assert.equal(s.activity[1].type, 'failure');
+  assert.equal(s.activity[0].kind, 'restriction');
+  assert.equal(s.activity[1].kind, 'failure');
+  assert.ok(s.activity.slice(0, 2).every((e) => e.surfaced === true));
   assert.ok(d.evidence.some((e) => e.id === 'EV-13' && e.status === 'fail' && /INC-02/.test(e.metric)));
   assert.equal(focusCapability(s).id, RR);
   // Earlier records are untouched.
@@ -230,7 +233,123 @@ test('store persists per-capability state and discards an interrupted run on rel
   assert.equal(store3.get().decisionRecords.length, 4);
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
-  // A v1 payload is ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 1, decisionRecords: [] }));
+  // Older payloads are ignored.
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 2, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
+});
+
+// ---------------------------------------------------------------------------
+// Three-tier record model (#2)
+// ---------------------------------------------------------------------------
+
+test('every capability starts with version 1 of each versioned object, matching its current value', () => {
+  const s = initialState();
+  for (const c of s.capabilities) {
+    const d = capData(s, c.id);
+    for (const kind of VERSIONED_KINDS) {
+      const v = currentVersion(s, c.id, kind);
+      assert.equal(v.version, 1, `${c.id} ${kind}`);
+      assert.equal(v.before, null);
+      assert.equal(v.afterEvidence, false);
+      assert.equal(v.author, c.owner);
+    }
+    assert.deepEqual(currentVersion(s, c.id, 'contract').value, c.contract);
+    assert.deepEqual(currentVersion(s, c.id, 'risk').value, c.risk);
+    assert.deepEqual(currentVersion(s, c.id, 'criteria').value, d.criteria);
+    assert.deepEqual(currentVersion(s, c.id, 'requirements').value, d.requirements);
+    assert.deepEqual(currentVersion(s, c.id, 'stakeholders').value, d.stakeholders);
+  }
+  assert.deepEqual(versionsInForce(s, RR), { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 });
+});
+
+test('every seeded activity event has a kind and is surfaced; every seeded record names its versions', () => {
+  const s = initialState();
+  for (const e of s.activity) {
+    assert.ok(e.kind, e.id);
+    assert.equal(e.surfaced, true, e.id);
+    assert.equal(isSurfaced(e), true, e.id);
+  }
+  for (const r of s.decisionRecords) {
+    assert.deepEqual(r.versions, { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 }, r.id);
+  }
+});
+
+test('amend writes a new version, keeps the old one intact, and updates the current value', () => {
+  let s = initialState();
+  const before = cap(s).contract;
+  const value = { ...before, mustNever: [...before.mustNever, 'Issue a refund while a fraud review is open.'] };
+  s = amend(s, RR, 'contract', { value, author: 'maya', reason: 'Close the gap found in INC-01.' });
+  const v2 = currentVersion(s, RR, 'contract');
+  assert.equal(v2.version, 2);
+  assert.equal(v2.author, 'maya');
+  assert.equal(v2.reason, 'Close the gap found in INC-01.');
+  assert.deepEqual(v2.before, before);
+  assert.deepEqual(v2.value, value);
+  assert.deepEqual(cap(s).contract, value, 'current contract follows the latest version');
+  const v1 = capData(s, RR).versions.contract[0];
+  assert.equal(v1.version, 1);
+  assert.deepEqual(v1.value, before, 'version 1 is untouched');
+  // The seed object was not mutated.
+  assert.equal(seed.capabilities.find((c) => c.id === RR).contract.mustNever.length, 4);
+  // Other capabilities and other kinds are untouched.
+  assert.equal(currentVersion(s, TC, 'contract').version, 1);
+  assert.equal(currentVersion(s, RR, 'criteria').version, 1);
+});
+
+test('amend covers criteria, requirements, risk and stakeholders, and rejects bad input', () => {
+  let s = initialState();
+  s = amend(s, RR, 'requirements', { value: capData(s, RR).requirements.map((r) => (r.id === 'high-value' ? { ...r, text: 'Minimum 30 high-value refund cases' } : r)), author: 'priya', reason: 'Lower the bar.' });
+  assert.equal(currentVersion(s, RR, 'requirements').version, 2);
+  assert.equal(capData(s, RR).requirements.find((r) => r.id === 'high-value').text, 'Minimum 30 high-value refund cases');
+  s = amend(s, RR, 'criteria', { value: capData(s, RR).criteria.slice(0, 3), author: 'maya', reason: 'Trim.' });
+  assert.equal(capData(s, RR).criteria.length, 3);
+  s = amend(s, RR, 'risk', { value: { ...cap(s).risk, impact: 'Medium' }, author: 'daniel', reason: 'Reassessed.' });
+  assert.equal(cap(s).risk.impact, 'Medium');
+  s = amend(s, RR, 'stakeholders', { value: [], author: 'maya', reason: 'Reset positions.' });
+  assert.deepEqual(capData(s, RR).stakeholders, []);
+  assert.throws(() => amend(s, RR, 'contract', { value: {}, author: 'maya', reason: '' }), /reason/);
+  assert.throws(() => amend(s, RR, 'contract', { value: {}, author: 'nobody', reason: 'x' }), /author/);
+  assert.throws(() => amend(s, RR, 'pilot', { value: {}, author: 'maya', reason: 'x' }), /Unknown versioned/);
+  assert.throws(() => amend(s, 'no-such', 'contract', { value: {}, author: 'maya', reason: 'x' }), /Unknown capability/);
+});
+
+test('afterEvidence is set from whether evidence existed, and decides whether the amendment is surfaced', () => {
+  let s = initialState();
+  assert.equal(hasEvidence(s, RR), true);
+  assert.equal(hasEvidence(s, TC), false);
+  s = amend(s, TC, 'contract', { value: { ...cap(s, TC).contract, may: [] }, author: 'priya', reason: 'Tighten before any evidence.' });
+  assert.equal(currentVersion(s, TC, 'contract').afterEvidence, false);
+  assert.equal(s.activity[0].kind, 'amendment');
+  assert.equal(s.activity[0].surfaced, false, 'an amendment before evidence is recorded but not surfaced');
+  assert.equal(s.activity[0].capabilityId, TC);
+  s = amend(s, RR, 'criteria', { value: capData(s, RR).criteria, author: 'maya', reason: 'Re-saved after the pilot.' });
+  assert.equal(currentVersion(s, RR, 'criteria').afterEvidence, true);
+  assert.equal(s.activity[0].surfaced, true, 'an amendment after evidence is surfaced');
+  assert.match(s.activity[0].body, /after evidence existed/);
+});
+
+test('decision records save the version numbers in force at the time', () => {
+  let s = initialState();
+  s = amend(s, RR, 'contract', { value: cap(s).contract, author: 'maya', reason: 'Re-confirmed.' });
+  s = amend(s, RR, 'contract', { value: cap(s).contract, author: 'maya', reason: 'Re-confirmed again.' });
+  s = amend(s, RR, 'criteria', { value: capData(s, RR).criteria, author: 'maya', reason: 'Re-confirmed.' });
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.deepEqual(rec.versions, { contract: 3, criteria: 2, requirements: 1, risk: 1, stakeholders: 1 });
+  // A later amendment does not change the record.
+  s = amend(s, RR, 'contract', { value: cap(s).contract, author: 'maya', reason: 'Later.' });
+  assert.equal(s.decisionRecords[s.decisionRecords.length - 1].versions.contract, 3);
+  // The automatic restriction record names versions too.
+  s = simulateBreach(s, RR);
+  assert.deepEqual(s.decisionRecords[s.decisionRecords.length - 1].versions, { contract: 4, criteria: 2, requirements: 1, risk: 1, stakeholders: 1 });
+});
+
+test('amend is available through the store and persists', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
+  const store = createStore({ storage });
+  store.dispatch('amend', RR, 'risk', { value: { ...cap(store.get()).risk, impact: 'Medium' }, author: 'daniel', reason: 'Reassessed.' });
+  const again = createStore({ storage });
+  assert.equal(currentVersion(again.get(), RR, 'risk').version, 2);
+  assert.equal(cap(again.get()).risk.impact, 'Medium');
 });

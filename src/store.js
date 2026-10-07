@@ -5,7 +5,7 @@
 
 import * as seed from './data/seed.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v2';
+export const STORAGE_KEY = 'authority-lab-state-v3';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -25,7 +25,16 @@ export function emptyCapabilityData() {
     decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true }, rationale: '', recordId: null },
     monitoring: null,
     reviewRequired: false,
+    // Versioned objects (decision 2). Each entry is a list of versions; the
+    // current value is the last one. Versions are never edited.
+    versions: { contract: [], criteria: [], requirements: [], risk: [], stakeholders: [] },
   };
+}
+
+export const VERSIONED_KINDS = ['contract', 'criteria', 'requirements', 'risk', 'stakeholders'];
+
+function firstVersion(value, { date, author }) {
+  return { version: 1, date, author, reason: 'Initial version', afterEvidence: false, before: null, value: clone(value) };
 }
 
 function seededCapabilityData(id) {
@@ -55,11 +64,23 @@ function seededCapabilityData(id) {
 }
 
 export function initialState() {
+  const capabilityData = Object.fromEntries(seed.capabilities.map((c) => {
+    const d = seededCapabilityData(c.id);
+    const stamp = { date: c.definedOn || c.lastEvaluated, author: c.owner };
+    d.versions = {
+      contract: [firstVersion(c.contract, stamp)],
+      criteria: [firstVersion(d.criteria, stamp)],
+      requirements: [firstVersion(d.requirements, stamp)],
+      risk: [firstVersion(c.risk, stamp)],
+      stakeholders: [firstVersion(d.stakeholders, stamp)],
+    };
+    return [c.id, d];
+  }));
   return {
-    version: 2,
+    version: 3,
     today: seed.TODAY,
     capabilities: clone(seed.capabilities),
-    capabilityData: Object.fromEntries(seed.capabilities.map((c) => [c.id, seededCapabilityData(c.id)])),
+    capabilityData,
     decisionRecords: clone(seed.decisionRecords),
     activity: clone(seed.activity),
     alerts: [],
@@ -76,6 +97,31 @@ export function getCapability(state, id) {
 
 export function capData(state, id) {
   return state.capabilityData[id] || emptyCapabilityData();
+}
+
+export function currentVersion(state, capabilityId, kind) {
+  const list = capData(state, capabilityId).versions[kind] || [];
+  return list[list.length - 1] || null;
+}
+
+export function versionsInForce(state, capabilityId) {
+  return Object.fromEntries(VERSIONED_KINDS.map((k) => [k, (currentVersion(state, capabilityId, k) || { version: 0 }).version]));
+}
+
+// True once any evidence exists for the capability: recorded evidence, a
+// pilot, or a test run. Amendments made after this point are surfaced.
+export function hasEvidence(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  return d.evidence.length > 0 || Boolean(d.pilot) || Boolean(d.testRun.lastRun);
+}
+
+// Kinds shown in Activity by default (decision 3). An amendment is surfaced
+// only when it was made after evidence existed.
+export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'criteria', 'decision']);
+
+export function isSurfaced(event) {
+  if (event.kind === 'amendment') return Boolean(event.afterEvidence);
+  return SURFACED_KINDS.has(event.kind);
 }
 
 // The capability the workspace should be looking at: an alert first, then a
@@ -232,6 +278,54 @@ function updateCap(state, capabilityId, patch) {
   return { ...state, capabilityData: { ...state.capabilityData, [capabilityId]: next } };
 }
 
+function logEvent(state, event) {
+  const e = { id: `ACT-${Date.now()}-${state.activity.length}`, date: state.today, ...event };
+  if (e.surfaced === undefined) e.surfaced = isSurfaced(e);
+  return { ...state, activity: [e, ...state.activity] };
+}
+
+// Write a new version of a versioned object. The previous versions stay as
+// they were. `author` is a person key; `reason` is required.
+export function amend(state, capabilityId, kind, { value, author, reason }) {
+  if (!VERSIONED_KINDS.includes(kind)) throw new Error(`Unknown versioned object: ${kind}`);
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!author || !seed.people[author]) throw new Error('An amendment needs an author.');
+  if (!reason || !reason.trim()) throw new Error('An amendment needs a reason.');
+  const d = capData(state, capabilityId);
+  const prev = currentVersion(state, capabilityId, kind);
+  const afterEvidence = hasEvidence(state, capabilityId);
+  const next = {
+    version: (prev ? prev.version : 0) + 1,
+    date: state.today,
+    author,
+    reason: reason.trim(),
+    afterEvidence,
+    before: prev ? clone(prev.value) : null,
+    value: clone(value),
+  };
+  const versions = { ...d.versions, [kind]: [...(d.versions[kind] || []), next] };
+  // The current value is cached on the capability (contract, risk) or on its
+  // data (criteria, requirements, stakeholders); the version list is the record.
+  let s = updateCap(state, capabilityId, { ...d, versions, ...(kind === 'criteria' || kind === 'requirements' || kind === 'stakeholders' ? { [kind]: clone(value) } : {}) });
+  if (kind === 'contract' || kind === 'risk') {
+    s = { ...s, capabilities: s.capabilities.map((c) => (c.id === capabilityId ? { ...c, [kind]: clone(value) } : c)) };
+  }
+  const who = seed.people[author];
+  return logEvent(s, {
+    kind: 'amendment',
+    afterEvidence,
+    objectKind: kind,
+    version: next.version,
+    title: `${KIND_LABELS[kind]} amended to v${next.version}`,
+    body: `${who.name}: ${next.reason}${afterEvidence ? ' Made after evidence existed for this capability.' : ''}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}?tab=${kind === 'risk' ? 'contract' : kind === 'requirements' ? 'criteria' : kind}`,
+  });
+}
+
+export const KIND_LABELS = { contract: 'Contract', criteria: 'Success criteria', requirements: 'Evidence requirements', risk: 'Risk profile', stakeholders: 'Stakeholders' };
+
 export function startTestRun(state, capabilityId) {
   const d = capData(state, capabilityId);
   if (d.testRun.status === 'running' || !d.scenarios.length) return state;
@@ -271,7 +365,8 @@ function finishTestRun(state, capabilityId) {
     {
       id: `ACT-${Date.now()}`,
       date: state.today,
-      type: 'test',
+      kind: 'test',
+      surfaced: true,
       title: 'Test suite run',
       body: `${summary.passed} of ${summary.total} scenarios passed. ${summary.highSeverity} high-severity failure${summary.highSeverity === 1 ? '' : 's'}. Results recorded as evidence ${item.id}.`,
       capabilityId,
@@ -352,6 +447,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     next,
     option,
     authorizedBy: by,
+    versions: versionsInForce(state, capabilityId),
     scope: scopeText(option, d.decision.conditions, cap),
     rationale: d.decision.rationale.trim(),
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
@@ -382,7 +478,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     {
       id: `ACT-${Date.now()}`,
       date: state.today,
-      type: 'authority',
+      kind: 'authority',
+      surfaced: true,
       title: `Authority ${verb}`,
       body: option === 'hold'
         ? `${cap.name} stays at ${authorityLabel(previous)}. Authorized by ${who.name}.`
@@ -426,6 +523,7 @@ export function simulateBreach(state, capabilityId) {
     next,
     option: 'auto-restrict',
     authorizedBy: 'system',
+    versions: versionsInForce(state, capabilityId),
     scope: 'Draft. Every decision requires human approval until a review is recorded.',
     rationale: `Automatic restriction. Severe error rate reached ${pct}% across the rolling ${m.rollingWindow}-case window, above the ${m.thresholdPct}% limit set in authority change ${m.recordId}. No human authorized this change; the rule was authorized in advance.`,
     evidenceSnapshot: [
@@ -451,7 +549,8 @@ export function simulateBreach(state, capabilityId) {
     {
       id: `ACT-${Date.now()}-b`,
       date: state.today,
-      type: 'restriction',
+      kind: 'restriction',
+      surfaced: true,
       title: 'Authority automatically restricted',
       body: `Severe error rate exceeded the allowed threshold (${pct}% against ${m.thresholdPct}% across ${m.rollingWindow} cases). ${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)} by rule. Review item opened.`,
       capabilityId: cap.id,
@@ -460,7 +559,8 @@ export function simulateBreach(state, capabilityId) {
     {
       id: `ACT-${Date.now()}-a`,
       date: state.today,
-      type: 'failure',
+      kind: 'failure',
+      surfaced: true,
       title: 'Monitoring threshold breached',
       body: `${errors} severe errors recorded in the rolling ${m.rollingWindow}-case window after expansion.`,
       capabilityId: cap.id,
@@ -538,6 +638,7 @@ export function createStore({ storage = null } = {}) {
 }
 
 const ACTIONS = {
+  amend,
   startTestRun,
   advanceTestRun,
   selectDecision,
@@ -554,7 +655,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 2) return null;
+    if (!parsed || parsed.version !== 3) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
