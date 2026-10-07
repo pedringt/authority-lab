@@ -3,6 +3,7 @@ import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, 
 import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList } from '../store.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
+import { contractReviewView } from './contract.js';
 
 const TABS = [
   ['contract', 'Contract'],
@@ -52,7 +53,7 @@ export function capabilityView(state, id, query) {
     case 'stakeholders': body = stakeholdersTab(state, cap, d); break;
     case 'decisions': body = decisionsTab(state, cap); break;
     case 'monitoring': body = monitoringTab(cap, d); break;
-    default: body = contractTab(state, cap);
+    default: body = contractTab(state, cap, d);
   }
 
   return html`<div class="page-head">
@@ -67,7 +68,7 @@ export function capabilityView(state, id, query) {
   <div class="tab-panel">${body}</div>`;
 }
 
-function contractTab(state, cap) {
+function contractTab(state, cap, d) {
   const c = current(state, cap.id, 'contract');
   const risk = current(state, cap.id, 'risk');
   const list = (items) => html`<ul class="contract-list">${items.map((i) => html`<li>${i}</li>`)}</ul>`;
@@ -78,11 +79,14 @@ function contractTab(state, cap) {
     ['Failure types watched', (risk.failureTypes || []).join(', ') || 'None listed'],
     ...(risk.note ? [['Note', risk.note]] : []),
   ]), { subtitle: 'The risk profile sets how much evidence an authority increase needs.' });
-  if (!versionList(state, cap.id, 'contract').length) {
-    return html`${emptyState(state, cap.id, 'No delegation contract yet.', 'contract')}${riskBlock}`;
+  const contractVersions = versionList(state, cap.id, 'contract');
+  if (!contractVersions.length) {
+    return html`${emptyState(state, cap.id, d.contractDraft ? 'The contract draft is not finalized yet.' : 'No delegation contract yet.', 'contract')}${riskBlock}`;
   }
+  const latest = contractVersions[contractVersions.length - 1];
   return html`
-    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment.</p>
+    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment. <span class="muted">Version ${latest.version}, ${person(latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span></p>
+    ${contractReviewView(contractVersions[0].review)}
     <div class="contract-grid">
       <div class="card contract-block contract-may"><h3>AI may</h3>${list(c.may)}</div>
       <div class="card contract-block contract-ask"><h3>AI must ask / require approval</h3>${list(c.mustAsk)}</div>

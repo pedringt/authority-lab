@@ -13,7 +13,8 @@ const KIND_TONE = {
   review: 'neutral',
   criteria: 'neutral',
   'criteria-locked': 'neutral',
-  'contract-finalized': 'neutral',
+  'contract-finalized': 'pass',
+  'contract-draft': 'neutral',
   decision: 'neutral',
   test: 'neutral',
 };

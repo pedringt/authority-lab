@@ -46,6 +46,10 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 **Capabilities → Add capability** defines a new capability (name, summary, owner), its risk profile, and its starting authority: Level 0, Level 1, or "Not delegated, by design" with a rationale. It writes the capability's first decision record and lands on its **Setup** checklist. Every tab is always visible; empty tabs say what is missing and link to the next setup step. The **Acting as** picker in the top bar (default: the capability owner) is the author on records. Reset demo removes added capabilities.
 
+## Building a contract
+
+For a new capability, **Setup → Open the contract builder** starts from a template picked by the risk profile plus seeded keyword suggestions labelled "Suggested by AI". Each suggestion is accepted, edited or rejected on its own (no accept-all; rejections stay in the record), all five sections are confirmed, software checks block empty hard limits above Low impact, contradictions, restriction rules without a number or window, and financial capabilities without a value limit, and a named person finalizes contract v1. Templates and suggestion rules live in `src/data/contract-templates.js`.
+
 ## Structure
 
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).
