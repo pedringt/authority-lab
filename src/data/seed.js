@@ -620,6 +620,7 @@ export const decisionRecords = [
     id: 'AC-01', number: 1, capabilityId: 'ticket-classification', date: '2026-08-19',
     previous: { level: 2, limited: false }, next: { level: 3, limited: false },
     option: 'expand', authorizedBy: 'priya',
+    versions: { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 },
     scope: 'Automatic queue and priority assignment for all tickets except those mentioning legal action or safety.',
     rationale: 'Four weeks of Draft operation with a 2.8% misroute rate against a 5% threshold. Misroutes are caught at the queue and cost minutes, not money.',
     evidenceSnapshot: ['1,120 tickets in Draft', '97.2% routing agreement', '2.8% misroute rate', 'No incidents'],
@@ -629,6 +630,7 @@ export const decisionRecords = [
     id: 'AC-02', number: 2, capabilityId: 'refund-recommendation', date: '2026-09-02',
     previous: { level: 1, limited: false }, next: { level: 2, limited: false },
     option: 'expand', authorizedBy: 'maya',
+    versions: { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 },
     scope: 'Prepare refund decisions for human approval on all refund requests. Success criteria and evidence requirements for a later Level 3 decision were defined at the same time.',
     rationale: 'Recommend-only operation showed 91% agreement with agents on 310 cases. Moving to Draft lets the pilot measure override and edit rates directly.',
     evidenceSnapshot: ['310 recommend-only cases', '91% agent agreement', 'No severe errors recorded'],
@@ -638,6 +640,7 @@ export const decisionRecords = [
     id: 'AC-03', number: 3, capabilityId: 'refund-execution-high-value', date: '2026-09-24',
     previous: { level: 2, limited: false }, next: { level: 1, limited: false },
     option: 'restrict', authorizedBy: 'daniel',
+    versions: { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 },
     scope: 'Refund execution above $50 returns to Recommend. A human executes every refund above $50 in the payments system.',
     rationale: 'A retry executed a $180 refund twice for one order. The failure was in the idempotency check, not in the recommendation, but the capability cannot stay at Draft while execution can duplicate.',
     evidenceSnapshot: ['1 duplicate execution incident ($180)', '96 executions since Sep 1', 'Idempotency defect confirmed by Engineering'],
@@ -646,29 +649,30 @@ export const decisionRecords = [
 ];
 
 // ---------------------------------------------------------------------------
-// Activity history (newest first)
+// Activity history (newest first). Every event has a kind and a surfaced
+// flag; surfaced events are the ones shown by default (decision 3).
 // ---------------------------------------------------------------------------
 
 export const activity = [
-  { id: 'ACT-10', date: '2026-10-06', type: 'review', title: 'Stakeholder review completed',
+  { id: 'ACT-10', date: '2026-10-06', kind: 'review', surfaced: true, title: 'Stakeholder review completed',
     body: 'Four positions recorded. Risk requested continued approval for high-value cases.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=stakeholders' },
-  { id: 'ACT-09', date: '2026-10-05', type: 'milestone', title: 'Pilot threshold reached',
+  { id: 'ACT-09', date: '2026-10-05', kind: 'milestone', surfaced: true, title: 'Pilot threshold reached',
     body: '200 pilot cases completed. Evidence requirements for the Level 3 decision became evaluable.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=evidence' },
-  { id: 'ACT-08', date: '2026-10-04', type: 'mitigation', title: 'Software gate added for fraud-flagged accounts',
+  { id: 'ACT-08', date: '2026-10-04', kind: 'mitigation', surfaced: true, title: 'Software gate added for fraud-flagged accounts',
     body: 'Engineering added an enforcement rule: no automatic action when a fraud flag is present, regardless of the AI recommendation. INC-01 marked mitigated.', capabilityId: 'refund-recommendation', link: '#/evidence' },
-  { id: 'ACT-07', date: '2026-10-03', type: 'failure', title: 'High-severity failure identified',
+  { id: 'ACT-07', date: '2026-10-03', kind: 'failure', surfaced: true, title: 'High-severity failure identified',
     body: 'Fraud escalation rule missed during scenario testing (H-04). Incident INC-01 opened.', capabilityId: 'refund-recommendation', link: '#/tests?filter=failed' },
-  { id: 'ACT-06', date: '2026-10-01', type: 'milestone', title: 'Pilot started',
+  { id: 'ACT-06', date: '2026-10-01', kind: 'milestone', surfaced: true, title: 'Pilot started',
     body: 'Refund recommendation entered limited, human-approved production testing with 9 agents.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation' },
-  { id: 'ACT-05', date: '2026-09-24', type: 'authority', title: 'Authority restricted',
+  { id: 'ACT-05', date: '2026-09-24', kind: 'authority', surfaced: true, title: 'Authority restricted',
     body: 'Refund execution > $50 moved from Draft to Recommend after a duplicate execution incident. Authorized by Daniel Okafor.', capabilityId: 'refund-execution-high-value', link: '#/decisions/AC-03' },
-  { id: 'ACT-04', date: '2026-09-02', type: 'authority', title: 'Authority expanded',
+  { id: 'ACT-04', date: '2026-09-02', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Refund recommendation moved from Recommend to Draft. Authorized by Maya Chen.', capabilityId: 'refund-recommendation', link: '#/decisions/AC-02' },
-  { id: 'ACT-03', date: '2026-09-02', type: 'criteria', title: 'Success criteria defined',
+  { id: 'ACT-03', date: '2026-09-02', kind: 'criteria', surfaced: true, title: 'Success criteria defined',
     body: 'Seven criteria and six evidence requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=criteria' },
-  { id: 'ACT-02', date: '2026-08-19', type: 'authority', title: 'Authority expanded',
+  { id: 'ACT-02', date: '2026-08-19', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Ticket classification moved from Draft to Act Within Limits. Authorized by Priya Natarajan.', capabilityId: 'ticket-classification', link: '#/decisions/AC-01' },
-  { id: 'ACT-01', date: '2026-08-12', type: 'decision', title: 'Account closure kept at Observe',
+  { id: 'ACT-01', date: '2026-08-12', kind: 'decision', surfaced: true, title: 'Account closure kept at Observe',
     body: 'Recorded as a deliberate non-delegation. Difficult to reverse, low volume.', capabilityId: 'account-closure', link: '#/capabilities/account-closure' },
 ];
 

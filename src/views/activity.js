@@ -3,6 +3,7 @@ import { html, badge, fmtDate } from '../ui.js';
 import { getCapability } from '../store.js';
 
 const TYPE_TONE = {
+  amendment: 'watch',
   authority: 'pass',
   restriction: 'fail',
   failure: 'fail',
@@ -14,6 +15,7 @@ const TYPE_TONE = {
   test: 'neutral',
 };
 const TYPE_LABEL = {
+  amendment: 'Amendment',
   authority: 'Authority',
   restriction: 'Automatic restriction',
   failure: 'Failure',
@@ -26,10 +28,10 @@ const TYPE_LABEL = {
 };
 
 export function activityView(state) {
-  const items = state.activity.map((a) => html`<li class="activity-item activity-${a.type}">
+  const items = state.activity.map((a) => html`<li class="activity-item activity-${a.kind}">
     <div class="activity-date">${fmtDate(a.date)}</div>
     <div class="activity-body">
-      <div class="activity-head">${badge(TYPE_TONE[a.type] || 'neutral', TYPE_LABEL[a.type] || a.type)}<strong>${a.title}</strong></div>
+      <div class="activity-head">${badge(TYPE_TONE[a.kind] || 'neutral', TYPE_LABEL[a.kind] || a.kind)}<strong>${a.title}</strong></div>
       <p>${a.body}</p>
       <div class="activity-meta"><a href="#/capabilities/${a.capabilityId}">${getCapability(state, a.capabilityId).name}</a>${a.link ? html` · <a href="${a.link}">Open</a>` : ''}</div>
     </div>

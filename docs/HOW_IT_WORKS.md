@@ -116,6 +116,12 @@ The system makes a recommendation with its reasons, but it cannot authorize anyt
 
 Every authorization writes a **decision record**: previous and new authority, the decision taken, who authorized it, the scope, the rationale, a snapshot of the evidence at that moment, and any open condition. Records are never edited. If something changes later, a new record is written and the old one stays as it was. Months later, anyone can answer "why did we let the AI do this, and what did we know at the time?"
 
+### Amendments
+
+The contract, success criteria, evidence requirements, risk profile and stakeholder list are versioned. Editing one writes a new version with the author, the reason, and what changed. The previous version stays exactly as it was, and every decision record names the version of each object that was in force when the decision was made.
+
+An amendment made after evidence already existed is marked as such, because changing the bar after seeing the results is the kind of thing a reviewer should notice. In the seeded demo everything is at version 1; the setup flow and the sign-off rules that use amendments are being built in the open issues.
+
 ### Monitoring and automatic restriction
 
 After authority expands, the capability enters a monitoring period. The product shows how many actions it has taken alone, how many it escalated, how many a person reversed, and how many incidents occurred.
@@ -144,7 +150,7 @@ The **activity history** is an audit-style timeline: pilot started, failure foun
 
 **Decisions** lists every authority change and opens the decision workspace for the pending one.
 
-**Activity** is the timeline.
+**Activity** is the timeline. Every event is recorded; the ones shown by default are decisions, automatic restrictions, test runs, pilot milestones, failures and amendments made after evidence existed. A full-history view for everything else is on the way.
 
 ---
 
