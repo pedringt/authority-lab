@@ -45,7 +45,7 @@ The tests cover the state transitions: running the suite, authorizing each decis
 ## Structure
 
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).
-- `src/store.js`: pure state transitions plus a small persisted store.
+- `src/store.js`: pure state transitions plus a small persisted store. Everything that belongs to one capability (criteria, requirements, scenarios, pilot, evidence, stakeholders, test run, pending decision, monitoring) lives under `state.capabilityData[capabilityId]`, and every transition takes a capability id.
 - `src/views/*.js`: one module per screen. Views render from state; they never mutate it.
 - `src/ui.js`: escaping template tag and shared components (badges, authority labels, level scale, notices).
 - `styles/app.css`: the design system. Color carries state (pass / watch / fail / insufficient / restricted / decision required) and is always paired with a label.
