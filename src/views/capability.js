@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, notice, empty } from '../ui.js';
-import { getCapability, readiness, authorityLabel, testSummary } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary } from '../store.js';
 import { scenarioTable } from './tests.js';
 
 const TABS = [
@@ -13,12 +13,26 @@ const TABS = [
   ['monitoring', 'Monitoring'],
 ];
 
+// Tabs appear when the capability has something to show in them. Empty
+// states for new capabilities arrive with the setup flow (#4).
+function tabAvailable(key, d) {
+  switch (key) {
+    case 'criteria': return d.criteria.length > 0 || d.requirements.length > 0;
+    case 'testing': return d.scenarios.length > 0;
+    case 'evidence': return Boolean(d.pilot) || d.evidence.length > 0;
+    case 'stakeholders': return d.stakeholders.length > 0;
+    case 'monitoring': return Boolean(d.monitoring) || Boolean(d.monitoringRule);
+    default: return true;
+  }
+}
+
 export function capabilityView(state, id, query) {
   const cap = getCapability(state, id);
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
-  const isPrimary = cap.id === 'refund-recommendation';
-  const tab = query.get('tab') || 'contract';
-  const r = readiness(state);
+  const d = capData(state, id);
+  const requested = query.get('tab') || 'contract';
+  const tab = tabAvailable(requested, d) ? requested : 'contract';
+  const r = readiness(state, id);
   const owner = person(cap.owner);
 
   const summary = html`<div class="card cap-summary">
@@ -30,26 +44,26 @@ export function capabilityView(state, id, query) {
         ['Risk', html`${cap.risk.impact} impact · ${cap.risk.exposure} · ${cap.risk.reversibility}`],
         ['Owner', html`${owner.name}, ${owner.role}`],
         ['Last evaluated', fmtDateYear(cap.lastEvaluated)],
-        ['Evidence readiness', isPrimary
-          ? html`${r.met} of ${r.total} requirements met${cap.decisionRequired ? html` · <a href="#/decisions/new">Open decision</a>` : ''}`
-          : html`<span class="muted">${cap.evidenceNote}</span>`],
+        ['Evidence readiness', r.total
+          ? html`${r.met} of ${r.total} requirements met${cap.decisionRequired ? html` · <a href="#/capabilities/${cap.id}/decision">Open decision</a>` : ''}`
+          : html`<span class="muted">${cap.evidenceNote || 'No evidence requirements defined.'}</span>`],
       ])}
     </div>
     ${levelScale(cap.authority, cap.decisionRequired ? cap.proposed : null)}
   </div>`;
 
   const tabs = html`<nav class="tabs" aria-label="Capability sections">${TABS
-    .filter(([k]) => isPrimary || ['contract', 'decisions'].includes(k))
+    .filter(([k]) => tabAvailable(k, d))
     .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}</a>`)}</nav>`;
 
   let body;
   switch (tab) {
-    case 'criteria': body = criteriaTab(state); break;
-    case 'testing': body = testingTab(state, query); break;
-    case 'evidence': body = evidenceTab(state); break;
-    case 'stakeholders': body = stakeholdersTab(state); break;
+    case 'criteria': body = criteriaTab(state, cap, d); break;
+    case 'testing': body = testingTab(state, cap); break;
+    case 'evidence': body = evidenceTab(state, cap, d); break;
+    case 'stakeholders': body = stakeholdersTab(d); break;
     case 'decisions': body = decisionsTab(state, cap); break;
-    case 'monitoring': body = monitoringTab(state, cap); break;
+    case 'monitoring': body = monitoringTab(cap, d); break;
     default: body = contractTab(cap);
   }
 
@@ -89,27 +103,34 @@ function contractTab(cap) {
     ]), { subtitle: 'The risk profile sets how much evidence an authority increase needs.' })}`;
 }
 
-function criteriaTab(state) {
-  const rows = seed.successCriteria.map((c) => html`<tr>
+function criteriaTab(state, cap, d) {
+  const rows = d.criteria.map((c) => html`<tr>
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
     <td>${c.current}</td>
     <td>${badge(c.status)}</td>
     <td class="muted">${c.note}</td>
   </tr>`);
+  const defining = state.decisionRecords.find((x) => x.capabilityId === cap.id && x.number === 2);
   return html`
-    <p class="muted">Defined Sep 2, before the pilot started, as part of authority change <a href="#/decisions/AC-02">AC-02</a>. These are the thresholds the decision is measured against, not a score.</p>
-    <div class="card table-card"><table class="table table-criteria">
+    <p class="muted">Defined before the pilot started${defining ? html`, as part of authority change <a href="#/decisions/${defining.id}">${defining.id}</a>` : ''}. These are the thresholds the decision is measured against, not a score.</p>
+    ${rows.length ? html`<div class="card table-card"><table class="table table-criteria">
       <thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th><th>Note</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table></div>
-    ${section('Evidence requirements for Level 2 → Level 3', requirementsList(), { subtitle: 'A checklist, not a readiness score. The last item is the open gap.' })}`;
+    </table></div>` : empty('No success criteria defined.')}
+    ${d.requirements.length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'A checklist, not a readiness score.' }) : ''}`;
 }
 
-export function requirementsList() {
-  const r = readiness();
+export function proposedChangeLabel(cap) {
+  return cap.proposed ? `${authorityLabel(cap.authority, { short: true })} → ${authorityLabel(cap.proposed, { short: true })}` : 'the next authority change';
+}
+
+export function requirementsList(state, capabilityId) {
+  const r = readiness(state, capabilityId);
+  const reqs = capData(state, capabilityId).requirements;
+  if (!reqs.length) return empty('No evidence requirements defined.');
   return html`<div class="card">
-    <ul class="req-list">${seed.evidenceRequirements.map((q) => html`<li class="${q.met ? 'is-met' : 'is-unmet'}">
+    <ul class="req-list">${reqs.map((q) => html`<li class="${q.met ? 'is-met' : 'is-unmet'}">
       <span class="req-mark" aria-hidden="true">${q.met ? '✓' : '⚠'}</span>
       <span class="req-text"><strong>${q.text}</strong><span class="muted"> · ${q.met ? 'Met' : 'Not met'}: ${q.current}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
     </li>`)}</ul>
@@ -117,17 +138,18 @@ export function requirementsList() {
   </div>`;
 }
 
-function testingTab(state, query) {
-  const t = testSummary(state);
+function testingTab(state, cap) {
+  const t = testSummary(state, cap.id);
   return html`
-    <p class="muted">26 scenarios in five groups. ${t.status === 'complete'
-      ? html`Run today: ${t.passed} of ${t.total} passed, ${t.highSeverity} high-severity failure.`
-      : html`Last run ${fmtDate(t.lastRun)}: ${t.seeded.passed} of ${t.total} passed, ${t.seeded.highSeverity} high-severity failure.`} <a href="#/tests">Open the testing ground</a> to run the suite and filter results.</p>
-    ${scenarioTable(state, { filter: 'failed', compact: true })}`;
+    <p class="muted">${t.total} scenarios. ${t.status === 'complete'
+      ? html`Run today: ${t.passed} of ${t.total} passed, ${t.highSeverity} high-severity failure${t.highSeverity === 1 ? '' : 's'}.`
+      : t.lastRun ? html`Last run ${fmtDate(t.lastRun)}: ${t.recorded.passed} of ${t.total} passed, ${t.recorded.highSeverity} high-severity failure${t.recorded.highSeverity === 1 ? '' : 's'}.` : 'Not yet run.'} <a href="#/tests?capability=${cap.id}">Open the testing ground</a> to run the suite and filter results.</p>
+    ${scenarioTable(state, cap.id, { filter: 'failed', compact: true })}`;
 }
 
-function evidenceTab(state) {
-  const p = seed.pilot;
+function evidenceTab(state, cap, d) {
+  const p = d.pilot;
+  if (!p) return html`${empty('No pilot has been run for this capability.')}${d.evidence.length ? html`<p class="muted small">Other evidence is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>` : ''}`;
   const rows = p.segments.map((s) => html`<tr class="${s.status === 'insufficient' ? 'row-insufficient' : ''}">
     <td><strong>${s.name}</strong></td>
     <td class="num">${s.cases}</td>
@@ -136,9 +158,11 @@ function evidenceTab(state) {
     <td class="num">${s.severeErrors}</td>
     <td>${badge(s.status)}</td>
   </tr>`);
+  const weak = p.segments.filter((s) => s.status === 'insufficient');
+  const unmetReq = readiness(state, cap.id).unmet[0];
   return html`
     <div class="pilot-head">
-      <div><p class="eyebrow">Limited pilot · ${fmtDate(p.started)} to Oct 6</p><p class="readiness-big">${p.cases}<span> real cases observed, every one reviewed by an agent</span></p></div>
+      <div><p class="eyebrow">Limited pilot · ${fmtDate(p.started)} to ${p.ended ? fmtDate(p.ended) : 'Oct 6'}</p><p class="readiness-big">${p.cases}<span> real cases observed, every one reviewed by an agent</span></p></div>
       <div class="pilot-stats">
         <div><span class="fact-label">Overall accuracy</span><strong>${p.accuracy}%</strong></div>
         <div><span class="fact-label">Overridden</span><strong>${p.overrides} (${p.overrideRate}%)</strong></div>
@@ -150,41 +174,42 @@ function evidenceTab(state) {
       <thead><tr><th>Segment</th><th class="num">Cases</th><th class="num">Accuracy</th><th class="num">Override rate</th><th class="num">Severe errors</th><th>Status</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    ${notice('insufficient', 'Overall performance looks good. One segment does not.', 'High-value refunds have 18 cases at 83% accuracy and a 28% override rate. That is too few cases to conclude anything, and the aggregate 94% hides it. The evidence requirement for this segment is 40 cases.')}
-    ${section('Severe errors in the pilot', html`<div class="card"><ul class="plain-list">${p.severeErrorList.map((e) => html`<li><span class="muted">${fmtDate(e.date)} · ${p.segments.find((s) => s.id === e.segment).name}</span><br>${e.text}</li>`)}</ul><p class="muted small">All three were caught in review before any action. That is what Draft authority is for; it is also why the override rate matters more than the raw error count.</p></div>`)}
-    ${section('Evidence requirements', requirementsList())}
-    <p class="muted small">All evidence for this capability is in the <a href="#/evidence">evidence repository</a>.</p>`;
+    ${weak.map((s) => notice('insufficient', 'Overall performance looks good. One segment does not.', `${s.name} have ${s.cases} cases at ${s.accuracy}% accuracy and a ${s.overrideRate}% override rate. That is too few cases to conclude anything, and the aggregate ${p.accuracy}% hides it.${unmetReq ? ` The evidence requirement for this segment is ${unmetReq.text.toLowerCase().replace(/^minimum /, '')}.` : ''}`))}
+    ${p.severeErrorList && p.severeErrorList.length ? section('Severe errors in the pilot', html`<div class="card"><ul class="plain-list">${p.severeErrorList.map((e) => html`<li><span class="muted">${fmtDate(e.date)} · ${p.segments.find((s) => s.id === e.segment).name}</span><br>${e.text}</li>`)}</ul><p class="muted small">All ${p.severeErrors} were caught in review before any action. That is what Draft authority is for; it is also why the override rate matters more than the raw error count.</p></div>`) : ''}
+    ${d.requirements.length ? section('Evidence requirements', requirementsList(state, cap.id)) : ''}
+    <p class="muted small">All evidence for this capability is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>`;
 }
 
-function stakeholdersTab(state) {
+function stakeholdersTab(d) {
   const tone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient' };
-  const cards = seed.stakeholders.map((s) => {
+  const cards = d.stakeholders.map((s) => {
     const who = person(s.person);
     return html`<div class="card stakeholder">
-      <div class="stakeholder-head"><div><strong>${s.team}</strong><div class="muted small">${who.name}, ${who.role}</div></div>${badge(tone[s.stance], s.position)}</div>
+      <div class="stakeholder-head"><div><strong>${s.team}</strong><div class="muted small">${who.name}, ${who.role}</div></div>${badge(tone[s.stance] || 'neutral', s.position)}</div>
       <blockquote>${s.quote}</blockquote>
     </div>`;
   });
+  const sum = d.stakeholderSummary;
   return html`
-    <p class="muted">Positions recorded Oct 6. They are kept as positions, not averaged into a score.</p>
+    <p class="muted">Positions recorded ${d.stakeholders[0] && d.stakeholders[0].date ? fmtDate(d.stakeholders[0].date) : 'Oct 6'}. They are kept as positions, not averaged into a score.</p>
     <div class="stakeholder-grid">${cards}</div>
-    <div class="two-col">
-      <div class="card"><p class="eyebrow">Consensus</p><p>${seed.stakeholderSummary.consensus}</p></div>
-      <div class="card card-watch"><p class="eyebrow">Unresolved disagreement</p><p>${seed.stakeholderSummary.disagreement}</p></div>
-    </div>`;
+    ${sum ? html`<div class="two-col">
+      <div class="card"><p class="eyebrow">Consensus</p><p>${sum.consensus}</p></div>
+      <div class="card card-watch"><p class="eyebrow">Unresolved disagreement</p><p>${sum.disagreement}</p></div>
+    </div>` : ''}`;
 }
 
 function decisionsTab(state, cap) {
-  const records = state.decisionRecords.filter((d) => d.capabilityId === cap.id).slice().reverse();
+  const records = state.decisionRecords.filter((x) => x.capabilityId === cap.id).slice().reverse();
   if (!records.length) return empty('No authority decisions have been recorded for this capability.');
   return html`<div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Date</th><th>Change</th><th>Decision</th><th>Authorized by</th></tr></thead>
-    <tbody>${records.map((d) => html`<tr>
-      <td><a href="#/decisions/${d.id}">Authority change #${String(d.number).padStart(2, '0')}</a></td>
-      <td>${fmtDate(d.date)}</td>
-      <td>${authorityLabel(d.previous, { short: true })} → ${authorityLabel(d.next, { short: true })}</td>
-      <td>${optionLabel(d.option)}</td>
-      <td>${person(d.authorizedBy).name}</td>
+    <tbody>${records.map((x) => html`<tr>
+      <td><a href="#/decisions/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
+      <td>${fmtDate(x.date)}</td>
+      <td>${authorityLabel(x.previous, { short: true })} → ${authorityLabel(x.next, { short: true })}</td>
+      <td>${optionLabel(x.option)}</td>
+      <td>${person(x.authorizedBy).name}</td>
     </tr>`)}</tbody>
   </table></div>`;
 }
@@ -195,11 +220,11 @@ export function optionLabel(option) {
   return o ? o.name : option;
 }
 
-function monitoringTab(state, cap) {
-  const m = state.monitoring;
+function monitoringTab(cap, d) {
+  const m = d.monitoring;
   if (!m) {
     return html`${notice('neutral', 'Monitoring is not active.', `${cap.name} is at ${authorityLabel(cap.authority)}. A monitoring period starts when authority is expanded. The automatic restriction rule below applies from that point.`)}
-      <div class="card"><p class="eyebrow">Automatic restriction rule</p><p>${seed.monitoringSeed.rule}</p></div>`;
+      ${d.monitoringRule ? html`<div class="card"><p class="eyebrow">Automatic restriction rule</p><p>${d.monitoringRule.rule}</p></div>` : ''}`;
   }
   const pct = Math.round((m.severeErrorsInWindow / m.rollingWindow) * 1000) / 10;
   const over = pct > m.thresholdPct;
@@ -223,7 +248,7 @@ function monitoringTab(state, cap) {
       ${m.breached
         ? html`<ul class="plain-list"><li class="muted small">Errors in the window:</li>${m.errors.map((e) => html`<li>${e}</li>`)}</ul>
           <p class="muted small">What happened when the rule fired: the metric crossed the threshold, the capability changed from autonomous to approval-required, a system event and a restriction record were created, the Overview shows an alert, and the Activity history records why.</p>`
-        : html`<p class="muted small">Demo control. This injects three severe errors into the rolling window to show what the rule does.</p>
-          <button class="btn btn-danger" data-action="simulate-breach">Simulate threshold breach</button>`}
+        : html`<p class="muted small">Demo control. This injects severe errors into the rolling window to show what the rule does.</p>
+          <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">Simulate threshold breach</button>`}
     </div>`;
 }

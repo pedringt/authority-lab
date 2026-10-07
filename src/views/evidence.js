@@ -1,36 +1,35 @@
 import * as seed from '../data/seed.js';
 import { html, badge, section, fmtDate } from '../ui.js';
-import { requirementsList } from './capability.js';
+import { capData, getCapability } from '../store.js';
+import { requirementsList, proposedChangeLabel } from './capability.js';
+import { capabilityPicker } from './tests.js';
 
 const STATUSES = [['all', 'All'], ['pass', 'Pass'], ['watch', 'Watch'], ['insufficient', 'Insufficient'], ['fail', 'Fail']];
 
-export function evidenceView(state, query) {
+export function evidenceView(state, capabilityId, query) {
+  const cap = getCapability(state, capabilityId);
+  const d = capData(state, capabilityId);
   const source = query.get('source') || 'all';
   const status = query.get('status') || 'all';
   const segment = query.get('segment') || 'all';
   const risk = query.get('risk') || 'all';
 
-  const sources = [...new Set(state.evidence.map((e) => e.source))];
-  const segments = [...new Set(state.evidence.map((e) => e.segment))];
+  const sources = [...new Set(d.evidence.map((e) => e.source))];
+  const segments = [...new Set(d.evidence.map((e) => e.segment))];
   const risks = ['High', 'Medium', 'Low'];
 
-  let items = state.evidence.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+  let items = d.evidence.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
   if (source !== 'all') items = items.filter((e) => e.source === source);
   if (status !== 'all') items = items.filter((e) => e.status === status);
   if (segment !== 'all') items = items.filter((e) => e.segment === segment);
   if (risk !== 'all') items = items.filter((e) => e.risk === risk);
 
   const link = (over) => {
-    const q = new URLSearchParams({ source, status, segment, risk, ...over });
+    const q = new URLSearchParams({ capability: cap.id, source, status, segment, risk, ...over });
     return `#/evidence?${q.toString()}`;
   };
 
-  const counts = {
-    pass: state.evidence.filter((e) => e.status === 'pass').length,
-    watch: state.evidence.filter((e) => e.status === 'watch').length,
-    insufficient: state.evidence.filter((e) => e.status === 'insufficient').length,
-    fail: state.evidence.filter((e) => e.status === 'fail').length,
-  };
+  const counts = Object.fromEntries(STATUSES.map(([k]) => [k, d.evidence.filter((e) => e.status === k).length]));
 
   const filters = html`<div class="filter-bar">
     <div class="filter-group" role="group" aria-label="Status">${STATUSES.map(([k, l]) => html`<a class="chip ${status === k ? 'is-active' : ''}" href="${link({ status: k })}">${l}${k !== 'all' ? html` <span class="chip-count">${counts[k]}</span>` : ''}</a>`)}</div>
@@ -51,12 +50,13 @@ export function evidenceView(state, query) {
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow">${seed.workspace.name} · Refund recommendation</p>
+      <p class="eyebrow">${seed.workspace.name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Evidence</h1>
       <p class="lede">Everything the authority decision rests on, from automated tests, the pilot, human review, operations, cost, incidents, user feedback and stakeholder assessment. Each item links back to where it came from.</p>
     </div>
   </div>
-  ${filters}
-  ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">No evidence matches these filters.</p>`}
-  ${section('Evidence requirements for Level 2 → Level 3', requirementsList(), { subtitle: 'What has to be true before the proposed change can be authorized. Five of six are met.' })}`;
+  ${capabilityPicker(state, cap.id, (id) => `#/evidence?capability=${id}`)}
+  ${d.evidence.length ? filters : ''}
+  ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${d.evidence.length ? 'No evidence matches these filters.' : `No evidence has been recorded for ${cap.name}.`}</p>`}
+  ${d.requirements.length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'What has to be true before the proposed change can be authorized.' }) : ''}`;
 }

@@ -77,6 +77,7 @@ export const capabilities = [
     id: 'refund-recommendation',
     name: 'Refund recommendation',
     summary: 'Reviews a refund request and recommends whether to issue it.',
+    actionNoun: 'refunds',
     authority: { level: 2, limited: false },
     status: 'pilot',
     pilotLabel: 'Limited pilot',
@@ -687,6 +688,7 @@ export const DECISION_OPTIONS = [
 export const systemRecommendation = {
   option: 'expand-limits',
   summary: 'Expand authority only for standard refunds of $50 or less.',
+  overviewSummary: 'Evidence supports limited automatic refund approval for standard cases under $50. High-value refunds do not yet have enough evidence for expanded authority.',
   rationale: [
     'Standard refunds: 97% accuracy and 7% override rate across 142 cases.',
     'Severe error rate (1.4%) and override rate (11%) are inside their thresholds.',
@@ -729,4 +731,26 @@ export const breachSeed = {
     'Automatic refund of $31 approved on an order already refunded manually the day before.',
     'Automatic refund of $44 approved against a policy that changed on the same day.',
   ],
+};
+
+// ---------------------------------------------------------------------------
+// Per-capability data. Capabilities without an entry start empty.
+// ---------------------------------------------------------------------------
+
+export const capabilityData = {
+  'refund-recommendation': {
+    criteria: successCriteria,
+    requirements: evidenceRequirements,
+    scenarios,
+    pilot,
+    evidence: evidenceItems,
+    stakeholders,
+    stakeholderSummary,
+    recommendation: systemRecommendation,
+    defaultConditions,
+    defaultRationale,
+    monitoringRule: monitoringSeed,
+    breach: breachSeed,
+    lastTestRun: '2026-10-03',
+  },
 };
