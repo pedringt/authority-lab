@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS } from '../store.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -65,8 +65,19 @@ export function decisionRecordView(state, id) {
         ${x.conditions.noChargeback ? html`<li>no active chargeback</li>` : ''}
       </ul>`]] : []),
     ])}
+    ${x.versions ? html`<div class="record-foot"><span class="fact-label">Based on</span><div class="based-on">${VERSIONED_KINDS.map((k) => html`<a href="#/capabilities/${cap.id}/versions?kind=${k}&version=${x.versions[k]}">${KIND_LABELS[k]} v${x.versions[k]}</a>`)}</div></div>` : ''}
+    ${amendedNote(state, x)}
     <p class="muted small record-foot">Record ${x.id}, written ${fmtDateYear(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was.</p>
   </div>`;
+}
+
+// Shown on a decision when the criteria or evidence requirements it relied on
+// were amended after performance results had been seen.
+export function amendedNote(state, record) {
+  const amended = amendmentsAfterEvidenceFor(state, record);
+  if (!amended.length) return '';
+  const cap = getCapability(state, record.capabilityId);
+  return notice('watch', 'Criteria amended after evidence', `${amended.map((a) => `${KIND_LABELS[a.kind]} v${a.version} by ${person(a.author).name}: ${a.reason}`).join(' ')} The bar this decision was measured against changed after results were seen.`, { link: `#/capabilities/${cap.id}/versions?kind=${amended[0].kind}&version=${amended[0].version}`, linkText: 'See the change' });
 }
 
 export function decisionWorkspaceView(state, capabilityId) {
@@ -127,6 +138,7 @@ export function decisionWorkspaceView(state, capabilityId) {
   <div class="decision-grid">
     <div class="decision-main">
       ${section('Evidence summary', html`
+        ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}
         ${criteriaRows.length ? html`<div class="card table-card"><table class="table"><thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th></tr></thead><tbody>${criteriaRows}</tbody></table></div>` : ''}
         ${requirementsList(state, cap.id)}`, { subtitle: r.total ? `${r.met} of ${r.total} evidence requirements met.${r.unmet.length ? ` Unresolved: ${r.unmet.map((u) => u.text.toLowerCase()).join('; ')}.` : ''}` : 'No evidence requirements defined.' })}
 

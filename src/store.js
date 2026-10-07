@@ -108,16 +108,56 @@ export function versionsInForce(state, capabilityId) {
   return Object.fromEntries(VERSIONED_KINDS.map((k) => [k, (currentVersion(state, capabilityId, k) || { version: 0 }).version]));
 }
 
-// True once any evidence exists for the capability: recorded evidence, a
-// pilot, or a test run. Amendments made after this point are surfaced.
-export function hasEvidence(state, capabilityId) {
+// Evidence sources that are measured performance results, as opposed to
+// opinions (stakeholder assessments, user feedback).
+export const MEASURED_SOURCES = new Set(['Automated tests', 'Pilot outcomes', 'Human review', 'Operational metrics', 'Cost', 'Incident']);
+
+// True once performance results have been seen for the capability: a recorded
+// test run, a pilot, or a measured evidence item. Stakeholder assessments and
+// user feedback alone do not count. This is the single definition used by
+// amendments (afterEvidence) and by the criteria lock (#6).
+export function performanceResultsSeen(state, capabilityId) {
   const d = capData(state, capabilityId);
-  return d.evidence.length > 0 || Boolean(d.pilot) || Boolean(d.testRun.lastRun);
+  return Boolean(d.testRun.lastRun) || Boolean(d.pilot) || d.evidence.some((e) => MEASURED_SOURCES.has(e.source));
 }
 
-// Kinds shown in Activity by default (decision 3). An amendment is surfaced
-// only when it was made after evidence existed.
-export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'criteria', 'decision']);
+// Kinds shown in Activity by default (decision 3): decisions, automatic
+// restrictions, test runs, pilot milestones, failures, criteria locked,
+// contract finalized, plus mitigations and stakeholder reviews. Setup-type
+// events (for example "criteria defined") sit in Full history. An amendment
+// is surfaced only when it was made after performance results were seen.
+export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision']);
+
+export const KIND_LABELS_ALL = {
+  authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
+  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized',
+  decision: 'Decision', test: 'Test run', amendment: 'Amendment',
+};
+
+// Activity events for the Activity screen. Default: surfaced events only.
+export function activityEvents(state, { full = false, kind = 'all', capabilityId = 'all' } = {}) {
+  return state.activity.filter((e) =>
+    (full || e.surfaced) && (kind === 'all' || e.kind === kind) && (capabilityId === 'all' || e.capabilityId === capabilityId));
+}
+
+export function versionFor(state, capabilityId, kind, number) {
+  return (capData(state, capabilityId).versions[kind] || []).find((v) => v.version === number) || null;
+}
+
+// Amendments to the criteria or evidence requirements that were made after
+// performance results were seen and that a decision record relied on
+// (version 2 up to the version in force at the time of the record).
+export function amendmentsAfterEvidenceFor(state, record) {
+  if (!record.versions) return [];
+  const out = [];
+  for (const kind of ['criteria', 'requirements']) {
+    const inForce = record.versions[kind] || 0;
+    for (const v of capData(state, record.capabilityId).versions[kind] || []) {
+      if (v.version > 1 && v.version <= inForce && v.afterEvidence) out.push({ kind, ...v });
+    }
+  }
+  return out;
+}
 
 export function isSurfaced(event) {
   if (event.kind === 'amendment') return Boolean(event.afterEvidence);
@@ -294,7 +334,7 @@ export function amend(state, capabilityId, kind, { value, author, reason }) {
   if (!reason || !reason.trim()) throw new Error('An amendment needs a reason.');
   const d = capData(state, capabilityId);
   const prev = currentVersion(state, capabilityId, kind);
-  const afterEvidence = hasEvidence(state, capabilityId);
+  const afterEvidence = performanceResultsSeen(state, capabilityId);
   const next = {
     version: (prev ? prev.version : 0) + 1,
     date: state.today,

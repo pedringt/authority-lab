@@ -114,13 +114,15 @@ The system makes a recommendation with its reasons, but it cannot authorize anyt
 
 ### The decision record
 
-Every authorization writes a **decision record**: previous and new authority, the decision taken, who authorized it, the scope, the rationale, a snapshot of the evidence at that moment, and any open condition. Records are never edited. If something changes later, a new record is written and the old one stays as it was. Months later, anyone can answer "why did we let the AI do this, and what did we know at the time?"
+Every authorization writes a **decision record**: previous and new authority, the decision taken, who authorized it, the scope, the rationale, a snapshot of the evidence at that moment, any open condition, and which version of the contract, criteria, requirements, risk profile and stakeholders was in force (the "Based on" line, which links to those versions). Records are never edited. If something changes later, a new record is written and the old one stays as it was. Months later, anyone can answer "why did we let the AI do this, and what did we know at the time?"
 
 ### Amendments
 
 The contract, success criteria, evidence requirements, risk profile and stakeholder list are versioned. Editing one writes a new version with the author, the reason, and what changed. The previous version stays exactly as it was, and every decision record names the version of each object that was in force when the decision was made.
 
-An amendment made after evidence already existed is marked as such, because changing the bar after seeing the results is the kind of thing a reviewer should notice. In the seeded demo everything is at version 1; the setup flow and the sign-off rules that use amendments are being built in the open issues.
+An amendment made after performance results have been seen (a recorded test run, a pilot, or a measured evidence item; stakeholder assessments and user feedback alone do not count) is marked **After evidence**, because changing the bar after seeing the results is the kind of thing a reviewer should notice. A decision record that relied on criteria or requirements amended after evidence carries a "Criteria amended after evidence" note. In the seeded demo everything is at version 1; the setup flow and the sign-off rules that use amendments are being built in the open issues.
+
+Every capability has a **Versions** page (from a decision record's "Based on" line) listing each version of its contract, criteria, requirements, risk profile and stakeholders, with who wrote it, why, and what changed from the version before.
 
 ### Monitoring and automatic restriction
 
@@ -150,7 +152,7 @@ The **activity history** is an audit-style timeline: pilot started, failure foun
 
 **Decisions** lists every authority change and opens the decision workspace for the pending one.
 
-**Activity** is the timeline. Every event is recorded; the ones shown by default are decisions, automatic restrictions, test runs, pilot milestones, failures and amendments made after evidence existed. A full-history view for everything else is on the way.
+**Activity** is the timeline. Every event is recorded. The default view ("Important") shows decisions, automatic restrictions, test runs, pilot milestones, failures, mitigations, stakeholder reviews, and amendments made after evidence; "Full history" shows everything, including setup-type events such as criteria being defined and amendments made before any results existed. Both views filter by kind and by capability, and an amendment expands to a before/after table.
 
 ---
 

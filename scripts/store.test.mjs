@@ -6,8 +6,10 @@ import {
   initialState, startTestRun, advanceTestRun, selectDecision, setCondition, setRationale,
   canAuthorize, authorize, simulateBreach, reset, readiness, testSummary, getCapability, capData,
   focusCapability, conditionsPreview, createStore, STORAGE_KEY,
-  amend, currentVersion, versionsInForce, hasEvidence, isSurfaced, VERSIONED_KINDS,
+  amend, currentVersion, versionsInForce, performanceResultsSeen, isSurfaced, VERSIONED_KINDS,
+  activityEvents, amendmentsAfterEvidenceFor, versionFor, SURFACED_KINDS,
 } from '../src/store.js';
+import { diffValues } from '../src/diff.js';
 
 const RR = 'refund-recommendation';
 const TC = 'ticket-classification';
@@ -262,13 +264,14 @@ test('every capability starts with version 1 of each versioned object, matching 
   assert.deepEqual(versionsInForce(s, RR), { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 });
 });
 
-test('every seeded activity event has a kind and is surfaced; every seeded record names its versions', () => {
+test('every seeded activity event has a kind and a surfaced flag that matches the rule; every seeded record names its versions', () => {
   const s = initialState();
   for (const e of s.activity) {
     assert.ok(e.kind, e.id);
-    assert.equal(e.surfaced, true, e.id);
-    assert.equal(isSurfaced(e), true, e.id);
+    assert.equal(isSurfaced(e), e.surfaced, `${e.id} surfaced flag matches the rule`);
   }
+  const quiet = s.activity.filter((e) => !e.surfaced).map((e) => e.id);
+  assert.deepEqual(quiet, ['ACT-03'], 'only "criteria defined" is a setup-type event in the seed');
   for (const r of s.decisionRecords) {
     assert.deepEqual(r.versions, { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 }, r.id);
   }
@@ -315,8 +318,8 @@ test('amend covers criteria, requirements, risk and stakeholders, and rejects ba
 
 test('afterEvidence is set from whether evidence existed, and decides whether the amendment is surfaced', () => {
   let s = initialState();
-  assert.equal(hasEvidence(s, RR), true);
-  assert.equal(hasEvidence(s, TC), false);
+  assert.equal(performanceResultsSeen(s, RR), true);
+  assert.equal(performanceResultsSeen(s, TC), false);
   s = amend(s, TC, 'contract', { value: { ...cap(s, TC).contract, may: [] }, author: 'priya', reason: 'Tighten before any evidence.' });
   assert.equal(currentVersion(s, TC, 'contract').afterEvidence, false);
   assert.equal(s.activity[0].kind, 'amendment');
@@ -352,4 +355,95 @@ test('amend is available through the store and persists', () => {
   const again = createStore({ storage });
   assert.equal(currentVersion(again.get(), RR, 'risk').version, 2);
   assert.equal(cap(again.get()).risk.impact, 'Medium');
+});
+
+// ---------------------------------------------------------------------------
+// Default activity view plus Full history (#3)
+// ---------------------------------------------------------------------------
+
+test('"after evidence" means performance results were seen, not opinions', () => {
+  let s = initialState();
+  // Ticket classification: no results yet.
+  assert.equal(performanceResultsSeen(s, TC), false);
+  // A stakeholder assessment alone does not count.
+  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), evidence: [{ id: 'X', source: 'Stakeholder assessment', metric: 'm', value: 'v', status: 'watch', risk: 'Low', segment: 'All', date: seed.TODAY, detail: '', link: '' }] } } };
+  assert.equal(performanceResultsSeen(s, TC), false);
+  // User feedback alone does not count either.
+  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), evidence: [{ id: 'X', source: 'User feedback', metric: 'm', value: 'v', status: 'pass', risk: 'Low', segment: 'All', date: seed.TODAY, detail: '', link: '' }] } } };
+  assert.equal(performanceResultsSeen(s, TC), false);
+  // A measured item does.
+  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), evidence: [{ id: 'X', source: 'Operational metrics', metric: 'm', value: 'v', status: 'pass', risk: 'Low', segment: 'All', date: seed.TODAY, detail: '', link: '' }] } } };
+  assert.equal(performanceResultsSeen(s, TC), true);
+  // So does a recorded test run with no evidence items at all.
+  let t = initialState();
+  t = { ...t, capabilityData: { ...t.capabilityData, [TC]: { ...capData(t, TC), testRun: { status: 'not-run', lastRun: '2026-10-01', completed: [] } } } };
+  assert.equal(performanceResultsSeen(t, TC), true);
+  // And a pilot.
+  let u = initialState();
+  u = { ...u, capabilityData: { ...u.capabilityData, [TC]: { ...capData(u, TC), pilot: { cases: 10, segments: [] } } } };
+  assert.equal(performanceResultsSeen(u, TC), true);
+});
+
+test('default activity shows surfaced events; full history shows everything; filters apply to both', () => {
+  const s = initialState();
+  const dflt = activityEvents(s);
+  const full = activityEvents(s, { full: true });
+  assert.equal(full.length, s.activity.length);
+  assert.equal(dflt.length, full.length - 1);
+  assert.ok(!dflt.some((e) => e.id === 'ACT-03'));
+  assert.ok(full.some((e) => e.id === 'ACT-03'));
+  // Mitigations and stakeholder reviews stay visible by default.
+  assert.ok(dflt.some((e) => e.kind === 'mitigation'));
+  assert.ok(dflt.some((e) => e.kind === 'review'));
+  assert.ok(!SURFACED_KINDS.has('criteria'));
+  assert.deepEqual(activityEvents(s, { kind: 'authority' }).map((e) => e.id), ['ACT-05', 'ACT-04', 'ACT-02']);
+  assert.deepEqual(activityEvents(s, { capabilityId: TC }).map((e) => e.id), ['ACT-02']);
+  assert.deepEqual(activityEvents(s, { full: true, kind: 'criteria', capabilityId: RR }).map((e) => e.id), ['ACT-03']);
+  assert.deepEqual(activityEvents(s, { kind: 'criteria' }), []);
+});
+
+test('amendments before evidence appear only in full history; after evidence they appear by default', () => {
+  let s = initialState();
+  s = amend(s, TC, 'risk', { value: { ...cap(s, TC).risk, impact: 'Medium' }, author: 'priya', reason: 'Reassessed.' });
+  assert.equal(activityEvents(s).filter((e) => e.kind === 'amendment').length, 0);
+  assert.equal(activityEvents(s, { full: true }).filter((e) => e.kind === 'amendment').length, 1);
+  s = amend(s, RR, 'requirements', { value: capData(s, RR).requirements, author: 'maya', reason: 'Re-confirmed.' });
+  assert.equal(activityEvents(s).filter((e) => e.kind === 'amendment').length, 1);
+  const ev = activityEvents(s)[0];
+  assert.equal(ev.objectKind, 'requirements');
+  assert.equal(versionFor(s, RR, 'requirements', ev.version).version, 2);
+  assert.equal(versionFor(s, RR, 'requirements', 9), null);
+});
+
+test('a decision relying on criteria amended after evidence is flagged; earlier and later records are not', () => {
+  let s = initialState();
+  // The seeded record AC-02 relied on v1 of everything: no note.
+  assert.deepEqual(amendmentsAfterEvidenceFor(s, s.decisionRecords[1]), []);
+  s = amend(s, RR, 'criteria', { value: capData(s, RR).criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 90% correct decisions' } : c)), author: 'priya', reason: 'Lower the quality bar.' });
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  const flagged = amendmentsAfterEvidenceFor(s, rec);
+  assert.equal(flagged.length, 1);
+  assert.equal(flagged[0].kind, 'criteria');
+  assert.equal(flagged[0].version, 2);
+  assert.equal(flagged[0].author, 'priya');
+  // A later amendment (v3) is not attributed to this record.
+  s = amend(s, RR, 'criteria', { value: capData(s, RR).criteria, author: 'maya', reason: 'Later.' });
+  assert.equal(amendmentsAfterEvidenceFor(s, rec).length, 1);
+  // The seeded records still carry no note.
+  assert.deepEqual(amendmentsAfterEvidenceFor(s, s.decisionRecords[1]), []);
+  // A record without versions (pre-#2 shape) yields nothing rather than throwing.
+  assert.deepEqual(amendmentsAfterEvidenceFor(s, { capabilityId: RR }), []);
+});
+
+test('diffValues reports added, removed and changed entries with readable paths', () => {
+  const before = { may: ['a', 'b'], mustNever: ['x'], impact: 'High' };
+  const after = { may: ['a', 'c'], mustNever: ['x'], impact: 'Medium' };
+  const d = diffValues(before, after);
+  assert.deepEqual(d.map((c) => [c.path, c.type]), [['may', 'removed'], ['may', 'added'], ['impact', 'changed']]);
+  assert.equal(d[0].before, 'b');
+  assert.equal(d[1].after, 'c');
+  const keyed = diffValues([{ id: 'q', text: 'old' }, { id: 'r', text: 'r' }], [{ id: 'q', text: 'new' }, { id: 's', text: 's' }]);
+  assert.deepEqual(keyed.map((c) => [c.path, c.type]), [['old › text', 'changed'], ['r', 'removed'], ['s', 'added']]);
+  assert.deepEqual(diffValues(before, before), []);
 });
