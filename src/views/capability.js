@@ -1,7 +1,8 @@
 import * as seed from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, notice, empty } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList } from '../store.js';
 import { scenarioTable } from './tests.js';
+import { emptyState, nextStep } from './setup.js';
 
 const TABS = [
   ['contract', 'Contract'],
@@ -13,26 +14,12 @@ const TABS = [
   ['monitoring', 'Monitoring'],
 ];
 
-// Tabs appear when the capability has something to show in them. Empty
-// states for new capabilities arrive with the setup flow (#4).
-function tabAvailable(key, state, id) {
-  const d = capData(state, id);
-  switch (key) {
-    case 'criteria': return current(state, id, 'criteria').length > 0 || current(state, id, 'requirements').length > 0;
-    case 'testing': return d.scenarios.length > 0;
-    case 'evidence': return Boolean(d.pilot) || d.evidence.length > 0;
-    case 'stakeholders': return current(state, id, 'stakeholders').length > 0;
-    case 'monitoring': return Boolean(d.monitoring) || Boolean(d.monitoringRule);
-    default: return true;
-  }
-}
-
 export function capabilityView(state, id, query) {
   const cap = getCapability(state, id);
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
   const d = capData(state, id);
   const requested = query.get('tab') || 'contract';
-  const tab = tabAvailable(requested, state, id) ? requested : 'contract';
+  const tab = TABS.some(([k]) => k === requested) ? requested : 'contract';
   const risk = current(state, id, 'risk');
   const r = readiness(state, id);
   const owner = person(cap.owner);
@@ -48,14 +35,13 @@ export function capabilityView(state, id, query) {
         ['Last evaluated', fmtDateYear(cap.lastEvaluated)],
         ['Evidence readiness', r.total
           ? html`${r.met} of ${r.total} requirements met${cap.decisionRequired ? html` · <a href="#/capabilities/${cap.id}/decision">Open decision</a>` : ''}`
-          : html`<span class="muted">${cap.evidenceNote || 'No evidence requirements defined.'}</span>`],
+          : html`<span class="muted">${cap.evidenceNote || 'No evidence requirements yet.'}</span>${nextStep(state, cap.id) ? html` · <a href="#/capabilities/${cap.id}/setup">Setup: ${nextStep(state, cap.id).title.toLowerCase()}</a>` : ''}`],
       ])}
     </div>
     ${levelScale(cap.authority, cap.decisionRequired ? cap.proposed : null)}
   </div>`;
 
   const tabs = html`<nav class="tabs" aria-label="Capability sections">${TABS
-    .filter(([k]) => tabAvailable(k, state, id))
     .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}</a>`)}</nav>`;
 
   let body;
@@ -85,6 +71,16 @@ function contractTab(state, cap) {
   const c = current(state, cap.id, 'contract');
   const risk = current(state, cap.id, 'risk');
   const list = (items) => html`<ul class="contract-list">${items.map((i) => html`<li>${i}</li>`)}</ul>`;
+  const riskBlock = section('Risk profile', kv([
+    ['Impact', risk.impact],
+    ['Reversibility', risk.reversibility],
+    ['Exposure', risk.exposure],
+    ['Failure types watched', (risk.failureTypes || []).join(', ') || 'None listed'],
+    ...(risk.note ? [['Note', risk.note]] : []),
+  ]), { subtitle: 'The risk profile sets how much evidence an authority increase needs.' });
+  if (!versionList(state, cap.id, 'contract').length) {
+    return html`${emptyState(state, cap.id, 'No delegation contract yet.', 'contract')}${riskBlock}`;
+  }
   return html`
     <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment.</p>
     <div class="contract-grid">
@@ -98,17 +94,13 @@ function contractTab(state, cap) {
       ${list(c.autoRestriction)}
       <p class="muted small">Humans authorize expanded authority. Software may automatically reduce authority when one of these predefined conditions is triggered.</p>
     </div>
-    ${section('Risk profile', kv([
-      ['Impact', risk.impact],
-      ['Reversibility', risk.reversibility],
-      ['Exposure', risk.exposure],
-      ['Failure types watched', (risk.failureTypes || []).join(', ')],
-    ]), { subtitle: 'The risk profile sets how much evidence an authority increase needs.' })}`;
+    ${riskBlock}`;
 }
 
 function criteriaTab(state, cap) {
   const criteria = current(state, cap.id, 'criteria');
   const requirements = current(state, cap.id, 'requirements');
+  if (!criteria.length && !requirements.length) return emptyState(state, cap.id, 'No success criteria or evidence requirements yet.', 'criteria');
   const rows = criteria.map((c) => html`<tr>
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
@@ -145,6 +137,7 @@ export function requirementsList(state, capabilityId) {
 
 function testingTab(state, cap) {
   const t = testSummary(state, cap.id);
+  if (!t.total) return emptyState(state, cap.id, 'No scenarios yet.', 'scenarios');
   return html`
     <p class="muted">${t.total} scenarios. ${t.status === 'complete'
       ? html`Run today: ${t.passed} of ${t.total} passed, ${t.highSeverity} high-severity failure${t.highSeverity === 1 ? '' : 's'}.`
@@ -154,7 +147,7 @@ function testingTab(state, cap) {
 
 function evidenceTab(state, cap, d) {
   const p = d.pilot;
-  if (!p) return html`${empty('No pilot has been run for this capability.')}${d.evidence.length ? html`<p class="muted small">Other evidence is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>` : ''}`;
+  if (!p) return html`${emptyState(state, cap.id, d.evidence.length ? 'No pilot has been run for this capability.' : 'No evidence yet.', 'tests')}${d.evidence.length ? html`<p class="muted small">Other evidence is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>` : ''}`;
   const rows = p.segments.map((s) => html`<tr class="${s.status === 'insufficient' ? 'row-insufficient' : ''}">
     <td><strong>${s.name}</strong></td>
     <td class="num">${s.cases}</td>
@@ -188,6 +181,7 @@ function evidenceTab(state, cap, d) {
 function stakeholdersTab(state, cap, d) {
   const tone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient' };
   const stakeholders = current(state, cap.id, 'stakeholders');
+  if (!stakeholders.length) return emptyState(state, cap.id, 'No stakeholders named yet.', 'stakeholders');
   const cards = stakeholders.map((s) => {
     const who = person(s.person);
     return html`<div class="card stakeholder">
@@ -213,7 +207,7 @@ function decisionsTab(state, cap) {
     <tbody>${records.map((x) => html`<tr>
       <td><a href="#/decisions/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
       <td>${fmtDate(x.date)}</td>
-      <td>${authorityLabel(x.previous, { short: true })} → ${authorityLabel(x.next, { short: true })}</td>
+      <td>${x.previous ? html`${authorityLabel(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityLabel(x.next, { short: true })}</td>
       <td>${optionLabel(x.option)}</td>
       <td>${person(x.authorizedBy).name}</td>
     </tr>`)}</tbody>
@@ -222,6 +216,8 @@ function decisionsTab(state, cap) {
 
 export function optionLabel(option) {
   if (option === 'auto-restrict') return 'Automatic restriction';
+  if (option === 'define') return 'Starting authority';
+  if (option === 'not-delegated') return 'Not delegated, by design';
   const o = seed.DECISION_OPTIONS.find((x) => x.id === option);
   return o ? o.name : option;
 }
@@ -229,7 +225,7 @@ export function optionLabel(option) {
 function monitoringTab(cap, d) {
   const m = d.monitoring;
   if (!m) {
-    return html`${notice('neutral', 'Monitoring is not active.', `${cap.name} is at ${authorityLabel(cap.authority)}. A monitoring period starts when authority is expanded. The automatic restriction rule below applies from that point.`)}
+    return html`${notice('neutral', 'Monitoring is not active.', `${cap.name} is at ${authorityLabel(cap.authority)}. A monitoring period starts when authority is expanded.${d.monitoringRule ? ' The automatic restriction rule below applies from that point.' : ' The rule will come from the contract\u2019s automatic restriction conditions.'}`)}
       ${d.monitoringRule ? html`<div class="card"><p class="eyebrow">Automatic restriction rule</p><p>${d.monitoringRule.rule}</p></div>` : ''}`;
   }
   const pct = Math.round((m.severeErrorsInWindow / m.rollingWindow) * 1000) / 10;

@@ -138,11 +138,23 @@ The **activity history** is an audit-style timeline: pilot started, failure foun
 
 ---
 
+### Adding a capability
+
+**Capabilities → Add capability** walks one capability through the first three setup steps on one page: define it (name, one-line summary, owner), give it a risk profile (impact, reversibility, exposure, failure types to watch), and choose its starting authority. The starting authority is Level 0, Level 1, or "Not delegated, by design", which needs a written rationale. Nothing starts higher; authority above Level 1 is earned later.
+
+Adding the capability writes its first decision record, dated today and authorized by whoever is acting, and version 1 of its risk profile. The contract, criteria, requirements and stakeholders have no versions until they are authored. A non-blocking warning appears when the name reads like a whole process ("handle", "manage") or like two actions joined by "and".
+
+Every tab of a capability is always visible. A tab with nothing to show says what is missing and links to the **Setup** page, a checklist of the steps to the first authority decision: define, contract, criteria and requirements, stakeholders, scenarios, test run, decision. Steps whose editors are not built yet say so.
+
+### Acting as
+
+The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
+
 ## 2. The screens
 
 **Overview** answers "where do we need to make a decision?" It shows the capability waiting on a decision, its current and proposed authority, decision readiness, the current evidence against the criteria, the exceptions that need attention, the system's recommendation, and a short authority map. If a monitoring rule has fired, the alert appears here first.
 
-**Capabilities** is the authority map: every capability, its current authority, status, risk, owner and last evaluation. This is the page for "what is the AI actually allowed to do here?"
+**Capabilities** is the authority map: every capability, its current authority, status, risk, owner and last evaluation, plus the Add capability button. This is the page for "what is the AI actually allowed to do here?"
 
 **Capability detail** is the full picture of one capability, with tabs for the contract, success criteria, testing, evidence, stakeholders, decision history and monitoring. The current and proposed authority are always visible at the top.
 
@@ -180,7 +192,9 @@ The **activity history** is an audit-style timeline: pilot started, failure foun
 | Authority conditions | Edit the limits for Expand with limits; the preview updates in plain English |
 | Authorize authority change | Changes the capability's authority, writes an immutable record, starts monitoring if authority expanded |
 | Simulate threshold breach | Pushes severe errors over the limit; software restricts authority, creates an alert, an event and a record, and requires review |
-| Reset demo | Restores the seeded state |
+| Add capability | Defines a capability, its risk profile and starting authority; writes its first decision record |
+| Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
+| Reset demo | Restores the seeded state, removing any added capabilities |
 
 State is kept in your browser, so you can refresh without losing your place.
 

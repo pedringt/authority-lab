@@ -70,6 +70,7 @@ export function badge(status, label) {
 
 export function capStatusBadge(status) {
   const tone = {
+    setup: 'neutral',
     stable: 'pass',
     pilot: 'neutral',
     'decision-required': 'decision',
@@ -137,4 +138,11 @@ export function notice(tone, title, body, { link, linkText } = {}) {
 
 export function empty(text) {
   return html`<p class="empty">${text}</p>`;
+}
+
+export function selectField(name, label, options, value, { placeholder, action } = {}) {
+  return html`<label class="field field-stack"><span>${label}</span><select name="${name}" ${action ? html`data-action="${action}"` : ''}>${placeholder ? html`<option value="" ${value ? '' : raw('selected')}>${placeholder}</option>` : ''}${options.map((o) => {
+    const [v, text] = Array.isArray(o) ? o : [o, o];
+    return html`<option value="${v}" ${v === value ? raw('selected') : ''}>${text}</option>`;
+  })}</select></label>`;
 }

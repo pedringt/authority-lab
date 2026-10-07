@@ -5,7 +5,7 @@
 
 import * as seed from './data/seed.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v4';
+export const STORAGE_KEY = 'authority-lab-state-v5';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -75,8 +75,11 @@ export function initialState() {
   // The contract and risk profile live in the version lists.
   const capabilities = seed.capabilities.map(({ contract, risk, ...rest }) => clone(rest));
   return {
-    version: 4,
+    version: 5,
     today: seed.TODAY,
+    // Who is acting in the UI. null means "the owner of the capability in
+    // context"; a person key overrides it (the "acting as" picker).
+    actingAs: null,
     capabilities,
     capabilityData,
     decisionRecords: clone(seed.decisionRecords),
@@ -178,6 +181,133 @@ export function amendmentsAfterEvidenceFor(state, record) {
 export function isSurfaced(event) {
   if (event.kind === 'amendment') return Boolean(event.afterEvidence);
   return SURFACED_KINDS.has(event.kind);
+}
+
+// The person acting right now: the picked person, else the capability's owner,
+// else the focus capability's owner. Used as the author of records and
+// amendments.
+export function actor(state, capabilityId) {
+  if (state.actingAs && seed.people[state.actingAs]) return state.actingAs;
+  const cap = capabilityId ? getCapability(state, capabilityId) : null;
+  if (cap) return cap.owner;
+  const focus = focusCapability(state);
+  return focus ? focus.owner : Object.keys(seed.people)[0];
+}
+
+export function setActingAs(state, personKey) {
+  if (personKey && !seed.people[personKey]) throw new Error(`Unknown person: ${personKey}`);
+  return { ...state, actingAs: personKey || null };
+}
+
+// A non-blocking warning when a capability name reads like more than one
+// action or like a whole process.
+export function vagueNameWarning(name) {
+  const n = (name || '').trim();
+  if (!n) return null;
+  if (/\b(handle|handles|handling|manage|manages|managing)\b/i.test(n)) {
+    return 'This name sounds like a whole process. A capability is one discrete thing the AI might do, small enough to hold one authority level.';
+  }
+  if (/\b\S+\s+and\s+\S+/i.test(n)) {
+    return 'This name may describe two actions. Each action should be its own capability so it can hold its own authority.';
+  }
+  return null;
+}
+
+export function slugify(name) {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'capability';
+}
+
+export const RISK_OPTIONS = {
+  impact: ['Low', 'Medium', 'High'],
+  reversibility: ['Easy to reverse', 'Recoverable with effort', 'Difficult to reverse'],
+  exposure: ['Internal only', 'Customer-facing', 'Financial / consequential'],
+  failureTypes: ['Wrong answer', 'Wrong action', 'Policy violation', 'Hallucination', 'Missing escalation', 'Excessive cost', 'User over-reliance', 'User rejection', 'Silent failure'],
+};
+
+// Add a capability (#4). Writes its first decision record (its starting
+// authority, or "not delegated, by design") and version 1 of its risk profile.
+// The contract, criteria, requirements and stakeholders get their first
+// versions when they are authored.
+export function addCapability(state, { name, summary, owner, risk, startingLevel, notDelegated = false, rationale = '', by } = {}) {
+  const cleanName = (name || '').trim();
+  if (!cleanName) throw new Error('A capability needs a name.');
+  if (!owner || !seed.people[owner]) throw new Error('Choose an owner.');
+  const r = risk || {};
+  for (const k of ['impact', 'reversibility', 'exposure']) {
+    if (!RISK_OPTIONS[k].includes(r[k])) throw new Error(`Choose a risk ${k}.`);
+  }
+  const level = notDelegated ? 0 : Number(startingLevel);
+  if (!notDelegated && ![0, 1].includes(level)) throw new Error('Starting authority must be Level 0 or Level 1.');
+  const reason = (rationale || '').trim();
+  if (notDelegated && reason.length < 20) throw new Error('"Not delegated, by design" needs a written rationale.');
+  const author = by && seed.people[by] ? by : owner;
+
+  let id = slugify(cleanName);
+  if (getCapability(state, id)) {
+    let n = 2;
+    while (getCapability(state, `${id}-${n}`)) n += 1;
+    id = `${id}-${n}`;
+  }
+
+  const cap = {
+    id,
+    name: cleanName,
+    summary: (summary || '').trim(),
+    owner,
+    authority: { level, limited: false },
+    status: notDelegated ? 'not-delegated' : 'setup',
+    decisionRequired: false,
+    definedOn: state.today,
+    lastEvaluated: state.today,
+    added: true,
+  };
+  const data = emptyCapabilityData();
+  data.versions.risk = [firstVersion({ impact: r.impact, reversibility: r.reversibility, exposure: r.exposure, failureTypes: (r.failureTypes || []).filter((f) => RISK_OPTIONS.failureTypes.includes(f)), note: (r.note || '').trim() || undefined }, { date: state.today, author })];
+
+  const number = state.decisionRecords.length + 1;
+  const recordId = `AC-${String(number).padStart(2, '0')}`;
+  const who = seed.people[author];
+  const record = {
+    id: recordId,
+    number,
+    sequence: 1,
+    capabilityId: id,
+    date: state.today,
+    previous: null,
+    next: { level, limited: false },
+    option: notDelegated ? 'not-delegated' : 'define',
+    owner,
+    authorizedBy: author,
+    versions: { contract: 0, criteria: 0, requirements: 0, risk: 1, stakeholders: 0 },
+    scope: notDelegated
+      ? 'Not delegated, by design. The AI produces no operational output for this capability. Any later delegation needs a new decision.'
+      : level === 1
+        ? 'Recommend. The AI may produce a recommendation for a person; it takes no action.'
+        : 'Observe. The AI sees the input and produces no operational output.',
+    rationale: reason || (level === 1
+      ? 'Starting at Recommend so recommendations can be compared with what people decide before any authority is granted.'
+      : 'Starting at Observe. Authority is earned through evidence from this point.'),
+    evidenceSnapshot: ['No evidence yet. This is the starting point.'],
+    openCondition: notDelegated
+      ? 'Deliberately not delegated. Revisit only with a new decision.'
+      : 'Finalize the delegation contract and save success criteria and evidence requirements before the first test run.',
+    conditions: null,
+  };
+
+  let s = {
+    ...state,
+    capabilities: [...state.capabilities, cap],
+    capabilityData: { ...state.capabilityData, [id]: data },
+    decisionRecords: [...state.decisionRecords, record],
+  };
+  s = logEvent(s, {
+    kind: 'authority',
+    title: notDelegated ? 'Capability added, not delegated by design' : `Capability added at ${authorityLabel(cap.authority)}`,
+    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${seed.people[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
+    capabilityId: id,
+    link: `#/decisions/${recordId}`,
+  });
+  return s;
 }
 
 // The capability the workspace should be looking at: an alert first, then a
@@ -493,11 +623,13 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const record = {
     id,
     number,
+    sequence: state.decisionRecords.filter((r) => r.capabilityId === cap.id).length + 1,
     capabilityId: cap.id,
     date: state.today,
     previous,
     next,
     option,
+    owner: cap.owner,
     authorizedBy: by,
     versions: versionsInForce(state, capabilityId),
     scope: scopeText(option, d.decision.conditions, cap),
@@ -569,11 +701,13 @@ export function simulateBreach(state, capabilityId) {
   const record = {
     id,
     number,
+    sequence: state.decisionRecords.filter((r) => r.capabilityId === cap.id).length + 1,
     capabilityId: cap.id,
     date: state.today,
     previous,
     next,
     option: 'auto-restrict',
+    owner: cap.owner,
     authorizedBy: 'system',
     versions: versionsInForce(state, capabilityId),
     scope: 'Draft. Every decision requires human approval until a review is recorded.',
@@ -691,6 +825,8 @@ export function createStore({ storage = null } = {}) {
 
 const ACTIONS = {
   amend,
+  addCapability,
+  setActingAs,
   startTestRun,
   advanceTestRun,
   selectDecision,
@@ -707,7 +843,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 4) return null;
+    if (!parsed || parsed.version !== 5) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
