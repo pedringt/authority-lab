@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, notice, empty } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current } from '../store.js';
 import { scenarioTable } from './tests.js';
 
 const TABS = [
@@ -15,12 +15,13 @@ const TABS = [
 
 // Tabs appear when the capability has something to show in them. Empty
 // states for new capabilities arrive with the setup flow (#4).
-function tabAvailable(key, d) {
+function tabAvailable(key, state, id) {
+  const d = capData(state, id);
   switch (key) {
-    case 'criteria': return d.criteria.length > 0 || d.requirements.length > 0;
+    case 'criteria': return current(state, id, 'criteria').length > 0 || current(state, id, 'requirements').length > 0;
     case 'testing': return d.scenarios.length > 0;
     case 'evidence': return Boolean(d.pilot) || d.evidence.length > 0;
-    case 'stakeholders': return d.stakeholders.length > 0;
+    case 'stakeholders': return current(state, id, 'stakeholders').length > 0;
     case 'monitoring': return Boolean(d.monitoring) || Boolean(d.monitoringRule);
     default: return true;
   }
@@ -31,7 +32,8 @@ export function capabilityView(state, id, query) {
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
   const d = capData(state, id);
   const requested = query.get('tab') || 'contract';
-  const tab = tabAvailable(requested, d) ? requested : 'contract';
+  const tab = tabAvailable(requested, state, id) ? requested : 'contract';
+  const risk = current(state, id, 'risk');
   const r = readiness(state, id);
   const owner = person(cap.owner);
 
@@ -41,7 +43,7 @@ export function capabilityView(state, id, query) {
         ['Status', html`${capStatusBadge(cap.status)}${cap.pilotLabel ? html` <span class="muted">${cap.pilotLabel}</span>` : ''}`],
         ['Current authority', authorityBadge(cap.authority)],
         ['Proposed authority', cap.proposed ? authorityBadge(cap.proposed) : html`<span class="muted">None proposed</span>`],
-        ['Risk', html`${cap.risk.impact} impact · ${cap.risk.exposure} · ${cap.risk.reversibility}`],
+        ['Risk', html`${risk.impact} impact · ${risk.exposure} · ${risk.reversibility}`],
         ['Owner', html`${owner.name}, ${owner.role}`],
         ['Last evaluated', fmtDateYear(cap.lastEvaluated)],
         ['Evidence readiness', r.total
@@ -53,25 +55,25 @@ export function capabilityView(state, id, query) {
   </div>`;
 
   const tabs = html`<nav class="tabs" aria-label="Capability sections">${TABS
-    .filter(([k]) => tabAvailable(k, d))
+    .filter(([k]) => tabAvailable(k, state, id))
     .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}</a>`)}</nav>`;
 
   let body;
   switch (tab) {
-    case 'criteria': body = criteriaTab(state, cap, d); break;
+    case 'criteria': body = criteriaTab(state, cap); break;
     case 'testing': body = testingTab(state, cap); break;
     case 'evidence': body = evidenceTab(state, cap, d); break;
-    case 'stakeholders': body = stakeholdersTab(d); break;
+    case 'stakeholders': body = stakeholdersTab(state, cap, d); break;
     case 'decisions': body = decisionsTab(state, cap); break;
     case 'monitoring': body = monitoringTab(cap, d); break;
-    default: body = contractTab(cap);
+    default: body = contractTab(state, cap);
   }
 
   return html`<div class="page-head">
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${seed.workflow.name}</p>
       <h1>${cap.name}</h1>
-      <p class="lede">${cap.summary}${cap.risk.note ? html` ${cap.risk.note}` : ''}</p>
+      <p class="lede">${cap.summary}${risk.note ? html` ${risk.note}` : ''}</p>
     </div>
   </div>
   ${summary}
@@ -79,8 +81,9 @@ export function capabilityView(state, id, query) {
   <div class="tab-panel">${body}</div>`;
 }
 
-function contractTab(cap) {
-  const c = cap.contract;
+function contractTab(state, cap) {
+  const c = current(state, cap.id, 'contract');
+  const risk = current(state, cap.id, 'risk');
   const list = (items) => html`<ul class="contract-list">${items.map((i) => html`<li>${i}</li>`)}</ul>`;
   return html`
     <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment.</p>
@@ -96,15 +99,17 @@ function contractTab(cap) {
       <p class="muted small">Humans authorize expanded authority. Software may automatically reduce authority when one of these predefined conditions is triggered.</p>
     </div>
     ${section('Risk profile', kv([
-      ['Impact', cap.risk.impact],
-      ['Reversibility', cap.risk.reversibility],
-      ['Exposure', cap.risk.exposure],
-      ['Failure types watched', cap.risk.failureTypes.join(', ')],
+      ['Impact', risk.impact],
+      ['Reversibility', risk.reversibility],
+      ['Exposure', risk.exposure],
+      ['Failure types watched', (risk.failureTypes || []).join(', ')],
     ]), { subtitle: 'The risk profile sets how much evidence an authority increase needs.' })}`;
 }
 
-function criteriaTab(state, cap, d) {
-  const rows = d.criteria.map((c) => html`<tr>
+function criteriaTab(state, cap) {
+  const criteria = current(state, cap.id, 'criteria');
+  const requirements = current(state, cap.id, 'requirements');
+  const rows = criteria.map((c) => html`<tr>
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
     <td>${c.current}</td>
@@ -118,7 +123,7 @@ function criteriaTab(state, cap, d) {
       <thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th><th>Note</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>` : empty('No success criteria defined.')}
-    ${d.requirements.length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'A checklist, not a readiness score.' }) : ''}`;
+    ${requirements.length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'A checklist, not a readiness score.' }) : ''}`;
 }
 
 export function proposedChangeLabel(cap) {
@@ -127,7 +132,7 @@ export function proposedChangeLabel(cap) {
 
 export function requirementsList(state, capabilityId) {
   const r = readiness(state, capabilityId);
-  const reqs = capData(state, capabilityId).requirements;
+  const reqs = current(state, capabilityId, 'requirements');
   if (!reqs.length) return empty('No evidence requirements defined.');
   return html`<div class="card">
     <ul class="req-list">${reqs.map((q) => html`<li class="${q.met ? 'is-met' : 'is-unmet'}">
@@ -176,13 +181,14 @@ function evidenceTab(state, cap, d) {
     </table></div>
     ${weak.map((s) => notice('insufficient', 'Overall performance looks good. One segment does not.', `${s.name} have ${s.cases} cases at ${s.accuracy}% accuracy and a ${s.overrideRate}% override rate. That is too few cases to conclude anything, and the aggregate ${p.accuracy}% hides it.${unmetReq ? ` The evidence requirement for this segment is ${unmetReq.text.toLowerCase().replace(/^minimum /, '')}.` : ''}`))}
     ${p.severeErrorList && p.severeErrorList.length ? section('Severe errors in the pilot', html`<div class="card"><ul class="plain-list">${p.severeErrorList.map((e) => html`<li><span class="muted">${fmtDate(e.date)} · ${p.segments.find((s) => s.id === e.segment).name}</span><br>${e.text}</li>`)}</ul><p class="muted small">All ${p.severeErrors} were caught in review before any action. That is what Draft authority is for; it is also why the override rate matters more than the raw error count.</p></div>`) : ''}
-    ${d.requirements.length ? section('Evidence requirements', requirementsList(state, cap.id)) : ''}
+    ${current(state, cap.id, 'requirements').length ? section('Evidence requirements', requirementsList(state, cap.id)) : ''}
     <p class="muted small">All evidence for this capability is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>`;
 }
 
-function stakeholdersTab(d) {
+function stakeholdersTab(state, cap, d) {
   const tone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient' };
-  const cards = d.stakeholders.map((s) => {
+  const stakeholders = current(state, cap.id, 'stakeholders');
+  const cards = stakeholders.map((s) => {
     const who = person(s.person);
     return html`<div class="card stakeholder">
       <div class="stakeholder-head"><div><strong>${s.team}</strong><div class="muted small">${who.name}, ${who.role}</div></div>${badge(tone[s.stance] || 'neutral', s.position)}</div>
@@ -191,7 +197,7 @@ function stakeholdersTab(d) {
   });
   const sum = d.stakeholderSummary;
   return html`
-    <p class="muted">Positions recorded ${d.stakeholders[0] && d.stakeholders[0].date ? fmtDate(d.stakeholders[0].date) : 'Oct 6'}. They are kept as positions, not averaged into a score.</p>
+    <p class="muted">Positions recorded ${stakeholders[0] && stakeholders[0].date ? fmtDate(stakeholders[0].date) : 'Oct 6'}. They are kept as positions, not averaged into a score.</p>
     <div class="stakeholder-grid">${cards}</div>
     ${sum ? html`<div class="two-col">
       <div class="card"><p class="eyebrow">Consensus</p><p>${sum.consensus}</p></div>

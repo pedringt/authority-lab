@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current } from '../store.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -122,7 +122,9 @@ export function decisionWorkspaceView(state, capabilityId) {
     ${c.maxValue > 100 ? notice('watch', 'This exceeds the $100 approval line in the contract.', r.unmet.length ? `The evidence requirement "${r.unmet[0].text}" is not met (currently ${r.unmet[0].current}).` : '') : ''}
   </div>` : dec.option ? html`<div class="card conditions"><p class="eyebrow">Resulting authority</p><p>${scopeText(dec.option, c, cap)}</p><p class="muted small">${cap.name} would move from ${authorityLabel(cap.authority)} to ${authorityLabel(nextAuthority(dec.option, cap.authority))}.</p></div>` : '';
 
-  const criteriaRows = d.criteria.map((s) => html`<tr><td>${s.name}</td><td>${s.target}</td><td>${s.current}</td><td>${badge(s.status)}</td></tr>`);
+  const criteria = current(state, cap.id, 'criteria');
+  const stakeholders = current(state, cap.id, 'stakeholders');
+  const criteriaRows = criteria.map((s) => html`<tr><td>${s.name}</td><td>${s.target}</td><td>${s.current}</td><td>${badge(s.status)}</td></tr>`);
   const stakeholderTone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient' };
   const authorizer = person(cap.owner);
 
@@ -148,7 +150,7 @@ export function decisionWorkspaceView(state, capabilityId) {
         <p class="muted small">${rec.caveat}</p>
       </div>`) : ''}
 
-      ${d.stakeholders.length ? section('Stakeholder positions', html`<div class="card"><ul class="position-list">${d.stakeholders.map((s) => html`<li><span class="position-team">${s.team}</span>${badge(stakeholderTone[s.stance] || 'neutral', s.position)}<span class="muted small">${person(s.person).name}</span></li>`)}</ul>
+      ${stakeholders.length ? section('Stakeholder positions', html`<div class="card"><ul class="position-list">${stakeholders.map((s) => html`<li><span class="position-team">${s.team}</span>${badge(stakeholderTone[s.stance] || 'neutral', s.position)}<span class="muted small">${person(s.person).name}</span></li>`)}</ul>
         ${d.stakeholderSummary ? html`<p><strong>Consensus:</strong> ${d.stakeholderSummary.consensus}</p>
         <p><strong>Unresolved:</strong> ${d.stakeholderSummary.disagreement} <a href="#/capabilities/${cap.id}?tab=stakeholders">Full positions</a></p>` : ''}</div>`) : ''}
     </div>
