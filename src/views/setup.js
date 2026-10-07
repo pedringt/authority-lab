@@ -21,7 +21,8 @@ export function addCapabilityView(state, query) {
       <label class="field field-stack"><span>Name</span><input name="name" type="text" required maxlength="80" placeholder="e.g. Order status lookup" data-action="check-name" autocomplete="off"></label>
       <p class="form-hint muted small" data-name-warning hidden></p>
       <label class="field field-stack"><span>What it does</span><input name="summary" type="text" maxlength="160" placeholder="One sentence. e.g. Answers where an order is from the carrier feed."></label>
-      ${selectField('owner', 'Owner', owners, actor(state))}
+      ${selectField('owner', 'Owner', owners, actor(state), { action: 'choose-owner' })}
+      <p class="muted small">Choosing an owner switches "Acting as" to them. Whoever is acting when you submit is recorded as the authorizer; if that is not the owner, the record shows both.</p>
     </div>`, { subtitle: 'A capability is small enough to hold one authority level. "Handle refunds" is a process; "Recommend a refund" is a capability.' })}
 
     ${section('2. Risk profile', html`<div class="card">

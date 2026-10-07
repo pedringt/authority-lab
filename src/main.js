@@ -94,11 +94,41 @@ function render() {
   acting.dataset.current = current;
 
   const y = window.scrollY;
+  const saved = captureForms();
   app.innerHTML = String(view);
+  restoreForms(saved);
   if (lastRoute === location.hash) window.scrollTo(0, y); else window.scrollTo(0, 0);
   lastRoute = location.hash;
 }
 let lastRoute = null;
+
+// Forms are uncontrolled; keep what the person typed across a re-render.
+function captureForms() {
+  const out = {};
+  for (const form of app.querySelectorAll('[data-form]')) {
+    const values = {};
+    for (const el of form.elements) {
+      if (!el.name) continue;
+      if (el.type === 'checkbox' || el.type === 'radio') values[`${el.name}=${el.value}`] = el.checked;
+      else values[el.name] = el.value;
+    }
+    out[form.dataset.form] = values;
+  }
+  return out;
+}
+function restoreForms(saved) {
+  for (const form of app.querySelectorAll('[data-form]')) {
+    const values = saved[form.dataset.form];
+    if (!values) continue;
+    for (const el of form.elements) {
+      if (!el.name) continue;
+      if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
+      else if (el.name in values) el.value = values[el.name];
+    }
+    const nameEl = form.querySelector('[data-action="check-name"]');
+    if (nameEl) nameEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Events
@@ -133,6 +163,7 @@ document.addEventListener('change', (e) => {
   if (!el) return;
   const capId = el.dataset.capability;
   if (el.dataset.action === 'set-acting') { store.dispatch('setActingAs', el.value || null); return; }
+  if (el.dataset.action === 'choose-owner') { store.dispatch('setActingAs', el.value || null); return; }
   if (el.dataset.action === 'select-option') store.dispatch('selectDecision', capId, el.value);
   if (el.dataset.action === 'set-condition') {
     const key = el.dataset.key;

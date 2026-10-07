@@ -518,6 +518,7 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   assert.deepEqual(rec.next, { level: 1, limited: false });
   assert.equal(rec.option, 'define');
   assert.equal(rec.authorizedBy, 'priya');
+  assert.equal(rec.owner, 'priya');
   assert.equal(rec.date, seed.TODAY);
   assert.deepEqual(rec.versions, { contract: 0, criteria: 0, requirements: 0, risk: 1, stakeholders: 0 });
   assert.equal(s.activity[0].kind, 'authority');
@@ -530,6 +531,19 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   // The seeded demo is untouched.
   assert.equal(cap(s).decisionRequired, true);
   assert.equal(focusCapability(s).id, RR);
+});
+
+test('whoever is acting is recorded as the authorizer, alongside the owner when they differ', () => {
+  const s = addCapability(initialState(), { name: 'Order status lookup', owner: 'priya', risk: LOW_RISK, startingLevel: 0, by: 'daniel' });
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.equal(rec.owner, 'priya');
+  assert.equal(rec.authorizedBy, 'daniel');
+  assert.match(s.activity[0].body, /added by Daniel Okafor \(owner: Priya Natarajan\)/);
+  // Later records carry the owner too.
+  const t = authorize(selectDecision(initialState(), RR, 'hold'), RR, { by: 'daniel' });
+  const later = t.decisionRecords[t.decisionRecords.length - 1];
+  assert.equal(later.owner, 'maya');
+  assert.equal(later.authorizedBy, 'daniel');
 });
 
 test('"not delegated, by design" needs a rationale and is recorded as a decision', () => {

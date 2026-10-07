@@ -276,6 +276,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     previous: null,
     next: { level, limited: false },
     option: notDelegated ? 'not-delegated' : 'define',
+    owner,
     authorizedBy: author,
     versions: { contract: 0, criteria: 0, requirements: 0, risk: 1, stakeholders: 0 },
     scope: notDelegated
@@ -302,7 +303,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
   s = logEvent(s, {
     kind: 'authority',
     title: notDelegated ? 'Capability added, not delegated by design' : `Capability added at ${authorityLabel(cap.authority)}`,
-    body: `${cap.name} was added by ${who.name}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
+    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${seed.people[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
     capabilityId: id,
     link: `#/decisions/${recordId}`,
   });
@@ -628,6 +629,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     previous,
     next,
     option,
+    owner: cap.owner,
     authorizedBy: by,
     versions: versionsInForce(state, capabilityId),
     scope: scopeText(option, d.decision.conditions, cap),
@@ -705,6 +707,7 @@ export function simulateBreach(state, capabilityId) {
     previous,
     next,
     option: 'auto-restrict',
+    owner: cap.owner,
     authorizedBy: 'system',
     versions: versionsInForce(state, capabilityId),
     scope: 'Draft. Every decision requires human approval until a review is recorded.',

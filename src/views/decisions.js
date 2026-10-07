@@ -51,6 +51,7 @@ export function decisionRecordView(state, id) {
       <div><span class="fact-label">New</span>${authorityBadge(x.next)}</div>
       <div><span class="fact-label">Decision</span><strong>${optionLabel(x.option)}</strong></div>
       <div><span class="fact-label">${auto ? 'Applied by' : 'Authorized by'}</span><strong>${who.name}</strong><div class="muted small">${who.role}</div></div>
+      ${x.owner && x.owner !== x.authorizedBy ? html`<div><span class="fact-label">Owner</span><strong>${person(x.owner).name}</strong><div class="muted small">${person(x.owner).role}</div></div>` : ''}
     </div>
     ${kv([
       ['Scope', x.scope],

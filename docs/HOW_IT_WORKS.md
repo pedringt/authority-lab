@@ -148,7 +148,7 @@ Every tab of a capability is always visible. A tab with nothing to show says wha
 
 ### Acting as
 
-The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person. Whoever is acting is the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. This is what lets a proposer and an approver be different people when sign-off rules arrive.
+The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
 
 ## 2. The screens
 
