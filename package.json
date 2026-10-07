@@ -1,0 +1,10 @@
+{
+  "name": "delegation-manager",
+  "private": true,
+  "type": "module",
+  "description": "Prototype: test an AI workflow before giving it more authority.",
+  "scripts": {
+    "start": "python3 -m http.server 8140",
+    "test": "node --test scripts/*.test.mjs"
+  }
+}

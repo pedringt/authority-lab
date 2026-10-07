@@ -1,1 +1,51 @@
-# authority-lab
+# Delegation Manager (prototype)
+
+A product prototype for one question:
+
+> Based on the evidence we have, what should this AI be allowed to do?
+
+It walks one AI capability, **Refund recommendation** in the fictional Northstar Support workspace, through the full lifecycle: Define → Test → Pilot → Evaluate → Decide → Monitor. Authority is explicit, earned through evidence, conditional, reversible and authorized by a named person.
+
+**AI interprets. Software enforces. Humans authorize.**
+
+## Run it
+
+No build step, no dependencies, no network calls.
+
+```bash
+python3 -m http.server 8140
+```
+
+Then open http://localhost:8140/. Any static host (Vercel, GitHub Pages) serves it as-is.
+
+## Test it
+
+```bash
+node --test scripts/*.test.mjs
+```
+
+The tests cover the state transitions: running the suite, authorizing each decision option, the automatic restriction on a threshold breach, the review-required lock, persistence and reset.
+
+## Demo story
+
+1. **Overview**: Refund recommendation needs an authority decision. 5 of 6 evidence requirements are met; high-value refunds are the gap.
+2. **Capability → Contract**: what the AI may do, must ask about, must never do, and when software pulls authority back.
+3. **Tests → Run test suite**: 24 of 26 pass. H-04 (fraud flag present) is a high-severity miss.
+4. **Capability → Evidence**: 218 pilot cases at 94%, but 18 high-value cases at 83%.
+5. **Capability → Stakeholders**: Support Operations wants to expand; Risk wants high-value cases held.
+6. **Decisions → Open authority decision**: choose **Expand with limits**, set the conditions, read the plain-English preview, write the rationale, authorize.
+7. **Decision record #04** is written with the evidence snapshot. The authority map updates.
+8. **Capability → Monitoring → Simulate threshold breach**: severe errors exceed 5% of the rolling 50; software returns the capability to Draft, creates an alert, an activity event and a restriction record, and locks expansion until a review is recorded.
+9. **Reset demo** (top right) restores the seeded state.
+
+## Structure
+
+- `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).
+- `src/store.js`: pure state transitions plus a small persisted store.
+- `src/views/*.js`: one module per screen. Views render from state; they never mutate it.
+- `src/ui.js`: escaping template tag and shared components (badges, authority labels, level scale, notices).
+- `styles/app.css`: the design system. Color carries state (pass / watch / fail / insufficient / restricted / decision required) and is always paired with a label.
+
+## Boundaries
+
+Not an agent builder, prompt editor, eval platform, observability tool or compliance suite. Those would feed evidence into this. All data is fictional; there are no real customers, no money movement and no model calls.

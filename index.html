@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delegation Manager</title>
+  <meta name="description" content="Prototype: test an AI workflow before giving it more authority. AI interprets. Software enforces. Humans authorize.">
+  <link rel="stylesheet" href="styles/app.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f2937'/%3E%3Cpath d='M9 17l5 5 9-11' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+  <a class="skip" href="#app">Skip to content</a>
+  <header class="topbar" id="topbar">
+    <div class="brand">
+      <a class="brand-name" href="#/overview">Delegation Manager</a>
+      <span class="brand-sep" aria-hidden="true">/</span>
+      <span class="brand-ws">Northstar Support</span>
+    </div>
+    <nav class="nav" id="nav" aria-label="Primary"></nav>
+    <div class="topbar-actions">
+      <span class="demo-tag" title="Seeded demo data. No real customers, money or model calls.">Demo · Oct 7, 2026</span>
+      <button class="btn btn-ghost btn-sm" data-action="reset" title="Restore the seeded prototype state">Reset demo</button>
+    </div>
+  </header>
+  <main class="app" id="app" tabindex="-1"></main>
+  <footer class="foot">
+    <p><strong>AI interprets. Software enforces. Humans authorize.</strong> A product prototype for deciding what an AI capability should be allowed to do, based on evidence. All data is seeded and fictional.</p>
+  </footer>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
