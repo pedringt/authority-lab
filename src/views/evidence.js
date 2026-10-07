@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, section, fmtDate } from '../ui.js';
-import { capData, getCapability } from '../store.js';
+import { capData, getCapability, current } from '../store.js';
 import { requirementsList, proposedChangeLabel } from './capability.js';
 import { capabilityPicker } from './tests.js';
 
@@ -58,5 +58,5 @@ export function evidenceView(state, capabilityId, query) {
   ${capabilityPicker(state, cap.id, (id) => `#/evidence?capability=${id}`)}
   ${d.evidence.length ? filters : ''}
   ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${d.evidence.length ? 'No evidence matches these filters.' : `No evidence has been recorded for ${cap.name}.`}</p>`}
-  ${d.requirements.length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'What has to be true before the proposed change can be authorized.' }) : ''}`;
+  ${current(state, cap.id, 'requirements').length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'What has to be true before the proposed change can be authorized.' }) : ''}`;
 }

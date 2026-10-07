@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate } from '../ui.js';
-import { focusCapability, capData, readiness, authorityLabel, testSummary } from '../store.js';
+import { focusCapability, capData, readiness, authorityLabel, testSummary, current } from '../store.js';
 
 function firstSentences(text, n) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
@@ -104,7 +104,8 @@ export function overviewView(state) {
     </div>`;
   }
 
-  const criterion = (id) => d.criteria.find((c) => c.id === id);
+  const criteria = current(state, cap.id, 'criteria');
+  const criterion = (id) => criteria.find((c) => c.id === id);
   const evidenceCards = p ? html`<div class="metric-grid">
     ${metricCard({ label: 'Quality', value: `${p.accuracy}%`, target: '≥ 92%', status: criterion('quality')?.status || 'neutral', href: `#/capabilities/${cap.id}?tab=criteria` })}
     ${metricCard({ label: 'Severe errors', value: `${p.severeErrorRate}%`, target: '< 2%', status: criterion('severe-errors')?.status || 'neutral', href: `#/capabilities/${cap.id}?tab=criteria` })}

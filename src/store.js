@@ -5,18 +5,15 @@
 
 import * as seed from './data/seed.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v3';
+export const STORAGE_KEY = 'authority-lab-state-v4';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 export function emptyCapabilityData() {
   return {
-    criteria: [],
-    requirements: [],
     scenarios: [],
     pilot: null,
     evidence: [],
-    stakeholders: [],
     stakeholderSummary: null,
     recommendation: null,
     monitoringRule: null,
@@ -43,12 +40,9 @@ function seededCapabilityData(id) {
   if (!s) return base;
   return {
     ...base,
-    criteria: clone(s.criteria || []),
-    requirements: clone(s.requirements || []),
     scenarios: clone(s.scenarios || []),
     pilot: s.pilot ? clone(s.pilot) : null,
     evidence: clone(s.evidence || []),
-    stakeholders: clone(s.stakeholders || []),
     stakeholderSummary: s.stakeholderSummary ? clone(s.stakeholderSummary) : null,
     recommendation: s.recommendation ? clone(s.recommendation) : null,
     monitoringRule: s.monitoringRule ? clone(s.monitoringRule) : null,
@@ -66,20 +60,24 @@ function seededCapabilityData(id) {
 export function initialState() {
   const capabilityData = Object.fromEntries(seed.capabilities.map((c) => {
     const d = seededCapabilityData(c.id);
+    const sd = seed.capabilityData[c.id] || {};
     const stamp = { date: c.definedOn || c.lastEvaluated, author: c.owner };
     d.versions = {
       contract: [firstVersion(c.contract, stamp)],
-      criteria: [firstVersion(d.criteria, stamp)],
-      requirements: [firstVersion(d.requirements, stamp)],
+      criteria: [firstVersion(sd.criteria || [], stamp)],
+      requirements: [firstVersion(sd.requirements || [], stamp)],
       risk: [firstVersion(c.risk, stamp)],
-      stakeholders: [firstVersion(d.stakeholders, stamp)],
+      stakeholders: [firstVersion(sd.stakeholders || [], stamp)],
     };
     return [c.id, d];
   }));
+  // The capability object holds identity and current authority/status only.
+  // The contract and risk profile live in the version lists.
+  const capabilities = seed.capabilities.map(({ contract, risk, ...rest }) => clone(rest));
   return {
-    version: 3,
+    version: 4,
     today: seed.TODAY,
-    capabilities: clone(seed.capabilities),
+    capabilities,
     capabilityData,
     decisionRecords: clone(seed.decisionRecords),
     activity: clone(seed.activity),
@@ -102,6 +100,24 @@ export function capData(state, id) {
 export function currentVersion(state, capabilityId, kind) {
   const list = capData(state, capabilityId).versions[kind] || [];
   return list[list.length - 1] || null;
+}
+
+export const EMPTY_CONTRACT = { may: [], mustAsk: [], mustNever: [], escalation: [], autoRestriction: [] };
+export const EMPTY_RISK = { impact: '', reversibility: '', exposure: '', failureTypes: [] };
+
+// The current value of a versioned object: the latest version. This is the
+// only way views read the contract, risk profile, criteria, requirements and
+// stakeholders.
+export function current(state, capabilityId, kind) {
+  const v = currentVersion(state, capabilityId, kind);
+  if (v) return v.value;
+  if (kind === 'contract') return EMPTY_CONTRACT;
+  if (kind === 'risk') return EMPTY_RISK;
+  return [];
+}
+
+export function versionList(state, capabilityId, kind) {
+  return capData(state, capabilityId).versions[kind] || [];
 }
 
 export function versionsInForce(state, capabilityId) {
@@ -190,7 +206,7 @@ export function authorityLabel(auth, { short = false } = {}) {
 }
 
 export function readiness(state, capabilityId) {
-  const reqs = capData(state, capabilityId).requirements;
+  const reqs = current(state, capabilityId, 'requirements');
   const met = reqs.filter((r) => r.met).length;
   return { met, total: reqs.length, unmet: reqs.filter((r) => !r.met) };
 }
@@ -345,12 +361,8 @@ export function amend(state, capabilityId, kind, { value, author, reason }) {
     value: clone(value),
   };
   const versions = { ...d.versions, [kind]: [...(d.versions[kind] || []), next] };
-  // The current value is cached on the capability (contract, risk) or on its
-  // data (criteria, requirements, stakeholders); the version list is the record.
-  let s = updateCap(state, capabilityId, { ...d, versions, ...(kind === 'criteria' || kind === 'requirements' || kind === 'stakeholders' ? { [kind]: clone(value) } : {}) });
-  if (kind === 'contract' || kind === 'risk') {
-    s = { ...s, capabilities: s.capabilities.map((c) => (c.id === capabilityId ? { ...c, [kind]: clone(value) } : c)) };
-  }
+  // The version list is the only copy; the latest version is the current value.
+  const s = updateCap(state, capabilityId, { versions });
   const who = seed.people[author];
   return logEvent(s, {
     kind: 'amendment',
@@ -695,7 +707,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 3) return null;
+    if (!parsed || parsed.version !== 4) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];

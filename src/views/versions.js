@@ -1,5 +1,5 @@
 import { html, badge, fmtDateYear, person, empty, kv } from '../ui.js';
-import { getCapability, capData, VERSIONED_KINDS, KIND_LABELS } from '../store.js';
+import { getCapability, versionList, VERSIONED_KINDS, KIND_LABELS } from '../store.js';
 import { diffTable } from './activity.js';
 
 // Every version of one versioned object for one capability, newest first.
@@ -8,9 +8,9 @@ export function versionsView(state, capabilityId, query) {
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
   const kind = VERSIONED_KINDS.includes(query.get('kind')) ? query.get('kind') : 'contract';
   const highlight = Number(query.get('version')) || null;
-  const versions = (capData(state, capabilityId).versions[kind] || []).slice().reverse();
+  const versions = versionList(state, capabilityId, kind).slice().reverse();
 
-  const tabs = html`<nav class="tabs" aria-label="Versioned objects">${VERSIONED_KINDS.map((k) => html`<a class="tab ${k === kind ? 'is-active' : ''}" href="#/capabilities/${cap.id}/versions?kind=${k}">${KIND_LABELS[k]} <span class="muted small">v${(capData(state, capabilityId).versions[k] || []).length}</span></a>`)}</nav>`;
+  const tabs = html`<nav class="tabs" aria-label="Versioned objects">${VERSIONED_KINDS.map((k) => html`<a class="tab ${k === kind ? 'is-active' : ''}" href="#/capabilities/${cap.id}/versions?kind=${k}">${KIND_LABELS[k]} <span class="muted small">v${versionList(state, capabilityId, k).length}</span></a>`)}</nav>`;
 
   const items = versions.map((v) => {
     const who = person(v.author);
