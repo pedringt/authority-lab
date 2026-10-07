@@ -62,7 +62,7 @@ function render() {
     case 'activity': view = activityView(state); title = 'Activity'; break;
     default: view = overviewView(state); title = 'Overview';
   }
-  document.title = `${title} · Delegation Manager`;
+  document.title = `${title} · Authority Lab`;
 
   const cap = getCapability(state, 'refund-recommendation');
   const counts = {

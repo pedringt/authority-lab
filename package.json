@@ -1,5 +1,5 @@
 {
-  "name": "delegation-manager",
+  "name": "authority-lab",
   "private": true,
   "type": "module",
   "description": "Prototype: test an AI workflow before giving it more authority.",

@@ -1,4 +1,4 @@
-# Delegation Manager (prototype)
+# Authority Lab (prototype)
 
 A product prototype for one question:
 

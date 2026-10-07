@@ -3,7 +3,7 @@
 
 import * as seed from './data/seed.js';
 
-export const STORAGE_KEY = 'delegation-manager-state-v1';
+export const STORAGE_KEY = 'authority-lab-state-v1';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
