@@ -8,6 +8,10 @@ It walks one AI capability, **Refund recommendation** in the fictional Northstar
 
 **AI interprets. Software enforces. Humans authorize.**
 
+## Read about it
+
+[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md) explains the product in plain terms: the building blocks, the screens, the demo story and what each control does.
+
 ## Run it
 
 No build step, no dependencies, no network calls.

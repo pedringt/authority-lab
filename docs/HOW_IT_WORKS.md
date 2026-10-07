@@ -1,0 +1,214 @@
+# How Authority Lab works
+
+Authority Lab is a prototype of a product that helps a team answer one question about an AI system:
+
+> Based on the evidence we have, what should this AI be allowed to do?
+
+Building an AI workflow is getting easier. Deciding how much to let it do on its own is still hard. Authority Lab is the place where a team tests an AI capability, collects evidence, argues about it, and then makes a deliberate, recorded decision about its authority.
+
+The whole product rests on one rule:
+
+> **AI interprets. Software enforces. Humans authorize.**
+
+The AI reads cases and makes recommendations. Software applies the limits and can pull authority back automatically. Only a named person can give the AI more authority.
+
+Everything in the prototype is fictional. There are no real customers, no real money and no real AI calls. The data is seeded so the same story plays out every time.
+
+---
+
+## 1. The building blocks
+
+### Workspace and workflow
+
+A **workspace** is a team. The demo workspace is **Northstar Support**, the customer support team of an online store.
+
+A **workflow** is a business process the team runs. The demo workflow is **Customer Support Resolution**: a ticket comes in, someone works out what the customer needs, and the problem gets fixed.
+
+### Capability
+
+A **capability** is one discrete thing the AI might be trusted to do inside a workflow. Northstar Support has five:
+
+| Capability | What it does |
+|---|---|
+| Ticket classification | Puts an incoming ticket in the right queue with the right priority |
+| Response drafting | Writes a reply for an agent to edit and send |
+| Refund recommendation | Looks at a refund request and says whether to issue it |
+| Refund execution > $50 | Actually moves the money for refunds over $50 |
+| Account closure | Closes a customer's account |
+
+Each capability holds its own authority. Being good at classifying tickets says nothing about whether the AI should be issuing refunds. That is why they are judged one at a time.
+
+The demo follows **Refund recommendation**.
+
+### Authority levels
+
+Authority is a scale, not a switch:
+
+| Level | Name | What the AI can do |
+|---|---|---|
+| 0 | Observe | Sees the input, produces nothing |
+| 1 | Recommend | Suggests an answer to a person |
+| 2 | Draft | Prepares the action, but a person must approve it before anything happens |
+| 3 | Act within limits | Acts on its own when predefined conditions are met; everything else goes to a person |
+| 4 | Broad delegation | Handles most cases alone, with monitoring and exception handling |
+
+Not every capability should climb the scale. Account closure is at Level 0 on purpose, because closing an account is hard to undo and happens rarely. Level 1 or 2 can be the right permanent home for a capability.
+
+### The delegation contract
+
+Every capability has a **delegation contract**: the plain-language rules for what it may and may not do. It has five parts.
+
+- **AI may**: things it can do on its own, such as reading order history and recommending a refund.
+- **AI must ask**: things that always need a person, such as refunds over $100 or accounts with a fraud flag.
+- **AI must never**: hard limits, such as refunding to a different card or changing who owns an account.
+- **Escalation conditions**: situations where the AI hands the case to a person, such as low confidence, conflicting policy or a legal threat.
+- **Automatic restriction conditions**: measurable triggers that pull authority back without waiting for anyone, such as too many severe errors in a week.
+
+The contract is enforced by software, not by the model's good behaviour. In the demo, a software gate blocks any automatic action on a fraud-flagged account even though the AI once recommended one.
+
+### Risk profile
+
+Each capability carries a simple risk profile: how much **impact** a mistake has, how easy it is to **reverse**, and who is **exposed** (internal only, customer-facing, or financial). A higher-risk capability needs more evidence before its authority grows. Refund recommendation is high impact, financially consequential and recoverable with effort.
+
+### Success criteria
+
+Before any testing starts, the team writes down what "good enough" means. For Refund recommendation the criteria are quality (at least 92% correct), severe error rate (under 2%), human review burden (no more than 30% of cases needing meaningful correction), speed, cost per case, agent adoption, and stakeholder confidence.
+
+Two of these deserve a note:
+
+- **Adoption is not correctness.** Agents accepting 78% of recommendations does not prove the recommendations are right. The product tracks separately how often accepted recommendations matched an independent reviewer.
+- **Stakeholder confidence stays qualitative.** It is a set of positions, not a number.
+
+### Evidence
+
+**Evidence** is anything that tells the team how the capability actually performs. It comes from several sources: automated test scenarios, the live pilot, human reviewers, operational metrics, cost, incidents, user feedback and stakeholder assessments. Every piece of evidence has a status: pass, watch, insufficient evidence, or fail.
+
+Evidence is deliberately kept **segmented**. Refund recommendation scores 94% overall, but only 83% on high-value refunds, and there are only 18 of those. The aggregate number would hide that. The product shows it.
+
+### Evidence requirements and decision readiness
+
+For a proposed change in authority, the team lists what must be true first. For the move from Level 2 to Level 3, there are six requirements: enough pilot cases, high enough accuracy, low enough severe-error and override rates, no unresolved critical incidents, and at least 40 high-value cases.
+
+**Decision readiness** is simply how many of those are met. The demo shows "5 of 6 evidence requirements satisfied" and names the one that is not. There is no readiness score or trust score, because a single number would hide which thing is missing.
+
+### Stakeholder positions
+
+Four people record where they stand: Support Operations, Product, Risk and Finance. Each gives a position and a reason. The product summarises where they agree and where they do not, and never averages them into one opinion. Disagreement is useful information.
+
+### The decision
+
+When the evidence is in, a person opens the **authority decision** and chooses one of six options:
+
+| Option | Meaning |
+|---|---|
+| Expand | Move the whole capability up a level |
+| Expand with limits | Let it act alone only under stated conditions |
+| Hold | Keep things as they are and gather more evidence |
+| Restrict | Move it down a level |
+| Suspend | Switch it off |
+| Redesign | Send it back to development and testing |
+
+Authority can go down as well as up. All six are first-class choices.
+
+The system makes a recommendation with its reasons, but it cannot authorize anything. A named person writes a rationale and clicks **Authorize authority change**. That click is what changes what the AI is allowed to do.
+
+### The decision record
+
+Every authorization writes a **decision record**: previous and new authority, the decision taken, who authorized it, the scope, the rationale, a snapshot of the evidence at that moment, and any open condition. Records are never edited. If something changes later, a new record is written and the old one stays as it was. Months later, anyone can answer "why did we let the AI do this, and what did we know at the time?"
+
+### Monitoring and automatic restriction
+
+After authority expands, the capability enters a monitoring period. The product shows how many actions it has taken alone, how many it escalated, how many a person reversed, and how many incidents occurred.
+
+It also shows the **automatic restriction rule** that was agreed as part of the decision. For Refund recommendation: if severe errors exceed 5% of the last 50 cases, authority returns to Draft. Software applies this rule on its own. A person has to review before authority can expand again.
+
+This is the other half of the core principle. People grant authority; software can take it back.
+
+### Activity
+
+The **activity history** is an audit-style timeline: pilot started, failure found, gate added, threshold reached, stakeholders reviewed, authority expanded, threshold breached, authority restricted. Every entry links to the thing it describes, so you can follow the thread from evidence to discussion to decision to authority.
+
+---
+
+## 2. The screens
+
+**Overview** answers "where do we need to make a decision?" It shows the capability waiting on a decision, its current and proposed authority, decision readiness, the current evidence against the criteria, the exceptions that need attention, the system's recommendation, and a short authority map. If a monitoring rule has fired, the alert appears here first.
+
+**Capabilities** is the authority map: every capability, its current authority, status, risk, owner and last evaluation. This is the page for "what is the AI actually allowed to do here?"
+
+**Capability detail** is the full picture of one capability, with tabs for the contract, success criteria, testing, evidence, stakeholders, decision history and monitoring. The current and proposed authority are always visible at the top.
+
+**Tests** is the testing ground: 26 scenarios in five groups (standard, ambiguous, adversarial, high impact, edge cases). Running the suite shows each scenario's expected behaviour, what the AI did, the outcome, the severity, and what the human reviewer decided. One scenario fails badly on purpose: a $420 refund on a fraud-flagged account was recommended instead of escalated.
+
+**Evidence** is the repository of everything the decision rests on, filterable by status, source, segment and risk, with the evidence requirements checklist underneath.
+
+**Decisions** lists every authority change and opens the decision workspace for the pending one.
+
+**Activity** is the timeline.
+
+---
+
+## 3. The demo, step by step
+
+1. **Overview.** Refund recommendation needs a decision. Five of six requirements are met. High-value refunds are the gap.
+2. **Capabilities, then Refund recommendation.** Read the contract: what it may do, must ask about, must never do.
+3. **Tests, then Run test suite.** 24 of 26 pass. Open the failed filter and read H-04, the fraud-flag miss.
+4. **Capability, Evidence tab.** 218 pilot cases at 94% overall. 18 high-value cases at 83%.
+5. **Capability, Stakeholders tab.** Operations wants to expand everything. Risk wants anything over $50 kept with a person.
+6. **Decisions, Open authority decision.** The evidence summary, the recommendation and the positions are side by side.
+7. **Choose Expand with limits.** Set the conditions (value at most $50, no fraud flag, clear policy, confidence at least 90%, no chargeback). Read the plain-English preview.
+8. **Authorize.** Record #04 is written with the evidence snapshot. The authority map now shows Level 3 (limited).
+9. **Capability, Monitoring tab, Simulate threshold breach.** Three severe errors land in the rolling window. Software returns the capability to Draft, writes record #05, raises an alert on the Overview, and locks expansion until a review is recorded.
+10. **Reset demo** (top right) puts everything back.
+
+---
+
+## 4. What the controls actually do
+
+| Control | Effect |
+|---|---|
+| Run test suite | Runs the 26 scenarios, records the result as evidence, adds an activity event |
+| Decision options | Choose Expand, Expand with limits, Hold, Restrict, Suspend or Redesign |
+| Authority conditions | Edit the limits for Expand with limits; the preview updates in plain English |
+| Authorize authority change | Changes the capability's authority, writes an immutable record, starts monitoring if authority expanded |
+| Simulate threshold breach | Pushes severe errors over the limit; software restricts authority, creates an alert, an event and a record, and requires review |
+| Reset demo | Restores the seeded state |
+
+State is kept in your browser, so you can refresh without losing your place.
+
+---
+
+## 5. How it is built
+
+The prototype is a static web app: plain HTML, CSS and JavaScript, no build step, no dependencies, no server.
+
+- `src/data/seed.js` holds all the fictional data: the workspace, capabilities, contracts, criteria, scenarios, pilot results, evidence, stakeholders, past decisions, activity and the monitoring rule.
+- `src/store.js` holds the rules for how state changes: running tests, choosing and authorizing a decision, the automatic restriction, reset. These are plain functions with tests.
+- `src/views/` holds one module per screen. Screens read state and draw it; they never change it directly.
+- `styles/app.css` is the design. Colour always carries a state (pass, watch, fail, insufficient evidence, restricted, decision required) and is always paired with a word.
+
+Nothing calls a model. In a real version, the evidence would come from outside: a test harness, a ticketing system, a payments system, a model API, an eval framework. Authority Lab would sit above those systems and turn what they report into a decision about authority.
+
+---
+
+## 6. What it is not
+
+Authority Lab is not an agent builder, a prompt editor, a model playground, an eval platform, an observability dashboard, a compliance suite or a ticketing system. Those tools produce evidence. This product turns evidence about an AI capability into an explicit, reviewable decision about what that capability is allowed to do.
+
+---
+
+## 7. Glossary
+
+- **Authority**: what an AI capability is allowed to do, on a scale from Observe to Broad delegation.
+- **Capability**: one discrete thing the AI might do inside a workflow.
+- **Delegation contract**: the written rules for a capability: may, must ask, must never, escalate, and automatic restriction.
+- **Evidence**: any measured or recorded fact about how the capability performs.
+- **Evidence requirement**: something that must be true before a specific authority change can be authorized.
+- **Decision readiness**: how many evidence requirements are met, and which are not.
+- **Severe error**: a mistake with high impact, such as approving a fraudulent refund or denying a clearly valid one.
+- **Override**: a reviewer rejected the AI's recommendation and did something else.
+- **Edit**: a reviewer changed the recommendation before approving it.
+- **Acceptance**: a reviewer approved the recommendation. Not the same as the recommendation being correct.
+- **Decision record**: the immutable write-up of one authority change.
+- **Automatic restriction**: software reducing authority when a predefined threshold is crossed.
+- **Monitoring period**: the time after an authority change when the capability is watched against its restriction rule.
