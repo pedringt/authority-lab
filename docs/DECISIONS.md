@@ -47,6 +47,7 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 ### Interface
 
 - **Demo controls are grouped apart from the app.** The header has two rows: the brand and one grouped demo area (acting as, the demo date, Reset demo), then the section tabs, which never scroll sideways at 1024px and wider. (#38)
+- **Section tabs are quiet.** Underlined tabs start flush with the brand, with an even gap; the active tab is underlined on the header's bottom border instead of a filled pill, and counts are small tinted badges (red only for an alert). (#47)
 - **The decision stays together.** In the decision workspace the options, the chosen option's plain-English preview, the rationale and the Authorize button share one panel that stays in view while the evidence scrolls. (#41)
 - **One filter pattern.** Tests and Evidence name their capability in the heading as a selector, with the other filters on one labelled bar with "Clear filters" and a "Showing X of Y" count. (#39)
 - **No wall of "Not run".** Before the first run, Tests shows the scenario groups collapsed with counts and one Run action; after a run, groups with failures come first and open. (#40)
@@ -79,7 +80,7 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 2. ~~People and roles~~ (done).
 3. ~~Housekeeping: CI, error handling, store split~~ (done: #35, #36, #37).
 4. ~~UI readability pass~~ (done: #38–#44): two-row header, filter bar, collapsed test groups, sticky decision panel, People "Manage" menu, one date format, level tooltips, inline errors instead of pop-ups.
-5. **Header nav cleanup** (next, small). The section tabs don't line up with the brand, and their spacing comes only from pill padding. Proposed: underline tabs flush with the brand, an even gap, the active tab underlined on the header's bottom border, quieter count badges. Nothing added.
+5. ~~Header nav cleanup~~ (done: #47). The section tabs don't line up with the brand, and their spacing comes only from pill padding. Proposed: underline tabs flush with the brand, an even gap, the active tab underlined on the header's bottom border, quieter count badges. Nothing added.
 6. **Monitoring and automatic restriction for every capability.** Today only Refund recommendation's restriction rule runs; other contracts state rules nothing enforces. Two questions are open (see Monitoring above).
 7. Empty-workspace path: set up the workspace and workflow first.
 8. Smaller rule changes: lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
