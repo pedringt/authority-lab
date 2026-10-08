@@ -138,6 +138,24 @@ The **activity history** is an audit-style timeline: pilot started, failure foun
 
 ---
 
+### Setting up a new capability: the path at a glance
+
+Everything in Authority Lab is done one capability at a time. A new capability goes through seven steps, in this order, and each step has to be real before the next one means anything:
+
+| Step | Where | What it produces | Who |
+|---|---|---|---|
+| 1. Define | Capabilities → Add capability | The capability (name, summary, owner, risk profile, starting authority at Level 0 or 1, or "not delegated, by design") and its **first decision record** | Whoever is acting; the record names the owner too |
+| 2. Contract | Setup → Contract builder | **Contract v1**, from a risk-picked template plus seeded "Suggested by AI" lines, each accepted, edited or rejected one at a time, past the software checks | A named person finalizes |
+| 3. Criteria | Setup → Criteria editor | **Success criteria v1** and **evidence requirements v1**, pre-filled from the risk profile, each row labelled with its source | Whoever is acting |
+| 4. Stakeholders | Setup → Stakeholder editor | **Stakeholders v1**: team, person, position when known | Whoever is acting |
+| 5. Scenarios | Setup → Scenario library | The library (a 20-scenario starter set is available), with seeded, deterministic results | Whoever is acting |
+| 6. Test run | Tests → Run test suite | The first evidence, and the **lock** on criteria and requirements | Anyone |
+| 7. First authority change | Decision history → Propose a move to Level N, then Authorize | The capability's **second decision record**; a move to Draft sets status Pilot | A named person authorizes |
+
+Expanding authority needs a pending proposal (the next level, proposed after a test run); restricting, suspending or redesigning does not, but still needs a named person, a rationale and a record. Status follows authority decisions only: a capability stays **In setup** until a person authorizes the move to Draft, then becomes **Pilot**. Finalizing a contract or saving criteria does not change it. Every tab of the capability is always visible; an empty tab says what is missing and links to the next step on the Setup page, which tracks the seven steps as Done, Next or Later.
+
+The sections that follow describe each step.
+
 ### Adding a capability
 
 **Capabilities → Add capability** walks one capability through the first three setup steps on one page: define it (name, one-line summary, owner), give it a risk profile (impact, reversibility, exposure, failure types to watch), and choose its starting authority. The starting authority is Level 0, Level 1, or "Not delegated, by design", which needs a written rationale. Nothing starts higher; authority above Level 1 is earned later.
@@ -162,11 +180,21 @@ Saving writes criteria v1 and requirements v1, authored by whoever is acting. Be
 
 ### Changing the bar after evidence: proposals and sign-off
 
-Once criteria are locked, and once a pilot has started for the contract, an edit becomes a **proposal**: the proposed new version plus a reason, recorded immediately but applied only after sign-off. Who must approve follows the risk profile. The proposer never approves. Low and Medium impact: one approver, the owner, or any other named stakeholder if the owner proposed. High impact or financial exposure: two different approvers, at least one from Risk. Owners can still propose. Use the "Acting as" picker to approve as each person. A proposed contract must pass the same checks as the builder's finalize step before it can be submitted. A proposal is refused at the moment it is made if the eligible approvers could never satisfy the rule, for example when the only Risk person on the list is the proposer; the message says what to do (add another Risk person to the stakeholders, or ask someone else to propose). The proposer can withdraw an open proposal with a reason, and others can reject it with a reason; both stay in the record. Three guards keep this honest: Risk eligibility comes only from a person's own team, never from how a capability's stakeholder list labels them; the set of eligible approvers is frozen when a proposal opens, so later stakeholder edits cannot change who may approve it; and once performance results exist, adding or removing a stakeholder or changing a team label is itself a proposal with sign-off, while position and reasoning updates stay direct.
+Three objects are governed once there is something to protect. Changes to them become **proposals** (the new version plus a reason, recorded at once, applied only after sign-off) rather than direct edits:
 
-The sign-off screen shows the reason, who has approved and who is still needed, what would change, and, for criteria, readiness under both versions ("5 of 6 met now, 6 of 6 under the proposal"). A proposal that makes the capability look more ready without new evidence is flagged for the approvers. Approving writes the new versions, authored by the proposer and carrying the approvals, and records a surfaced "amended after evidence" event; any later decision that relies on them is marked "Criteria amended after evidence". Rejecting needs a reason and is kept in the record. Only one proposal per object can be open at a time.
+| Object | Governed from | Direct edits still allowed |
+|---|---|---|
+| Success criteria and evidence requirements | The first performance results (a recorded test run, a pilot, or a measured evidence item) | None; before the lock every save is a new version |
+| Contract | The start of a pilot (a human-authorized move to Draft or above), while the `CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` setting is on | Before a pilot starts |
+| Stakeholders | The first performance results, for adding or removing people and for team labels | Position, stance and reasoning updates, always |
 
-The contract rule is a setting (`CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT`, on by default): before a pilot starts, contract edits write a new version directly.
+**Who must approve.** The proposer never approves. For Low and Medium impact, one approver: the owner, or any other named stakeholder if the owner proposed. For High impact or financial exposure, two different approvers, at least one from Risk; the last slot is refused to a non-Risk person while no Risk approval exists. Owners can still propose. "Named stakeholders" are the owner and the people on the capability's list; whether one of them counts as Risk comes from their own team in the roster, never from how the list labels them. Use the "Acting as" picker to propose and to approve as each person.
+
+**What the sign-off screen shows.** The reason, how many approvers have signed and whether Risk has, who was eligible when the proposal opened, what would change, and, for criteria, readiness under both versions ("5 of 6 met now, 6 of 6 under the proposal") with a flag when the proposal makes the capability look more ready without new evidence.
+
+**Outcomes.** Approving writes the new versions, authored by the proposer and carrying the approvals, and records a surfaced "amended after evidence" event; any later decision that relies on them is marked "Criteria amended after evidence". Rejecting (by an eligible approver) and withdrawing (by the proposer) both need a reason and stay in the record. One proposal per object can be open at a time.
+
+A proposed contract must pass the same software checks as the builder's finalize step before it can be submitted. A proposal is refused at the moment it is made if the eligible approvers could never satisfy the rule (for example when the only Risk person on the list is the proposer); the message says what to do.
 
 ### Naming stakeholders
 
