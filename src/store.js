@@ -8,7 +8,7 @@ import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-t
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
 import { starterScenarios } from './data/scenario-templates.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v12';
+export const STORAGE_KEY = 'authority-lab-state-v13';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -38,8 +38,8 @@ export function emptyCapabilityData() {
 
 export const VERSIONED_KINDS = ['contract', 'criteria', 'requirements', 'risk', 'stakeholders'];
 
-function firstVersion(value, { date, author }) {
-  return { version: 1, date, author, reason: 'Initial version', afterEvidence: false, before: null, value: clone(value) };
+function firstVersion(value, { date, author, authorAt = null }) {
+  return { version: 1, date, author, authorAt, reason: 'Initial version', afterEvidence: false, before: null, value: clone(value) };
 }
 
 function seededCapabilityData(id) {
@@ -68,10 +68,11 @@ function seededCapabilityData(id) {
 }
 
 export function initialState() {
+  const seedState = { roster: { versions: [{ value: seed.people }] } };
   const capabilityData = Object.fromEntries(seed.capabilities.map((c) => {
     const d = seededCapabilityData(c.id);
     const sd = seed.capabilityData[c.id] || {};
-    const stamp = { date: c.definedOn || seed.TODAY, author: c.owner };
+    const stamp = { date: c.definedOn || seed.TODAY, author: c.owner, authorAt: snapshotPerson(seedState, c.owner) };
     d.versions = {
       contract: [firstVersion(c.contract, stamp)],
       criteria: [firstVersion(sd.criteria || [], stamp)],
@@ -86,11 +87,11 @@ export function initialState() {
   // decision, last decision and last-evaluated date are derived by selectors.
   const capabilities = seed.capabilities.map(({ contract, risk, proposed, decisionRequired, lastEvaluated, lastDecisionId, ...rest }) => clone(rest));
   return {
-    version: 12,
+    version: 13,
     today: seed.TODAY,
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
-    roster: { versions: [{ version: 1, date: seed.TODAY, author: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },
+    roster: { versions: [{ version: 1, date: seed.TODAY, author: null, authorAt: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },
     // Governed roster changes (#23): rights grants and removals, and the
     // deactivation of anyone holding a right. Never removed.
     rosterProposals: [],
@@ -99,7 +100,7 @@ export function initialState() {
     actingAs: null,
     capabilities,
     capabilityData,
-    decisionRecords: clone(seed.decisionRecords),
+    decisionRecords: clone(seed.decisionRecords).map((r) => ({ ...r, authorizedByAt: snapshotPerson(seedState, r.authorizedBy), ownerAt: snapshotPerson(seedState, r.owner || (seed.capabilities.find((c) => c.id === r.capabilityId) || {}).owner) })),
     activity: clone(seed.activity),
     alerts: [],
   };
@@ -236,6 +237,17 @@ export function rosterVersions(state) {
   return (state.roster && state.roster.versions) || [];
 }
 
+// A person as they were at the moment a record was written: name, title,
+// team and rights. Records keep this so later roster changes never rewrite
+// history (#24). `system` and unknown keys snapshot to null.
+export function snapshotPerson(state, key) {
+  const p = key ? people(state)[key] : null;
+  if (!p) return null;
+  return { key, name: p.name, title: p.role, team: p.team, rights: { riskApprover: Boolean(p.rights && p.rights.riskApprover), workspaceAdmin: Boolean(p.rights && p.rights.workspaceAdmin) }, active: p.active !== false };
+}
+
+const withSnap = (state, list) => list.map((a) => (a && a.by && !a.byAt ? { ...a, byAt: snapshotPerson(state, a.by) } : a));
+
 function requireActive(state, key, what = 'act') {
   if (!key || !personRecord(state, key)) throw new Error(`A named person must ${what}.`);
   if (!isActivePerson(state, key)) throw new Error(`${personRecord(state, key).name} is deactivated and cannot ${what}.`);
@@ -249,7 +261,7 @@ function requireAdmin(state, key) {
 function writeRoster(state, value, { author, reason, title, body, surfaced = false, meta = null }) {
   const prev = rosterVersions(state);
   const last = prev[prev.length - 1];
-  const next = { version: (last ? last.version : 0) + 1, date: state.today, author, reason, afterEvidence: false, before: last ? clone(last.value) : null, value: clone(value), ...(meta ? clone(meta) : {}) };
+  const next = { version: (last ? last.version : 0) + 1, date: state.today, author, authorAt: snapshotPerson(state, author), reason, afterEvidence: false, before: last ? clone(last.value) : null, value: clone(value), ...(meta ? clone(meta) : {}) };
   const s = { ...state, roster: { ...state.roster, versions: [...prev, next] } };
   return logEvent(s, { kind: 'roster', surfaced, title, body, capabilityId: null, link: '#/people' });
 }
@@ -377,6 +389,8 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
     right: kind === 'rights' ? right : null,
     grant: kind === 'rights' ? Boolean(grant) : null,
     proposedBy: by,
+    proposedByAt: snapshotPerson(state, by),
+    personAt: snapshotPerson(state, person),
     date: state.today,
     reason: why,
     eligible,
@@ -420,7 +434,7 @@ export function approveRosterChange(state, proposalId, { by } = {}) {
   if (!e.ok) throw new Error(e.reason);
   const roster = people(state);
   const target = roster[pr.person];
-  const approvals = [{ by, date: state.today }];
+  const approvals = [{ by, byAt: snapshotPerson(state, by), date: state.today }];
   let s = state;
   const meta = { proposalId, proposedBy: pr.proposedBy, approvals };
   if (pr.kind === 'deactivate') {
@@ -443,7 +457,7 @@ export function rejectRosterChange(state, proposalId, { by, reason } = {}) {
   if (!e.ok) throw new Error(e.reason);
   const why = (reason || '').trim();
   if (why.length < 5) throw new Error('A rejection needs a reason.');
-  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today } : x)) };
+  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'rejected', rejection: { by, byAt: snapshotPerson(state, by), date: state.today, reason: why }, closedAt: state.today } : x)) };
   return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change rejected: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} rejected the change proposed by ${people(s)[pr.proposedBy].name}. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
 }
 
@@ -455,7 +469,7 @@ export function withdrawRosterChange(state, proposalId, { by, reason } = {}) {
   requireActive(state, by, 'withdraw a roster change');
   const why = (reason || '').trim();
   if (why.length < 5) throw new Error('A withdrawal needs a reason.');
-  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'withdrawn', withdrawal: { by, date: state.today, reason: why }, closedAt: state.today } : x)) };
+  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'withdrawn', withdrawal: { by, byAt: snapshotPerson(state, by), date: state.today, reason: why }, closedAt: state.today } : x)) };
   return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change withdrawn: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} withdrew their proposal. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
 }
 
@@ -585,7 +599,9 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     next: { level, limited: false },
     option: notDelegated ? 'not-delegated' : 'define',
     owner,
+    ownerAt: snapshotPerson(state, owner),
     authorizedBy: author,
+    authorizedByAt: snapshotPerson(state, author),
     versions: { contract: 0, criteria: 0, requirements: 0, risk: 1, stakeholders: 0 },
     scope: notDelegated
       ? 'Not delegated, by design. The AI produces no operational output for this capability. Any later delegation needs a new decision.'
@@ -798,6 +814,7 @@ export function amend(state, capabilityId, kind, { value, author, reason, meta =
     version: (prev ? prev.version : 0) + 1,
     date: state.today,
     author,
+    authorAt: snapshotPerson(state, author),
     reason: reason.trim(),
     afterEvidence,
     before: prev ? clone(prev.value) : null,
@@ -960,7 +977,9 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     next,
     option,
     owner: cap.owner,
+    ownerAt: snapshotPerson(state, cap.owner),
     authorizedBy: by,
+    authorizedByAt: snapshotPerson(state, by),
     versions: versionsInForce(state, capabilityId),
     scope: scopeText(option, d.decision.conditions, cap, next),
     rationale: d.decision.rationale.trim(),
@@ -1038,7 +1057,9 @@ export function simulateBreach(state, capabilityId) {
     next,
     option: 'auto-restrict',
     owner: cap.owner,
+    ownerAt: snapshotPerson(state, cap.owner),
     authorizedBy: 'system',
+    authorizedByAt: null,
     versions: versionsInForce(state, capabilityId),
     scope: 'Draft. Every decision requires human approval until a review is recorded.',
     rationale: `Automatic restriction. Severe error rate reached ${pct}% across the rolling ${m.rollingWindow}-case window, above the ${m.thresholdPct}% limit set in authority change ${m.recordId}. No human authorized this change; the rule was authorized in advance.`,
@@ -1196,7 +1217,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 12) return null;
+    if (!parsed || parsed.version !== 13) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -1441,6 +1462,7 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
     version: 1,
     date: state.today,
     author: by,
+    authorAt: snapshotPerson(state, by),
     reason: `Finalized from template "${draft.templateName}". ${review.suggestions} AI suggestion${review.suggestions === 1 ? '' : 's'}: ${review.accepted} accepted, ${review.edited} edited, ${review.rejected.length} rejected. ${review.added} line${review.added === 1 ? '' : 's'} added by hand.`,
     afterEvidence: performanceResultsSeen(state, capabilityId),
     before: null,
@@ -1748,6 +1770,7 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     kind,
     capabilityId,
     proposedBy: by,
+    proposedByAt: snapshotPerson(state, by),
     date: state.today,
     reason: why,
     value: clean,
@@ -1843,7 +1866,7 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
   if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
   const e = approvalEligibility(state, capabilityId, proposal, by);
   if (!e.ok) throw new Error(e.reason);
-  const approvals = [...proposal.approvals, { by, role: e.role, date: state.today }];
+  const approvals = [...proposal.approvals, { by, byAt: snapshotPerson(state, by), role: e.role, date: state.today }];
   let next = { ...proposal, approvals };
   let s = state;
   const who = people(state)[by];
@@ -1908,7 +1931,7 @@ export function withdrawProposal(state, capabilityId, proposalId, { by, reason }
   requireActive(state, by, 'withdraw a proposal');
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A withdrawal needs a reason (a sentence).');
-  const next = { ...proposal, status: 'withdrawn', withdrawal: { by, date: state.today, reason: why }, closedAt: state.today };
+  const next = { ...proposal, status: 'withdrawn', withdrawal: { by, byAt: snapshotPerson(state, by), date: state.today, reason: why }, closedAt: state.today };
   const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
   return logEvent(s, {
     kind: 'proposal',
@@ -1932,7 +1955,7 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
   const frozen = proposal.eligible || namedStakeholders(state, capabilityId);
   const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && frozen.includes(by));
   if (!eligible) throw new Error(`${people(state)[by].name} is not eligible to reject this: ${requirementLabel(proposal.required)} decide.`);
-  const next = { ...proposal, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today };
+  const next = { ...proposal, status: 'rejected', rejection: { by, byAt: snapshotPerson(state, by), date: state.today, reason: why }, closedAt: state.today };
   const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
   return logEvent(s, {
     kind: 'proposal',

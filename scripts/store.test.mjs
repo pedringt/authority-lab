@@ -18,7 +18,12 @@ import {
   withdrawProposal, signoffFeasibility, decisionRequired, proposedAuthority, lastDecisionId, lastEvaluated,
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
+  snapshotPerson,
 } from '../src/store.js';
+import { setPeople, personAt } from '../src/ui.js';
+import { decisionRecordView } from '../src/views/decisions.js';
+import { proposalView } from '../src/views/proposals.js';
+import { versionsView } from '../src/views/versions.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
 import { pickTemplate, suggestLines } from '../src/data/contract-templates.js';
@@ -64,8 +69,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 12);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v12');
+  assert.equal(s.version, 13);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v13');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(decisionRequired(s, RR), true);
@@ -258,7 +263,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 11, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 12, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -1800,4 +1805,82 @@ test('a grant cannot be approved by the person receiving it; a Risk approver gra
   let v = proposeRosterChange(initialState(), { kind: 'rights', person: 'jonas', right: 'workspaceAdmin', grant: false, by: 'maya', reason: 'Jonas moves to another workspace.' });
   v = approveRosterChange(v, 'RP-1', { by: 'jonas' });
   assert.equal(isWorkspaceAdmin(v, 'jonas'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Records keep history as it was (#24)
+// ---------------------------------------------------------------------------
+
+test('records, versions, approvals and proposals snapshot the person at write time; a later rename or rights change does not rewrite them', () => {
+  let s = initialState();
+  // Seeded records and first versions carry the seed roster.
+  assert.deepEqual(s.decisionRecords[1].authorizedByAt, { key: 'maya', name: 'Maya Chen', title: 'Support Product Lead', team: 'Product', rights: { riskApprover: false, workspaceAdmin: true }, active: true });
+  assert.equal(s.decisionRecords[1].ownerAt.key, 'maya');
+  assert.equal(versionList(s, RR, 'contract')[0].authorAt.name, 'Maya Chen');
+  assert.equal(snapshotPerson(s, 'system'), null);
+  assert.equal(snapshotPerson(s, 'nobody'), null);
+  // A capability proposal approved by Daniel as Risk, then Daniel loses the right and Maya is renamed.
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
+  s = approveProposal(s, RR, 'P-1', { by: 'maya' });
+  s = approveProposal(s, RR, 'P-1', { by: 'daniel' });
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR, { by: 'maya' });
+  const recId = lastDecisionId(s, RR);
+  s = editPerson(s, 'maya', { name: 'Maya Chen-Ortiz', title: 'Director of Support Product', team: 'Support Product', by: 'jonas', reason: 'Promotion and name change.' });
+  s = proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: false, by: 'jonas', reason: 'Daniel rotates off Risk sign-off.' });
+  s = approveRosterChange(s, 'RP-1', { by: 'maya' });
+  assert.equal(isRiskApprover(s, 'daniel'), false);
+  assert.equal(people(s).maya.name, 'Maya Chen-Ortiz');
+  // The record written before the changes keeps the old values.
+  const rec = s.decisionRecords.find((r) => r.id === recId);
+  assert.equal(rec.authorizedByAt.name, 'Maya Chen');
+  assert.equal(rec.authorizedByAt.title, 'Support Product Lead');
+  assert.equal(rec.authorizedByAt.team, 'Product');
+  const p1 = getProposal(s, RR, 'P-1');
+  assert.equal(p1.proposedByAt.name, 'Priya Natarajan');
+  const danielApproval = p1.approvals.find((a) => a.by === 'daniel');
+  assert.equal(danielApproval.byAt.rights.riskApprover, true, 'the approval keeps the right as it was');
+  assert.equal(danielApproval.byAt.title, 'Risk & Compliance Lead');
+  const applied = versionList(s, RR, 'requirements').find((v) => v.proposalId === 'P-1');
+  assert.equal(applied.authorAt.name, 'Priya Natarajan');
+  assert.equal(applied.approvals.find((a) => a.by === 'daniel').byAt.rights.riskApprover, true);
+  // The roster proposal and versions snapshot too.
+  const rp = getRosterProposal(s, 'RP-1');
+  assert.equal(rp.personAt.rights.riskApprover, true, 'Daniel as he was when the removal was proposed');
+  assert.equal(rp.approvals[0].byAt.name, 'Maya Chen-Ortiz', 'approved after the rename');
+  const renameVersion = rosterVersions(s).find((v) => v.change && v.change.kind === 'edit' && v.change.key === 'maya');
+  assert.equal(renameVersion.authorAt.name, 'Jonas Lindqvist');
+  // A record written after the changes shows the new values.
+  s = { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...capData(s, RR), decision: { ...capData(s, RR).decision, proposed: { level: 4, limited: false } } } } };
+  s = authorize(selectDecision(setRationale(s, RR, 'Testing the snapshot after a rename.'), RR, 'hold'), RR, { by: 'maya' });
+  assert.equal(s.decisionRecords[s.decisionRecords.length - 1].authorizedByAt.name, 'Maya Chen-Ortiz');
+  assert.equal(s.decisionRecords[s.decisionRecords.length - 1].authorizedByAt.title, 'Director of Support Product');
+  // Views render the snapshot, not the current roster.
+  setPeople(people(s));
+  const html = String(decisionRecordView(s, recId));
+  assert.ok(html.includes('Maya Chen</strong>'), 'old name on the old record');
+  assert.ok(html.includes('Support Product Lead'));
+  assert.ok(!html.includes('Chen-Ortiz'));
+  const pv = String(proposalView(s, RR, 'P-1', new URLSearchParams('')));
+  assert.ok(pv.includes('Risk approver at the time'));
+  assert.ok(pv.includes('Priya Natarajan'));
+  const vv = String(versionsView(s, RR, new URLSearchParams('kind=requirements')));
+  assert.ok(vv.includes('Risk approver at the time'));
+  setPeople(null);
+  // The helper falls back to the roster only when no snapshot was saved.
+  assert.equal(personAt(null, 'maya').snapshot, false);
+  assert.equal(personAt(rec.authorizedByAt, 'maya').name, 'Maya Chen');
+});
+
+test('a deactivated person stays on the records they are on, as they were', () => {
+  let s = initialState();
+  s = proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'elena', reason: REASON });
+  s = deactivatePerson(s, 'elena', { by: 'maya', reason: 'Left the company.' });
+  assert.equal(isActivePerson(s, 'elena'), false);
+  const p = getProposal(s, RR, 'P-1');
+  assert.equal(p.proposedByAt.name, 'Elena Rossi');
+  assert.equal(p.proposedByAt.active, true, 'active when she proposed');
+  setPeople(people(s));
+  assert.ok(String(proposalView(s, RR, 'P-1', new URLSearchParams(''))).includes('Elena Rossi'));
+  setPeople(null);
 });

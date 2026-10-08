@@ -1,4 +1,4 @@
-import { html, badge, fmtDateYear, person, empty, kv } from '../ui.js';
+import { html, badge, fmtDateYear, person, personAt, rightsNote, empty, kv } from '../ui.js';
 import { getCapability, versionList, VERSIONED_KINDS, KIND_LABELS } from '../store.js';
 import { diffTable, deviationsView } from './activity.js';
 import { contractReviewView } from './contract.js';
@@ -14,7 +14,7 @@ export function versionsView(state, capabilityId, query) {
   const tabs = html`<nav class="tabs" aria-label="Versioned objects">${VERSIONED_KINDS.map((k) => html`<a class="tab ${k === kind ? 'is-active' : ''}" href="#/capabilities/${cap.id}/versions?kind=${k}">${KIND_LABELS[k]} <span class="muted small">v${versionList(state, capabilityId, k).length}</span></a>`)}</nav>`;
 
   const items = versions.map((v) => {
-    const who = person(v.author);
+    const who = personAt(v.authorAt, v.author);
     return html`<article class="card version ${v.version === highlight ? 'is-highlight' : ''}" id="v${v.version}">
       <div class="version-head">
         <div><span class="eyebrow">${KIND_LABELS[kind]} · version ${v.version}</span><h3>${v.version === 1 ? 'Initial version' : v.reason}</h3></div>
@@ -22,7 +22,7 @@ export function versionsView(state, capabilityId, query) {
       </div>
       ${kv([
         ['Written', fmtDateYear(v.date)],
-        ['Author', html`${who.name}${who.role ? html`, ${who.role}` : ''}`],
+        ['Author', html`${who.name}${who.role ? html`, ${who.role}` : ''}${rightsNote(v.authorAt)}${v.approvals ? html`<div class="muted small">Approved by ${v.approvals.map((a, i) => html`${i ? ', ' : ''}${personAt(a.byAt, a.by).name}${a.role ? ` (as ${a.role === 'risk' ? 'Risk approver' : a.role === 'owner' ? 'owner' : 'stakeholder'})` : ''}${rightsNote(a.byAt)}`)}</div>` : ''}`],
         ['Reason', v.reason],
       ])}
       ${v.review ? contractReviewView(v.review) : ''}

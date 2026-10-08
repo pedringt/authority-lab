@@ -114,7 +114,7 @@ The system makes a recommendation with its reasons, but it cannot authorize anyt
 
 ### The decision record
 
-Every authorization writes a **decision record**: previous and new authority, the decision taken, who authorized it, the scope, the rationale, a snapshot of the evidence at that moment, any open condition, and which version of the contract, criteria, requirements, risk profile and stakeholders was in force (the "Based on" line, which links to those versions). Records are never edited. If something changes later, a new record is written and the old one stays as it was. Months later, anyone can answer "why did we let the AI do this, and what did we know at the time?"
+Every authorization writes a **decision record**: previous and new authority, the decision taken, who authorized it, the scope, the rationale, a snapshot of the evidence at that moment, any open condition, and which version of the contract, criteria, requirements, risk profile and stakeholders was in force (the "Based on" line, which links to those versions). People are saved as they were at that moment too: name, title, team and rights. The same is true of every version, approval, proposal and roster change. Renaming someone, changing their title or team, taking away a right or deactivating them later never rewrites what a record says; the record shows the person as they were, and a new record shows them as they are now. Records are never edited. If something changes later, a new record is written and the old one stays as it was. Months later, anyone can answer "why did we let the AI do this, and what did we know at the time?"
 
 ### Amendments
 
