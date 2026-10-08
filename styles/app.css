@@ -518,7 +518,18 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .people-form input[type="text"] { flex: 1 1 160px; }
 .table tr.is-editing td { background: var(--neutral-bg); }
 
-.rights-actions { display: flex; gap: 10px; margin-top: 4px; }
+.rights-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag-acting { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--decide); background: var(--decide-bg); border: 1px solid var(--decide-bd); border-radius: 999px; padding: 0 7px; vertical-align: 1px; }
+.cell-manage { text-align: right; width: 1%; white-space: nowrap; }
+@media (min-width: 721px) { .people-card { overflow: visible; } }
+.menu { position: relative; display: inline-block; }
+.menu > summary { list-style: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 10; min-width: 220px; display: grid; padding: 4px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(24, 24, 27, 0.12); text-align: left; }
+.menu-list a { padding: 7px 10px; border-radius: 4px; color: var(--text); font-size: 14px; }
+.menu-list a:hover { background: var(--neutral-bg); text-decoration: none; }
+.menu-list .menu-danger { color: var(--fail); border-top: 1px solid var(--border); border-radius: 0 0 4px 4px; margin-top: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .roster-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .roster-proposal + .roster-proposal { margin-top: 10px; }
 

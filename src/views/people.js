@@ -23,7 +23,7 @@ export function peopleView(state, query) {
 
   const row = ([key, p]) => {
     if (editing === key && admin) {
-      return html`<tr class="is-editing"><td colspan="6">
+      return html`<tr class="is-editing"><td colspan="5">
         <form class="line-edit people-form" data-form="edit-person" data-person="${key}">
           <input type="text" name="name" value="${p.name}" maxlength="60" aria-label="Name" required>
           <input type="text" name="title" value="${p.role}" maxlength="80" aria-label="Title" required>
@@ -36,7 +36,7 @@ export function peopleView(state, query) {
     }
     if (deactivating === key && admin) {
       const impact = rosterChangeImpact(state, { kind: 'deactivate', person: key });
-      return html`<tr class="is-editing"><td colspan="6">
+      return html`<tr class="is-editing"><td colspan="5">
         ${impactNote(impact)}
         <form class="line-edit people-form" data-form="deactivate-person" data-person="${key}">
           <span><strong>Deactivate ${p.name}?</strong> <span class="muted small">They stay on every record they are on; they can no longer act, propose, approve or be a stakeholder.${p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover) ? ' They hold a right, so this becomes a proposal for a different workspace admin to approve.' : ''}</span></span>
@@ -48,7 +48,7 @@ export function peopleView(state, query) {
     }
     if (rightPerson === key && RIGHT_LABELS[rightKey] && admin) {
       const impact = rosterChangeImpact(state, { kind: 'rights', person: key, right: rightKey, grant: rightGrant });
-      return html`<tr class="is-editing"><td colspan="6">
+      return html`<tr class="is-editing"><td colspan="5">
         ${impactNote(impact)}
         <form class="line-edit people-form" data-form="propose-roster" data-person="${key}" data-right="${rightKey}" data-grant="${rightGrant ? '1' : '0'}">
           <span><strong>${rightGrant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[rightKey]}: ${p.name}</strong> <span class="muted small">Proposed by ${who.name}; approved by a different workspace admin${rightGrant && rightKey === 'riskApprover' ? ' or an existing Risk approver' : ''}, never by ${rightGrant ? 'the person receiving it' : 'the proposer'}.</span></span>
@@ -60,14 +60,21 @@ export function peopleView(state, query) {
     }
     const pending = openRosterProposal(state, key);
     const holds = (r) => Boolean(p.rights && p.rights[r]);
+    // One "Manage" control per row: edit, grant or remove each right, deactivate.
+    const manage = admin && p.active !== false && !pending ? html`<details class="menu">
+        <summary class="btn btn-sm" aria-label="Manage ${p.name}">Manage <span aria-hidden="true">▾</span></summary>
+        <div class="menu-list">
+          <a href="#/people?edit=${key}">Edit name, title or team</a>
+          ${RIGHTS.map(([r, label]) => html`<a href="#/people?person=${key}&right=${r}&grant=${holds(r) ? 0 : 1}">${holds(r) ? `Remove ${label.toLowerCase()}` : `Grant ${label.toLowerCase()}`}…</a>`)}
+          <a class="menu-danger" href="#/people?deactivate=${key}">Deactivate…</a>
+        </div>
+      </details>` : '';
     return html`<tr class="${p.active === false ? 'is-inactive' : ''}">
-      <td><strong>${p.name}</strong>${p.active === false ? html` ${badge('neutral', 'Deactivated')}` : ''}</td>
+      <td><strong>${p.name}</strong>${key === acting ? html` <span class="tag-acting">Acting now</span>` : ''}${p.active === false ? html` ${badge('neutral', 'Deactivated')}` : ''}</td>
       <td>${p.role}</td>
       <td>${p.team}</td>
-      <td>${holds('workspaceAdmin') ? badge('decision', 'Workspace admin') : ''} ${holds('riskApprover') ? badge('restricted', 'Risk approver') : ''}${pending ? html` <a class="badge badge-watch" href="#/people?proposal=${pending.id}">${pending.id} pending</a>` : ''}
-        ${admin && p.active !== false && !pending ? html`<div class="rights-actions">${RIGHTS.map(([r, label]) => html`<a class="muted small" href="#/people?person=${key}&right=${r}&grant=${holds(r) ? 0 : 1}">${holds(r) ? `Remove ${label.toLowerCase()}` : `Grant ${label.toLowerCase()}`}</a>`)}</div>` : ''}</td>
-      <td class="muted small">${key === acting ? 'Acting now' : ''}</td>
-      <td>${admin && p.active !== false && !pending ? html`<a class="btn btn-sm btn-ghost" href="#/people?edit=${key}">Edit</a> <a class="btn btn-sm btn-ghost" href="#/people?deactivate=${key}">Deactivate</a>` : ''}</td>
+      <td><div class="rights-badges">${holds('workspaceAdmin') ? badge('decision', 'Workspace admin') : ''}${holds('riskApprover') ? badge('restricted', 'Risk approver') : ''}${pending ? html`<a class="badge badge-watch" href="#/people?proposal=${pending.id}">${pending.id} pending</a>` : ''}</div></td>
+      <td class="cell-manage">${manage}</td>
     </tr>`;
   };
 
@@ -89,8 +96,8 @@ export function peopleView(state, query) {
     <div><span class="fact-label">Risk approvers</span><strong>${riskApprovers}</strong></div>
     <div><span class="fact-label">Roster version</span><strong>v${rosterVersions(state).length}</strong></div>
   </div></div>
-  <div class="card table-card"><table class="table table-people">
-    <thead><tr><th>Name</th><th>Title</th><th>Team</th><th>Rights</th><th></th><th></th></tr></thead>
+  <div class="card table-card people-card"><table class="table table-people">
+    <thead><tr><th>Name</th><th>Title</th><th>Team</th><th>Rights</th><th><span class="sr-only">Manage</span></th></tr></thead>
     <tbody>${entries.map(row)}</tbody>
   </table></div>
   <p class="muted small"><a href="#/people?inactive=${showInactive ? '0' : '1'}">${showInactive ? 'Hide' : 'Show'} deactivated people</a> · Rights are granted and removed, and rights holders deactivated, through a proposal by a workspace admin that someone else approves: a different workspace admin, or an existing Risk approver for a Risk approver grant. Neither the proposer nor the person receiving a right approves it. The last workspace admin cannot be removed.</p>

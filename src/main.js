@@ -176,6 +176,15 @@ function clearErrorOn(route, ...params) {
   if (params.some((p) => location.hash.includes(`?${p}=`))) location.hash = route;
 }
 
+// Row menus (details.menu) close on an outside click, on Escape, and after a choice.
+document.addEventListener('click', (e) => {
+  for (const m of document.querySelectorAll('details.menu[open]')) if (!m.contains(e.target) || e.target.closest('.menu-list a')) m.open = false;
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  for (const m of document.querySelectorAll('details.menu[open]')) { m.open = false; m.querySelector('summary').focus(); }
+});
+
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.tagName === 'INPUT' || btn.tagName === 'TEXTAREA') return;
