@@ -482,3 +482,7 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .people-form { flex-wrap: wrap; }
 .people-form input[type="text"] { flex: 1 1 160px; }
 .table tr.is-editing td { background: var(--neutral-bg); }
+
+.rights-actions { display: flex; gap: 10px; margin-top: 4px; }
+.roster-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.roster-proposal + .roster-proposal { margin-top: 10px; }
