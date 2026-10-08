@@ -16,6 +16,7 @@ export function decisionsListView(state) {
     ${pending.length === 1 ? html`<div class="page-actions"><a class="btn btn-primary" href="#/capabilities/${pending[0].id}/decision">Open authority decision</a></div>` : ''}
   </div>
   ${pending.map((c) => notice('decision', `Decision required: ${c.name}`, `Proposed change from ${authorityLabel(c.authority)} to ${authorityLabel(c.proposed)}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} evidence requirements met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
+  ${state.capabilities.flatMap((c) => capData(state, c.id).proposals.filter((p) => p.status === 'open').map((p) => notice('watch', `Amendment awaiting sign-off: ${c.name}`, `${p.id}, proposed by ${person(p.proposedBy).name}. Needs ${p.required.map((r) => r === 'owner' ? 'the owner' : 'a Risk stakeholder').join(' and ')}.`, { link: `#/capabilities/${c.id}/proposals/${p.id}`, linkText: 'Open' })))}
   ${reviews.map((c) => notice('fail', `Review required before any expansion: ${c.name}`, 'Authority was restricted automatically. A post-incident review must be recorded before authority can expand again.', { link: `#/decisions/${capData(state, c.id).monitoring.breachRecordId}`, linkText: 'Restriction record' }))}
   <div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Capability</th><th>Date</th><th>Change</th><th>Decision</th><th>Authorized by</th></tr></thead>

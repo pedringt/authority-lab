@@ -12,6 +12,8 @@ import {
   startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection,
   contractChecks, canFinalizeContract, finalizeContract, draftValue, contractSummary, SECTION_KEYS,
   saveCriteria, criteriaSaved, criteriaLocked, canRunSuite, defaultsFor, defaultDeviations, CORE_CRITERIA, CORE_REQUIREMENTS,
+  SETTINGS, pilotStarted, needsSignoff, signoffRequirements, isRiskStakeholder, proposeAmendment, approveProposal, rejectProposal,
+  openProposal, getProposal, approvalEligibility, proposalReadiness, evaluateRequirement,
 } from '../src/store.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
 import { pickTemplate, suggestLines } from '../src/data/contract-templates.js';
@@ -51,8 +53,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 7);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v7');
+  assert.equal(s.version, 8);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v8');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(cap(s).decisionRequired, true);
@@ -242,7 +244,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 6, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 7, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -468,7 +470,7 @@ test('views read the contract, risk, criteria, requirements and stakeholders onl
   const dir = new URL('../src/views', import.meta.url).pathname;
   // Allowed: a decision record's own version numbers, an evidence item's risk
   // level, the defaults object, and the versions-in-force number map.
-  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g];
+  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g, /\b(p\.value|p\.base|before)\.(contract|criteria|requirements)\b/g];
   const forbidden = /\.(contract|criteria|requirements|stakeholders|versions)\b|\b(cap|c|capability)\.risk\b/g;
   const offenders = [];
   for (const f of readdirSync(dir)) {
@@ -923,4 +925,169 @@ test('loosening or removing a risk-derived default needs a reason, stored on the
   assert.deepEqual(defaultDeviations([{ id: 'a', t: '< 2% errors' }], [{ id: 'a', t: '< 3% errors' }], (x) => x.t).map((x) => x.change), ['loosened']);
   assert.deepEqual(defaultDeviations([{ id: 'a', t: '< 2% errors' }], [{ id: 'a', t: '< 1% errors' }], (x) => x.t), []);
   assert.deepEqual(defaultDeviations([{ id: 'a', t: 'Minimum 200 cases' }], [{ id: 'a', t: 'Minimum 200 cases' }], (x) => x.t), []);
+});
+
+// ---------------------------------------------------------------------------
+// Amendments after evidence need sign-off (#7)
+// ---------------------------------------------------------------------------
+
+function loosenedRequirements(s, id = RR) {
+  return current(s, id, 'requirements').map((r) => (r.id === 'high-value' ? { ...r, text: 'Minimum 15 high-value refund cases' } : r));
+}
+const REASON = 'Volume is too low to reach 40 this quarter; 15 is what the pilot can produce.';
+
+test('who must sign off follows the risk profile; the gate follows the lock and the pilot', () => {
+  const s = initialState();
+  assert.deepEqual(signoffRequirements(s, RR), ['owner', 'risk'], 'High impact, financial');
+  assert.deepEqual(signoffRequirements(s, TC), ['owner'], 'Low impact, internal');
+  assert.equal(isRiskStakeholder(s, RR, 'daniel'), true);
+  assert.equal(isRiskStakeholder(s, RR, 'elena'), false);
+  assert.equal(needsSignoff(s, RR, 'criteria'), true, 'refund criteria are locked');
+  assert.equal(needsSignoff(s, TC, 'criteria'), false, 'ticket classification has no criteria, so nothing is locked');
+  assert.equal(pilotStarted(s, RR), true);
+  assert.equal(pilotStarted(s, 'account-closure'), false);
+  assert.equal(needsSignoff(s, RR, 'contract'), true);
+  assert.equal(needsSignoff(s, 'account-closure', 'contract'), false);
+  assert.equal(SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT, true, 'kept on');
+  SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT = false;
+  try { assert.equal(needsSignoff(s, RR, 'contract'), false); } finally { SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT = true; }
+  assert.throws(() => needsSignoff(s, RR, 'risk'), /Unknown amendment kind/);
+});
+
+test('a proposal on locked criteria is recorded, shows readiness under both versions, and does not change anything yet', () => {
+  let s = initialState();
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: 'short' }), /needs a reason/);
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria').filter((c) => c.id !== 'quality'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON }), /Core rows/);
+  const before = versionsInForce(s, RR);
+  s = proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON });
+  const p = openProposal(s, RR, 'criteria');
+  assert.equal(p.id, 'P-1');
+  assert.equal(p.status, 'open');
+  assert.equal(p.proposedBy, 'priya');
+  assert.deepEqual(p.required, ['owner', 'risk']);
+  assert.deepEqual(p.base, { criteria: 1, requirements: 1 });
+  assert.deepEqual(versionsInForce(s, RR), before, 'nothing applied yet');
+  assert.equal(readiness(s, RR).met, 5);
+  const r = proposalReadiness(s, RR, p);
+  assert.equal(`${r.now.met} of ${r.now.total}`, '5 of 6');
+  assert.equal(`${r.proposed.met} of ${r.proposed.total}`, '6 of 6');
+  assert.equal(s.activity[0].kind, 'proposal');
+  assert.equal(s.activity[0].surfaced, true);
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'maya', reason: REASON }), /already awaiting sign-off/);
+  // evaluateRequirement only moves "met" when the threshold changed and the value is numeric.
+  assert.equal(evaluateRequirement({ text: 'Minimum 15 cases', current: '18', met: false }, { text: 'Minimum 40 cases' }), true);
+  assert.equal(evaluateRequirement({ text: 'Minimum 40 cases', current: '18', met: false }, { text: 'Minimum 40 cases' }), false);
+  assert.equal(evaluateRequirement({ text: 'No unresolved critical incidents', current: 'INC-01 mitigated', met: true }, { text: 'No unresolved critical incidents' }), true);
+  assert.equal(evaluateRequirement({ text: 'High-severity error rate < 1%', current: '1.4%', met: true }, { text: 'High-severity error rate < 2%' }), false);
+});
+
+test('the proposer cannot approve; the owner alone is not enough for High impact; a Risk stakeholder completes it and the versions are written', () => {
+  let s = proposeAmendment(initialState(), RR, 'criteria', { value: { criteria: current(initialState(), RR, 'criteria'), requirements: loosenedRequirements(initialState()) }, by: 'priya', reason: REASON });
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /proposed this; someone else/);
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'elena' }), /cannot approve/);
+  assert.match(approvalEligibility(s, RR, getProposal(s, RR, 'P-1'), 'elena').reason, /the owner \(Maya Chen\) and a Risk stakeholder \(Daniel Okafor\)/);
+  s = approveProposal(s, RR, 'P-1', { by: 'maya' });
+  assert.equal(getProposal(s, RR, 'P-1').status, 'open', 'owner alone is not enough');
+  assert.deepEqual(getProposal(s, RR, 'P-1').approvals.map((a) => [a.by, a.role]), [['maya', 'owner']]);
+  assert.equal(versionsInForce(s, RR).requirements, 1);
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'maya' }), /already approved/);
+  s = approveProposal(s, RR, 'P-1', { by: 'daniel' });
+  const p = getProposal(s, RR, 'P-1');
+  assert.equal(p.status, 'approved');
+  assert.deepEqual(p.applied, { criteria: 2, requirements: 2 });
+  assert.equal(readiness(s, RR).met, 6, 'met is re-evaluated against the new threshold');
+  assert.equal(current(s, RR, 'requirements').find((r) => r.id === 'high-value').current, '18', 'measured value unchanged');
+  const v = currentVersion(s, RR, 'requirements');
+  assert.equal(v.author, 'priya');
+  assert.equal(v.afterEvidence, true);
+  assert.equal(v.proposalId, 'P-1');
+  assert.deepEqual(v.approvals.map((a) => a.by), ['maya', 'daniel']);
+  assert.deepEqual(v.deviations.map((x) => [x.id, x.change]), [['high-value', 'loosened']]);
+  assert.equal(s.activity[0].kind, 'amendment');
+  assert.equal(s.activity[0].surfaced, true);
+  assert.match(s.activity[0].body, /approved by Maya Chen \(the owner\) and Daniel Okafor \(a Risk stakeholder\)/);
+  // A later decision is flagged as relying on criteria amended after evidence.
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.equal(rec.versions.requirements, 2);
+  assert.equal(amendmentsAfterEvidenceFor(s, rec).length, 2, 'criteria v2 and requirements v2 were both amended after evidence');
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'daniel' }), /closed/);
+});
+
+test('low impact: the owner alone approves; a rejection is recorded with its reason and leaves versions untouched', () => {
+  // Give ticket classification criteria and lock them with a run of borrowed scenarios.
+  let s = initialState();
+  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), scenarios: seed.scenarios.slice(0, 2) } } };
+  const d = defaultsFor(s, TC);
+  s = saveCriteria(s, TC, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  s = runSuite(s, TC);
+  assert.equal(criteriaLocked(s, TC), true);
+  const value = { criteria: current(s, TC, 'criteria'), requirements: current(s, TC, 'requirements').map((r) => (r.id === 'min-cases' ? { ...r, text: 'Minimum 30 pilot cases' } : r)) };
+  s = proposeAmendment(s, TC, 'criteria', { value, by: 'maya', reason: 'Classification volume is high; 30 cases is a week.' });
+  assert.deepEqual(openProposal(s, TC, 'criteria').required, ['owner']);
+  // Reject path first, by the owner (priya), with a reason.
+  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'maya', reason: 'Changed my mind about it.' }), /withdraws rather than rejects/);
+  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'elena', reason: 'Not my area, but no.' }), /neither the owner nor a Risk stakeholder/);
+  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'priya', reason: 'no' }), /needs a reason/);
+  const beforeReject = versionsInForce(s, TC).requirements;
+  const t = rejectProposal(s, TC, 'P-1', { by: 'priya', reason: 'Keep the default until the queue change settles.' });
+  assert.equal(getProposal(t, TC, 'P-1').status, 'rejected');
+  assert.equal(getProposal(t, TC, 'P-1').rejection.by, 'priya');
+  assert.equal(versionsInForce(t, TC).requirements, beforeReject, 'a rejection writes no version');
+  assert.equal(t.activity[0].kind, 'proposal');
+  assert.equal(t.activity[0].outcome, 'rejected');
+  assert.throws(() => approveProposal(t, TC, 'P-1', { by: 'priya' }), /closed/);
+  // Approve path: owner alone completes it.
+  const u = approveProposal(s, TC, 'P-1', { by: 'priya' });
+  assert.equal(getProposal(u, TC, 'P-1').status, 'approved');
+  assert.equal(versionsInForce(u, TC).requirements, beforeReject + 1);
+});
+
+test('before the gate, an amendment is applied directly; after a pilot starts, contract edits need the same sign-off (setting on)', () => {
+  // Criteria not locked: direct new version.
+  let [s, id] = withNewCap({ impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, 'Quarterly summary', 'Summarises the quarter.');
+  const d = defaultsFor(s, id);
+  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  s = proposeAmendment(s, id, 'criteria', { value: { criteria: current(s, id, 'criteria'), requirements: current(s, id, 'requirements') }, by: 'priya', reason: 'Re-saved before any testing.' });
+  assert.equal(capData(s, id).proposals.length, 0);
+  assert.equal(versionsInForce(s, id).criteria, 2);
+  // Contract on the seeded refund capability: pilot started, so a proposal.
+  let t = initialState();
+  const c = current(t, RR, 'contract');
+  const value = { ...c, mustNever: [...c.mustNever, 'Issue a refund while a fraud review is open.'] };
+  t = proposeAmendment(t, RR, 'contract', { value, by: 'maya', reason: 'Close the gap found in INC-01.' });
+  const p = openProposal(t, RR, 'contract');
+  assert.ok(p && p.kind === 'contract');
+  assert.deepEqual(p.base, { contract: 1 });
+  assert.deepEqual(p.required, ['risk'], 'the owner proposed it, so a Risk stakeholder stands in for the owner role');
+  assert.equal(versionsInForce(t, RR).contract, 1);
+  assert.equal(proposalReadiness(t, RR, p).proposed, null, 'no readiness comparison for a contract');
+  assert.throws(() => approveProposal(t, RR, 'P-1', { by: 'maya' }), /proposed this/);
+  t = approveProposal(t, RR, 'P-1', { by: 'daniel' });
+  assert.equal(getProposal(t, RR, 'P-1').status, 'approved');
+  assert.equal(versionsInForce(t, RR).contract, 2);
+  assert.ok(current(t, RR, 'contract').mustNever.includes('Issue a refund while a fraud review is open.'));
+  assert.equal(currentVersion(t, RR, 'contract').afterEvidence, true);
+  // When someone else proposes a High-impact change, both roles are needed.
+  let w = proposeAmendment(initialState(), RR, 'contract', { value, by: 'priya', reason: 'Close the gap found in INC-01.' });
+  assert.deepEqual(openProposal(w, RR, 'contract').required, ['owner', 'risk']);
+  // With the setting off, the same edit on a fresh state is applied directly.
+  SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT = false;
+  try {
+    const u = proposeAmendment(initialState(), RR, 'contract', { value, by: 'maya', reason: 'Close the gap found in INC-01.' });
+    assert.equal(versionsInForce(u, RR).contract, 2);
+    assert.equal(capData(u, RR).proposals.length, 0);
+  } finally { SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT = true; }
+});
+
+test('proposal actions are available through the store', () => {
+  const store = createStore({});
+  store.dispatch('proposeAmendment', RR, 'criteria', { value: { criteria: current(store.get(), RR, 'criteria'), requirements: loosenedRequirements(store.get()) }, by: 'priya', reason: REASON });
+  store.dispatch('approveProposal', RR, 'P-1', { by: 'maya' });
+  store.dispatch('approveProposal', RR, 'P-1', { by: 'daniel' });
+  assert.equal(getProposal(store.get(), RR, 'P-1').status, 'approved');
+  const again = createStore({});
+  again.dispatch('proposeAmendment', RR, 'criteria', { value: { criteria: current(again.get(), RR, 'criteria'), requirements: loosenedRequirements(again.get()) }, by: 'priya', reason: REASON });
+  again.dispatch('rejectProposal', RR, 'P-1', { by: 'daniel', reason: 'Not without more cases.' });
+  assert.equal(getProposal(again.get(), RR, 'P-1').status, 'rejected');
 });

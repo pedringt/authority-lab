@@ -461,3 +461,12 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 
 .deviations { background: var(--watch-bg); border: 1px solid var(--watch-bd); border-radius: 4px; padding: 10px 12px; margin: 8px 0; }
 .deviations .plain-list { margin-bottom: 6px; }
+
+/* Proposals and sign-off ------------------------------------------------- */
+.readiness-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.readiness-compare > div { display: grid; gap: 2px; }
+.readiness-compare strong { font-size: 20px; }
+.readiness-compare .notice { grid-column: 1 / -1; margin: 6px 0 0; }
+.signoff-role { display: inline-block; margin-right: 6px; }
+.reject-form { margin-top: 12px; }
+@media (max-width: 720px) { .readiness-compare { grid-template-columns: 1fr; } }

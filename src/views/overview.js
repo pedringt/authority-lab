@@ -129,6 +129,12 @@ export function overviewView(state) {
       <p>${d.stakeholderSummary.disagreement}</p>
     </a>`);
   }
+  d.proposals.filter((p) => p.status === 'open').forEach((p) => {
+    attention.push(html`<a class="card card-link attention" href="#/capabilities/${cap.id}/proposals/${p.id}">
+      <div class="attention-head"><strong>Amendment awaiting sign-off</strong>${badge('decision', p.id)}</div>
+      <p>${(seed.people[p.proposedBy] || {}).name} proposed changing the ${p.kind === 'contract' ? 'contract' : 'success criteria'} after evidence. ${p.reason}</p>
+    </a>`);
+  });
   d.evidence.filter((e) => e.source === 'Incident' && e.status === 'fail').slice(0, 1).forEach((e) => {
     attention.push(html`<a class="card card-link attention" href="${e.link}">
       <div class="attention-head"><strong>${e.metric}</strong>${badge('fail', e.value.includes('mitigated') ? 'Mitigated' : 'Fail')}</div>

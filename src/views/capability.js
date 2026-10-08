@@ -4,6 +4,7 @@ import { getCapability, capData, readiness, authorityLabel, testSummary, current
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
+import { proposalsList, amendLink } from './proposals.js';
 
 const TABS = [
   ['contract', 'Contract'],
@@ -85,7 +86,8 @@ function contractTab(state, cap, d) {
   }
   const latest = contractVersions[contractVersions.length - 1];
   return html`
-    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment. <span class="muted">Version ${latest.version}, ${person(latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span></p>
+    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment. <span class="muted">Version ${latest.version}, ${person(latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}</p>
+    ${proposalsList(state, cap.id, 'contract')}
     ${contractReviewView(contractVersions[0].review)}
     <div class="contract-grid">
       <div class="card contract-block contract-may"><h3>AI may</h3>${list(c.may)}</div>
@@ -117,7 +119,8 @@ function criteriaTab(state, cap) {
   const v = versionList(state, cap.id, 'criteria');
   return html`
     ${locked
-      ? html`<div class="notice notice-watch"><div class="notice-body"><strong>Locked since the first performance results</strong><p>Criteria v${v.length} and requirements v${versionList(state, cap.id, 'requirements').length}. Changing the bar after seeing results needs a proposed amendment with sign-off (arrives with #7).</p></div><button class="btn btn-sm" disabled title="Arrives with #7">Propose amendment</button></div>`
+      ? html`<div class="notice notice-watch"><div class="notice-body"><strong>Locked since the first performance results</strong><p>Criteria v${v.length} and requirements v${versionList(state, cap.id, 'requirements').length}. Changing the bar after seeing results needs a proposed amendment with sign-off.</p></div>${amendLink(state, cap.id, 'criteria')}</div>
+        ${proposalsList(state, cap.id, 'criteria')}`
       : html`<div class="notice notice-neutral"><div class="notice-body"><strong>Open until the first test run</strong><p>Criteria v${v.length} and requirements v${versionList(state, cap.id, 'requirements').length}. Every save writes a new version; the first test run locks them.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/criteria/edit">Edit</a></div>`}
     <p class="muted">${defining ? html`Defined before the pilot started, as part of authority change <a href="#/decisions/${defining.id}">${defining.id}</a>. ` : ''}These are the thresholds the decision is measured against, not a score.</p>
     ${rows.length ? html`<div class="card table-card"><table class="table table-criteria">
