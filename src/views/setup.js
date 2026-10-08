@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, selectField, person, section, kv } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness } from '../store.js';
+import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId } from '../store.js';
 
 // Add a capability: define it, give it a risk profile, choose its starting
 // authority. One page, three sections, one submit. Nothing starts above Level 1.
@@ -66,10 +66,10 @@ export function setupSteps(state, capabilityId) {
     { id: 'stakeholders', title: 'Name the stakeholders', done: stakeholdersDone, text: 'The people whose positions are recorded at decision time.', link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: stakeholdersDone ? 'Stakeholders' : 'Open the editor' },
     { id: 'scenarios', title: 'Write the scenario library', done: scenariosDone, text: 'Standard, ambiguous, adversarial, high-impact and edge cases. Twenty to thirty is enough to start; a starter set is available.', link: `#/capabilities/${cap.id}/scenarios/edit`, linkText: scenariosDone ? 'Scenario library' : 'Open the library' },
     { id: 'tests', title: 'Run the test suite', done: testsDone, text: 'The first run locks the criteria and produces the first evidence.', link: `#/tests?capability=${cap.id}`, linkText: 'Testing ground', needs: scenariosDone && criteriaDone },
-    { id: 'decision', title: 'Authorize the first authority change', done: Boolean(cap.lastDecisionId && cap.authority.level >= 2), text: 'Usually a move to Draft with a small pilot scope. The owner authorizes; the system can only recommend.', link: cap.decisionRequired ? `#/capabilities/${cap.id}/decision` : null, linkText: 'Authority decision', needs: testsDone, propose: testsDone && !cap.decisionRequired && cap.authority.level < 2 ? cap.authority.level + 1 : null },
+    { id: 'decision', title: 'Authorize the first authority change', done: Boolean(lastDecisionId(state, cap.id) && cap.authority.level >= 2), text: 'Usually a move to Draft with a small pilot scope. The owner authorizes; the system can only recommend.', link: decisionRequired(state, cap.id) ? `#/capabilities/${cap.id}/decision` : null, linkText: 'Authority decision', needs: testsDone, propose: testsDone && !decisionRequired(state, cap.id) && cap.authority.level < 2 ? cap.authority.level + 1 : null },
   ];
   if (notDelegated) {
-    return [steps[0], { id: 'not-delegated', title: 'Not delegated, by design', done: true, text: 'This capability stays at Level 0 on purpose. Any later delegation starts with a new decision.', link: `#/decisions/${cap.lastDecisionId || ''}`, linkText: 'Decision record' }];
+    return [steps[0], { id: 'not-delegated', title: 'Not delegated, by design', done: true, text: 'This capability stays at Level 0 on purpose. Any later delegation starts with a new decision.', link: `#/decisions/${lastDecisionId(state, cap.id) || ''}`, linkText: 'Decision record' }];
   }
   let nextFound = false;
   return steps.map((st) => {
@@ -100,7 +100,7 @@ export function setupView(state, capabilityId, query) {
     <div class="setup-step-head"><span class="req-mark" aria-hidden="true">${st.done ? '✓' : i + 1}</span><strong>${st.title}</strong>${st.done ? badge('pass', 'Done') : st.next ? badge('decision', 'Next') : badge('neutral', 'Later')}</div>
     <p class="muted">${st.text}</p>
     ${st.done && st.link ? html`<a href="${st.id === 'contract' ? `#/capabilities/${cap.id}?tab=contract` : st.id === 'criteria' ? `#/capabilities/${cap.id}?tab=criteria` : st.id === 'stakeholders' ? `#/capabilities/${cap.id}?tab=stakeholders` : st.link}">${st.linkText}</a>` : ''}
-    ${st.done && st.id === 'decision' && cap.lastDecisionId ? html`<a href="#/decisions/${cap.lastDecisionId}">Decision record</a>` : ''}
+    ${st.done && st.id === 'decision' && lastDecisionId(state, cap.id) ? html`<a href="#/decisions/${lastDecisionId(state, cap.id)}">Decision record</a>` : ''}
     ${!st.done && st.link && st.needs !== false ? html`<a class="btn btn-sm" href="${st.link}">${st.linkText}</a>` : ''}
     ${!st.done && st.propose ? html`<button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${st.propose}">Propose a move to Level ${st.propose}</button>` : ''}
     ${!st.done && st.soon ? html`<p class="muted small">Not available in this prototype yet: ${st.soon}.</p>` : ''}

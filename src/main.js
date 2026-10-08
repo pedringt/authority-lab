@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning } from './store.js';
+import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired } from './store.js';
 import { html } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
@@ -87,7 +87,7 @@ function render() {
   }
   document.title = `${title} · Authority Lab`;
 
-  const pending = state.capabilities.filter((c) => c.decisionRequired).length;
+  const pending = state.capabilities.filter((c) => decisionRequired(state, c.id)).length;
   const counts = {
     overview: state.alerts.length || pending,
     decisions: pending,

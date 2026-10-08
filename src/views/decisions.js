@@ -1,11 +1,11 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority } from '../store.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
   const records = state.decisionRecords.slice().reverse();
-  const pending = state.capabilities.filter((c) => c.decisionRequired);
+  const pending = state.capabilities.filter((c) => decisionRequired(state, c.id));
   const reviews = state.capabilities.filter((c) => capData(state, c.id).reviewRequired);
   return html`<div class="page-head">
     <div>
@@ -15,7 +15,7 @@ export function decisionsListView(state) {
     </div>
     ${pending.length === 1 ? html`<div class="page-actions"><a class="btn btn-primary" href="#/capabilities/${pending[0].id}/decision">Open authority decision</a></div>` : ''}
   </div>
-  ${pending.map((c) => notice('decision', `Decision required: ${c.name}`, `Proposed change from ${authorityLabel(c.authority)} to ${authorityLabel(c.proposed)}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} evidence requirements met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
+  ${pending.map((c) => notice('decision', `Decision required: ${c.name}`, `Proposed change from ${authorityLabel(c.authority)} to ${authorityLabel(proposedAuthority(state, c.id))}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} evidence requirements met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
   ${state.capabilities.flatMap((c) => capData(state, c.id).proposals.filter((p) => p.status === 'open').map((p) => notice('watch', `Amendment awaiting sign-off: ${c.name}`, `${p.id}, proposed by ${person(p.proposedBy).name}. Needs ${requirementLabel(p.required)}.`, { link: `#/capabilities/${c.id}/proposals/${p.id}`, linkText: 'Open' })))}
   ${reviews.map((c) => notice('fail', `Review required before any expansion: ${c.name}`, 'Authority was restricted automatically. A post-incident review must be recorded before authority can expand again.', { link: `#/decisions/${capData(state, c.id).monitoring.breachRecordId}`, linkText: 'Restriction record' }))}
   <div class="card table-card"><table class="table">
@@ -89,7 +89,9 @@ export function decisionWorkspaceView(state, capabilityId) {
   const r = readiness(state, capabilityId);
   const dec = d.decision;
 
-  if (dec.recordId && !cap.decisionRequired) {
+  const pending = decisionRequired(state, capabilityId);
+  const proposed = proposedAuthority(state, capabilityId);
+  if (dec.recordId && !pending) {
     const rec = state.decisionRecords.find((x) => x.id === dec.recordId);
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/decisions">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was recorded as <a href="#/decisions/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a> on ${fmtDateYear(rec.date)}.</p></div></div>
       ${d.reviewRequired
@@ -97,7 +99,7 @@ export function decisionWorkspaceView(state, capabilityId) {
         : notice('pass', 'Authority is set', `${cap.name} is at ${authorityLabel(cap.authority)}. A new decision would create a new record; this prototype replays the flow through Reset demo.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Monitoring' })}`;
   }
 
-  if (!cap.decisionRequired) {
+  if (!pending) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/decisions">Decisions</a></p><h1>Authority decision</h1><p class="lede">No authority change is proposed for ${cap.name}. It is at ${authorityLabel(cap.authority)}.</p></div></div>`;
   }
 
@@ -134,10 +136,10 @@ export function decisionWorkspaceView(state, capabilityId) {
     <div>
       <p class="eyebrow"><a href="#/decisions">Decisions</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Authority decision</h1>
-      <p class="lede">Current: <strong>${authorityLabel(cap.authority)}</strong>. Proposed: <strong>${authorityLabel(cap.proposed)}</strong>. ${rec ? 'The system has summarized the evidence and made a recommendation. ' : ''}A named person decides.</p>
+      <p class="lede">Current: <strong>${authorityLabel(cap.authority)}</strong>. Proposed: <strong>${authorityLabel(proposed)}</strong>. ${rec ? 'The system has summarized the evidence and made a recommendation. ' : ''}A named person decides.</p>
     </div>
   </div>
-  <div class="card">${levelScale(cap.authority, cap.proposed)}</div>
+  <div class="card">${levelScale(cap.authority, proposed)}</div>
 
   <div class="decision-grid">
     <div class="decision-main">

@@ -45,7 +45,7 @@ export const capabilities = [
     authority: { level: 3, limited: false },
     status: 'stable',
     owner: 'priya',
-    lastEvaluated: '2026-09-28',
+    definedOn: '2026-07-21',
     risk: { impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only', failureTypes: ['Wrong answer', 'Silent failure'] },
     contract: {
       may: ['Read the ticket subject and body.', 'Assign queue and priority.', 'Add routing tags.'],
@@ -63,7 +63,7 @@ export const capabilities = [
     authority: { level: 2, limited: false },
     status: 'pilot',
     owner: 'priya',
-    lastEvaluated: '2026-10-02',
+    definedOn: '2026-09-15',
     risk: { impact: 'Medium', reversibility: 'Recoverable with effort', exposure: 'Customer-facing', failureTypes: ['Hallucination', 'Wrong answer', 'User over-reliance'] },
     contract: {
       may: ['Draft a reply using the ticket, order history and help-center articles.', 'Suggest a tone.'],
@@ -82,11 +82,8 @@ export const capabilities = [
     authority: { level: 2, limited: false },
     status: 'pilot',
     pilotLabel: 'Limited pilot',
-    proposed: { level: 3, limited: true },
-    decisionRequired: true,
     owner: 'maya',
     definedOn: '2026-09-02',
-    lastEvaluated: '2026-10-06',
     risk: {
       impact: 'High',
       reversibility: 'Recoverable with effort',
@@ -135,7 +132,7 @@ export const capabilities = [
     authority: { level: 1, limited: false },
     status: 'restricted',
     owner: 'daniel',
-    lastEvaluated: '2026-09-24',
+    definedOn: '2026-08-25',
     risk: { impact: 'High', reversibility: 'Difficult to reverse', exposure: 'Financial / consequential', failureTypes: ['Wrong action', 'Policy violation', 'Excessive cost'] },
     contract: {
       may: ['Prepare the refund amount and payment reference for a human to execute.'],
@@ -153,7 +150,7 @@ export const capabilities = [
     authority: { level: 0, limited: false },
     status: 'not-delegated',
     owner: 'daniel',
-    lastEvaluated: '2026-08-12',
+    definedOn: '2026-08-12',
     risk: { impact: 'High', reversibility: 'Difficult to reverse', exposure: 'Customer-facing', failureTypes: ['Wrong action', 'Missing escalation'] },
     contract: {
       may: ['Observe closure requests for evaluation purposes.'],
@@ -482,6 +479,7 @@ export const scenarios = [
 
 export const pilot = {
   started: '2026-10-01',
+  ended: '2026-10-06',
   cases: 218,
   accuracy: 94,
   severeErrorRate: 1.4,
@@ -880,6 +878,7 @@ export const capabilityData = {
     recommendation: systemRecommendation,
     defaultConditions,
     defaultRationale,
+    pendingDecision: { level: 3, limited: true },
     monitoringRule: monitoringSeed,
     breach: breachSeed,
     lastTestRun: '2026-10-03',

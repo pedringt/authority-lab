@@ -60,5 +60,5 @@ export function evidenceView(state, capabilityId, query) {
   ${d.evidence.length ? filters : ''}
   ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${d.evidence.length ? 'No evidence matches these filters.' : `No evidence has been recorded for ${cap.name}.`}</p>`}
   ${d.evidence.length ? '' : evidenceSourcesCard()}
-  ${current(state, cap.id, 'requirements').length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'What has to be true before the proposed change can be authorized.' }) : ''}`;
+  ${current(state, cap.id, 'requirements').length ? section(`Evidence requirements for ${proposedChangeLabel(cap, state)}`, requirementsList(state, cap.id), { subtitle: 'What has to be true before the proposed change can be authorized.' }) : ''}`;
 }
