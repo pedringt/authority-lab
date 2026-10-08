@@ -236,6 +236,8 @@ document.addEventListener('change', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const capId = el.dataset.capability;
+  // Heading capability selector and filter dropdowns: each option is a route.
+  if (el.dataset.action === 'navigate') { location.hash = el.value; return; }
   if (el.dataset.action === 'set-acting') { store.dispatch('setActingAs', el.value || null); return; }
   if (el.dataset.action === 'choose-owner') { store.dispatch('setActingAs', el.value || null); return; }
   if (el.dataset.action === 'select-option') store.dispatch('selectDecision', capId, el.value);
