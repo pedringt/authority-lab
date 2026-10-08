@@ -19,6 +19,9 @@ export function emptyCapabilityData() {
     testRun: { status: 'not-run', lastRun: null, completed: [] },
     decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true }, rationale: '', recordId: null, proposed: null },
     monitoring: null,
+    // Simulated readings for the contract's restriction rules, keyed by the
+    // rule's line (#49). Empty until something is measured.
+    ruleReadings: {},
     reviewRequired: false,
     // Contract builder draft (#5). null until started; kept after finalize so
     // the review (including rejected suggestions) stays on record.
@@ -50,6 +53,7 @@ export function seededCapabilityData(id) {
     recommendation: s.recommendation ? clone(s.recommendation) : null,
     monitoringRule: s.monitoringRule ? clone(s.monitoringRule) : null,
     breach: s.breach ? clone(s.breach) : null,
+    ruleReadings: clone(s.ruleReadings || {}),
     testRun: { status: 'not-run', lastRun: s.lastTestRun || null, completed: [] },
     decision: {
       option: null,

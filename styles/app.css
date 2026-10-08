@@ -552,3 +552,9 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .rule-list p { margin: 2px 0 0; }
 .rule-list-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .rule-list-head .badge { flex-shrink: 0; }
+.rule-reading { display: grid; gap: 4px; margin: 8px 0 4px; }
+.rule-reading-bar { position: relative; height: 6px; background: var(--neutral-bg); border-radius: 999px; max-width: 360px; }
+.rule-reading-bar span { display: block; height: 100%; background: var(--pass); border-radius: 999px; }
+.rule-reading-bar i { position: absolute; left: 80%; top: -3px; bottom: -3px; width: 2px; background: var(--text-2); }
+.rule-reading.is-crossed .rule-reading-bar span { background: var(--fail); }
+.section + .rule-card { margin-top: 12px; }
