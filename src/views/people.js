@@ -47,7 +47,7 @@ export function peopleView(state, query) {
     if (rightPerson === key && RIGHT_LABELS[rightKey] && admin) {
       return html`<tr class="is-editing"><td colspan="6">
         <form class="line-edit people-form" data-form="propose-roster" data-person="${key}" data-right="${rightKey}" data-grant="${rightGrant ? '1' : '0'}">
-          <span><strong>${rightGrant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[rightKey]}: ${p.name}</strong> <span class="muted small">Proposed by ${who.name}; a different workspace admin approves. ${rightGrant && key === acting ? 'Nobody grants a right to themselves.' : ''}</span></span>
+          <span><strong>${rightGrant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[rightKey]}: ${p.name}</strong> <span class="muted small">Proposed by ${who.name}; approved by a different workspace admin${rightGrant && rightKey === 'riskApprover' ? ' or an existing Risk approver' : ''}, never by ${rightGrant ? 'the person receiving it' : 'the proposer'}.</span></span>
           <input type="text" name="reason" placeholder="Reason" maxlength="200" aria-label="Reason" required>
           <button class="btn btn-sm btn-primary" type="submit">Propose</button>
           <a class="btn btn-sm btn-ghost" href="#/people">Cancel</a>
@@ -88,7 +88,7 @@ export function peopleView(state, query) {
     <thead><tr><th>Name</th><th>Title</th><th>Team</th><th>Rights</th><th></th><th></th></tr></thead>
     <tbody>${entries.map(row)}</tbody>
   </table></div>
-  <p class="muted small"><a href="#/people?inactive=${showInactive ? '0' : '1'}">${showInactive ? 'Hide' : 'Show'} deactivated people</a> · Rights are granted and removed, and rights holders deactivated, through a proposal by a workspace admin that a different workspace admin approves. Nobody grants a right to themselves. The last workspace admin cannot be removed.</p>
+  <p class="muted small"><a href="#/people?inactive=${showInactive ? '0' : '1'}">${showInactive ? 'Hide' : 'Show'} deactivated people</a> · Rights are granted and removed, and rights holders deactivated, through a proposal by a workspace admin that someone else approves: a different workspace admin, or an existing Risk approver for a Risk approver grant. Neither the proposer nor the person receiving a right approves it. The last workspace admin cannot be removed.</p>
   ${rosterProposals(state, acting, focusProposal)}
   ${admin ? section('Add a person', html`<form class="setup-form" data-form="add-person"><div class="card">
     <div class="three-col">

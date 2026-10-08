@@ -362,8 +362,14 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
     throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
   }
   if (openRosterProposal(state, person)) throw new Error(`A change for ${target.name} is already awaiting sign-off.`);
-  const eligible = activeAdmins(state).filter((k) => k !== by);
-  if (!eligible.length) throw new Error(`No other workspace admin can sign this off. Grant the Workspace admin right to someone else first.`);
+  // Who can approve: a different workspace admin. For a grant, never the
+  // person receiving the right. A Risk approver grant can also be approved by
+  // an existing Risk approver, so a grant to an admin still has an approver.
+  const isGrant = kind === 'rights' && Boolean(grant);
+  let eligible = activeAdmins(state).filter((k) => k !== by);
+  if (isGrant && right === 'riskApprover') eligible = [...new Set([...eligible, ...Object.keys(activePeople(state)).filter((k) => isRiskApprover(state, k) && k !== by)])];
+  if (isGrant) eligible = eligible.filter((k) => k !== person);
+  if (!eligible.length) throw new Error(isGrant && right === 'riskApprover' ? 'No other workspace admin or Risk approver can sign this off.' : 'No other workspace admin can sign this off. Grant the Workspace admin right to someone else first.');
   const pr = {
     id: `RP-${state.rosterProposals.length + 1}`,
     kind,
@@ -395,8 +401,14 @@ export function rosterApprovalEligibility(state, pr, personKey) {
   if (!pr || pr.status !== 'open') return { ok: false, reason: 'This change is closed.' };
   const p = people(state)[personKey];
   if (!p) return { ok: false, reason: 'Choose who is acting.' };
-  if (personKey === pr.proposedBy) return { ok: false, reason: `${p.name} proposed this; a different workspace admin must approve it.` };
-  if (!isWorkspaceAdmin(state, personKey)) return { ok: false, reason: `${p.name} is not an active workspace admin.` };
+  const isGrant = pr.kind === 'rights' && pr.grant;
+  const riskGrant = isGrant && pr.right === 'riskApprover';
+  if (personKey === pr.proposedBy) return { ok: false, reason: `${p.name} proposed this; someone else must approve it.` };
+  if (isGrant && personKey === pr.person) return { ok: false, reason: `${p.name} is receiving this right and cannot approve their own grant.` };
+  if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and cannot approve.` };
+  const admin = isWorkspaceAdmin(state, personKey);
+  const risk = riskGrant && isRiskApprover(state, personKey);
+  if (!admin && !risk) return { ok: false, reason: riskGrant ? `${p.name} is neither a workspace admin nor a Risk approver.` : `${p.name} is not an active workspace admin.` };
   if (!pr.eligible.includes(personKey)) return { ok: false, reason: `${p.name} was not an eligible approver when this change was proposed.` };
   return { ok: true, reason: null };
 }
@@ -416,7 +428,7 @@ export function approveRosterChange(state, proposalId, { by } = {}) {
   } else {
     if (!pr.grant && pr.right === 'workspaceAdmin' && activeAdmins(s).filter((k) => k !== pr.person).length === 0) throw new Error('This would leave no workspace admin.');
     const value = { ...roster, [pr.person]: { ...target, rights: { ...target.rights, [pr.right]: pr.grant } } };
-    s = writeRoster(s, value, { author: pr.proposedBy, reason: pr.reason, surfaced: true, title: `${pr.grant ? 'Right granted' : 'Right removed'}: ${RIGHT_LABELS[pr.right]}, ${target.name}`, body: `Proposed by ${roster[pr.proposedBy].name}, approved by ${roster[by].name}. ${pr.reason}`, meta: { change: { kind: pr.grant ? 'grant' : 'remove', key: pr.person, right: pr.right }, ...meta } });
+    s = writeRoster(s, value, { author: pr.proposedBy, reason: pr.reason, surfaced: true, title: `${pr.grant ? 'Right granted' : 'Right removed'}: ${RIGHT_LABELS[pr.right]}, ${target.name}`, body: `Proposed by ${roster[pr.proposedBy].name}, approved by ${roster[by].name}${isWorkspaceAdmin(state, by) ? '' : ' (as a Risk approver)'}. ${pr.reason}`, meta: { change: { kind: pr.grant ? 'grant' : 'remove', key: pr.person, right: pr.right }, ...meta } });
     if (!pr.grant && pr.right === 'workspaceAdmin' && s.actingAs === pr.person) s = s; // acting stays; they just lost the admin controls
   }
   const applied = rosterVersions(s).length;

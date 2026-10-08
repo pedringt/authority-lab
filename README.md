@@ -82,7 +82,7 @@ Expanding authority needs a pending proposal; restricting, suspending or redesig
 
 ## People and rights
 
-The roster lives in versioned state (`state.roster`), seeded from `src/data/seed.js`. Each person has a name, title, team, `active` flag and explicit rights `{ riskApprover, workspaceAdmin }`. Only a workspace admin changes the roster (add, edit, deactivate; never delete), always with a reason, as a new version. Granting or removing a right, or deactivating a rights holder, is a proposal by an admin approved by a different admin; nobody self-grants; the last admin cannot be removed. Deactivated people cannot act, propose, approve or be stakeholders. Seed admins: Maya Chen, Jonas Lindqvist. Seed Risk approvers: Daniel Okafor, Sofia Alvarez.
+The roster lives in versioned state (`state.roster`), seeded from `src/data/seed.js`. Each person has a name, title, team, `active` flag and explicit rights `{ riskApprover, workspaceAdmin }`. Only a workspace admin changes the roster (add, edit, deactivate; never delete), always with a reason, as a new version. Granting or removing a right, or deactivating a rights holder, is a proposal by an admin approved by someone else (a different admin, or an existing Risk approver for a Risk approver grant); the recipient of a grant never approves it; the last admin cannot be removed. Deactivated people cannot act, propose, approve or be stakeholders. Seed admins: Maya Chen, Jonas Lindqvist. Seed Risk approvers: Daniel Okafor, Sofia Alvarez.
 
 ## Structure
 
