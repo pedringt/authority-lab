@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, notice, section, person, fmtDateYear, selectField } from '../ui.js';
-import { getCapability, current, versionList, actor, STANCES, versionsInForce } from '../store.js';
+import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal } from '../store.js';
 
 export function stakeholdersEditorView(state, capabilityId, query) {
   const cap = getCapability(state, capabilityId);
@@ -12,7 +12,7 @@ export function stakeholdersEditorView(state, capabilityId, query) {
   const people = Object.entries(seed.people).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
   const v = versionsInForce(state, capabilityId).stakeholders;
   const row = (st, i) => html`<tr>
-    <td><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
+    <td><input type="hidden" name="s-position" value="${st.position || ''}"><input type="hidden" name="s-stance-was" value="${st.stance || ''}"><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
     <td>${selectField(`s-person`, '', people, st.person || '', { placeholder: 'Choose a person' })}</td>
     <td><select name="s-stance" aria-label="Position">${STANCES.map(([k, l]) => html`<option value="${k}" ${k === (st.stance || 'undecided') ? raw('selected') : ''}>${l}</option>`)}</select></td>
     <td><input type="text" name="s-quote" value="${st.quote || ''}" maxlength="240" placeholder="Their reasoning, in their words" aria-label="Quote"></td>
@@ -26,6 +26,8 @@ export function stakeholdersEditorView(state, capabilityId, query) {
     </div>
   </div>
   ${error ? notice('fail', 'Could not save', error) : ''}
+  ${needsSignoff(state, capabilityId, 'stakeholders') ? notice('watch', 'Membership changes need sign-off now', 'Performance results have been seen. Adding or removing a person, or changing a team label, becomes a proposal for the usual approvers. Position, stance and reasoning updates still save directly. Risk eligibility comes from a person\u2019s own team, not from this list.') : ''}
+  ${openProposal(state, capabilityId, 'stakeholders') ? notice('decision', `Proposal ${openProposal(state, capabilityId, 'stakeholders').id} is awaiting sign-off`, 'A membership change is already proposed. Approve or reject it before proposing another.', { link: `#/capabilities/${cap.id}/proposals/${openProposal(state, capabilityId, 'stakeholders').id}`, linkText: 'Open' }) : ''}
   <form class="setup-form criteria-form" data-form="save-stakeholders" novalidate>
     <div class="card table-card"><table class="table table-edit">
       <thead><tr><th>Team</th><th>Person</th><th>Position</th><th>In their words</th><th></th></tr></thead>

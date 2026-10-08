@@ -1299,7 +1299,15 @@ export function pilotStarted(state, capabilityId) {
 export function needsSignoff(state, capabilityId, kind) {
   if (kind === 'criteria') return criteriaLocked(state, capabilityId);
   if (kind === 'contract') return SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT && pilotStarted(state, capabilityId);
+  if (kind === 'stakeholders') return performanceResultsSeen(state, capabilityId);
   throw new Error(`Unknown amendment kind: ${kind}`);
+}
+
+// Membership (who) and team labels are governed; position, stance and
+// reasoning are not.
+export function stakeholderMembershipChanged(before, after) {
+  const key = (list) => list.map((st) => `${st.person}|${st.team}`).sort().join(',');
+  return key(before) !== key(after);
 }
 
 // Who must approve (decision 7, revised): the proposer never approves.
@@ -1331,11 +1339,11 @@ export function namedStakeholders(state, capabilityId) {
   return listed.length ? [...set] : Object.keys(seed.people);
 }
 
+// Risk eligibility comes only from the person's own team in `people`, never
+// from how a capability's stakeholder list labels them.
 export function isRiskStakeholder(state, capabilityId, personKey) {
   const p = seed.people[personKey];
-  if (!p) return false;
-  if (p.team === 'Risk') return true;
-  return current(state, capabilityId, 'stakeholders').some((st) => st.person === personKey && st.team === 'Risk');
+  return Boolean(p && p.team === 'Risk');
 }
 
 export function riskStakeholders(state, capabilityId) {
@@ -1362,6 +1370,7 @@ function cleanContractValue(value) {
 // source) is kept, so the proposal's diff shows only the proposed change.
 function cleanAmendmentValue(state, capabilityId, kind, value) {
   if (kind === 'contract') return cleanContractValue(value);
+  if (kind === 'stakeholders') return cleanStakeholders(state, value);
   const c = cleanCriteria(value && value.criteria);
   const r = cleanRequirements(value && value.requirements);
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
@@ -1417,6 +1426,7 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
   }
   if (!needsSignoff(state, capabilityId, kind)) {
     if (kind === 'criteria') return applyCriteriaDirect(state, capabilityId, clean, by, why);
+    if (kind === 'stakeholders') return amend(state, capabilityId, 'stakeholders', { value: clean, author: by, reason: why });
     if (!versionList(state, capabilityId, 'contract').length) throw new Error('Finalize the contract in the builder first.');
     return amend(state, capabilityId, 'contract', { value: clean, author: by, reason: why });
   }
@@ -1431,8 +1441,10 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     date: state.today,
     reason: why,
     value: clean,
-    base: kind === 'contract' ? { contract: v.contract } : { criteria: v.criteria, requirements: v.requirements },
+    base: kind === 'contract' ? { contract: v.contract } : kind === 'stakeholders' ? { stakeholders: v.stakeholders } : { criteria: v.criteria, requirements: v.requirements },
     required: signoffRequirements(state, capabilityId, by),
+    // Frozen when the proposal opens; later stakeholder edits do not change it.
+    eligible: namedStakeholders(state, capabilityId).filter((k) => k !== by),
     approvals: [],
     status: 'open',
     rejection: null,
@@ -1443,7 +1455,7 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
   return logEvent(s, {
     kind: 'proposal',
     outcome: 'opened',
-    title: `Amendment proposed: ${kind === 'contract' ? 'contract' : 'success criteria and evidence requirements'}`,
+    title: `Amendment proposed: ${kind === 'contract' ? 'contract' : kind === 'stakeholders' ? 'stakeholders' : 'success criteria and evidence requirements'}`,
     body: `${cap.name}: ${who.name} proposed ${proposal.id} after evidence. Needs ${requirementLabel(proposal.required)}, never the proposer. Reason: ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
@@ -1482,7 +1494,8 @@ export function approvalEligibility(state, capabilityId, proposal, personKey) {
     if (personKey !== cap.owner) return { ok: false, role: null, reason: `${name} cannot approve this. Needed: the owner (${seed.people[cap.owner].name}).` };
     return { ok: true, role: 'owner', reason: null };
   }
-  if (!namedStakeholders(state, capabilityId).includes(personKey)) return { ok: false, role: null, reason: `${name} is not a named stakeholder of ${cap.name}.` };
+  const eligible = proposal.eligible || namedStakeholders(state, capabilityId);
+  if (!eligible.includes(personKey)) return { ok: false, role: null, reason: `${name} was not an eligible approver when this proposal opened.` };
   // Last slot on a High/Financial proposal must be Risk if none has signed yet.
   const remaining = req.approvers - proposal.approvals.length;
   const riskStill = req.riskRequired && !proposal.approvals.some((a) => a.role === 'risk');
@@ -1522,6 +1535,9 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
   if (proposal.kind === 'contract') {
     s = amend(s, capabilityId, 'contract', { value: proposal.value, author: proposal.proposedBy, reason: proposal.reason, meta, silent: true });
     applied.contract = versionsInForce(s, capabilityId).contract;
+  } else if (proposal.kind === 'stakeholders') {
+    s = amend(s, capabilityId, 'stakeholders', { value: proposal.value, author: proposal.proposedBy, reason: proposal.reason, meta, silent: true });
+    applied.stakeholders = versionsInForce(s, capabilityId).stakeholders;
   } else {
     const defaults = defaultsFor(s, capabilityId);
     const deviations = (kind, items, textOf) => defaultDeviations(defaults[kind], items, textOf).map((x) => ({ ...x, label: kind === 'criteria' ? (defaults.criteria.find((y) => y.id === x.id) || {}).name : null }));
@@ -1536,12 +1552,12 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
   }
   next = { ...next, status: 'approved', applied, closedAt: state.today };
   s = updateCap(s, capabilityId, { proposals: capData(s, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
-  const label = proposal.kind === 'contract' ? `Contract amended to v${applied.contract}` : `Success criteria amended to v${applied.criteria}, evidence requirements to v${applied.requirements}`;
+  const label = proposal.kind === 'contract' ? `Contract amended to v${applied.contract}` : proposal.kind === 'stakeholders' ? `Stakeholders amended to v${applied.stakeholders}` : `Success criteria amended to v${applied.criteria}, evidence requirements to v${applied.requirements}`;
   return logEvent(s, {
     kind: 'amendment',
     afterEvidence: true,
-    objectKind: proposal.kind === 'contract' ? 'contract' : 'criteria',
-    version: proposal.kind === 'contract' ? applied.contract : applied.criteria,
+    objectKind: proposal.kind === 'contract' ? 'contract' : proposal.kind === 'stakeholders' ? 'stakeholders' : 'criteria',
+    version: proposal.kind === 'contract' ? applied.contract : proposal.kind === 'stakeholders' ? applied.stakeholders : applied.criteria,
     proposalId,
     title: `${label} after evidence`,
     body: `${cap.name}: proposed by ${seed.people[proposal.proposedBy].name}, approved by ${approvals.map((a) => `${seed.people[a.by].name} (${roleLabel(a.role)})`).join(' and ')}. ${proposal.reason}`,
@@ -1559,7 +1575,8 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
   if (by === proposal.proposedBy) throw new Error('The proposer withdraws rather than rejects; someone else must reject.');
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A rejection needs a reason (a sentence).');
-  const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && namedStakeholders(state, capabilityId).includes(by));
+  const frozen = proposal.eligible || namedStakeholders(state, capabilityId);
+  const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && frozen.includes(by));
   if (!eligible) throw new Error(`${seed.people[by].name} is not eligible to reject this: ${requirementLabel(proposal.required)} decide.`);
   const next = { ...proposal, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today };
   const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
@@ -1579,13 +1596,10 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
 
 export const STANCES = [['expand', 'Expand'], ['expand-limits', 'Expand with limits'], ['hold', 'Hold'], ['restrict', 'Restrict'], ['undecided', 'No position yet']];
 
-export function saveStakeholders(state, capabilityId, { stakeholders, by, reason } = {}) {
-  const cap = getCapability(state, capabilityId);
-  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (!by || !seed.people[by]) throw new Error('A named person saves the stakeholders.');
+function cleanStakeholders(state, stakeholders) {
   if (!Array.isArray(stakeholders) || !stakeholders.length) throw new Error('Name at least one stakeholder.');
   const seen = new Set();
-  const list = stakeholders.map((st, i) => {
+  return stakeholders.map((st, i) => {
     const team = (st.team || '').trim();
     const person = st.person;
     if (!team) throw new Error(`Stakeholder ${i + 1} needs a team.`);
@@ -1596,8 +1610,24 @@ export function saveStakeholders(state, capabilityId, { stakeholders, by, reason
     const position = (st.position || '').trim() || (STANCES.find(([k]) => k === stance) || [])[1] || 'No position yet';
     return { team, person, stance, position, quote: (st.quote || '').trim(), date: st.date || state.today };
   });
-  const first = !current(state, capabilityId, 'stakeholders').length;
-  return amend(state, capabilityId, 'stakeholders', { value: list, author: by, reason: (reason || '').trim() || (first ? 'Stakeholders named.' : 'Stakeholders updated.') });
+}
+
+// Save the stakeholder list. Before performance results exist every save is a
+// direct new version. After that, a change to who is listed or to a team
+// label goes through a proposal with sign-off; position, stance and
+// reasoning updates stay direct.
+export function saveStakeholders(state, capabilityId, { stakeholders, by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person saves the stakeholders.');
+  const list = cleanStakeholders(state, stakeholders);
+  const before = current(state, capabilityId, 'stakeholders');
+  const first = !before.length;
+  const why = (reason || '').trim() || (first ? 'Stakeholders named.' : 'Stakeholders updated.');
+  if (needsSignoff(state, capabilityId, 'stakeholders') && stakeholderMembershipChanged(before, list)) {
+    return proposeAmendment(state, capabilityId, 'stakeholders', { value: list, by, reason: (reason || '').trim() || 'Stakeholder membership change after performance results.' });
+  }
+  return amend(state, capabilityId, 'stakeholders', { value: list, author: by, reason: why });
 }
 
 // Deterministic simulated results for a person-written or starter scenario.

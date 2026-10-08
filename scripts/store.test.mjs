@@ -14,7 +14,7 @@ import {
   saveCriteria, criteriaSaved, criteriaLocked, canRunSuite, defaultsFor, defaultDeviations, CORE_CRITERIA, CORE_REQUIREMENTS,
   SETTINGS, pilotStarted, needsSignoff, signoffRequirements, isRiskStakeholder, proposeAmendment, approveProposal, rejectProposal,
   openProposal, getProposal, approvalEligibility, proposalReadiness, evaluateRequirement, approvalsComplete, namedStakeholders, contractValueChecks,
-  saveStakeholders, saveScenarios, addStarterScenarios, simulateScenario, scenarioNudge, proposeAuthority, STANCES,
+  saveStakeholders, saveScenarios, addStarterScenarios, simulateScenario, scenarioNudge, proposeAuthority, STANCES, stakeholderMembershipChanged,
 } from '../src/store.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
@@ -472,7 +472,7 @@ test('views read the contract, risk, criteria, requirements and stakeholders onl
   const dir = new URL('../src/views', import.meta.url).pathname;
   // Allowed: a decision record's own version numbers, an evidence item's risk
   // level, the defaults object, and the versions-in-force number map.
-  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g, /\b(p\.value|p\.base|before)\.(contract|criteria|requirements)\b/g, /versionsInForce\([^)]*\)\.(contract|criteria|requirements|risk|stakeholders)\b/g];
+  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g, /\b(p\.value|p\.base|before)\.(contract|criteria|requirements|stakeholders)\b/g, /versionsInForce\([^)]*\)\.(contract|criteria|requirements|risk|stakeholders)\b/g];
   const forbidden = /\.(contract|criteria|requirements|stakeholders|versions)\b|\b(cap|c|capability)\.risk\b/g;
   const offenders = [];
   for (const f of readdirSync(dir)) {
@@ -948,6 +948,9 @@ test('who must sign off follows the risk profile; the gate follows the lock and 
   assert.deepEqual(namedStakeholders(s, TC).sort(), Object.keys(seed.people).sort(), 'no stakeholders listed: any named person');
   assert.equal(isRiskStakeholder(s, RR, 'daniel'), true);
   assert.equal(isRiskStakeholder(s, RR, 'elena'), false);
+  // A stakeholder entry labelled Risk does not make someone Risk.
+  const relabel = amend(s, RR, 'stakeholders', { value: current(s, RR, 'stakeholders').map((x) => (x.person === 'elena' ? { ...x, team: 'Risk' } : x)), author: 'maya', reason: 'Relabel for the test.' });
+  assert.equal(isRiskStakeholder(relabel, RR, 'elena'), false);
   assert.equal(needsSignoff(s, RR, 'criteria'), true, 'refund criteria are locked');
   assert.equal(needsSignoff(s, TC, 'criteria'), false, 'ticket classification has no criteria, so nothing is locked');
   assert.equal(pilotStarted(s, RR), true);
@@ -1303,4 +1306,82 @@ test('end to end in the store: add → contract → criteria → stakeholders �
   // The seeded demo is untouched.
   assert.equal(getCapability(store.get(), RR).decisionRequired, true);
   assert.equal(readiness(store.get(), RR).met, 5);
+});
+
+// ---------------------------------------------------------------------------
+// Sign-off loophole (PR #18 review)
+// ---------------------------------------------------------------------------
+
+test('loophole: relabelling a stakeholder as Risk after proposing cannot satisfy the Risk approval', () => {
+  let s = initialState();
+  const reqs = loosenedRequirements(s);
+  s = proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: reqs }, by: 'maya', reason: REASON });
+  // Maya then relabels Elena as Risk. After performance results, that is itself a proposal, not a direct edit.
+  const relabelled = current(s, RR, 'stakeholders').map((x) => (x.person === 'elena' ? { ...x, team: 'Risk' } : x));
+  s = saveStakeholders(s, RR, { stakeholders: relabelled, by: 'maya', reason: 'Relabel Elena as Risk.' });
+  assert.equal(current(s, RR, 'stakeholders').find((x) => x.person === 'elena').team, 'Finance', 'the list did not change');
+  assert.equal(openProposal(s, RR, 'stakeholders').id, 'P-2');
+  // Even if it had applied, Elena is not Risk: her team in people is Finance.
+  s = approveProposal(s, RR, 'P-1', { by: 'elena' });
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /at least one approver must be from Risk/);
+  assert.equal(getProposal(s, RR, 'P-1').status, 'open', 'P-1 does not apply without Daniel');
+  assert.equal(versionsInForce(s, RR).requirements, 1);
+  s = approveProposal(s, RR, 'P-1', { by: 'daniel' });
+  assert.equal(getProposal(s, RR, 'P-1').status, 'approved');
+});
+
+test('eligible approvers are frozen when a proposal opens', () => {
+  // Ticket classification (Low impact) with criteria locked: owner-proposed, so one other named stakeholder approves.
+  let s = initialState();
+  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), scenarios: seed.scenarios.slice(0, 2) } } };
+  s = saveStakeholders(s, TC, { stakeholders: [{ team: 'Support Operations', person: 'priya' }, { team: 'Product', person: 'maya' }], by: 'priya' });
+  const d = defaultsFor(s, TC);
+  s = saveCriteria(s, TC, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  s = runSuite(s, TC);
+  const value = { criteria: current(s, TC, 'criteria'), requirements: current(s, TC, 'requirements').map((r) => (r.id === 'min-cases' ? { ...r, text: 'Minimum 30 pilot cases' } : r)) };
+  s = proposeAmendment(s, TC, 'criteria', { value, by: 'priya', reason: 'Owner proposing; one other stakeholder must approve.' });
+  const p = openProposal(s, TC, 'criteria');
+  assert.deepEqual(p.eligible.sort(), ['daniel', 'maya'], 'listed stakeholders plus Risk, minus the proposer, at open time');
+  // Adding Elena afterwards (itself a proposal now) does not make her eligible on P-1.
+  assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /not an eligible approver when this proposal opened/);
+  // Nor does an applied membership change: approve the membership proposal first, then retry.
+  s = saveStakeholders(s, TC, { stakeholders: [...current(s, TC, 'stakeholders'), { team: 'Finance', person: 'elena' }], by: 'priya', reason: 'Add Finance.' });
+  const sp = openProposal(s, TC, 'stakeholders');
+  s = approveProposal(s, TC, sp.id, { by: 'maya' });
+  assert.equal(getProposal(s, TC, sp.id).status, 'approved');
+  assert.ok(current(s, TC, 'stakeholders').some((x) => x.person === 'elena'), 'Elena is now listed');
+  assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /not an eligible approver when this proposal opened/, 'P-1 keeps its frozen set');
+  s = approveProposal(s, TC, 'P-1', { by: 'maya' });
+  assert.equal(getProposal(s, TC, 'P-1').status, 'approved');
+});
+
+test('after performance results, membership and team changes to stakeholders go through sign-off; position changes stay direct', () => {
+  let s = initialState();
+  const before = current(s, RR, 'stakeholders');
+  assert.equal(needsSignoff(s, RR, 'stakeholders'), true);
+  // Position/stance/quote only: direct new version.
+  const repositioned = before.map((x) => (x.person === 'elena' ? { ...x, stance: 'hold', position: 'Hold', quote: 'Changed my mind.' } : x));
+  assert.equal(stakeholderMembershipChanged(before, repositioned), false);
+  s = saveStakeholders(s, RR, { stakeholders: repositioned, by: 'maya', reason: 'Finance moved to hold.' });
+  assert.equal(versionsInForce(s, RR).stakeholders, 2);
+  assert.equal(capData(s, RR).proposals.length, 0);
+  assert.equal(current(s, RR, 'stakeholders').find((x) => x.person === 'elena').stance, 'hold');
+  // Removing someone: proposal.
+  const removed = current(s, RR, 'stakeholders').filter((x) => x.person !== 'daniel');
+  assert.equal(stakeholderMembershipChanged(current(s, RR, 'stakeholders'), removed), true);
+  s = saveStakeholders(s, RR, { stakeholders: removed, by: 'maya', reason: 'Drop Risk from the list.' });
+  const p = openProposal(s, RR, 'stakeholders');
+  assert.ok(p);
+  assert.deepEqual(p.required, { approvers: 2, riskRequired: true, ownerOnly: false });
+  assert.equal(versionsInForce(s, RR).stakeholders, 2, 'nothing applied');
+  assert.ok(current(s, RR, 'stakeholders').some((x) => x.person === 'daniel'));
+  // Daniel can reject the proposal that would remove him.
+  s = rejectProposal(s, RR, p.id, { by: 'daniel', reason: 'Risk stays on the list for this capability.' });
+  assert.equal(getProposal(s, RR, p.id).status, 'rejected');
+  // Before any results (a new capability), membership edits are direct.
+  let [t, id] = withNewCap(MED_CF, 'Order status lookup', 'Answers where an order is.');
+  t = saveStakeholders(t, id, { stakeholders: [{ team: 'Support Operations', person: 'priya' }], by: 'priya' });
+  t = saveStakeholders(t, id, { stakeholders: [{ team: 'Support Operations', person: 'priya' }, { team: 'Risk', person: 'daniel' }], by: 'priya' });
+  assert.equal(versionsInForce(t, id).stakeholders, 2);
+  assert.equal(capData(t, id).proposals.length, 0);
 });

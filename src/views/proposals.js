@@ -3,12 +3,13 @@ import { html, raw, badge, notice, section, person, fmtDate, fmtDateYear, kv } f
 import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS } from '../store.js';
 import { diffTable } from './activity.js';
 
-const KIND_TITLE = { criteria: 'success criteria and evidence requirements', contract: 'contract' };
+const KIND_TITLE = { criteria: 'success criteria and evidence requirements', contract: 'contract', stakeholders: 'stakeholders' };
 
 // Propose (or, before the gate, apply) a change to a locked object.
 export function proposeView(state, capabilityId, kind, query) {
   const cap = getCapability(state, capabilityId);
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
+  if (kind === 'stakeholders') return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Amend the stakeholders</h1><p class="lede">Stakeholders are edited in their editor. After performance results, a change to who is listed or to a team label becomes a proposal with sign-off; position and reasoning updates apply directly.</p></div></div>${notice('neutral', 'Use the stakeholder editor', 'Save there; the store decides whether sign-off is needed.', { link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: 'Stakeholder editor' })}`;
   if (!['criteria', 'contract'].includes(kind)) return html`<div class="page-head"><h1>Unknown amendment</h1></div>`;
   const error = query.get('error');
   const acting = person(actor(state, capabilityId));
@@ -99,22 +100,28 @@ export function proposalView(state, capabilityId, proposalId, query) {
 
   const before = p.kind === 'contract'
     ? versionList(state, capabilityId, 'contract').find((v) => v.version === p.base.contract)?.value
-    : { criteria: versionList(state, capabilityId, 'criteria').find((v) => v.version === p.base.criteria)?.value, requirements: versionList(state, capabilityId, 'requirements').find((v) => v.version === p.base.requirements)?.value };
+    : p.kind === 'stakeholders'
+      ? versionList(state, capabilityId, 'stakeholders').find((v) => v.version === p.base.stakeholders)?.value
+      : { criteria: versionList(state, capabilityId, 'criteria').find((v) => v.version === p.base.criteria)?.value, requirements: versionList(state, capabilityId, 'requirements').find((v) => v.version === p.base.requirements)?.value };
+  const stakeholderKey = (list) => (list || []).map((st) => ({ id: st.person, person: seed.people[st.person] ? seed.people[st.person].name : st.person, team: st.team, position: st.position }));
   const diff = p.kind === 'contract'
     ? diffTable(before, p.value)
-    : html`<h4 class="version-sub">Success criteria</h4>${diffTable(before.criteria, p.value.criteria)}<h4 class="version-sub">Evidence requirements</h4>${diffTable(before.requirements, p.value.requirements)}`;
+    : p.kind === 'stakeholders'
+      ? diffTable(stakeholderKey(before), stakeholderKey(p.value))
+      : html`<h4 class="version-sub">Success criteria</h4>${diffTable(before.criteria, p.value.criteria)}<h4 class="version-sub">Evidence requirements</h4>${diffTable(before.requirements, p.value.requirements)}`;
 
   return html`<div class="page-head">
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Proposed amendment</p>
-      <h1>${p.id}: ${p.kind === 'contract' ? 'Contract' : 'Success criteria and evidence requirements'}</h1>
-      <p class="lede">Proposed by <strong>${person(p.proposedBy).name}</strong> on ${fmtDateYear(p.date)}, against ${p.kind === 'contract' ? `contract v${p.base.contract}` : `criteria v${p.base.criteria} and requirements v${p.base.requirements}`}. ${status}</p>
+      <h1>${p.id}: ${p.kind === 'contract' ? 'Contract' : p.kind === 'stakeholders' ? 'Stakeholders' : 'Success criteria and evidence requirements'}</h1>
+      <p class="lede">Proposed by <strong>${person(p.proposedBy).name}</strong> on ${fmtDateYear(p.date)}, against ${p.kind === 'contract' ? `contract v${p.base.contract}` : p.kind === 'stakeholders' ? `stakeholders v${p.base.stakeholders}` : `criteria v${p.base.criteria} and requirements v${p.base.requirements}`}. ${status}</p>
     </div>
   </div>
   ${error ? notice('fail', 'Could not record that', error) : ''}
   <div class="card">${kv([
     ['Reason', p.reason],
-    ['Sign-off needed', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approver${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk: approved') : badge('neutral', 'Risk: pending')}</span>` : ''} <span class="muted small">${requirementLabel(req)}; the proposer never approves.</span>`],
+    ['Sign-off needed', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approver${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk: approved') : badge('neutral', 'Risk: pending')}</span>` : ''} <span class="muted small">${requirementLabel(req)}; the proposer never approves. Risk means the person's own team.</span>`],
+    ['Eligible approvers', html`<span class="muted small">Frozen when the proposal opened: ${(p.eligible || []).map((k) => person(k).name).join(', ') || 'none'}.</span>`],
     ['Approvals so far', p.approvals.length ? html`<ul class="plain-list">${p.approvals.map((a) => html`<li>${person(a.by).name} as ${roleLabel(a.role)}, ${fmtDate(a.date)}</li>`)}</ul>` : html`<span class="muted">None yet</span>`],
     ...(p.rejection ? [['Rejected', html`${person(p.rejection.by).name}, ${fmtDate(p.rejection.date)}: ${p.rejection.reason}`]] : []),
     ...(p.applied ? [['Applied as', Object.entries(p.applied).map(([k, v]) => `${KIND_LABELS[k]} v${v}`).join(', ')]] : []),

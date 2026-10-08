@@ -253,8 +253,14 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const capId = parseRoute().parts[1];
     const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
-    const stakeholders = [...stForm.querySelectorAll('[data-rows="stakeholders"] tr')].map((tr) => ({ team: val(tr, 's-team'), person: val(tr, 's-person'), stance: val(tr, 's-stance'), quote: val(tr, 's-quote') }));
-    try { store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}?tab=stakeholders`; }
+    // Keep the recorded position text unless the stance was changed.
+    const stakeholders = [...stForm.querySelectorAll('[data-rows="stakeholders"] tr')].map((tr) => ({ team: val(tr, 's-team'), person: val(tr, 's-person'), stance: val(tr, 's-stance'), position: val(tr, 's-stance') === val(tr, 's-stance-was') ? val(tr, 's-position') : '', quote: val(tr, 's-quote') }));
+    try {
+      const before = capData(store.get(), capId).proposals.length;
+      store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) });
+      const after = capData(store.get(), capId).proposals;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=stakeholders`;
+    }
     catch (err) { location.hash = `#/capabilities/${capId}/stakeholders/edit?error=${encodeURIComponent(err.message)}`; }
     return;
   }
