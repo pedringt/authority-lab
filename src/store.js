@@ -5,8 +5,9 @@
 
 import * as seed from './data/seed.js';
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-templates.js';
+import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v6';
+export const STORAGE_KEY = 'authority-lab-state-v7';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -79,7 +80,7 @@ export function initialState() {
   // The contract and risk profile live in the version lists.
   const capabilities = seed.capabilities.map(({ contract, risk, ...rest }) => clone(rest));
   return {
-    version: 6,
+    version: 7,
     today: seed.TODAY,
     // Who is acting in the UI. null means "the owner of the capability in
     // context"; a person key overrides it (the "acting as" picker).
@@ -153,7 +154,7 @@ export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'mile
 
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
-  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft',
+  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved',
   decision: 'Decision', test: 'Test run', amendment: 'Amendment',
 };
 
@@ -503,7 +504,7 @@ export function amend(state, capabilityId, kind, { value, author, reason }) {
     afterEvidence,
     objectKind: kind,
     version: next.version,
-    title: `${KIND_LABELS[kind]} amended to v${next.version}`,
+    title: next.version === 1 ? `${KIND_LABELS[kind]} v1 written` : `${KIND_LABELS[kind]} amended to v${next.version}`,
     body: `${who.name}: ${next.reason}${afterEvidence ? ' Made after evidence existed for this capability.' : ''}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}?tab=${kind === 'risk' ? 'contract' : kind === 'requirements' ? 'criteria' : kind}`,
@@ -515,6 +516,7 @@ export const KIND_LABELS = { contract: 'Contract', criteria: 'Success criteria',
 export function startTestRun(state, capabilityId) {
   const d = capData(state, capabilityId);
   if (d.testRun.status === 'running' || !d.scenarios.length) return state;
+  if (!criteriaSaved(state, capabilityId)) throw new Error('Save success criteria and evidence requirements before the first test run. The first run locks them.');
   return updateCap(state, capabilityId, { testRun: { ...d.testRun, status: 'running', completed: [] } });
 }
 
@@ -532,6 +534,7 @@ export function advanceTestRun(state, capabilityId) {
 
 function finishTestRun(state, capabilityId) {
   const d = capData(state, capabilityId);
+  const lockedBefore = criteriaLocked(state, capabilityId);
   const summary = testSummary(state, capabilityId);
   const failed = d.scenarios.filter((s) => !s.pass);
   const detail =
@@ -560,8 +563,19 @@ function finishTestRun(state, capabilityId) {
     },
     ...state.activity,
   ];
-  const s = updateCap(state, capabilityId, { testRun: { ...d.testRun, status: 'complete', lastRun: state.today }, evidence });
-  return { ...s, activity };
+  let s = updateCap(state, capabilityId, { testRun: { ...d.testRun, status: 'complete', lastRun: state.today }, evidence });
+  s = { ...s, activity };
+  if (!lockedBefore && criteriaLocked(s, capabilityId)) {
+    const cap = getCapability(s, capabilityId);
+    s = logEvent(s, {
+      kind: 'criteria-locked',
+      title: 'Success criteria locked',
+      body: `${cap.name}: the first test run produced performance results, so success criteria v${versionsInForce(s, capabilityId).criteria} and evidence requirements v${versionsInForce(s, capabilityId).requirements} are now locked. Changes need a proposed amendment with sign-off.`,
+      capabilityId,
+      link: `#/capabilities/${capabilityId}?tab=criteria`,
+    });
+  }
+  return s;
 }
 
 export function selectDecision(state, capabilityId, option) {
@@ -829,6 +843,7 @@ export function createStore({ storage = null } = {}) {
 
 const ACTIONS = {
   amend,
+  saveCriteria,
   addCapability,
   setActingAs,
   startContractDraft,
@@ -854,7 +869,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 6) return null;
+    if (!parsed || parsed.version !== 7) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -1111,4 +1126,83 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
     link: `#/capabilities/${capabilityId}?tab=contract`,
   });
   return s;
+}
+
+// ---------------------------------------------------------------------------
+// Success criteria and evidence requirements (#6)
+// ---------------------------------------------------------------------------
+
+export function criteriaSaved(state, capabilityId) {
+  return versionList(state, capabilityId, 'criteria').length > 0 && versionList(state, capabilityId, 'requirements').length > 0;
+}
+
+// Criteria lock (decision 6): saved, and performance results have been seen.
+// Same definition as "after evidence" for amendments.
+export function criteriaLocked(state, capabilityId) {
+  return criteriaSaved(state, capabilityId) && performanceResultsSeen(state, capabilityId);
+}
+
+export function canRunSuite(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (!d.scenarios.length) return { ok: false, reason: 'No scenarios yet.' };
+  if (!criteriaSaved(state, capabilityId)) return { ok: false, reason: 'Save success criteria and evidence requirements first. The first run locks them.' };
+  if (d.testRun.status === 'running') return { ok: false, reason: 'Already running.' };
+  return { ok: true };
+}
+
+export function defaultsFor(state, capabilityId) {
+  const risk = current(state, capabilityId, 'risk');
+  return { criteria: defaultCriteria(risk), requirements: defaultRequirements(risk) };
+}
+
+const slugId = (text, i) => (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `item-${i + 1}`;
+
+function cleanCriteria(items) {
+  if (!Array.isArray(items) || !items.length) throw new Error('Add at least one success criterion.');
+  const seen = new Set();
+  return items.map((c, i) => {
+    const name = (c.name || '').trim();
+    const target = (c.target || '').trim();
+    if (!name || !target) throw new Error(`Criterion ${i + 1} needs a name and a target.`);
+    let id = c.id || slugId(name, i);
+    while (seen.has(id)) id = `${id}-${i + 1}`;
+    seen.add(id);
+    return { id, name, target, current: c.current || 'Not yet measured', status: c.status || 'pending', note: (c.note || '').trim(), source: c.source || 'Written by hand' };
+  });
+}
+
+function cleanRequirements(items) {
+  if (!Array.isArray(items) || !items.length) throw new Error('Add at least one evidence requirement.');
+  const seen = new Set();
+  return items.map((r, i) => {
+    const text = (r.text || '').trim();
+    if (!text) throw new Error(`Requirement ${i + 1} needs text.`);
+    let id = r.id || slugId(text, i);
+    while (seen.has(id)) id = `${id}-${i + 1}`;
+    seen.add(id);
+    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand' };
+  });
+}
+
+// Save both objects before the first test run. Each save writes a new version
+// (never an edit); once locked, changes go through a proposed amendment (#7).
+export function saveCriteria(state, capabilityId, { criteria, requirements, by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person saves the criteria.');
+  if (criteriaLocked(state, capabilityId)) throw new Error('Criteria are locked: performance results have been seen. Propose an amendment instead.');
+  const c = cleanCriteria(criteria);
+  const r = cleanRequirements(requirements);
+  const first = !criteriaSaved(state, capabilityId);
+  const why = (reason || '').trim() || (first ? 'Saved before testing.' : 'Edited before testing.');
+  let s = amend(state, capabilityId, 'criteria', { value: c, author: by, reason: why });
+  s = amend(s, capabilityId, 'requirements', { value: r, author: by, reason: why });
+  // The two amendment events are kept in Full history; one saved event summarises them.
+  return logEvent(s, {
+    kind: 'criteria-saved',
+    title: first ? 'Success criteria and evidence requirements saved' : 'Success criteria and evidence requirements updated',
+    body: `${cap.name}: ${c.length} criteria and ${r.length} evidence requirements saved by ${seed.people[by].name} (criteria v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}). They lock on the first test run.`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}?tab=criteria`,
+  });
 }

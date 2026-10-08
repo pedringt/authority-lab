@@ -451,3 +451,10 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .rejected summary { font-size: 13px; color: var(--muted); cursor: pointer; margin-bottom: 6px; }
 .check-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; font-size: 14px; }
 .form-error.plain-list { gap: 4px; }
+
+/* Criteria editor -------------------------------------------------------- */
+.table-edit td { padding: 6px 8px; }
+.table-edit input[type="text"] { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
+.criteria-form .section + .section { margin-top: 20px; }
+.criteria-form .btn-sm { margin-top: 8px; }
+.page-actions p { margin: 6px 0 0; max-width: 32ch; text-align: right; }
