@@ -8,7 +8,7 @@ import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-t
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
 import { starterScenarios } from './data/scenario-templates.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v11';
+export const STORAGE_KEY = 'authority-lab-state-v12';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -86,11 +86,14 @@ export function initialState() {
   // decision, last decision and last-evaluated date are derived by selectors.
   const capabilities = seed.capabilities.map(({ contract, risk, proposed, decisionRequired, lastEvaluated, lastDecisionId, ...rest }) => clone(rest));
   return {
-    version: 11,
+    version: 12,
     today: seed.TODAY,
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
     roster: { versions: [{ version: 1, date: seed.TODAY, author: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },
+    // Governed roster changes (#23): rights grants and removals, and the
+    // deactivation of anyone holding a right. Never removed.
+    rosterProposals: [],
     // Who is acting in the UI. null means "the owner of the capability in
     // context"; a person key overrides it (the "acting as" picker).
     actingAs: null,
@@ -289,12 +292,171 @@ export function deactivatePerson(state, key, { by, reason } = {}) {
   if (p.active === false) throw new Error(`${p.name} is already deactivated.`);
   const why = (reason || '').trim();
   if (why.length < 5) throw new Error('A roster change needs a reason.');
+  // Anyone holding a right is deactivated through a proposal with a different
+  // admin's sign-off (#23).
+  if (p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover)) {
+    return proposeRosterChange(state, { kind: 'deactivate', person: key, by, reason: why });
+  }
+  return applyDeactivation(state, key, { by, reason: why });
+}
+
+function applyDeactivation(state, key, { by, reason, meta = null } = {}) {
+  const roster = people(state);
+  const p = roster[key];
+  if (!p || p.active === false) throw new Error(`${p ? p.name : key} is not an active person.`);
   const adminsLeft = Object.entries(roster).filter(([k, x]) => k !== key && x.active !== false && x.rights && x.rights.workspaceAdmin).length;
   if (p.rights && p.rights.workspaceAdmin && adminsLeft === 0) throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+  const why = reason;
   const value = { ...roster, [key]: { ...p, active: false } };
-  let s = writeRoster(state, value, { author: by, reason: why, title: `Person deactivated: ${p.name}`, body: `${roster[by].name} deactivated ${p.name}. ${why}`, surfaced: true, meta: { change: { kind: 'deactivate', key } } });
+  let s = writeRoster(state, value, { author: by, reason: why, title: `Person deactivated: ${p.name}`, body: `${roster[by].name} deactivated ${p.name}. ${why}`, surfaced: true, meta: { change: { kind: 'deactivate', key }, ...(meta || {}) } });
   if (s.actingAs === key) s = { ...s, actingAs: null };
   return s;
+}
+
+// ---------------------------------------------------------------------------
+// Governed roster changes (#23)
+// ---------------------------------------------------------------------------
+
+export const RIGHTS = [['riskApprover', 'Risk approver'], ['workspaceAdmin', 'Workspace admin']];
+export const RIGHT_LABELS = Object.fromEntries(RIGHTS);
+
+export function activeAdmins(state) {
+  return Object.keys(activePeople(state)).filter((k) => isWorkspaceAdmin(state, k));
+}
+
+export function openRosterProposal(state, personKey = null) {
+  return state.rosterProposals.find((p) => p.status === 'open' && (!personKey || p.person === personKey)) || null;
+}
+
+export function getRosterProposal(state, id) {
+  return state.rosterProposals.find((p) => p.id === id) || null;
+}
+
+function describeRosterChange(state, pr) {
+  const name = people(state)[pr.person] ? people(state)[pr.person].name : pr.person;
+  if (pr.kind === 'deactivate') return `Deactivate ${name}`;
+  return `${pr.grant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[pr.right]}: ${name}`;
+}
+
+// A rights grant or removal, or the deactivation of a rights holder: proposed
+// by an active workspace admin, approved by a different one. Nobody grants a
+// right to themselves. The last workspace admin cannot be removed or deactivated.
+export function proposeRosterChange(state, { kind, person, right, grant, by, reason } = {}) {
+  requireAdmin(state, by);
+  const roster = people(state);
+  const target = roster[person];
+  if (!target) throw new Error(`Unknown person: ${person}`);
+  if (target.active === false) throw new Error(`${target.name} is deactivated.`);
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  if (!['rights', 'deactivate'].includes(kind)) throw new Error(`Unknown roster change: ${kind}`);
+  if (kind === 'rights') {
+    if (!RIGHT_LABELS[right]) throw new Error(`Unknown right: ${right}`);
+    const has = Boolean(target.rights && target.rights[right]);
+    if (grant && person === by) throw new Error('Nobody grants a right to themselves. Ask another workspace admin to propose it.');
+    if (grant && has) throw new Error(`${target.name} already holds the ${RIGHT_LABELS[right]} right.`);
+    if (!grant && !has) throw new Error(`${target.name} does not hold the ${RIGHT_LABELS[right]} right.`);
+    if (!grant && right === 'workspaceAdmin' && activeAdmins(state).filter((k) => k !== person).length === 0) throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+  }
+  if (kind === 'deactivate' && target.rights && target.rights.workspaceAdmin && activeAdmins(state).filter((k) => k !== person).length === 0) {
+    throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+  }
+  if (openRosterProposal(state, person)) throw new Error(`A change for ${target.name} is already awaiting sign-off.`);
+  // Who can approve: a different workspace admin. For a grant, never the
+  // person receiving the right. A Risk approver grant can also be approved by
+  // an existing Risk approver, so a grant to an admin still has an approver.
+  const isGrant = kind === 'rights' && Boolean(grant);
+  let eligible = activeAdmins(state).filter((k) => k !== by);
+  if (isGrant && right === 'riskApprover') eligible = [...new Set([...eligible, ...Object.keys(activePeople(state)).filter((k) => isRiskApprover(state, k) && k !== by)])];
+  if (isGrant) eligible = eligible.filter((k) => k !== person);
+  if (!eligible.length) throw new Error(isGrant && right === 'riskApprover' ? 'No other workspace admin or Risk approver can sign this off.' : 'No other workspace admin can sign this off. Grant the Workspace admin right to someone else first.');
+  const pr = {
+    id: `RP-${state.rosterProposals.length + 1}`,
+    kind,
+    person,
+    right: kind === 'rights' ? right : null,
+    grant: kind === 'rights' ? Boolean(grant) : null,
+    proposedBy: by,
+    date: state.today,
+    reason: why,
+    eligible,
+    approvals: [],
+    status: 'open',
+    rejection: null,
+    withdrawal: null,
+    appliedVersion: null,
+  };
+  const s = { ...state, rosterProposals: [...state.rosterProposals, pr] };
+  return logEvent(s, {
+    kind: 'roster',
+    surfaced: true,
+    title: `Roster change proposed: ${describeRosterChange(s, pr)}`,
+    body: `${roster[by].name} proposed ${describeRosterChange(s, pr).toLowerCase()}. Needs a different workspace admin to approve. ${why}`,
+    capabilityId: null,
+    link: `#/people?proposal=${pr.id}`,
+  });
+}
+
+export function rosterApprovalEligibility(state, pr, personKey) {
+  if (!pr || pr.status !== 'open') return { ok: false, reason: 'This change is closed.' };
+  const p = people(state)[personKey];
+  if (!p) return { ok: false, reason: 'Choose who is acting.' };
+  const isGrant = pr.kind === 'rights' && pr.grant;
+  const riskGrant = isGrant && pr.right === 'riskApprover';
+  if (personKey === pr.proposedBy) return { ok: false, reason: `${p.name} proposed this; someone else must approve it.` };
+  if (isGrant && personKey === pr.person) return { ok: false, reason: `${p.name} is receiving this right and cannot approve their own grant.` };
+  if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and cannot approve.` };
+  const admin = isWorkspaceAdmin(state, personKey);
+  const risk = riskGrant && isRiskApprover(state, personKey);
+  if (!admin && !risk) return { ok: false, reason: riskGrant ? `${p.name} is neither a workspace admin nor a Risk approver.` : `${p.name} is not an active workspace admin.` };
+  if (!pr.eligible.includes(personKey)) return { ok: false, reason: `${p.name} was not an eligible approver when this change was proposed.` };
+  return { ok: true, reason: null };
+}
+
+export function approveRosterChange(state, proposalId, { by } = {}) {
+  const pr = getRosterProposal(state, proposalId);
+  if (!pr) throw new Error(`Unknown roster change: ${proposalId}`);
+  const e = rosterApprovalEligibility(state, pr, by);
+  if (!e.ok) throw new Error(e.reason);
+  const roster = people(state);
+  const target = roster[pr.person];
+  const approvals = [{ by, date: state.today }];
+  let s = state;
+  const meta = { proposalId, proposedBy: pr.proposedBy, approvals };
+  if (pr.kind === 'deactivate') {
+    s = applyDeactivation(s, pr.person, { by: pr.proposedBy, reason: pr.reason, meta });
+  } else {
+    if (!pr.grant && pr.right === 'workspaceAdmin' && activeAdmins(s).filter((k) => k !== pr.person).length === 0) throw new Error('This would leave no workspace admin.');
+    const value = { ...roster, [pr.person]: { ...target, rights: { ...target.rights, [pr.right]: pr.grant } } };
+    s = writeRoster(s, value, { author: pr.proposedBy, reason: pr.reason, surfaced: true, title: `${pr.grant ? 'Right granted' : 'Right removed'}: ${RIGHT_LABELS[pr.right]}, ${target.name}`, body: `Proposed by ${roster[pr.proposedBy].name}, approved by ${roster[by].name}${isWorkspaceAdmin(state, by) ? '' : ' (as a Risk approver)'}. ${pr.reason}`, meta: { change: { kind: pr.grant ? 'grant' : 'remove', key: pr.person, right: pr.right }, ...meta } });
+    if (!pr.grant && pr.right === 'workspaceAdmin' && s.actingAs === pr.person) s = s; // acting stays; they just lost the admin controls
+  }
+  const applied = rosterVersions(s).length;
+  s = { ...s, rosterProposals: s.rosterProposals.map((x) => (x.id === proposalId ? { ...x, approvals, status: 'approved', appliedVersion: applied, closedAt: state.today } : x)) };
+  return s;
+}
+
+export function rejectRosterChange(state, proposalId, { by, reason } = {}) {
+  const pr = getRosterProposal(state, proposalId);
+  if (!pr) throw new Error(`Unknown roster change: ${proposalId}`);
+  const e = rosterApprovalEligibility(state, pr, by);
+  if (!e.ok) throw new Error(e.reason);
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A rejection needs a reason.');
+  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today } : x)) };
+  return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change rejected: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} rejected the change proposed by ${people(s)[pr.proposedBy].name}. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
+}
+
+export function withdrawRosterChange(state, proposalId, { by, reason } = {}) {
+  const pr = getRosterProposal(state, proposalId);
+  if (!pr) throw new Error(`Unknown roster change: ${proposalId}`);
+  if (pr.status !== 'open') throw new Error('This change is closed.');
+  if (by !== pr.proposedBy) throw new Error('Only the proposer withdraws; others reject.');
+  requireActive(state, by, 'withdraw a roster change');
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A withdrawal needs a reason.');
+  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'withdrawn', withdrawal: { by, date: state.today, reason: why }, closedAt: state.today } : x)) };
+  return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change withdrawn: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} withdrew their proposal. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
 }
 
 // Derived capability fields (#4 follow-up). Nothing stores these; they are
@@ -996,6 +1158,10 @@ const ACTIONS = {
   addPerson,
   editPerson,
   deactivatePerson,
+  proposeRosterChange,
+  approveRosterChange,
+  rejectRosterChange,
+  withdrawRosterChange,
   saveCriteria,
   saveStakeholders,
   saveScenarios,
@@ -1030,7 +1196,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 11) return null;
+    if (!parsed || parsed.version !== 12) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -1480,11 +1646,10 @@ export function namedStakeholders(state, capabilityId) {
   return [...new Set([...(cap && isActivePerson(state, cap.owner) ? [cap.owner] : []), ...listed])];
 }
 
-// Risk eligibility comes only from the person's own team in `people`, never
-// from how a capability's stakeholder list labels them.
+// Risk eligibility is the recorded Risk approver right on an active person.
+// Never a team name, never a stakeholder label.
 export function isRiskStakeholder(state, capabilityId, personKey) {
-  const p = people(state)[personKey];
-  return Boolean(p && p.active !== false && p.team === 'Risk');
+  return isRiskApprover(state, personKey);
 }
 
 export function riskStakeholders(state, capabilityId) {

@@ -135,7 +135,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form === 'save-scenarios') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -191,6 +191,11 @@ document.addEventListener('click', (e) => {
     catch (err) { alert(err.message); }
     return;
   }
+  if (action === 'approve-roster') {
+    try { store.dispatch('approveRosterChange', btn.dataset.proposal, { by: actor(store.get()) }); location.hash = `#/people?proposal=${btn.dataset.proposal}`; render(); }
+    catch (err) { location.hash = `#/people?error=${encodeURIComponent(err.message)}`; }
+    return;
+  }
   if (action === 'proposal-approve') {
     const pid = btn.dataset.proposal;
     try { store.dispatch('approveProposal', capId, pid, { by: actor(store.get(), capId) }); if (location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}/proposals/${pid}`; }
@@ -243,9 +248,36 @@ document.addEventListener('submit', (e) => {
     try {
       if (personForm.dataset.form === 'add-person') store.dispatch('addPerson', { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
       else if (personForm.dataset.form === 'edit-person') store.dispatch('editPerson', personForm.dataset.person, { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
-      else store.dispatch('deactivatePerson', personForm.dataset.person, { by, reason: f.get('reason') });
+      else {
+        const before = store.get().rosterProposals.length;
+        store.dispatch('deactivatePerson', personForm.dataset.person, { by, reason: f.get('reason') });
+        const after = store.get().rosterProposals;
+        if (after.length > before) { location.hash = `#/people?proposal=${after[after.length - 1].id}`; return; }
+      }
       location.hash = '#/people';
       render();
+    } catch (err) {
+      location.hash = `#/people?error=${encodeURIComponent(err.message)}`;
+    }
+    return;
+  }
+  const rosterForm = e.target.closest('[data-form="propose-roster"], [data-form="reject-roster"], [data-form="withdraw-roster"]');
+  if (rosterForm) {
+    e.preventDefault();
+    const f = new FormData(rosterForm);
+    const by = actor(store.get());
+    try {
+      if (rosterForm.dataset.form === 'propose-roster') {
+        store.dispatch('proposeRosterChange', { kind: 'rights', person: rosterForm.dataset.person, right: rosterForm.dataset.right, grant: rosterForm.dataset.grant === '1', by, reason: f.get('reason') });
+        const list = store.get().rosterProposals;
+        location.hash = `#/people?proposal=${list[list.length - 1].id}`;
+      } else if (rosterForm.dataset.form === 'reject-roster') {
+        store.dispatch('rejectRosterChange', rosterForm.dataset.proposal, { by, reason: f.get('reason') });
+        location.hash = `#/people?proposal=${rosterForm.dataset.proposal}`; render();
+      } else {
+        store.dispatch('withdrawRosterChange', rosterForm.dataset.proposal, { by, reason: f.get('reason') });
+        location.hash = `#/people?proposal=${rosterForm.dataset.proposal}`; render();
+      }
     } catch (err) {
       location.hash = `#/people?error=${encodeURIComponent(err.message)}`;
     }

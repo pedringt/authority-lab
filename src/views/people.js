@@ -1,5 +1,5 @@
 import { html, raw, badge, notice, section, person, fmtDateYear, fmtDate, kv } from '../ui.js';
-import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson } from '../store.js';
+import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins } from '../store.js';
 import { diffTable } from './activity.js';
 
 // The people roster (#22). Workspace admins add, edit and deactivate; nobody
@@ -12,6 +12,10 @@ export function peopleView(state, query) {
   const roster = people(state);
   const editing = query.get('edit');
   const deactivating = query.get('deactivate');
+  const rightKey = query.get('right');
+  const rightPerson = query.get('person');
+  const rightGrant = query.get('grant') === '1';
+  const focusProposal = query.get('proposal');
   const showInactive = query.get('inactive') === '1';
   const entries = Object.entries(roster).filter(([, p]) => showInactive || p.active !== false);
   const admins = Object.values(roster).filter((p) => p.active !== false && p.rights && p.rights.workspaceAdmin).length;
@@ -33,20 +37,33 @@ export function peopleView(state, query) {
     if (deactivating === key && admin) {
       return html`<tr class="is-editing"><td colspan="6">
         <form class="line-edit people-form" data-form="deactivate-person" data-person="${key}">
-          <span><strong>Deactivate ${p.name}?</strong> <span class="muted small">They stay on every record they are on; they can no longer act, propose, approve or be a stakeholder.</span></span>
+          <span><strong>Deactivate ${p.name}?</strong> <span class="muted small">They stay on every record they are on; they can no longer act, propose, approve or be a stakeholder.${p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover) ? ' They hold a right, so this becomes a proposal for a different workspace admin to approve.' : ''}</span></span>
           <input type="text" name="reason" placeholder="Reason" maxlength="200" aria-label="Reason" required>
           <button class="btn btn-sm btn-danger" type="submit">Deactivate</button>
           <a class="btn btn-sm btn-ghost" href="#/people">Cancel</a>
         </form>
       </td></tr>`;
     }
+    if (rightPerson === key && RIGHT_LABELS[rightKey] && admin) {
+      return html`<tr class="is-editing"><td colspan="6">
+        <form class="line-edit people-form" data-form="propose-roster" data-person="${key}" data-right="${rightKey}" data-grant="${rightGrant ? '1' : '0'}">
+          <span><strong>${rightGrant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[rightKey]}: ${p.name}</strong> <span class="muted small">Proposed by ${who.name}; approved by a different workspace admin${rightGrant && rightKey === 'riskApprover' ? ' or an existing Risk approver' : ''}, never by ${rightGrant ? 'the person receiving it' : 'the proposer'}.</span></span>
+          <input type="text" name="reason" placeholder="Reason" maxlength="200" aria-label="Reason" required>
+          <button class="btn btn-sm btn-primary" type="submit">Propose</button>
+          <a class="btn btn-sm btn-ghost" href="#/people">Cancel</a>
+        </form>
+      </td></tr>`;
+    }
+    const pending = openRosterProposal(state, key);
+    const holds = (r) => Boolean(p.rights && p.rights[r]);
     return html`<tr class="${p.active === false ? 'is-inactive' : ''}">
       <td><strong>${p.name}</strong>${p.active === false ? html` ${badge('neutral', 'Deactivated')}` : ''}</td>
       <td>${p.role}</td>
       <td>${p.team}</td>
-      <td>${p.rights && p.rights.workspaceAdmin ? badge('decision', 'Workspace admin') : ''} ${p.rights && p.rights.riskApprover ? badge('restricted', 'Risk approver') : ''}</td>
+      <td>${holds('workspaceAdmin') ? badge('decision', 'Workspace admin') : ''} ${holds('riskApprover') ? badge('restricted', 'Risk approver') : ''}${pending ? html` <a class="badge badge-watch" href="#/people?proposal=${pending.id}">${pending.id} pending</a>` : ''}
+        ${admin && p.active !== false && !pending ? html`<div class="rights-actions">${RIGHTS.map(([r, label]) => html`<a class="muted small" href="#/people?person=${key}&right=${r}&grant=${holds(r) ? 0 : 1}">${holds(r) ? `Remove ${label.toLowerCase()}` : `Grant ${label.toLowerCase()}`}</a>`)}</div>` : ''}</td>
       <td class="muted small">${key === acting ? 'Acting now' : ''}</td>
-      <td>${admin && p.active !== false ? html`<a class="btn btn-sm btn-ghost" href="#/people?edit=${key}">Edit</a> <a class="btn btn-sm btn-ghost" href="#/people?deactivate=${key}">Deactivate</a>` : ''}</td>
+      <td>${admin && p.active !== false && !pending ? html`<a class="btn btn-sm btn-ghost" href="#/people?edit=${key}">Edit</a> <a class="btn btn-sm btn-ghost" href="#/people?deactivate=${key}">Deactivate</a>` : ''}</td>
     </tr>`;
   };
 
@@ -71,7 +88,8 @@ export function peopleView(state, query) {
     <thead><tr><th>Name</th><th>Title</th><th>Team</th><th>Rights</th><th></th><th></th></tr></thead>
     <tbody>${entries.map(row)}</tbody>
   </table></div>
-  <p class="muted small"><a href="#/people?inactive=${showInactive ? '0' : '1'}">${showInactive ? 'Hide' : 'Show'} deactivated people</a> · Rights are granted and removed through a proposal signed off by a different workspace admin (coming with #23).</p>
+  <p class="muted small"><a href="#/people?inactive=${showInactive ? '0' : '1'}">${showInactive ? 'Hide' : 'Show'} deactivated people</a> · Rights are granted and removed, and rights holders deactivated, through a proposal by a workspace admin that someone else approves: a different workspace admin, or an existing Risk approver for a Risk approver grant. Neither the proposer nor the person receiving a right approves it. The last workspace admin cannot be removed.</p>
+  ${rosterProposals(state, acting, focusProposal)}
   ${admin ? section('Add a person', html`<form class="setup-form" data-form="add-person"><div class="card">
     <div class="three-col">
       <label class="field field-stack"><span>Name</span><input type="text" name="name" maxlength="60" required></label>
@@ -90,4 +108,32 @@ export function peopleView(state, query) {
 
 function flatten(roster) {
   return Object.entries(roster || {}).map(([key, p]) => ({ id: key, name: p.name, title: p.role, team: p.team, active: p.active !== false ? 'active' : 'deactivated', rights: [p.rights && p.rights.workspaceAdmin ? 'workspace admin' : null, p.rights && p.rights.riskApprover ? 'Risk approver' : null].filter(Boolean).join(', ') || 'none' }));
+}
+
+function rosterProposals(state, acting, focusId) {
+  const list = state.rosterProposals.slice().reverse();
+  if (!list.length) return '';
+  const roster = people(state);
+  const describe = (pr) => `${pr.kind === 'deactivate' ? 'Deactivate' : pr.grant ? 'Grant' : 'Remove'} ${pr.kind === 'deactivate' ? '' : `${RIGHT_LABELS[pr.right]}: `}${roster[pr.person] ? roster[pr.person].name : pr.person}`;
+  return section('Roster changes awaiting sign-off', html`${list.map((pr) => {
+    const e = rosterApprovalEligibility(state, pr, acting);
+    const status = pr.status === 'open' ? badge('decision', 'Awaiting sign-off') : pr.status === 'approved' ? badge('pass', 'Approved and applied') : pr.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected');
+    return html`<article class="card roster-proposal ${pr.id === focusId ? 'is-highlight' : ''}" id="${pr.id}">
+      <div class="version-head"><div><span class="eyebrow">${pr.id} · ${fmtDateYear(pr.date)}</span><h3>${describe(pr)}</h3></div><div>${status}</div></div>
+      ${kv([
+        ['Proposed by', person(pr.proposedBy).name],
+        ['Reason', pr.reason],
+        ['Can approve', pr.eligible.map((k) => person(k).name).join(', ') || 'nobody'],
+        ...(pr.approvals.length ? [['Approved by', pr.approvals.map((a) => `${person(a.by).name}, ${fmtDate(a.date)}`).join('; ')]] : []),
+        ...(pr.rejection ? [['Rejected', `${person(pr.rejection.by).name}: ${pr.rejection.reason}`]] : []),
+        ...(pr.withdrawal ? [['Withdrawn', `${person(pr.withdrawal.by).name}: ${pr.withdrawal.reason}`]] : []),
+      ])}
+      ${pr.status === 'open' ? html`<div class="roster-actions">
+        ${e.ok ? html`<button class="btn btn-sm btn-primary" data-action="approve-roster" data-proposal="${pr.id}">Approve as ${person(acting).name}</button>` : html`<span class="muted small">${e.reason}</span>`}
+        ${acting === pr.proposedBy
+          ? html`<form class="line-add reject-form" data-form="withdraw-roster" data-proposal="${pr.id}"><input type="text" name="reason" placeholder="Reason for withdrawing…" aria-label="Withdrawal reason"><button class="btn btn-sm" type="submit">Withdraw</button></form>`
+          : e.ok ? html`<form class="line-add reject-form" data-form="reject-roster" data-proposal="${pr.id}"><input type="text" name="reason" placeholder="Reason for rejecting…" aria-label="Rejection reason"><button class="btn btn-sm btn-danger" type="submit">Reject</button></form>` : ''}
+      </div>` : ''}
+    </article>`;
+  })}`, { subtitle: 'Rights grants and removals, and the deactivation of anyone holding a right. The proposer never approves.' });
 }
