@@ -493,3 +493,6 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .acting-demo { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--watch); background: var(--watch-bg); border: 1px solid var(--watch-bd); border-radius: 3px; padding: 1px 5px; margin-right: 4px; }
 .acting-help { flex-basis: 100%; font-size: 11px; color: var(--muted); line-height: 1.2; }
 @media (max-width: 720px) { .acting-help { display: none; } }
+
+.notice-links { white-space: nowrap; font-weight: 600; }
+.attention ul.plain-list { margin: 6px 0; }

@@ -2147,9 +2147,13 @@ export function coverageWarning(state, capabilityId) {
     capabilityId,
     kind: 'coverage',
     title: `${cap.name} has ${c.approvers.length === 0 ? 'no' : 'only one'} active Risk approver${c.approvers.length === 1 ? '' : 's'} among its possible approvers`,
-    body: `High-impact or financial changes need two approvers with at least one from Risk, and one of the two could be the proposer. ${names.length ? `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} the only Risk approver${names.length === 1 ? '' : 's'} on this capability's list.` : 'Nobody on this capability\u2019s list holds the Risk approver right.'} Add a Risk approver to the stakeholders, or grant the right to someone already listed.`,
-    link: '#/people',
-    linkText: 'People',
+    body: `High-impact or financial changes need two approvers with at least one from Risk, and one of the two could be the proposer. ${names.length ? `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} the only Risk approver${names.length === 1 ? '' : 's'} on this capability's list.` : 'Nobody on this capability\u2019s list holds the Risk approver right.'} Usually the fix is adding an existing Risk approver to the stakeholders; otherwise grant the right to someone already listed.`,
+    link: `#/capabilities/${capabilityId}?tab=stakeholders`,
+    linkText: 'Stakeholders',
+    links: [
+      { href: `#/capabilities/${capabilityId}?tab=stakeholders`, text: 'Stakeholders' },
+      { href: '#/people', text: 'People' },
+    ],
   };
 }
 

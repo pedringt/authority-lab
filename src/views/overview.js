@@ -137,10 +137,22 @@ export function overviewView(state) {
       <p>${personAt(p.proposedByAt, p.proposedBy).name} proposed changing the ${p.kind === 'contract' ? 'contract' : 'success criteria'} after evidence. ${p.reason}</p>
     </a>`);
   });
-  coverageWarnings(state).forEach((w) => {
+  // Coverage gaps roll into one card listing the affected capabilities; each
+  // open proposal that cannot complete gets its own.
+  const warnings = coverageWarnings(state);
+  const short = warnings.filter((w) => w.kind === 'coverage');
+  if (short.length) {
+    attention.push(html`<div class="card attention">
+      <div class="attention-head"><strong>Risk coverage: ${short.length} capabilit${short.length === 1 ? 'y' : 'ies'} short</strong>${badge('watch', 'Coverage')}</div>
+      <p>High-impact or financial changes need two approvers with at least one from Risk. These have fewer than two active Risk approvers among their possible approvers:</p>
+      <ul class="plain-list small">${short.map((w) => { const c = state.capabilities.find((x) => x.id === w.capabilityId); return html`<li><a href="#/capabilities/${c.id}?tab=stakeholders">${c.name}</a> <span class="muted">· ${w.title.replace(`${c.name} has `, '')}</span></li>`; })}</ul>
+      <p class="small">Usually the fix is adding an existing Risk approver to the capability's stakeholders. <a href="#/people">People</a></p>
+    </div>`);
+  }
+  warnings.filter((w) => w.kind === 'proposal').forEach((w) => {
     attention.push(html`<a class="card card-link attention" href="${w.link}">
-      <div class="attention-head"><strong>${w.kind === 'coverage' ? `Risk coverage: ${state.capabilities.find((c) => c.id === w.capabilityId).name}` : `${w.proposalId} cannot complete`}</strong>${badge('watch', w.kind === 'coverage' ? 'Coverage' : 'Sign-off')}</div>
-      <p>${w.title}. ${w.kind === 'coverage' ? 'Add a Risk approver on the People page.' : 'The proposer can withdraw and propose again.'}</p>
+      <div class="attention-head"><strong>${w.proposalId} cannot complete</strong>${badge('watch', 'Sign-off')}</div>
+      <p>${w.title}. The proposer can withdraw and propose again.</p>
     </a>`);
   });
   d.evidence.filter((e) => e.source === 'Incident' && e.status === 'fail').slice(0, 1).forEach((e) => {

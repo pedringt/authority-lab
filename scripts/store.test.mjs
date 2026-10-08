@@ -1910,7 +1910,8 @@ test('a High or Financial capability warns when fewer than two active Risk appro
   assert.ok(w);
   assert.match(w.title, /only one active Risk approver/);
   assert.match(w.body, /Daniel Okafor is the only Risk approver/);
-  assert.equal(w.link, '#/people');
+  assert.equal(w.link, '#/capabilities/refund-recommendation?tab=stakeholders');
+  assert.deepEqual(w.links.map((l) => l.text), ['Stakeholders', 'People']);
   assert.ok(coverageWarnings(s).some((x) => x.capabilityId === 'account-closure'));
   assert.ok(!coverageWarnings(s).some((x) => x.capabilityId === TC));
   // Nothing is blocked: proposing on the capability still works (Daniel can be the Risk approver if someone else proposes).
