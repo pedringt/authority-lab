@@ -2,10 +2,10 @@ import * as seed from '../data/seed.js';
 import { html, badge, section, fmtDate } from '../ui.js';
 import { capData, getCapability, current } from '../store/index.js';
 import { requirementsList, proposedChangeLabel } from './capability.js';
-import { capabilityPicker } from './tests.js';
+import { capabilityHeading, filterBar } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';
 
-const STATUSES = [['all', 'All'], ['pass', 'Pass'], ['watch', 'Watch'], ['insufficient', 'Insufficient'], ['fail', 'Fail']];
+const STATUSES = [['all', 'All statuses'], ['pass', 'Pass'], ['watch', 'Watch'], ['insufficient', 'Insufficient'], ['fail', 'Fail']];
 
 export function evidenceView(state, capabilityId, query) {
   const cap = getCapability(state, capabilityId);
@@ -32,12 +32,19 @@ export function evidenceView(state, capabilityId, query) {
 
   const counts = Object.fromEntries(STATUSES.map(([k]) => [k, d.evidence.filter((e) => e.status === k).length]));
 
-  const filters = html`<div class="filter-bar">
-    <div class="filter-group" role="group" aria-label="Status">${STATUSES.map(([k, l]) => html`<a class="chip ${status === k ? 'is-active' : ''}" href="${link({ status: k })}">${l}${k !== 'all' ? html` <span class="chip-count">${counts[k]}</span>` : ''}</a>`)}</div>
-    <div class="filter-group" role="group" aria-label="Source"><a class="chip ${source === 'all' ? 'is-active' : ''}" href="${link({ source: 'all' })}">All sources</a>${sources.map((s) => html`<a class="chip ${source === s ? 'is-active' : ''}" href="${link({ source: s })}">${s}</a>`)}</div>
-    <div class="filter-group" role="group" aria-label="Segment"><a class="chip ${segment === 'all' ? 'is-active' : ''}" href="${link({ segment: 'all' })}">All segments</a>${segments.map((s) => html`<a class="chip ${segment === s ? 'is-active' : ''}" href="${link({ segment: s })}">${s}</a>`)}</div>
-    <div class="filter-group" role="group" aria-label="Risk"><a class="chip ${risk === 'all' ? 'is-active' : ''}" href="${link({ risk: 'all' })}">Any risk</a>${risks.map((s) => html`<a class="chip ${risk === s ? 'is-active' : ''}" href="${link({ risk: s })}">${s} risk</a>`)}</div>
-  </div>`;
+  const filters = filterBar({
+    selects: [
+      { label: 'Status', value: status, options: STATUSES.map(([k, l]) => [k, k === 'all' ? l : `${l} (${counts[k]})`]), hrefFor: (k) => link({ status: k }) },
+      { label: 'Source', value: source, options: [['all', 'All sources'], ...sources.map((s) => [s, s])], hrefFor: (s) => link({ source: s }) },
+      { label: 'Segment', value: segment, options: [['all', 'All segments'], ...segments.map((s) => [s, s])], hrefFor: (s) => link({ segment: s }) },
+      { label: 'Risk', value: risk, options: [['all', 'Any risk'], ...risks.map((s) => [s, `${s} risk`])], hrefFor: (s) => link({ risk: s }) },
+    ],
+    clearHref: `#/evidence?capability=${cap.id}`,
+    active: [source, status, segment, risk].some((v) => v !== 'all'),
+    showing: items.length,
+    total: d.evidence.length,
+    noun: 'items',
+  });
 
   const cards = items.map((e) => html`<article class="card evidence-item evidence-${e.status}">
     <div class="evidence-head">
@@ -52,11 +59,10 @@ export function evidenceView(state, capabilityId, query) {
   return html`<div class="page-head">
     <div>
       <p class="eyebrow">${seed.workspace.name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>Evidence</h1>
+      <h1>${capabilityHeading(state, cap, 'Evidence for', (id) => `#/evidence?capability=${id}`)}</h1>
       <p class="lede">Everything the authority decision rests on, from automated tests, the pilot, human review, operations, cost, incidents, user feedback and stakeholder assessment. Each item links back to where it came from.</p>
     </div>
   </div>
-  ${capabilityPicker(state, cap.id, (id) => `#/evidence?capability=${id}`)}
   ${d.evidence.length ? filters : ''}
   ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${d.evidence.length ? 'No evidence matches these filters.' : `No evidence has been recorded for ${cap.name}.`}</p>`}
   ${d.evidence.length ? '' : evidenceSourcesCard()}

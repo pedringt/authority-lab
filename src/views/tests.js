@@ -3,7 +3,7 @@ import { html, raw, badge, section, notice, fmtDate } from '../ui.js';
 import { testSummary, capData, getCapability, canRunSuite } from '../store/index.js';
 
 const FILTERS = [
-  ['all', 'All'],
+  ['all', 'All results'],
   ['failed', 'Failed'],
   ['high', 'High severity'],
   ['escalated', 'Escalated'],
@@ -46,27 +46,39 @@ export function testsView(state, capabilityId, query) {
   return html`<div class="page-head">
     <div>
       <p class="eyebrow">${seed.workspace.name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>Testing ground</h1>
-      <p class="lede">${t.total} seeded scenarios in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}), run against the capability's current contract. No real model call is made; results replay the recorded decisions so the demo is repeatable.</p>
+      <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/tests?capability=${id}`)}</h1>
+      <p class="lede">The testing ground: ${t.total} seeded scenarios in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}), run against the capability's current contract. No real model call is made; results replay the recorded decisions so the demo is repeatable.</p>
     </div>
     <div class="page-actions">${runControl}</div>
   </div>
-  ${capabilityPicker(state, cap.id, (id) => `#/tests?capability=${id}`)}
   ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit the scenario library</a></p>` : ''}
   <div class="card run-summary"><p>${summaryLine}</p>${progress}</div>
   ${failureCallout}
   ${scenarioTable(state, cap.id, { filter, group })}`;
 }
 
-// A small switcher so the testing ground and the evidence repository can show
-// any capability that has data.
-export function capabilityPicker(state, currentId, hrefFor) {
+// The page heading names the capability, as a selector when more than one
+// capability has data: "Evidence for: Refund recommendation ▾".
+export function capabilityHeading(state, cap, label, hrefFor) {
   const withData = state.capabilities.filter((c) => {
     const d = capData(state, c.id);
-    return d.scenarios.length || d.evidence.length || c.id === currentId;
+    return d.scenarios.length || d.evidence.length || c.id === cap.id;
   });
-  if (withData.length < 2) return '';
-  return html`<div class="filter-bar"><div class="filter-group" role="group" aria-label="Capability">${withData.map((c) => html`<a class="chip ${c.id === currentId ? 'is-active' : ''}" href="${hrefFor(c.id)}">${c.name}</a>`)}</div></div>`;
+  if (withData.length < 2) return html`${label}: ${cap.name}`;
+  return html`<label class="heading-picker"><span>${label}:</span>
+    <select data-action="navigate" aria-label="${label}: capability">${withData.map((c) => html`<option value="${hrefFor(c.id)}" ${c.id === cap.id ? raw('selected') : ''}>${c.name}</option>`)}</select></label>`;
+}
+
+// One labelled filter bar: a dropdown per filter, "Clear filters" and a
+// "Showing X of Y" count. Each option's value is the route it leads to.
+export function filterBar({ selects, clearHref, active, showing, total, noun }) {
+  return html`<div class="filter-bar filter-bar-select" role="group" aria-label="Filters">
+    <span class="filter-bar-label">Filter</span>
+    ${selects.map((f) => html`<label class="filter-select ${f.value !== 'all' ? 'is-set' : ''}"><span>${f.label}</span>
+      <select data-action="navigate" ${f.disabled ? raw(`disabled title="${f.disabled}"`) : ''}>${f.options.map(([v, l]) => html`<option value="${f.hrefFor(v)}" ${v === f.value ? raw('selected') : ''}>${l}</option>`)}</select></label>`)}
+    ${active ? html`<a class="filter-clear" href="${clearHref}">Clear filters</a>` : ''}
+    <span class="filter-count">Showing ${showing} of ${total} ${noun}</span>
+  </div>`;
 }
 
 export function scenarioTable(state, capabilityId, { filter = 'all', group = 'all', compact = false } = {}) {
@@ -85,11 +97,17 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
   }
 
   const base = `#/tests?capability=${capabilityId}`;
-  const filters = compact ? '' : html`<div class="filter-bar">
-    <div class="filter-group" role="group" aria-label="Result filter">${FILTERS.map(([k, label]) => html`<a class="chip ${k === filter ? 'is-active' : ''}" href="${base}&filter=${k}&group=${group}">${label}${hasResults && k !== 'all' ? html` <span class="chip-count">${countFor(k)}</span>` : ''}</a>`)}</div>
-    <div class="filter-group" role="group" aria-label="Category filter"><a class="chip ${group === 'all' ? 'is-active' : ''}" href="${base}&filter=${filter}&group=all">All groups</a>${seed.SCENARIO_GROUPS.map((g) => html`<a class="chip ${g.id === group ? 'is-active' : ''}" href="${base}&filter=${filter}&group=${g.id}">${g.name}</a>`)}</div>
-    ${!hasResults && filter !== 'all' ? html`<p class="muted small">Result filters apply after the suite has run.</p>` : ''}
-  </div>`;
+  const filters = compact || !d.scenarios.length ? '' : filterBar({
+    selects: [
+      { label: 'Result', value: hasResults ? filter : 'all', options: FILTERS.map(([k, label]) => [k, hasResults && k !== 'all' ? `${label} (${countFor(k)})` : label]), hrefFor: (k) => `${base}&filter=${k}&group=${group}`, disabled: hasResults ? '' : 'Result filters apply after the suite has run.' },
+      { label: 'Group', value: group, options: [['all', 'All groups'], ...seed.SCENARIO_GROUPS.map((g) => [g.id, g.name])], hrefFor: (g) => `${base}&filter=${filter}&group=${g}` },
+    ],
+    clearHref: base,
+    active: group !== 'all' || (hasResults && filter !== 'all'),
+    showing: rows.length,
+    total: d.scenarios.length,
+    noun: 'scenarios',
+  });
 
   function countFor(k) {
     const all = d.scenarios.filter((s) => completed.has(s.id));
