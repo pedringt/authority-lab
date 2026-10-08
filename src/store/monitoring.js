@@ -120,8 +120,9 @@ export function simulateBreach(state, capabilityId) {
   if (rule.kind === 'incident') {
     const evidence = [{ id: evidenceId, source: 'Incident', metric: `${incidentId}: contract rule triggered`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `${breach.errors.join(' ')} The contract rule "${rule.text}" opened this incident. Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
     const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'Incident opened by a contract rule', body: `${cap.name}: ${breach.errors.join(' ')} Authority unchanged.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
+    const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `Incident opened by a contract rule: ${cap.name}`, body: `${incidentId}: ${breach.errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` };
     const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: breach.errors }] });
-    return { ...s, activity };
+    return { ...s, activity, alerts: [alert, ...state.alerts] };
   }
 
   const previous = { ...cap.authority };

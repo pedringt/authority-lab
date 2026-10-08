@@ -2126,6 +2126,8 @@ test('an incident rule opens an incident and never changes authority', () => {
   assert.equal(capData(b, 'account-closure').reviewRequired, false);
   assert.equal(capData(b, 'account-closure').ruleIncidents.length, 1);
   assert.equal(capData(b, 'account-closure').evidence[0].source, 'Incident');
+  assert.equal(b.alerts.length, 1, 'an incident raises an Overview alert');
+  assert.equal(b.alerts[0].capabilityId, 'account-closure');
   assert.equal(simulateBreach(b, 'account-closure'), b, 'one incident per demo breach');
 });
 
