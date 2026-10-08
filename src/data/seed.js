@@ -24,13 +24,15 @@ export const AUTHORITY_LEVELS = [
   { level: 4, name: 'Broad Delegation', description: 'AI handles most cases independently, with monitoring and exception handling.' },
 ];
 
+// The seed roster: version 1 of the people roster in state. `role` is the
+// person's title. Rights are explicit and recorded, never inferred from team.
 export const people = {
-  maya: { name: 'Maya Chen', role: 'Support Product Lead', team: 'Product' },
-  priya: { name: 'Priya Natarajan', role: 'Support Operations Manager', team: 'Support Operations' },
-  daniel: { name: 'Daniel Okafor', role: 'Risk & Compliance Lead', team: 'Risk' },
-  elena: { name: 'Elena Rossi', role: 'Finance Business Partner', team: 'Finance' },
-  jonas: { name: 'Jonas Lindqvist', role: 'Engineering Lead, Support Platform', team: 'Engineering' },
-  sofia: { name: 'Sofia Alvarez', role: 'Risk Analyst', team: 'Risk' },
+  maya: { name: 'Maya Chen', role: 'Support Product Lead', team: 'Product', active: true, rights: { riskApprover: false, workspaceAdmin: true } },
+  priya: { name: 'Priya Natarajan', role: 'Support Operations Manager', team: 'Support Operations', active: true, rights: { riskApprover: false, workspaceAdmin: false } },
+  daniel: { name: 'Daniel Okafor', role: 'Risk & Compliance Lead', team: 'Risk', active: true, rights: { riskApprover: true, workspaceAdmin: false } },
+  elena: { name: 'Elena Rossi', role: 'Finance Business Partner', team: 'Finance', active: true, rights: { riskApprover: false, workspaceAdmin: false } },
+  jonas: { name: 'Jonas Lindqvist', role: 'Engineering Lead, Support Platform', team: 'Engineering', active: true, rights: { riskApprover: false, workspaceAdmin: true } },
+  sofia: { name: 'Sofia Alvarez', role: 'Risk Analyst', team: 'Risk', active: true, rights: { riskApprover: true, workspaceAdmin: false } },
 };
 
 // ---------------------------------------------------------------------------

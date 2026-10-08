@@ -476,3 +476,9 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .table-edit select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
 .table-edit .field-stack { margin: 0; }
 .table-edit .field-stack > span:first-child { display: none; }
+
+/* People ---------------------------------------------------------------- */
+.table-people tr.is-inactive td { color: var(--muted); }
+.people-form { flex-wrap: wrap; }
+.people-form input[type="text"] { flex: 1 1 160px; }
+.table tr.is-editing td { background: var(--neutral-bg); }

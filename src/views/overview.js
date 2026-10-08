@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate } from '../ui.js';
+import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person } from '../ui.js';
 import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId } from '../store.js';
 
 function firstSentences(text, n) {
@@ -87,7 +87,7 @@ export function overviewView(state) {
           <div class="hero-facts">
             <div><span class="fact-label">Status</span>${capStatusBadge(cap.status)}</div>
             <div><span class="fact-label">Current authority</span>${authorityBadge(cap.authority)}</div>
-            ${rec ? html`<div><span class="fact-label">Authorized by</span><span>${(seed.people[rec.authorizedBy] || { name: 'Software rule' }).name}, ${fmtDate(rec.date)}</span></div>` : ''}
+            ${rec ? html`<div><span class="fact-label">Authorized by</span><span>${person(rec.authorizedBy).name}, ${fmtDate(rec.date)}</span></div>` : ''}
           </div>
         </div>
         <div class="hero-side">
@@ -134,7 +134,7 @@ export function overviewView(state) {
   d.proposals.filter((p) => p.status === 'open').forEach((p) => {
     attention.push(html`<a class="card card-link attention" href="#/capabilities/${cap.id}/proposals/${p.id}">
       <div class="attention-head"><strong>Amendment awaiting sign-off</strong>${badge('decision', p.id)}</div>
-      <p>${(seed.people[p.proposedBy] || {}).name} proposed changing the ${p.kind === 'contract' ? 'contract' : 'success criteria'} after evidence. ${p.reason}</p>
+      <p>${person(p.proposedBy).name} proposed changing the ${p.kind === 'contract' ? 'contract' : 'success criteria'} after evidence. ${p.reason}</p>
     </a>`);
   });
   d.evidence.filter((e) => e.source === 'Incident' && e.status === 'fail').slice(0, 1).forEach((e) => {

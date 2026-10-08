@@ -1,6 +1,6 @@
 import * as seed from './data/seed.js';
-import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired } from './store.js';
-import { html } from './ui.js';
+import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store.js';
+import { html, setPeople } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
 import { capabilityView } from './views/capability.js';
@@ -15,6 +15,7 @@ import { criteriaEditorView } from './views/criteria.js';
 import { proposeView, proposalView } from './views/proposals.js';
 import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
+import { peopleView } from './views/people.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -28,6 +29,7 @@ const NAV = [
   ['evidence', 'Evidence'],
   ['decisions', 'Decisions'],
   ['activity', 'Activity'],
+  ['people', 'People'],
 ];
 
 function safeStorage() {
@@ -57,6 +59,7 @@ function capabilityFor(state, query) {
 
 function render() {
   const state = store.get();
+  setPeople(people(state));
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;
   let view;
@@ -83,6 +86,7 @@ function render() {
       else { view = decisionsListView(state); title = 'Decisions'; }
       break;
     case 'activity': view = activityView(state, query); title = 'Activity'; break;
+    case 'people': view = peopleView(state, query); title = 'People'; break;
     default: view = overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
@@ -98,9 +102,10 @@ function render() {
   const contextCap = root === 'capabilities' && sub && sub !== 'new' ? sub : null;
   const current = actor(state, contextCap);
   const defaultOwner = contextCap && getCapability(state, contextCap) ? getCapability(state, contextCap).owner : focusCapability(state).owner;
+  const roster = people(state);
   acting.innerHTML = String(html`<label class="acting"><span class="acting-label">Acting as</span><select data-action="set-acting" aria-label="Acting as">
-    <option value="" ${state.actingAs ? '' : 'selected'}>${seed.people[defaultOwner].name} (owner)</option>
-    ${Object.entries(seed.people).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
+    <option value="" ${state.actingAs ? '' : 'selected'}>${(roster[defaultOwner] || roster[current]).name} (owner)</option>
+    ${Object.entries(activePeople(state)).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
   </select></label>`);
   acting.dataset.current = current;
 
@@ -130,7 +135,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form === 'save-scenarios') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form === 'save-scenarios') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -230,6 +235,22 @@ function readCriteriaRows(form) {
 }
 
 document.addEventListener('submit', (e) => {
+  const personForm = e.target.closest('[data-form="add-person"], [data-form="edit-person"], [data-form="deactivate-person"]');
+  if (personForm) {
+    e.preventDefault();
+    const f = new FormData(personForm);
+    const by = actor(store.get());
+    try {
+      if (personForm.dataset.form === 'add-person') store.dispatch('addPerson', { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
+      else if (personForm.dataset.form === 'edit-person') store.dispatch('editPerson', personForm.dataset.person, { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
+      else store.dispatch('deactivatePerson', personForm.dataset.person, { by, reason: f.get('reason') });
+      location.hash = '#/people';
+      render();
+    } catch (err) {
+      location.hash = `#/people?error=${encodeURIComponent(err.message)}`;
+    }
+    return;
+  }
   const proposeForm = e.target.closest('[data-form="propose-criteria"], [data-form="propose-contract"]');
   if (proposeForm) {
     e.preventDefault();

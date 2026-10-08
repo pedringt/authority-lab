@@ -103,7 +103,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
     : p.kind === 'stakeholders'
       ? versionList(state, capabilityId, 'stakeholders').find((v) => v.version === p.base.stakeholders)?.value
       : { criteria: versionList(state, capabilityId, 'criteria').find((v) => v.version === p.base.criteria)?.value, requirements: versionList(state, capabilityId, 'requirements').find((v) => v.version === p.base.requirements)?.value };
-  const stakeholderKey = (list) => (list || []).map((st) => ({ id: st.person, person: seed.people[st.person] ? seed.people[st.person].name : st.person, team: st.team, position: st.position }));
+  const stakeholderKey = (list) => (list || []).map((st) => ({ id: st.person, person: person(st.person).name, team: st.team, position: st.position }));
   const diff = p.kind === 'contract'
     ? diffTable(before, p.value)
     : p.kind === 'stakeholders'

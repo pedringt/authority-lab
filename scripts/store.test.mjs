@@ -16,6 +16,7 @@ import {
   openProposal, getProposal, approvalEligibility, proposalReadiness, evaluateRequirement, approvalsComplete, namedStakeholders, contractValueChecks,
   saveStakeholders, saveScenarios, addStarterScenarios, simulateScenario, scenarioNudge, proposeAuthority, STANCES, stakeholderMembershipChanged,
   withdrawProposal, signoffFeasibility, decisionRequired, proposedAuthority, lastDecisionId, lastEvaluated,
+  people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
 } from '../src/store.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
@@ -62,8 +63,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 10);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v10');
+  assert.equal(s.version, 11);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v11');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(decisionRequired(s, RR), true);
@@ -256,7 +257,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 9, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 10, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -1556,4 +1557,103 @@ test('views and the entry point read the derived fields only through selectors',
     for (const m of src.matchAll(forbidden)) offenders.push(`${f}: ${m[0]}`);
   }
   assert.deepEqual(offenders, []);
+});
+
+// ---------------------------------------------------------------------------
+// People roster in state (#22)
+// ---------------------------------------------------------------------------
+
+test('the roster is version 1 of the seed, with explicit rights; everything reads it from state', () => {
+  const s = initialState();
+  assert.equal(rosterVersions(s).length, 1);
+  assert.deepEqual(Object.keys(people(s)).sort(), ['daniel', 'elena', 'jonas', 'maya', 'priya', 'sofia']);
+  assert.equal(isWorkspaceAdmin(s, 'maya'), true);
+  assert.equal(isWorkspaceAdmin(s, 'jonas'), true);
+  assert.equal(isWorkspaceAdmin(s, 'priya'), false);
+  assert.equal(isRiskApprover(s, 'daniel'), true);
+  assert.equal(isRiskApprover(s, 'sofia'), true);
+  assert.equal(isRiskApprover(s, 'maya'), false);
+  assert.ok(Object.values(people(s)).every((p) => p.active === true && p.rights && 'riskApprover' in p.rights && 'workspaceAdmin' in p.rights));
+  assert.equal(personRecord(s, 'nobody'), null);
+});
+
+test('only a workspace admin changes the roster, always with a reason; add, edit and deactivate write versions', () => {
+  let s = initialState();
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /not a workspace admin/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: '' }), /needs a reason/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: '', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' }), /name, a title and a team/);
+  const before = s.activity.length;
+  s = addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' });
+  assert.equal(rosterVersions(s).length, 2);
+  assert.deepEqual(personRecord(s, 'omar-haddad'), { name: 'Omar Haddad', role: 'Support Agent Lead', team: 'Support Operations', active: true, rights: { riskApprover: false, workspaceAdmin: false } });
+  assert.equal(rosterVersions(s)[1].author, 'maya');
+  assert.equal(rosterVersions(s)[1].reason, 'Joined the pilot team.');
+  assert.deepEqual(rosterVersions(s)[1].change, { kind: 'add', key: 'omar-haddad' });
+  assert.equal(Object.keys(rosterVersions(s)[1].before).length, 6, 'before kept');
+  assert.equal(s.activity.length, before + 1);
+  assert.equal(s.activity[0].kind, 'roster');
+  assert.equal(s.activity[0].surfaced, false);
+  // Duplicate names get distinct keys.
+  s = addPerson(s, { name: 'Omar Haddad', title: 'Analyst', team: 'Finance', by: 'jonas', reason: 'A second Omar.' });
+  assert.ok(personRecord(s, 'omar-haddad-2'));
+  // Edit name/title/team only.
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /not a workspace admin/);
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'maya', reason: 'Nothing happened here.' }), /Nothing changed/);
+  s = editPerson(s, 'omar-haddad', { title: 'Support Team Lead', by: 'maya', reason: 'Promoted to lead.' });
+  assert.equal(personRecord(s, 'omar-haddad').role, 'Support Team Lead');
+  assert.equal(rosterVersions(s).length, 4);
+  assert.match(s.activity[0].body, /title Support Agent Lead → Support Team Lead/);
+  // Deactivate: never delete.
+  s = deactivatePerson(s, 'omar-haddad-2', { by: 'jonas', reason: 'Left the company.' });
+  assert.equal(isActivePerson(s, 'omar-haddad-2'), false);
+  assert.ok(personRecord(s, 'omar-haddad-2'), 'still on the roster');
+  assert.equal(s.activity[0].surfaced, true, 'a deactivation is worth seeing');
+  assert.throws(() => deactivatePerson(s, 'omar-haddad-2', { by: 'jonas', reason: 'Again, please.' }), /already deactivated/);
+  // Cannot leave zero workspace admins.
+  s = deactivatePerson(s, 'jonas', { by: 'maya', reason: 'Moved to another team.' });
+  assert.throws(() => deactivatePerson(s, 'maya', { by: 'maya', reason: 'Leaving too, somehow.' }), /no workspace admin/);
+  // Rights are not editable here (#23).
+  assert.equal(personRecord(s, 'omar-haddad').rights.workspaceAdmin, false);
+});
+
+test('a deactivated person cannot act, propose, approve, author or be a stakeholder, and leaves the pickers', () => {
+  let s = initialState();
+  s = { ...s, actingAs: 'elena' };
+  s = deactivatePerson(s, 'elena', { by: 'maya', reason: 'Left the company.' });
+  assert.equal(s.actingAs, null, 'acting-as falls back when the acting person is deactivated');
+  assert.throws(() => setActingAs(s, 'elena'), /deactivated and cannot act/);
+  assert.ok(!Object.keys(activePeople(s)).includes('elena'));
+  assert.equal(actor(s, RR), 'maya');
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value, by: 'elena', reason: REASON }), /deactivated and cannot propose/);
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
+  const p = openProposal(s, RR, 'criteria');
+  assert.ok(!p.eligible.includes('elena'), 'not eligible when frozen');
+  assert.throws(() => approveProposal(s, RR, p.id, { by: 'elena' }), /deactivated and cannot approve/);
+  assert.throws(() => rejectProposal(s, RR, p.id, { by: 'elena', reason: 'Not from here.' }), /deactivated/);
+  assert.throws(() => amend(s, RR, 'risk', { value: current(s, RR, 'risk'), author: 'elena', reason: 'Trying anyway.' }), /deactivated and cannot author/);
+  assert.throws(() => authorize(selectDecision(s, RR, 'hold'), RR, { by: 'elena' }), /deactivated and cannot authorize/);
+  assert.throws(() => addCapability(s, { name: 'X', owner: 'elena', risk: LOW_RISK, startingLevel: 0 }), /deactivated and cannot own/);
+  // Stakeholder lists: cannot add; existing entries stop counting as named stakeholders.
+  const [t, id] = withNewCap();
+  assert.throws(() => saveStakeholders(deactivatePerson(t, 'elena', { by: 'maya', reason: 'Left the company.' }), id, { stakeholders: [{ team: 'Finance', person: 'elena' }], by: 'priya' }), /deactivated and cannot be a stakeholder/);
+  assert.ok(!namedStakeholders(s, RR).includes('elena'));
+  // The seeded positions on record still name her; history is not rewritten.
+  assert.ok(current(s, RR, 'stakeholders').some((x) => x.person === 'elena'));
+  // The demo is unchanged.
+  assert.equal(readiness(s, RR).met, 5);
+});
+
+test('roster changes are available through the store and persist', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
+  const store = createStore({ storage });
+  store.dispatch('addPerson', { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' });
+  store.dispatch('editPerson', 'omar-haddad', { team: 'Support', by: 'jonas', reason: 'Team renamed.' });
+  store.dispatch('deactivatePerson', 'omar-haddad', { by: 'jonas', reason: 'Left the company.' });
+  const again = createStore({ storage });
+  assert.equal(rosterVersions(again.get()).length, 4);
+  assert.equal(isActivePerson(again.get(), 'omar-haddad'), false);
+  again.dispatch('reset');
+  assert.equal(rosterVersions(again.get()).length, 1);
 });

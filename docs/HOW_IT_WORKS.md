@@ -208,6 +208,12 @@ Setup step 5 is the scenario library: name, situation and expected behaviour in 
 
 After the first test run, the Decision history tab and the Setup page offer **Propose a move to Level N**, one level at a time. That opens the authority decision for the capability: criteria not yet measured, requirements 0 of N met, the test results in the evidence snapshot, stakeholder positions where recorded. A person authorizes as whoever is acting, which writes the capability's second record. A move to Draft sets the status to Pilot and starts no monitoring, because every case is approved by a person; monitoring begins only at Level 3.
 
+### People
+
+The **People** page is the workspace roster: name, title, team, whether the person is active, and two explicit, recorded rights. **Workspace admin** can change the roster; **Risk approver** can sign off as Risk. Rights are recorded on the person, never inferred from a team name. In the seed, Maya Chen and Jonas Lindqvist are workspace admins, and Daniel Okafor and Sofia Alvarez hold the Risk approver right.
+
+Only a workspace admin adds a person, edits a name, title or team, or deactivates someone, and every change records the admin and a reason as a new roster version, with the history and a before/after diff on the page. Nobody is ever deleted: records, approvals and stakeholder lists keep referring to people after they are deactivated. A deactivated person cannot be the acting person, cannot propose, cannot approve, and cannot be added as a stakeholder, and drops out of the pickers. Granting or removing a right is its own governed change, signed off by a different admin (next issue).
+
 ### Acting as
 
 The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
@@ -261,6 +267,7 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Stakeholder editor | Names the stakeholders and records positions when known; every save is a new version |
 | Scenario library | Adds a starter set or writes scenarios; results are seeded and deterministic |
 | Propose a move to Level N | After the first run, opens the authority decision for a new capability; authorizing writes its second record |
+| People | Workspace admins add, edit and deactivate people, each change versioned with a reason; rights are shown, never inferred |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 

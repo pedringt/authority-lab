@@ -80,6 +80,10 @@ Expanding authority needs a pending proposal; restricting, suspending or redesig
 6. **Tests → Run test suite**: results are simulated deterministically; the first run locks the criteria.
 7. **Decision history → Propose a move to Level 2**, then **Authorize**: the capability's second record, status Pilot.
 
+## People and rights
+
+The roster lives in versioned state (`state.roster`), seeded from `src/data/seed.js`. Each person has a name, title, team, `active` flag and explicit rights `{ riskApprover, workspaceAdmin }`. Only a workspace admin changes the roster (add, edit, deactivate; never delete), always with a reason, as a new version. Deactivated people cannot act, propose, approve or be stakeholders. Seed admins: Maya Chen, Jonas Lindqvist. Seed Risk approvers: Daniel Okafor, Sofia Alvarez.
+
 ## Structure
 
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).

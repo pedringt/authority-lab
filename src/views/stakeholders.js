@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, notice, section, person, fmtDateYear, selectField } from '../ui.js';
-import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal } from '../store.js';
+import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal, activePeople, people } from '../store.js';
 
 export function stakeholdersEditorView(state, capabilityId, query) {
   const cap = getCapability(state, capabilityId);
@@ -8,12 +8,12 @@ export function stakeholdersEditorView(state, capabilityId, query) {
   const error = query.get('error');
   const acting = person(actor(state, capabilityId));
   const list = current(state, capabilityId, 'stakeholders');
-  const existing = list.length ? list : [{ team: seed.people[cap.owner].team, person: cap.owner, stance: 'undecided', position: '', quote: '' }];
-  const people = Object.entries(seed.people).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
+  const existing = list.length ? list : [{ team: people(state)[cap.owner].team, person: cap.owner, stance: 'undecided', position: '', quote: '' }];
+  const choices = Object.entries(activePeople(state)).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
   const v = versionsInForce(state, capabilityId).stakeholders;
   const row = (st, i) => html`<tr>
     <td><input type="hidden" name="s-position" value="${st.position || ''}"><input type="hidden" name="s-stance-was" value="${st.stance || ''}"><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
-    <td>${selectField(`s-person`, '', people, st.person || '', { placeholder: 'Choose a person' })}</td>
+    <td>${selectField(`s-person`, '', choices, st.person || '', { placeholder: 'Choose a person' })}</td>
     <td><select name="s-stance" aria-label="Position">${STANCES.map(([k, l]) => html`<option value="${k}" ${k === (st.stance || 'undecided') ? raw('selected') : ''}>${l}</option>`)}</select></td>
     <td><input type="text" name="s-quote" value="${st.quote || ''}" maxlength="240" placeholder="Their reasoning, in their words" aria-label="Quote"></td>
     <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove stakeholder ${i + 1}">Remove</button></td>
