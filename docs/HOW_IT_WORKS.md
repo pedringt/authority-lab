@@ -214,6 +214,8 @@ The **People** page is the workspace roster: name, title, team, whether the pers
 
 Only a workspace admin adds a person, edits a name, title or team, or deactivates someone, and every change records the admin and a reason as a new roster version, with the history and a before/after diff on the page. Nobody is ever deleted: records, approvals and stakeholder lists keep referring to people after they are deactivated. A deactivated person cannot be the acting person, cannot propose, cannot approve, and cannot be added as a stakeholder, and drops out of the pickers.
 
+Each row's **Manage** menu holds the admin actions for that person: edit name, title or team; grant or remove each right; deactivate. The person currently acting is tagged "Acting now" next to their name.
+
 Rights are governed. Granting or removing the Risk approver or workspace admin right, and deactivating anyone who holds a right, is a proposal made by a workspace admin and approved by someone else: a **different** workspace admin, or, for a Risk approver grant, an existing Risk approver. The proposer never approves. For a grant, the person receiving the right never approves either, so nobody grants a right to themselves and nobody waves through their own. For a removal, the person losing the right may approve it. A change that would leave no workspace admin is refused. Open roster changes, with approve, reject and withdraw, sit on the People page. Changing someone's team changes nothing about what they can approve: Risk eligibility is only ever the recorded right.
 
 ### Coverage warnings
@@ -227,7 +229,7 @@ When a workspace admin proposes removing a right or deactivating someone, the fo
 
 ### Demo: acting as
 
-The top bar has a picker labelled **Demo: acting as**. It is a demo control: a real version would know who is signed in, and the picker stands in for sign-in so one visitor can show different people proposing, approving and authorizing. Only active people appear in it. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
+The header's grouped demo area (top right, next to the demo date and Reset demo) has a picker labelled **Demo · Acting as**. It is a demo control: a real version would know who is signed in, and the picker stands in for sign-in so one visitor can show different people proposing, approving and authorizing. Only active people appear in it. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
 
 ## 2. The screens
 
@@ -237,11 +239,13 @@ The top bar has a picker labelled **Demo: acting as**. It is a demo control: a r
 
 **Capability detail** is the full picture of one capability, with tabs for the contract, success criteria, testing, evidence, stakeholders, decision history and monitoring. The current and proposed authority are always visible at the top.
 
-**Tests** is the testing ground: 26 scenarios in five groups (standard, ambiguous, adversarial, high impact, edge cases). Running the suite shows each scenario's expected behaviour, what the AI did, the outcome, the severity, and what the human reviewer decided. One scenario fails badly on purpose: a $420 refund on a fraud-flagged account was recommended instead of escalated.
+**Tests** is the testing ground: 26 scenarios in five groups (standard, ambiguous, adversarial, high impact, edge cases). The heading names the capability and switches it ("Tests for: … ▾"). Before the first run the groups are collapsed with their counts beside one Run test suite button; after a run, groups with failures come first and open, and a filter bar narrows by result and group. Running the suite shows each scenario's expected behaviour, what the AI did, the outcome, the severity, and what the human reviewer decided. One scenario fails badly on purpose: a $420 refund on a fraud-flagged account was recommended instead of escalated.
 
-**Evidence** is the repository of everything the decision rests on, filterable by status, source, segment and risk, with the evidence requirements checklist underneath.
+**Evidence** is the repository of everything the decision rests on ("Evidence for: … ▾" switches capability), filterable on one bar by status, source, segment and risk, with a count of what is shown and the evidence requirements checklist underneath.
 
-**Decisions** lists every authority change and opens the decision workspace for the pending one.
+**Decisions** lists every authority change and opens the decision workspace for the pending one. In the workspace, the options, the plain-English preview, the rationale and the Authorize button share one panel that stays in view while you read the evidence; the condition inputs for Expand with limits sit at the top of the page.
+
+When an action can't go through (a missing rationale, a rule that refuses it), the reason appears as a notice on the same page. Dates read "Oct 7", with the year only when it differs from the current one, and hovering any authority level shows what it allows.
 
 **Activity** is the timeline. Every event is recorded. The default view ("Important") shows decisions, automatic restrictions, test runs, pilot milestones, failures, mitigations, stakeholder reviews, and amendments made after evidence; "Full history" shows everything, including setup-type events such as criteria being defined and amendments made before any results existed. Both views filter by kind and by capability, and an amendment expands to a before/after table.
 
@@ -280,7 +284,7 @@ The top bar has a picker labelled **Demo: acting as**. It is a demo control: a r
 | Propose a move to Level N | After the first run, opens the authority decision for a new capability; authorizing writes its second record |
 | People | Workspace admins add, edit and deactivate people, each change versioned with a reason; rights are shown, never inferred |
 | Coverage warnings | Flag a High/Financial capability short of two active Risk approvers and any open proposal that can no longer complete; never block; the People page forms show the impact of a change before it is proposed |
-| Demo: acting as | A demo stand-in for sign-in; chooses who is authoring records from this screen, defaulting to the capability owner; only active people appear |
+| Demo · Acting as | A demo stand-in for sign-in; chooses who is authoring records from this screen, defaulting to the capability owner; only active people appear |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 
 State is kept in your browser, so you can refresh without losing your place.
