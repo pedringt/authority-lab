@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, fmtDate, fmtDateYear, kv } from '../ui.js';
+import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, fmtDateYear, kv } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS } from '../store.js';
 import { diffTable } from './activity.js';
 
@@ -21,7 +21,7 @@ export function proposeView(state, capabilityId, kind, query) {
 
   if (kind === 'contract' && !hasContract) return html`<div class="page-head"><div><h1>Amend the contract</h1><p class="lede">${cap.name} has no finalized contract yet.</p></div></div>${notice('neutral', 'Nothing to amend', 'Finalize the contract in the builder first.', { link: `#/capabilities/${cap.id}/contract/build`, linkText: 'Contract builder' })}`;
   if (kind === 'criteria' && !hasCriteria) return html`<div class="page-head"><div><h1>Amend the success criteria</h1><p class="lede">${cap.name} has no saved criteria yet.</p></div></div>${notice('neutral', 'Nothing to amend', 'Save the criteria in the editor first.', { link: `#/capabilities/${cap.id}/criteria/edit`, linkText: 'Criteria editor' })}`;
-  if (open) return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Amend the ${KIND_TITLE[kind]}</h1></div></div>${notice('watch', `${open.id} is awaiting sign-off`, `${person(open.proposedBy).name} proposed a change on ${fmtDate(open.date)}. Approve or reject it before proposing another.`, { link: `#/capabilities/${cap.id}/proposals/${open.id}`, linkText: 'Open the proposal' })}`;
+  if (open) return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Amend the ${KIND_TITLE[kind]}</h1></div></div>${notice('watch', `${open.id} is awaiting sign-off`, `${personAt(open.proposedByAt, open.proposedBy).name} proposed a change on ${fmtDate(open.date)}. Approve or reject it before proposing another.`, { link: `#/capabilities/${cap.id}/proposals/${open.id}`, linkText: 'Open the proposal' })}`;
 
   const head = html`<div class="page-head">
     <div>
@@ -114,7 +114,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Proposed amendment</p>
       <h1>${p.id}: ${p.kind === 'contract' ? 'Contract' : p.kind === 'stakeholders' ? 'Stakeholders' : 'Success criteria and evidence requirements'}</h1>
-      <p class="lede">Proposed by <strong>${person(p.proposedBy).name}</strong> on ${fmtDateYear(p.date)}, against ${p.kind === 'contract' ? `contract v${p.base.contract}` : p.kind === 'stakeholders' ? `stakeholders v${p.base.stakeholders}` : `criteria v${p.base.criteria} and requirements v${p.base.requirements}`}. ${status}</p>
+      <p class="lede">Proposed by <strong>${personAt(p.proposedByAt, p.proposedBy).name}</strong> on ${fmtDateYear(p.date)}, against ${p.kind === 'contract' ? `contract v${p.base.contract}` : p.kind === 'stakeholders' ? `stakeholders v${p.base.stakeholders}` : `criteria v${p.base.criteria} and requirements v${p.base.requirements}`}. ${status}</p>
     </div>
   </div>
   ${error ? notice('fail', 'Could not record that', error) : ''}
@@ -122,9 +122,9 @@ export function proposalView(state, capabilityId, proposalId, query) {
     ['Reason', p.reason],
     ['Sign-off needed', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approver${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk: approved') : badge('neutral', 'Risk: pending')}</span>` : ''} <span class="muted small">${requirementLabel(req)}; the proposer never approves. Risk means the recorded Risk approver right.</span>`],
     ['Eligible approvers', html`<span class="muted small">Frozen when the proposal opened: ${(p.eligible || []).map((k) => person(k).name).join(', ') || 'none'}.</span>`],
-    ['Approvals so far', p.approvals.length ? html`<ul class="plain-list">${p.approvals.map((a) => html`<li>${person(a.by).name} as ${roleLabel(a.role)}, ${fmtDate(a.date)}</li>`)}</ul>` : html`<span class="muted">None yet</span>`],
-    ...(p.rejection ? [['Rejected', html`${person(p.rejection.by).name}, ${fmtDate(p.rejection.date)}: ${p.rejection.reason}`]] : []),
-    ...(p.withdrawal ? [['Withdrawn', html`${person(p.withdrawal.by).name}, ${fmtDate(p.withdrawal.date)}: ${p.withdrawal.reason}`]] : []),
+    ['Approvals so far', p.approvals.length ? html`<ul class="plain-list">${p.approvals.map((a) => html`<li>${personAt(a.byAt, a.by).name} as ${roleLabel(a.role)}, ${fmtDate(a.date)}${rightsNote(a.byAt)}</li>`)}</ul>` : html`<span class="muted">None yet</span>`],
+    ...(p.rejection ? [['Rejected', html`${personAt(p.rejection.byAt, p.rejection.by).name}, ${fmtDate(p.rejection.date)}: ${p.rejection.reason}`]] : []),
+    ...(p.withdrawal ? [['Withdrawn', html`${personAt(p.withdrawal.byAt, p.withdrawal.by).name}, ${fmtDate(p.withdrawal.date)}: ${p.withdrawal.reason}`]] : []),
     ...(p.applied ? [['Applied as', Object.entries(p.applied).map(([k, v]) => `${KIND_LABELS[k]} v${v}`).join(', ')]] : []),
   ])}</div>
 
@@ -158,7 +158,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
 export function proposalsList(state, capabilityId, kind) {
   const list = capData(state, capabilityId).proposals.filter((p) => p.kind === kind);
   if (!list.length) return '';
-  return html`<div class="card"><p class="eyebrow">Proposed amendments</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${person(p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected')} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
+  return html`<div class="card"><p class="eyebrow">Proposed amendments</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${personAt(p.proposedByAt, p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected')} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
 }
 
 export function amendLink(state, capabilityId, kind) {

@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person } from '../ui.js';
+import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person, personAt, rightsNote } from '../ui.js';
 import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority } from '../store.js';
 import { requirementsList, optionLabel } from './capability.js';
 
@@ -26,7 +26,7 @@ export function decisionsListView(state) {
       <td>${fmtDate(x.date)}</td>
       <td>${x.previous ? html`${authorityLabel(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityLabel(x.next, { short: true })}${x.previous && x.next.level < x.previous.level ? html` <span class="badge badge-restricted">Down</span>` : ''}</td>
       <td>${optionLabel(x.option)}</td>
-      <td>${person(x.authorizedBy).name}</td>
+      <td>${personAt(x.authorizedByAt, x.authorizedBy).name}</td>
     </tr>`)}</tbody>
   </table></div>`;
 }
@@ -35,7 +35,8 @@ export function decisionRecordView(state, id) {
   const x = state.decisionRecords.find((r) => r.id === id);
   if (!x) return html`<div class="page-head"><h1>Record not found</h1></div>`;
   const cap = getCapability(state, x.capabilityId);
-  const who = person(x.authorizedBy);
+  const who = personAt(x.authorizedByAt, x.authorizedBy);
+  const ownerAt = personAt(x.ownerAt, x.owner);
   const auto = x.authorizedBy === 'system';
   return html`<div class="page-head">
     <div>
@@ -51,8 +52,8 @@ export function decisionRecordView(state, id) {
       <span class="record-arrow" aria-hidden="true">→</span>
       <div><span class="fact-label">New</span>${authorityBadge(x.next)}</div>
       <div><span class="fact-label">Decision</span><strong>${optionLabel(x.option)}</strong></div>
-      <div><span class="fact-label">${auto ? 'Applied by' : 'Authorized by'}</span><strong>${who.name}</strong><div class="muted small">${who.role}</div></div>
-      ${x.owner && x.owner !== x.authorizedBy ? html`<div><span class="fact-label">Owner</span><strong>${person(x.owner).name}</strong><div class="muted small">${person(x.owner).role}</div></div>` : ''}
+      <div><span class="fact-label">${auto ? 'Applied by' : 'Authorized by'}</span><strong>${who.name}</strong><div class="muted small">${who.role}${who.team ? html`, ${who.team}` : ''}${rightsNote(x.authorizedByAt)}</div></div>
+      ${x.owner && x.owner !== x.authorizedBy ? html`<div><span class="fact-label">Owner</span><strong>${ownerAt.name}</strong><div class="muted small">${ownerAt.role}${ownerAt.team ? html`, ${ownerAt.team}` : ''}</div></div>` : ''}
     </div>
     ${kv([
       ['Scope', x.scope],
@@ -69,7 +70,7 @@ export function decisionRecordView(state, id) {
     ])}
     ${x.versions ? html`<div class="record-foot"><span class="fact-label">Based on</span><div class="based-on">${VERSIONED_KINDS.map((k) => x.versions[k] ? html`<a href="#/capabilities/${cap.id}/versions?kind=${k}&version=${x.versions[k]}">${KIND_LABELS[k]} v${x.versions[k]}</a>` : html`<span class="muted">${KIND_LABELS[k]}: none yet</span>`)}</div></div>` : ''}
     ${amendedNote(state, x)}
-    <p class="muted small record-foot">Record ${x.id}${x.sequence ? html`, record ${x.sequence} for ${cap.name}` : ''}, written ${fmtDateYear(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was.</p>
+    <p class="muted small record-foot">Record ${x.id}${x.sequence ? html`, record ${x.sequence} for ${cap.name}` : ''}, written ${fmtDateYear(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was. People are shown as they were when it was written.</p>
   </div>`;
 }
 

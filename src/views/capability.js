@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, notice, empty } from '../ui.js';
+import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, personAt, notice, empty } from '../ui.js';
 import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId } from '../store.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
@@ -89,7 +89,7 @@ function contractTab(state, cap, d) {
   }
   const latest = contractVersions[contractVersions.length - 1];
   return html`
-    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment. <span class="muted">Version ${latest.version}, ${person(latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}</p>
+    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment. <span class="muted">Version ${latest.version}, ${personAt(latest.authorAt, latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}</p>
     ${proposalsList(state, cap.id, 'contract')}
     ${contractReviewView(contractVersions[0].review)}
     <div class="contract-grid">
@@ -235,7 +235,7 @@ function decisionsTab(state, cap) {
       <td>${fmtDate(x.date)}</td>
       <td>${x.previous ? html`${authorityLabel(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityLabel(x.next, { short: true })}</td>
       <td>${optionLabel(x.option)}</td>
-      <td>${person(x.authorizedBy).name}</td>
+      <td>${personAt(x.authorizedByAt, x.authorizedBy).name}</td>
     </tr>`)}</tbody>
   </table></div>`;
 }

@@ -57,6 +57,22 @@ export function person(key) {
   return roster[key] || { name: key, role: '', team: '' };
 }
 
+// A person as a record saved them. Records written before snapshots existed
+// fall back to the current roster.
+export function personAt(snapshot, key) {
+  if (snapshot) return { name: snapshot.name, role: snapshot.title, team: snapshot.team, rights: snapshot.rights || {}, snapshot: true };
+  return { ...person(key), rights: {}, snapshot: false };
+}
+
+// "Risk approver at the time" style note for an approval or author snapshot.
+export function rightsNote(snapshot) {
+  if (!snapshot || !snapshot.rights) return '';
+  const r = [];
+  if (snapshot.rights.riskApprover) r.push('Risk approver');
+  if (snapshot.rights.workspaceAdmin) r.push('workspace admin');
+  return r.length ? html`<span class="muted small"> · ${r.join(', ')} at the time</span>` : '';
+}
+
 // Status tokens: pass | watch | fail | insufficient | restricted | decision | neutral
 const STATUS_WORDS = {
   pass: 'Pass',

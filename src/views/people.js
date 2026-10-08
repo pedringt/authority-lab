@@ -1,4 +1,4 @@
-import { html, raw, badge, notice, section, person, fmtDateYear, fmtDate, kv } from '../ui.js';
+import { html, raw, badge, notice, section, person, personAt, fmtDateYear, fmtDate, kv } from '../ui.js';
 import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins } from '../store.js';
 import { diffTable } from './activity.js';
 
@@ -101,7 +101,7 @@ export function peopleView(state, query) {
     <button class="btn btn-primary" type="submit">Add person</button>
   </div></form>`) : ''}
   ${section('Roster history', html`${versions.map((v) => html`<article class="card version"><div class="version-head"><div><span class="eyebrow">Roster · version ${v.version}</span><h3>${v.version === 1 ? 'Seed roster' : v.reason}</h3></div></div>
-    ${kv([['Written', fmtDateYear(v.date)], ['By', v.author ? person(v.author).name : 'Seed'], ['Reason', v.reason]])}
+    ${kv([['Written', fmtDateYear(v.date)], ['By', v.author ? html`${personAt(v.authorAt, v.author).name}${v.approvals ? html` · approved by ${v.approvals.map((a) => personAt(a.byAt, a.by).name).join(', ')}` : ''}` : 'Seed'], ['Reason', v.reason]])}
     ${v.version > 1 ? html`<h4 class="version-sub">What changed from v${v.version - 1}</h4>${diffTable(flatten(v.before), flatten(v.value))}` : ''}
   </article>`)}`, { subtitle: 'Every change is a new version with its author and reason.' })}`;
 }
@@ -114,19 +114,19 @@ function rosterProposals(state, acting, focusId) {
   const list = state.rosterProposals.slice().reverse();
   if (!list.length) return '';
   const roster = people(state);
-  const describe = (pr) => `${pr.kind === 'deactivate' ? 'Deactivate' : pr.grant ? 'Grant' : 'Remove'} ${pr.kind === 'deactivate' ? '' : `${RIGHT_LABELS[pr.right]}: `}${roster[pr.person] ? roster[pr.person].name : pr.person}`;
+  const describe = (pr) => `${pr.kind === 'deactivate' ? 'Deactivate' : pr.grant ? 'Grant' : 'Remove'} ${pr.kind === 'deactivate' ? '' : `${RIGHT_LABELS[pr.right]}: `}${personAt(pr.personAt, pr.person).name}`;
   return section('Roster changes awaiting sign-off', html`${list.map((pr) => {
     const e = rosterApprovalEligibility(state, pr, acting);
     const status = pr.status === 'open' ? badge('decision', 'Awaiting sign-off') : pr.status === 'approved' ? badge('pass', 'Approved and applied') : pr.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected');
     return html`<article class="card roster-proposal ${pr.id === focusId ? 'is-highlight' : ''}" id="${pr.id}">
       <div class="version-head"><div><span class="eyebrow">${pr.id} · ${fmtDateYear(pr.date)}</span><h3>${describe(pr)}</h3></div><div>${status}</div></div>
       ${kv([
-        ['Proposed by', person(pr.proposedBy).name],
+        ['Proposed by', personAt(pr.proposedByAt, pr.proposedBy).name],
         ['Reason', pr.reason],
         ['Can approve', pr.eligible.map((k) => person(k).name).join(', ') || 'nobody'],
-        ...(pr.approvals.length ? [['Approved by', pr.approvals.map((a) => `${person(a.by).name}, ${fmtDate(a.date)}`).join('; ')]] : []),
-        ...(pr.rejection ? [['Rejected', `${person(pr.rejection.by).name}: ${pr.rejection.reason}`]] : []),
-        ...(pr.withdrawal ? [['Withdrawn', `${person(pr.withdrawal.by).name}: ${pr.withdrawal.reason}`]] : []),
+        ...(pr.approvals.length ? [['Approved by', pr.approvals.map((a) => `${personAt(a.byAt, a.by).name}, ${fmtDate(a.date)}`).join('; ')]] : []),
+        ...(pr.rejection ? [['Rejected', `${personAt(pr.rejection.byAt, pr.rejection.by).name}: ${pr.rejection.reason}`]] : []),
+        ...(pr.withdrawal ? [['Withdrawn', `${personAt(pr.withdrawal.byAt, pr.withdrawal.by).name}: ${pr.withdrawal.reason}`]] : []),
       ])}
       ${pr.status === 'open' ? html`<div class="roster-actions">
         ${e.ok ? html`<button class="btn btn-sm btn-primary" data-action="approve-roster" data-proposal="${pr.id}">Approve as ${person(acting).name}</button>` : html`<span class="muted small">${e.reason}</span>`}
