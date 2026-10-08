@@ -188,7 +188,7 @@ Three objects are governed once there is something to protect. Changes to them b
 | Contract | The start of a pilot (a human-authorized move to Draft or above), while the `CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` setting is on | Before a pilot starts |
 | Stakeholders | The first performance results, for adding or removing people and for team labels | Position, stance and reasoning updates, always |
 
-**Who must approve.** The proposer never approves. For Low and Medium impact, one approver: the owner, or any other named stakeholder if the owner proposed. For High impact or financial exposure, two different approvers, at least one from Risk; the last slot is refused to a non-Risk person while no Risk approval exists. Owners can still propose. "Named stakeholders" are the owner and the people on the capability's list; whether one of them counts as Risk is the recorded Risk approver right on the People page, never a team name or a label on the list. Use the "Acting as" picker to propose and to approve as each person.
+**Who must approve.** The proposer never approves. For Low and Medium impact, one approver: the owner, or any other named stakeholder if the owner proposed. For High impact or financial exposure, two different approvers, at least one from Risk; the last slot is refused to a non-Risk person while no Risk approval exists. Owners can still propose. "Named stakeholders" are the owner and the people on the capability's list; whether one of them counts as Risk is the recorded Risk approver right on the People page, never a team name or a label on the list. Use the "Demo: acting as" picker to propose and to approve as each person.
 
 **What the sign-off screen shows.** The reason, how many approvers have signed and whether Risk has, who was eligible when the proposal opened, what would change, and, for criteria, readiness under both versions ("5 of 6 met now, 6 of 6 under the proposal") with a flag when the proposal makes the capability look more ready without new evidence.
 
@@ -216,9 +216,9 @@ Only a workspace admin adds a person, edits a name, title or team, or deactivate
 
 Rights are governed. Granting or removing the Risk approver or workspace admin right, and deactivating anyone who holds a right, is a proposal made by a workspace admin and approved by someone else: a **different** workspace admin, or, for a Risk approver grant, an existing Risk approver. The proposer never approves. For a grant, the person receiving the right never approves either, so nobody grants a right to themselves and nobody waves through their own. For a removal, the person losing the right may approve it. A change that would leave no workspace admin is refused. Open roster changes, with approve, reject and withdraw, sit on the People page. Changing someone's team changes nothing about what they can approve: Risk eligibility is only ever the recorded right.
 
-### Acting as
+### Demo: acting as
 
-The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
+The top bar has a picker labelled **Demo: acting as**. It is a demo control: a real version would know who is signed in, and the picker stands in for sign-in so one visitor can show different people proposing, approving and authorizing. Only active people appear in it. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
 
 ## 2. The screens
 
@@ -270,7 +270,7 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Scenario library | Adds a starter set or writes scenarios; results are seeded and deterministic |
 | Propose a move to Level N | After the first run, opens the authority decision for a new capability; authorizing writes its second record |
 | People | Workspace admins add, edit and deactivate people, each change versioned with a reason; rights are shown, never inferred |
-| Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
+| Demo: acting as | A demo stand-in for sign-in; chooses who is authoring records from this screen, defaulting to the capability owner; only active people appear |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 
 State is kept in your browser, so you can refresh without losing your place.

@@ -486,3 +486,9 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .rights-actions { display: flex; gap: 10px; margin-top: 4px; }
 .roster-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .roster-proposal + .roster-proposal { margin-top: 10px; }
+
+/* Acting-as picker as a demo control ------------------------------------ */
+.acting { flex-wrap: wrap; }
+.acting-demo { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--watch); background: var(--watch-bg); border: 1px solid var(--watch-bd); border-radius: 3px; padding: 1px 5px; margin-right: 4px; }
+.acting-help { flex-basis: 100%; font-size: 11px; color: var(--muted); line-height: 1.2; }
+@media (max-width: 720px) { .acting-help { display: none; } }
