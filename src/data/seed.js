@@ -742,7 +742,124 @@ export const breachSeed = {
 // Per-capability data. Capabilities without an entry start empty.
 // ---------------------------------------------------------------------------
 
+// Setup data for the mature capabilities (#14), in the same shape the editors
+// save: criteria {id, name, target, current, status, note, source},
+// requirements {id, text, current, met, gap, source}, stakeholders {team,
+// person, stance, position, quote, date}. One measured evidence item each so
+// their criteria read as locked (performance results have been seen).
+
+const matureCapabilities = {
+  'ticket-classification': {
+    criteria: [
+      { id: 'quality', name: 'Quality', target: '≥ 85% correct queue and priority', current: '97.2%', status: 'pass', note: 'Routing agreement with the queue a person would have chosen, sampled weekly.', source: 'Default for Low impact' },
+      { id: 'severe-errors', name: 'Severe error rate', target: '< 5% high-impact errors', current: '0.4%', status: 'pass', note: 'A severe error is a legal or safety ticket routed to a general queue.', source: 'Default for Low impact' },
+      { id: 'review-burden', name: 'Human review burden', target: '≤ 30% of cases need meaningful correction', current: '3.1%', status: 'pass', note: 'Misroutes re-queued by an agent.', source: 'Default for every capability' },
+      { id: 'speed', name: 'Speed', target: '50% faster average resolution', current: '71% faster to first touch', status: 'pass', note: 'Time from ticket arrival to the right queue.', source: 'Default for every capability' },
+      { id: 'cost', name: 'Cost', target: 'AI operating cost < $0.20 per case', current: '$0.01', status: 'pass', note: 'Classification only.', source: 'Default for every capability' },
+      { id: 'adoption', name: 'Adoption', target: '≥ 70% recommendation acceptance', current: '96.9%', status: 'pass', note: 'Tickets left in the assigned queue. Acceptance is not correctness; the weekly sample checks that.', source: 'Default for every capability' },
+      { id: 'confidence', name: 'Stakeholder confidence', target: 'Key stakeholders agree the proposed authority is appropriate', current: 'Agreed, Aug 18', status: 'pass', note: 'Three positions recorded before the move to Level 3.', source: 'Default for every capability' },
+    ],
+    requirements: [
+      { id: 'min-cases', text: 'Minimum 50 pilot cases', current: '1,120', met: true, source: 'Default for Low impact' },
+      { id: 'accuracy', text: 'Overall accuracy ≥ 85%', current: '97.2%', met: true, source: 'Default for Low impact' },
+      { id: 'severe', text: 'High-severity error rate < 5%', current: '0.4%', met: true, source: 'Default for Low impact' },
+      { id: 'override', text: 'Override rate < 20%', current: '2.8%', met: true, source: 'Default for every capability' },
+      { id: 'incidents', text: 'No unresolved critical incidents', current: 'None', met: true, source: 'Default for every capability' },
+    ],
+    stakeholders: [
+      { team: 'Support Operations', person: 'priya', stance: 'expand', position: 'Expand', quote: 'Misroutes cost minutes, not money, and agents fix them at the queue.', date: '2026-08-18' },
+      { team: 'Engineering', person: 'jonas', stance: 'expand-limits', position: 'Expand with a misroute ceiling', quote: 'Fine to automate as long as the misroute rule returns it to Draft on its own.', date: '2026-08-18' },
+      { team: 'Risk', person: 'daniel', stance: 'expand-limits', position: 'Expand, keep legal and safety tickets gated', quote: 'Low impact and reversible. The gate on legal and safety tickets is the only thing I need.', date: '2026-08-18' },
+    ],
+    evidence: [
+      { id: 'EV-TC-01', source: 'Operational metrics', metric: 'Misroute rate since expansion', value: '3.1% across 1,840 tickets', status: 'pass', risk: 'Low', segment: 'All', date: '2026-09-28', detail: 'Tickets re-queued by an agent after automatic assignment. Legal and safety tickets are gated and are not in this figure.', link: '#/capabilities/ticket-classification?tab=criteria' },
+    ],
+  },
+  'response-drafting': {
+    criteria: [
+      { id: 'quality', name: 'Quality', target: '≥ 90% correct drafts', current: '88%', status: 'watch', note: 'A correct draft needs no factual edit before sending. Two drafts quoted an outdated return window.', source: 'Default for Medium impact' },
+      { id: 'severe-errors', name: 'Severe error rate', target: '< 3% high-impact errors', current: '1.2%', status: 'pass', note: 'A severe error is a promise, a policy misquote or a wrong customer in the draft.', source: 'Default for Medium impact' },
+      { id: 'customer-harm', name: 'Customer-visible errors', target: '0 customer-visible errors that a person would have caught', current: '0', status: 'pass', note: 'Every send is approved by an agent at Draft.', source: 'Default for customer-facing exposure' },
+      { id: 'review-burden', name: 'Human review burden', target: '≤ 30% of cases need meaningful correction', current: '39%', status: 'watch', note: '61% sent with light edits; the rest needed a rewrite or a factual fix.', source: 'Default for every capability' },
+      { id: 'speed', name: 'Speed', target: '50% faster average resolution', current: '34% faster', status: 'watch', note: 'Reply time with a draft versus without, same agents.', source: 'Default for every capability' },
+      { id: 'cost', name: 'Cost', target: 'AI operating cost < $0.20 per case', current: '$0.11', status: 'pass', note: 'Draft plus help-center retrieval.', source: 'Default for every capability' },
+      { id: 'adoption', name: 'Adoption', target: '≥ 70% recommendation acceptance', current: '61%', status: 'watch', note: 'Drafts sent with light edits. Acceptance is not correctness.', source: 'Default for every capability' },
+      { id: 'confidence', name: 'Stakeholder confidence', target: 'Key stakeholders agree the proposed authority is appropriate', current: 'No expansion proposed', status: 'pending', note: 'Positions on record from the move to Draft.', source: 'Default for every capability' },
+    ],
+    requirements: [
+      { id: 'min-cases', text: 'Minimum 100 pilot cases', current: '412', met: true, source: 'Default for Medium impact' },
+      { id: 'accuracy', text: 'Overall accuracy ≥ 90%', current: '88%', met: false, gap: 'Drafts still misquote policy often enough to miss the bar. The two outdated-return-window drafts are the pattern to fix.', source: 'Default for Medium impact' },
+      { id: 'severe', text: 'High-severity error rate < 3%', current: '1.2%', met: true, source: 'Default for Medium impact' },
+      { id: 'override', text: 'Override rate < 20%', current: '14%', met: true, source: 'Default for every capability' },
+      { id: 'incidents', text: 'No unresolved critical incidents', current: 'None; both policy misquotes were caught before sending', met: true, source: 'Default for every capability' },
+    ],
+    stakeholders: [
+      { team: 'Support Operations', person: 'priya', stance: 'hold', position: 'Hold at Draft', quote: 'Agents like the drafts, but 39% still need real work. Not ready to send anything unreviewed.', date: '2026-10-02' },
+      { team: 'Product', person: 'maya', stance: 'hold', position: 'Hold until policy quotes are reliable', quote: 'Fix the policy-version retrieval first; the quality number should move on its own.', date: '2026-10-02' },
+      { team: 'Risk', person: 'daniel', stance: 'hold', position: 'Hold; customer-facing text stays reviewed', quote: 'A misquoted policy that reaches a customer is a commitment. Draft is the right level.', date: '2026-10-02' },
+      { team: 'Engineering', person: 'jonas', stance: 'undecided', position: 'No position yet', quote: '', date: '2026-10-02' },
+    ],
+    evidence: [
+      { id: 'EV-RD-01', source: 'Pilot outcomes', metric: 'Draft quality', value: '88% across 412 drafts', status: 'watch', risk: 'Medium', segment: 'All', date: '2026-10-02', detail: '61% sent with light edits, 39% needed a rewrite or a factual fix. Two drafts quoted an outdated return window; both were caught by agents before sending.', link: '#/capabilities/response-drafting?tab=criteria' },
+    ],
+  },
+  'refund-execution-high-value': {
+    criteria: [
+      { id: 'quality', name: 'Quality', target: '≥ 92% correct executions', current: '99.0%', status: 'pass', note: 'An execution is correct when the amount, order and destination match the approved recommendation.', source: 'Default for High impact' },
+      { id: 'severe-errors', name: 'Severe error rate', target: '< 2% high-impact errors', current: '1.0%', status: 'pass', note: '1 duplicate execution in 96. One is enough to restrict: the failure is in the mechanism, not the judgment.', source: 'Default for High impact' },
+      { id: 'review-burden', name: 'Human review burden', target: '≤ 30% of cases need meaningful correction', current: '0%', status: 'pass', note: 'Executions do not get edited; they get reversed.', source: 'Default for every capability' },
+      { id: 'speed', name: 'Speed', target: '50% faster average resolution', current: 'Not measured since restriction', status: 'pending', note: 'Execution time is immaterial while a person executes every refund above $50.', source: 'Default for every capability' },
+      { id: 'cost', name: 'Cost', target: 'AI operating cost < $0.20 per case', current: '$0.02', status: 'pass', note: 'Execution is a system call; the model only prepares it.', source: 'Default for every capability' },
+      { id: 'adoption', name: 'Adoption', target: '≥ 70% recommendation acceptance', current: 'Not applicable at Recommend', status: 'pending', note: 'A person executes; there is nothing to accept.', source: 'Default for every capability' },
+      { id: 'confidence', name: 'Stakeholder confidence', target: 'Key stakeholders agree the proposed authority is appropriate', current: 'Agreed on restriction, Sep 24', status: 'pass', note: 'All four positions supported returning to Recommend.', source: 'Default for every capability' },
+    ],
+    requirements: [
+      { id: 'min-cases', text: 'Minimum 200 pilot cases', current: '96', met: false, gap: 'Fewer than half the cases needed before Draft can be considered again.', source: 'Default for High impact' },
+      { id: 'accuracy', text: 'Overall accuracy ≥ 92%', current: '99.0%', met: true, source: 'Default for High impact' },
+      { id: 'severe', text: 'High-severity error rate < 2%', current: '1.0%', met: true, source: 'Default for High impact' },
+      { id: 'override', text: 'Override rate < 20%', current: '0%', met: true, source: 'Default for every capability' },
+      { id: 'incidents', text: 'No unresolved critical incidents', current: 'Duplicate execution incident open; idempotency defect confirmed', met: false, gap: 'The $180 duplicate execution is unresolved until the idempotency check is redesigned and replayed.', source: 'Default for every capability' },
+      { id: 'high-value', text: 'Minimum 40 high-value cases', current: '96', met: true, source: 'Default for financial exposure' },
+      { id: 'replay', text: '100 clean executions in a replay environment after the idempotency redesign', current: '0', met: false, gap: 'Set in authority change AC-03 as the condition for returning to Draft.', source: 'Written by hand' },
+    ],
+    stakeholders: [
+      { team: 'Risk', person: 'daniel', stance: 'restrict', position: 'Restrict to Recommend', quote: 'The capability cannot stay at Draft while execution can duplicate. The judgment was fine; the mechanism was not.', date: '2026-09-24' },
+      { team: 'Engineering', person: 'jonas', stance: 'restrict', position: 'Restrict and redesign the idempotency check', quote: 'A retry executed the same refund twice. That is a defect in our code, and I would rather fix it than argue about it.', date: '2026-09-24' },
+      { team: 'Finance', person: 'elena', stance: 'restrict', position: 'Restrict until replayed', quote: 'One duplicate at $180 is small. The next one may not be.', date: '2026-09-24' },
+      { team: 'Support Operations', person: 'priya', stance: 'restrict', position: 'Restrict; agents execute above $50', quote: 'Agents can carry the volume above $50 for a while. Fix it properly.', date: '2026-09-24' },
+    ],
+    evidence: [
+      { id: 'EV-RX-01', source: 'Incident', metric: 'Duplicate execution', value: 'High severity, open', status: 'fail', risk: 'High', segment: 'All', date: '2026-09-24', detail: 'A retry executed a $180 refund twice for one order. The idempotency check did not hold. Authority was restricted to Recommend in AC-03; return to Draft requires a redesigned check and 100 clean replayed executions.', link: '#/decisions/AC-03' },
+      { id: 'EV-RX-02', source: 'Operational metrics', metric: 'Executions since Sep 1', value: '96, 1 duplicate', status: 'pass', risk: 'High', segment: 'All', date: '2026-09-24', detail: '95 correct executions. Amounts, orders and destinations matched the approved recommendations.', link: '#/capabilities/refund-execution-high-value?tab=criteria' },
+    ],
+  },
+  'account-closure': {
+    criteria: [
+      { id: 'quality', name: 'Quality', target: '≥ 99% correct closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'A wrong closure removes a customer. Even 99% would mean about one wrong closure a quarter at current volume.', source: 'Default for High impact, tightened' },
+      { id: 'severe-errors', name: 'Severe error rate', target: '0 wrong closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'Every wrong closure is severe. There is no acceptable rate.', source: 'Default for High impact, tightened' },
+      { id: 'reversibility', name: 'Reversibility', target: 'A closure can be undone within 30 days without data loss', current: 'Not possible today', status: 'fail', note: 'Closure is irreversible in the current system. This is the reason the capability stays at Level 0 by design.', source: 'Written by hand' },
+      { id: 'review-burden', name: 'Human review burden', target: '≤ 30% of cases need meaningful correction', current: 'Not applicable: a person handles every closure', status: 'pending', note: 'About 30 closures a month, all by hand.', source: 'Default for every capability' },
+      { id: 'cost', name: 'Cost', target: 'AI operating cost < $0.20 per case', current: 'Not applicable', status: 'pending', note: 'Volume is too low for cost to matter.', source: 'Default for every capability' },
+      { id: 'confidence', name: 'Stakeholder confidence', target: 'Key stakeholders agree the proposed authority is appropriate', current: 'Agreed: not delegated, Aug 12', status: 'pass', note: 'Three positions recorded, all for keeping closure with a person.', source: 'Default for every capability' },
+    ],
+    requirements: [
+      { id: 'min-cases', text: 'Minimum 200 pilot cases', current: '0', met: false, gap: 'There is no pilot and none is planned.', source: 'Default for High impact' },
+      { id: 'accuracy', text: 'Overall accuracy ≥ 99%', current: 'Not measured', met: false, source: 'Default for High impact, tightened' },
+      { id: 'severe', text: '0 wrong closures', current: 'Not measured', met: false, source: 'Default for High impact, tightened' },
+      { id: 'reversal', text: 'Every pilot action reviewed before it took effect', current: 'Not applicable', met: false, source: 'Default for difficult-to-reverse actions' },
+      { id: 'undo', text: 'A 30-day restore for closed accounts exists in production', current: 'Does not exist', met: false, gap: 'Until closure can be undone, no level above Observe will be considered. This is the condition that would reopen the decision.', source: 'Written by hand' },
+    ],
+    stakeholders: [
+      { team: 'Risk', person: 'daniel', stance: 'hold', position: 'Not delegated, by design', quote: 'Difficult to reverse and about thirty a month. There is nothing to gain from delegating this.', date: '2026-08-12' },
+      { team: 'Support Operations', person: 'priya', stance: 'hold', position: 'Keep closures with a person', quote: 'A person closing thirty accounts a month is not a bottleneck.', date: '2026-08-12' },
+      { team: 'Product', person: 'maya', stance: 'hold', position: 'Revisit only if closures become reversible', quote: 'If a 30-day restore ever ships, we can talk. Not before.', date: '2026-08-12' },
+    ],
+    evidence: [],
+  },
+};
+
 export const capabilityData = {
+  ...matureCapabilities,
   'refund-recommendation': {
     criteria: successCriteria,
     requirements: evidenceRequirements,

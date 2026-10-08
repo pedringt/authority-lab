@@ -25,6 +25,12 @@ const RR = 'refund-recommendation';
 const TC = 'ticket-classification';
 const cap = (s, id = RR) => getCapability(s, id);
 
+// A freshly added Low-impact capability with nothing else set up.
+function blankCap(name = 'Ticket tagging', summary = 'Adds routing tags.') {
+  const s = addCapability(initialState(), { name, summary, owner: 'priya', risk: { impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, startingLevel: 0 });
+  return [s, s.capabilities[s.capabilities.length - 1].id];
+}
+
 function runSuite(s, id = RR) {
   s = startTestRun(s, id);
   for (let i = 0; i < 100 && capData(s, id).testRun.status === 'running'; i++) s = advanceTestRun(s, id);
@@ -65,6 +71,7 @@ test('initial state: data is per capability', () => {
   assert.equal(capData(s, RR).monitoring, null);
   assert.equal(capData(s, TC).scenarios.length, 0);
   assert.equal(capData(s, TC).pilot, null);
+  assert.equal(capData(s, TC).evidence.length, 1, 'one measured item so its criteria read as locked');
   assert.equal(s.alerts.length, 0);
   assert.equal(focusCapability(s).id, RR);
 });
@@ -75,7 +82,9 @@ test('readiness is computed per capability', () => {
   assert.equal(r.met, 5);
   assert.equal(r.total, 6);
   assert.equal(r.unmet[0].id, 'high-value');
-  assert.deepEqual(readiness(s, TC), { met: 0, total: 0, unmet: [] });
+  assert.deepEqual([readiness(s, TC).met, readiness(s, TC).total], [5, 5], 'ticket classification has its own seeded requirements');
+  const [b, bid] = blankCap();
+  assert.deepEqual(readiness(b, bid), { met: 0, total: 0, unmet: [] });
   assert.deepEqual(readiness(s, 'no-such-capability'), { met: 0, total: 0, unmet: [] });
 });
 
@@ -97,7 +106,7 @@ test('test suite runs to completion for one capability and updates its evidence 
   assert.equal(s.activity[0].kind, 'test');
   assert.equal(s.activity[0].surfaced, true);
   assert.equal(s.activity[0].capabilityId, RR);
-  assert.equal(capData(s, TC).evidence.length, 0);
+  assert.equal(capData(s, TC).evidence.length, 1, 'other capabilities untouched');
   // A capability without scenarios cannot start a run.
   assert.equal(startTestRun(s, TC), s);
 });
@@ -209,8 +218,8 @@ test('a second capability gets its own decision and readiness, independent of th
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
   assert.equal(rec.capabilityId, TC);
   assert.equal(rec.authorizedBy, 'priya');
-  assert.deepEqual(rec.evidenceSnapshot, []);
-  assert.equal(readiness(s, TC).total, 0);
+  assert.deepEqual(rec.evidenceSnapshot, [], 'no pilot or scenarios, all requirements met');
+  assert.deepEqual([readiness(s, TC).met, readiness(s, TC).total], [5, 5]);
   assert.equal(readiness(s, RR).met, 5);
   // The workspace still focuses on the capability with the pending decision.
   assert.equal(focusCapability(s).id, RR);
@@ -333,14 +342,15 @@ test('amend covers criteria, requirements, risk and stakeholders, and rejects ba
 });
 
 test('afterEvidence is set from whether evidence existed, and decides whether the amendment is surfaced', () => {
-  let s = initialState();
+  let [s, bid] = blankCap();
   assert.equal(performanceResultsSeen(s, RR), true);
-  assert.equal(performanceResultsSeen(s, TC), false);
-  s = amend(s, TC, 'contract', { value: { ...current(s, TC, 'contract'), may: [] }, author: 'priya', reason: 'Tighten before any evidence.' });
-  assert.equal(currentVersion(s, TC, 'contract').afterEvidence, false);
+  assert.equal(performanceResultsSeen(s, TC), true, 'ticket classification has a measured item');
+  assert.equal(performanceResultsSeen(s, bid), false);
+  s = amend(s, bid, 'risk', { value: { ...current(s, bid, 'risk'), impact: 'Medium' }, author: 'priya', reason: 'Tighten before any evidence.' });
+  assert.equal(currentVersion(s, bid, 'risk').afterEvidence, false);
   assert.equal(s.activity[0].kind, 'amendment');
   assert.equal(s.activity[0].surfaced, false, 'an amendment before evidence is recorded but not surfaced');
-  assert.equal(s.activity[0].capabilityId, TC);
+  assert.equal(s.activity[0].capabilityId, bid);
   s = amend(s, RR, 'criteria', { value: current(s, RR, 'criteria'), author: 'maya', reason: 'Re-saved after the pilot.' });
   assert.equal(currentVersion(s, RR, 'criteria').afterEvidence, true);
   assert.equal(s.activity[0].surfaced, true, 'an amendment after evidence is surfaced');
@@ -378,26 +388,22 @@ test('amend is available through the store and persists', () => {
 // ---------------------------------------------------------------------------
 
 test('"after evidence" means performance results were seen, not opinions', () => {
-  let s = initialState();
-  // Ticket classification: no results yet.
-  assert.equal(performanceResultsSeen(s, TC), false);
+  let [s, id] = blankCap();
+  const item = (source, status) => ({ id: 'X', source, metric: 'm', value: 'v', status, risk: 'Low', segment: 'All', date: seed.TODAY, detail: '', link: '' });
+  const withEvidence = (st, items) => ({ ...st, capabilityData: { ...st.capabilityData, [id]: { ...capData(st, id), evidence: items } } });
+  assert.equal(performanceResultsSeen(s, id), false);
   // A stakeholder assessment alone does not count.
-  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), evidence: [{ id: 'X', source: 'Stakeholder assessment', metric: 'm', value: 'v', status: 'watch', risk: 'Low', segment: 'All', date: seed.TODAY, detail: '', link: '' }] } } };
-  assert.equal(performanceResultsSeen(s, TC), false);
+  assert.equal(performanceResultsSeen(withEvidence(s, [item('Stakeholder assessment', 'watch')]), id), false);
   // User feedback alone does not count either.
-  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), evidence: [{ id: 'X', source: 'User feedback', metric: 'm', value: 'v', status: 'pass', risk: 'Low', segment: 'All', date: seed.TODAY, detail: '', link: '' }] } } };
-  assert.equal(performanceResultsSeen(s, TC), false);
+  assert.equal(performanceResultsSeen(withEvidence(s, [item('User feedback', 'pass')]), id), false);
   // A measured item does.
-  s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), evidence: [{ id: 'X', source: 'Operational metrics', metric: 'm', value: 'v', status: 'pass', risk: 'Low', segment: 'All', date: seed.TODAY, detail: '', link: '' }] } } };
-  assert.equal(performanceResultsSeen(s, TC), true);
+  assert.equal(performanceResultsSeen(withEvidence(s, [item('Operational metrics', 'pass')]), id), true);
   // So does a recorded test run with no evidence items at all.
-  let t = initialState();
-  t = { ...t, capabilityData: { ...t.capabilityData, [TC]: { ...capData(t, TC), testRun: { status: 'not-run', lastRun: '2026-10-01', completed: [] } } } };
-  assert.equal(performanceResultsSeen(t, TC), true);
+  const ran = { ...s, capabilityData: { ...s.capabilityData, [id]: { ...capData(s, id), testRun: { status: 'not-run', lastRun: '2026-10-01', completed: [] } } } };
+  assert.equal(performanceResultsSeen(ran, id), true);
   // And a pilot.
-  let u = initialState();
-  u = { ...u, capabilityData: { ...u.capabilityData, [TC]: { ...capData(u, TC), pilot: { cases: 10, segments: [] } } } };
-  assert.equal(performanceResultsSeen(u, TC), true);
+  const piloted = { ...s, capabilityData: { ...s.capabilityData, [id]: { ...capData(s, id), pilot: { cases: 10, segments: [] } } } };
+  assert.equal(performanceResultsSeen(piloted, id), true);
 });
 
 test('default activity shows surfaced events; full history shows everything; filters apply to both', () => {
@@ -419,8 +425,8 @@ test('default activity shows surfaced events; full history shows everything; fil
 });
 
 test('amendments before evidence appear only in full history; after evidence they appear by default', () => {
-  let s = initialState();
-  s = amend(s, TC, 'risk', { value: { ...current(s, TC, 'risk'), impact: 'Medium' }, author: 'priya', reason: 'Reassessed.' });
+  let [s, bid] = blankCap();
+  s = amend(s, bid, 'risk', { value: { ...current(s, bid, 'risk'), impact: 'Medium' }, author: 'priya', reason: 'Reassessed.' });
   assert.equal(activityEvents(s).filter((e) => e.kind === 'amendment').length, 0);
   assert.equal(activityEvents(s, { full: true }).filter((e) => e.kind === 'amendment').length, 1);
   s = amend(s, RR, 'requirements', { value: current(s, RR, 'requirements'), author: 'maya', reason: 'Re-confirmed.' });
@@ -945,14 +951,18 @@ test('who must sign off follows the risk profile; the gate follows the lock and 
   assert.deepEqual(signoffRequirements(s, TC, 'maya'), { approvers: 1, riskRequired: false, ownerOnly: true }, 'Low impact: the owner');
   assert.deepEqual(signoffRequirements(s, TC, 'priya'), { approvers: 1, riskRequired: false, ownerOnly: false }, 'Low impact, owner proposed: one other named stakeholder');
   assert.deepEqual(namedStakeholders(s, RR).sort(), ['daniel', 'elena', 'maya', 'priya'].sort(), 'owner, listed stakeholders, Risk team');
-  assert.deepEqual(namedStakeholders(s, TC).sort(), Object.keys(seed.people).sort(), 'no stakeholders listed: any named person');
+  assert.deepEqual(namedStakeholders(s, TC).sort(), ['daniel', 'jonas', 'priya'], 'ticket classification: its listed people plus Risk');
+  const [nb, nbid] = blankCap();
+  assert.deepEqual(namedStakeholders(nb, nbid).sort(), Object.keys(seed.people).sort(), 'no stakeholders listed: any named person');
   assert.equal(isRiskStakeholder(s, RR, 'daniel'), true);
   assert.equal(isRiskStakeholder(s, RR, 'elena'), false);
   // A stakeholder entry labelled Risk does not make someone Risk.
   const relabel = amend(s, RR, 'stakeholders', { value: current(s, RR, 'stakeholders').map((x) => (x.person === 'elena' ? { ...x, team: 'Risk' } : x)), author: 'maya', reason: 'Relabel for the test.' });
   assert.equal(isRiskStakeholder(relabel, RR, 'elena'), false);
   assert.equal(needsSignoff(s, RR, 'criteria'), true, 'refund criteria are locked');
-  assert.equal(needsSignoff(s, TC, 'criteria'), false, 'ticket classification has no criteria, so nothing is locked');
+  assert.equal(needsSignoff(s, TC, 'criteria'), true, 'ticket classification has seeded criteria and a measured item');
+  const [b, bid] = blankCap();
+  assert.equal(needsSignoff(b, bid, 'criteria'), false, 'a new capability has nothing locked');
   assert.equal(pilotStarted(s, RR), true);
   assert.equal(pilotStarted(s, 'account-closure'), false);
   assert.equal(needsSignoff(s, RR, 'contract'), true);
@@ -1025,8 +1035,8 @@ test('the proposer cannot approve; the owner alone is not enough for High impact
 });
 
 test('low impact: the owner alone approves; a rejection is recorded with its reason and leaves versions untouched', () => {
-  // Give ticket classification criteria and lock them with a run of borrowed scenarios.
-  let s = initialState();
+  // A new Low-impact capability, with criteria locked by a run of borrowed scenarios.
+  let [s, TC] = blankCap();
   s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), scenarios: seed.scenarios.slice(0, 2) } } };
   const d = defaultsFor(s, TC);
   s = saveCriteria(s, TC, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
@@ -1125,7 +1135,7 @@ test('sign-off rule, the four requested cases', () => {
   assert.equal(getProposal(t, RR, 'P-1').status, 'approved');
   assert.deepEqual(getProposal(t, RR, 'P-1').approvals.map((a) => a.role), ['risk', 'owner']);
   // 3. Owner proposes on Low: one other named stakeholder approves.
-  let u = initialState();
+  let [u, TC] = blankCap();
   u = { ...u, capabilityData: { ...u.capabilityData, [TC]: { ...capData(u, TC), scenarios: seed.scenarios.slice(0, 2) } } };
   const d = defaultsFor(u, TC);
   u = saveCriteria(u, TC, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
@@ -1138,7 +1148,7 @@ test('sign-off rule, the four requested cases', () => {
   assert.equal(getProposal(u, TC, 'P-1').status, 'approved');
   assert.deepEqual(getProposal(u, TC, 'P-1').approvals.map((a) => [a.by, a.role]), [['elena', 'stakeholder']]);
   // 4. The proposer cannot approve in any case (non-owner on Low either).
-  let v = initialState();
+  let v = blankCap()[0];
   v = { ...v, capabilityData: { ...v.capabilityData, [TC]: { ...capData(v, TC), scenarios: seed.scenarios.slice(0, 2) } } };
   v = saveCriteria(v, TC, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
   v = runSuite(v, TC);
@@ -1331,8 +1341,8 @@ test('loophole: relabelling a stakeholder as Risk after proposing cannot satisfy
 });
 
 test('eligible approvers are frozen when a proposal opens', () => {
-  // Ticket classification (Low impact) with criteria locked: owner-proposed, so one other named stakeholder approves.
-  let s = initialState();
+  // A new Low-impact capability with criteria locked: owner-proposed, so one other named stakeholder approves.
+  let [s, TC] = blankCap();
   s = { ...s, capabilityData: { ...s.capabilityData, [TC]: { ...capData(s, TC), scenarios: seed.scenarios.slice(0, 2) } } };
   s = saveStakeholders(s, TC, { stakeholders: [{ team: 'Support Operations', person: 'priya' }, { team: 'Product', person: 'maya' }], by: 'priya' });
   const d = defaultsFor(s, TC);
@@ -1384,4 +1394,49 @@ test('after performance results, membership and team changes to stakeholders go 
   t = saveStakeholders(t, id, { stakeholders: [{ team: 'Support Operations', person: 'priya' }, { team: 'Risk', person: 'daniel' }], by: 'priya' });
   assert.equal(versionsInForce(t, id).stakeholders, 2);
   assert.equal(capData(t, id).proposals.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Seed setup data for mature capabilities (#14)
+// ---------------------------------------------------------------------------
+
+test('mature capabilities carry criteria, requirements and stakeholders in the editor shape; the refund demo is unchanged', () => {
+  const s = initialState();
+  for (const id of ['ticket-classification', 'response-drafting', 'refund-execution-high-value', 'account-closure']) {
+    const c = current(s, id, 'criteria');
+    const r = current(s, id, 'requirements');
+    const st = current(s, id, 'stakeholders');
+    assert.ok(c.length >= 5, `${id} criteria`);
+    assert.ok(r.length >= 5, `${id} requirements`);
+    assert.ok(st.length >= 3, `${id} stakeholders`);
+    for (const x of c) assert.ok(x.id && x.name && x.target && x.current && x.status && x.source, `${id} criterion ${x.id} shape`);
+    for (const x of r) assert.ok(x.id && x.text && x.current && typeof x.met === 'boolean' && x.source, `${id} requirement ${x.id} shape`);
+    for (const x of st) assert.ok(x.team && seed.people[x.person] && x.stance && x.position && x.date, `${id} stakeholder shape`);
+    assert.ok(CORE_CRITERIA.every((k) => c.some((x) => x.id === k)), `${id} has the core criteria`);
+    assert.ok(CORE_REQUIREMENTS.every((k) => r.some((x) => x.id === k)), `${id} has the core requirement`);
+    assert.equal(criteriaSaved(s, id), true);
+    assert.equal(versionsInForce(s, id).criteria, 1);
+  }
+  // Results have been seen for the three with evidence, so their criteria read as locked; account closure has no results.
+  assert.equal(criteriaLocked(s, 'ticket-classification'), true);
+  assert.equal(criteriaLocked(s, 'response-drafting'), true);
+  assert.equal(criteriaLocked(s, 'refund-execution-high-value'), true);
+  assert.equal(criteriaLocked(s, 'account-closure'), false);
+  // Readiness reflects each capability's story.
+  assert.deepEqual([readiness(s, 'ticket-classification').met, readiness(s, 'ticket-classification').total], [5, 5]);
+  assert.deepEqual([readiness(s, 'response-drafting').met, readiness(s, 'response-drafting').total], [4, 5]);
+  assert.deepEqual([readiness(s, 'refund-execution-high-value').met, readiness(s, 'refund-execution-high-value').total], [4, 7]);
+  assert.equal(readiness(s, 'account-closure').met, 0);
+  // Account closure's criteria say why it stays at Level 0.
+  const ac = current(s, 'account-closure', 'criteria');
+  assert.ok(ac.some((x) => /Level 0 by design/.test(x.note)));
+  assert.ok(current(s, 'account-closure', 'requirements').some((x) => /no level above Observe/.test(x.gap || '')));
+  // The refund demo is unchanged.
+  assert.equal(current(s, RR, 'criteria').length, 7);
+  assert.equal(readiness(s, RR).met, 5);
+  assert.equal(capData(s, RR).evidence.length, 12);
+  assert.equal(current(s, RR, 'stakeholders').length, 4);
+  assert.equal(focusCapability(s).id, RR);
+  // Risk eligibility still comes from people, not from these lists.
+  assert.equal(isRiskStakeholder(s, 'ticket-classification', 'jonas'), false);
 });
