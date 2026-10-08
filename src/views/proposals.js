@@ -103,7 +103,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
     : p.kind === 'stakeholders'
       ? versionList(state, capabilityId, 'stakeholders').find((v) => v.version === p.base.stakeholders)?.value
       : { criteria: versionList(state, capabilityId, 'criteria').find((v) => v.version === p.base.criteria)?.value, requirements: versionList(state, capabilityId, 'requirements').find((v) => v.version === p.base.requirements)?.value };
-  const stakeholderKey = (list) => (list || []).map((st) => ({ id: st.person, person: seed.people[st.person] ? seed.people[st.person].name : st.person, team: st.team, position: st.position }));
+  const stakeholderKey = (list) => (list || []).map((st) => ({ id: st.person, person: person(st.person).name, team: st.team, position: st.position }));
   const diff = p.kind === 'contract'
     ? diffTable(before, p.value)
     : p.kind === 'stakeholders'
@@ -120,7 +120,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
   ${error ? notice('fail', 'Could not record that', error) : ''}
   <div class="card">${kv([
     ['Reason', p.reason],
-    ['Sign-off needed', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approver${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk: approved') : badge('neutral', 'Risk: pending')}</span>` : ''} <span class="muted small">${requirementLabel(req)}; the proposer never approves. Risk means the person's own team.</span>`],
+    ['Sign-off needed', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approver${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk: approved') : badge('neutral', 'Risk: pending')}</span>` : ''} <span class="muted small">${requirementLabel(req)}; the proposer never approves. Risk means the recorded Risk approver right.</span>`],
     ['Eligible approvers', html`<span class="muted small">Frozen when the proposal opened: ${(p.eligible || []).map((k) => person(k).name).join(', ') || 'none'}.</span>`],
     ['Approvals so far', p.approvals.length ? html`<ul class="plain-list">${p.approvals.map((a) => html`<li>${person(a.by).name} as ${roleLabel(a.role)}, ${fmtDate(a.date)}</li>`)}</ul>` : html`<span class="muted">None yet</span>`],
     ...(p.rejection ? [['Rejected', html`${person(p.rejection.by).name}, ${fmtDate(p.rejection.date)}: ${p.rejection.reason}`]] : []),

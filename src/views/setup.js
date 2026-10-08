@@ -1,13 +1,13 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, selectField, person, section, kv } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId } from '../store.js';
+import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId, activePeople } from '../store.js';
 
 // Add a capability: define it, give it a risk profile, choose its starting
 // authority. One page, three sections, one submit. Nothing starts above Level 1.
 export function addCapabilityView(state, query) {
   const error = query.get('error');
   const acting = person(actor(state));
-  const owners = Object.entries(seed.people).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
+  const owners = Object.entries(activePeople(state)).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
   return html`<div class="page-head">
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${seed.workflow.name}</p>

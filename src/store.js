@@ -8,7 +8,7 @@ import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-t
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
 import { starterScenarios } from './data/scenario-templates.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v10';
+export const STORAGE_KEY = 'authority-lab-state-v12';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -86,8 +86,14 @@ export function initialState() {
   // decision, last decision and last-evaluated date are derived by selectors.
   const capabilities = seed.capabilities.map(({ contract, risk, proposed, decisionRequired, lastEvaluated, lastDecisionId, ...rest }) => clone(rest));
   return {
-    version: 10,
+    version: 12,
     today: seed.TODAY,
+    // The people roster, versioned (#22). Version 1 is the seed. People are
+    // never deleted; they are deactivated.
+    roster: { versions: [{ version: 1, date: seed.TODAY, author: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },
+    // Governed roster changes (#23): rights grants and removals, and the
+    // deactivation of anyone holding a right. Never removed.
+    rosterProposals: [],
     // Who is acting in the UI. null means "the owner of the capability in
     // context"; a person key overrides it (the "acting as" picker).
     actingAs: null,
@@ -160,7 +166,7 @@ export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'mile
 
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
-  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', 'scenarios-saved': 'Scenarios saved', proposal: 'Proposal',
+  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', 'scenarios-saved': 'Scenarios saved', proposal: 'Proposal', roster: 'Roster',
   decision: 'Decision', test: 'Test run', amendment: 'Amendment',
 };
 
@@ -192,6 +198,265 @@ export function amendmentsAfterEvidenceFor(state, record) {
 export function isSurfaced(event) {
   if (event.kind === 'amendment') return Boolean(event.afterEvidence);
   return SURFACED_KINDS.has(event.kind);
+}
+
+// ---------------------------------------------------------------------------
+// People roster (#22)
+// ---------------------------------------------------------------------------
+
+export function people(state) {
+  const v = state.roster && state.roster.versions;
+  return v && v.length ? v[v.length - 1].value : seed.people;
+}
+
+export function personRecord(state, key) {
+  return people(state)[key] || null;
+}
+
+export function activePeople(state) {
+  return Object.fromEntries(Object.entries(people(state)).filter(([, p]) => p.active !== false));
+}
+
+export function isActivePerson(state, key) {
+  const p = personRecord(state, key);
+  return Boolean(p && p.active !== false);
+}
+
+export function isWorkspaceAdmin(state, key) {
+  const p = personRecord(state, key);
+  return Boolean(p && p.active !== false && p.rights && p.rights.workspaceAdmin);
+}
+
+export function isRiskApprover(state, key) {
+  const p = personRecord(state, key);
+  return Boolean(p && p.active !== false && p.rights && p.rights.riskApprover);
+}
+
+export function rosterVersions(state) {
+  return (state.roster && state.roster.versions) || [];
+}
+
+function requireActive(state, key, what = 'act') {
+  if (!key || !personRecord(state, key)) throw new Error(`A named person must ${what}.`);
+  if (!isActivePerson(state, key)) throw new Error(`${personRecord(state, key).name} is deactivated and cannot ${what}.`);
+}
+
+function requireAdmin(state, key) {
+  requireActive(state, key, 'change the roster');
+  if (!isWorkspaceAdmin(state, key)) throw new Error(`${personRecord(state, key).name} is not a workspace admin. Only a workspace admin changes the roster.`);
+}
+
+function writeRoster(state, value, { author, reason, title, body, surfaced = false, meta = null }) {
+  const prev = rosterVersions(state);
+  const last = prev[prev.length - 1];
+  const next = { version: (last ? last.version : 0) + 1, date: state.today, author, reason, afterEvidence: false, before: last ? clone(last.value) : null, value: clone(value), ...(meta ? clone(meta) : {}) };
+  const s = { ...state, roster: { ...state.roster, versions: [...prev, next] } };
+  return logEvent(s, { kind: 'roster', surfaced, title, body, capabilityId: null, link: '#/people' });
+}
+
+const personKey = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+export function addPerson(state, { name, title, team, by, reason } = {}) {
+  requireAdmin(state, by);
+  const n = (name || '').trim(); const t = (title || '').trim(); const tm = (team || '').trim();
+  if (!n || !t || !tm) throw new Error('A person needs a name, a title and a team.');
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  let key = personKey(n) || 'person';
+  const roster = people(state);
+  if (roster[key]) { let i = 2; while (roster[`${key}-${i}`]) i += 1; key = `${key}-${i}`; }
+  const value = { ...roster, [key]: { name: n, role: t, team: tm, active: true, rights: { riskApprover: false, workspaceAdmin: false } } };
+  return writeRoster(state, value, { author: by, reason: why, title: `Person added: ${n}`, body: `${roster[by].name} added ${n} (${t}, ${tm}). ${why}`, meta: { change: { kind: 'add', key } } });
+}
+
+export function editPerson(state, key, { name, title, team, by, reason } = {}) {
+  requireAdmin(state, by);
+  const roster = people(state);
+  const p = roster[key];
+  if (!p) throw new Error(`Unknown person: ${key}`);
+  const next = { ...p, name: (name || p.name).trim(), role: (title || p.role).trim(), team: (team || p.team).trim() };
+  if (!next.name || !next.role || !next.team) throw new Error('A person needs a name, a title and a team.');
+  if (next.name === p.name && next.role === p.role && next.team === p.team) throw new Error('Nothing changed.');
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  return writeRoster(state, { ...roster, [key]: next }, { author: by, reason: why, title: `Person updated: ${next.name}`, body: `${roster[by].name} updated ${p.name}${next.name !== p.name ? ` (now ${next.name})` : ''}: ${[next.role !== p.role ? `title ${p.role} → ${next.role}` : null, next.team !== p.team ? `team ${p.team} → ${next.team}` : null].filter(Boolean).join(', ') || 'name'}. ${why}`, meta: { change: { kind: 'edit', key } } });
+}
+
+// People are never deleted: records reference them. Deactivation keeps the
+// record and removes the person from everything that needs a live person.
+export function deactivatePerson(state, key, { by, reason } = {}) {
+  requireAdmin(state, by);
+  const roster = people(state);
+  const p = roster[key];
+  if (!p) throw new Error(`Unknown person: ${key}`);
+  if (p.active === false) throw new Error(`${p.name} is already deactivated.`);
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  // Anyone holding a right is deactivated through a proposal with a different
+  // admin's sign-off (#23).
+  if (p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover)) {
+    return proposeRosterChange(state, { kind: 'deactivate', person: key, by, reason: why });
+  }
+  return applyDeactivation(state, key, { by, reason: why });
+}
+
+function applyDeactivation(state, key, { by, reason, meta = null } = {}) {
+  const roster = people(state);
+  const p = roster[key];
+  if (!p || p.active === false) throw new Error(`${p ? p.name : key} is not an active person.`);
+  const adminsLeft = Object.entries(roster).filter(([k, x]) => k !== key && x.active !== false && x.rights && x.rights.workspaceAdmin).length;
+  if (p.rights && p.rights.workspaceAdmin && adminsLeft === 0) throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+  const why = reason;
+  const value = { ...roster, [key]: { ...p, active: false } };
+  let s = writeRoster(state, value, { author: by, reason: why, title: `Person deactivated: ${p.name}`, body: `${roster[by].name} deactivated ${p.name}. ${why}`, surfaced: true, meta: { change: { kind: 'deactivate', key }, ...(meta || {}) } });
+  if (s.actingAs === key) s = { ...s, actingAs: null };
+  return s;
+}
+
+// ---------------------------------------------------------------------------
+// Governed roster changes (#23)
+// ---------------------------------------------------------------------------
+
+export const RIGHTS = [['riskApprover', 'Risk approver'], ['workspaceAdmin', 'Workspace admin']];
+export const RIGHT_LABELS = Object.fromEntries(RIGHTS);
+
+export function activeAdmins(state) {
+  return Object.keys(activePeople(state)).filter((k) => isWorkspaceAdmin(state, k));
+}
+
+export function openRosterProposal(state, personKey = null) {
+  return state.rosterProposals.find((p) => p.status === 'open' && (!personKey || p.person === personKey)) || null;
+}
+
+export function getRosterProposal(state, id) {
+  return state.rosterProposals.find((p) => p.id === id) || null;
+}
+
+function describeRosterChange(state, pr) {
+  const name = people(state)[pr.person] ? people(state)[pr.person].name : pr.person;
+  if (pr.kind === 'deactivate') return `Deactivate ${name}`;
+  return `${pr.grant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[pr.right]}: ${name}`;
+}
+
+// A rights grant or removal, or the deactivation of a rights holder: proposed
+// by an active workspace admin, approved by a different one. Nobody grants a
+// right to themselves. The last workspace admin cannot be removed or deactivated.
+export function proposeRosterChange(state, { kind, person, right, grant, by, reason } = {}) {
+  requireAdmin(state, by);
+  const roster = people(state);
+  const target = roster[person];
+  if (!target) throw new Error(`Unknown person: ${person}`);
+  if (target.active === false) throw new Error(`${target.name} is deactivated.`);
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  if (!['rights', 'deactivate'].includes(kind)) throw new Error(`Unknown roster change: ${kind}`);
+  if (kind === 'rights') {
+    if (!RIGHT_LABELS[right]) throw new Error(`Unknown right: ${right}`);
+    const has = Boolean(target.rights && target.rights[right]);
+    if (grant && person === by) throw new Error('Nobody grants a right to themselves. Ask another workspace admin to propose it.');
+    if (grant && has) throw new Error(`${target.name} already holds the ${RIGHT_LABELS[right]} right.`);
+    if (!grant && !has) throw new Error(`${target.name} does not hold the ${RIGHT_LABELS[right]} right.`);
+    if (!grant && right === 'workspaceAdmin' && activeAdmins(state).filter((k) => k !== person).length === 0) throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+  }
+  if (kind === 'deactivate' && target.rights && target.rights.workspaceAdmin && activeAdmins(state).filter((k) => k !== person).length === 0) {
+    throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+  }
+  if (openRosterProposal(state, person)) throw new Error(`A change for ${target.name} is already awaiting sign-off.`);
+  // Who can approve: a different workspace admin. For a grant, never the
+  // person receiving the right. A Risk approver grant can also be approved by
+  // an existing Risk approver, so a grant to an admin still has an approver.
+  const isGrant = kind === 'rights' && Boolean(grant);
+  let eligible = activeAdmins(state).filter((k) => k !== by);
+  if (isGrant && right === 'riskApprover') eligible = [...new Set([...eligible, ...Object.keys(activePeople(state)).filter((k) => isRiskApprover(state, k) && k !== by)])];
+  if (isGrant) eligible = eligible.filter((k) => k !== person);
+  if (!eligible.length) throw new Error(isGrant && right === 'riskApprover' ? 'No other workspace admin or Risk approver can sign this off.' : 'No other workspace admin can sign this off. Grant the Workspace admin right to someone else first.');
+  const pr = {
+    id: `RP-${state.rosterProposals.length + 1}`,
+    kind,
+    person,
+    right: kind === 'rights' ? right : null,
+    grant: kind === 'rights' ? Boolean(grant) : null,
+    proposedBy: by,
+    date: state.today,
+    reason: why,
+    eligible,
+    approvals: [],
+    status: 'open',
+    rejection: null,
+    withdrawal: null,
+    appliedVersion: null,
+  };
+  const s = { ...state, rosterProposals: [...state.rosterProposals, pr] };
+  return logEvent(s, {
+    kind: 'roster',
+    surfaced: true,
+    title: `Roster change proposed: ${describeRosterChange(s, pr)}`,
+    body: `${roster[by].name} proposed ${describeRosterChange(s, pr).toLowerCase()}. Needs a different workspace admin to approve. ${why}`,
+    capabilityId: null,
+    link: `#/people?proposal=${pr.id}`,
+  });
+}
+
+export function rosterApprovalEligibility(state, pr, personKey) {
+  if (!pr || pr.status !== 'open') return { ok: false, reason: 'This change is closed.' };
+  const p = people(state)[personKey];
+  if (!p) return { ok: false, reason: 'Choose who is acting.' };
+  const isGrant = pr.kind === 'rights' && pr.grant;
+  const riskGrant = isGrant && pr.right === 'riskApprover';
+  if (personKey === pr.proposedBy) return { ok: false, reason: `${p.name} proposed this; someone else must approve it.` };
+  if (isGrant && personKey === pr.person) return { ok: false, reason: `${p.name} is receiving this right and cannot approve their own grant.` };
+  if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and cannot approve.` };
+  const admin = isWorkspaceAdmin(state, personKey);
+  const risk = riskGrant && isRiskApprover(state, personKey);
+  if (!admin && !risk) return { ok: false, reason: riskGrant ? `${p.name} is neither a workspace admin nor a Risk approver.` : `${p.name} is not an active workspace admin.` };
+  if (!pr.eligible.includes(personKey)) return { ok: false, reason: `${p.name} was not an eligible approver when this change was proposed.` };
+  return { ok: true, reason: null };
+}
+
+export function approveRosterChange(state, proposalId, { by } = {}) {
+  const pr = getRosterProposal(state, proposalId);
+  if (!pr) throw new Error(`Unknown roster change: ${proposalId}`);
+  const e = rosterApprovalEligibility(state, pr, by);
+  if (!e.ok) throw new Error(e.reason);
+  const roster = people(state);
+  const target = roster[pr.person];
+  const approvals = [{ by, date: state.today }];
+  let s = state;
+  const meta = { proposalId, proposedBy: pr.proposedBy, approvals };
+  if (pr.kind === 'deactivate') {
+    s = applyDeactivation(s, pr.person, { by: pr.proposedBy, reason: pr.reason, meta });
+  } else {
+    if (!pr.grant && pr.right === 'workspaceAdmin' && activeAdmins(s).filter((k) => k !== pr.person).length === 0) throw new Error('This would leave no workspace admin.');
+    const value = { ...roster, [pr.person]: { ...target, rights: { ...target.rights, [pr.right]: pr.grant } } };
+    s = writeRoster(s, value, { author: pr.proposedBy, reason: pr.reason, surfaced: true, title: `${pr.grant ? 'Right granted' : 'Right removed'}: ${RIGHT_LABELS[pr.right]}, ${target.name}`, body: `Proposed by ${roster[pr.proposedBy].name}, approved by ${roster[by].name}${isWorkspaceAdmin(state, by) ? '' : ' (as a Risk approver)'}. ${pr.reason}`, meta: { change: { kind: pr.grant ? 'grant' : 'remove', key: pr.person, right: pr.right }, ...meta } });
+    if (!pr.grant && pr.right === 'workspaceAdmin' && s.actingAs === pr.person) s = s; // acting stays; they just lost the admin controls
+  }
+  const applied = rosterVersions(s).length;
+  s = { ...s, rosterProposals: s.rosterProposals.map((x) => (x.id === proposalId ? { ...x, approvals, status: 'approved', appliedVersion: applied, closedAt: state.today } : x)) };
+  return s;
+}
+
+export function rejectRosterChange(state, proposalId, { by, reason } = {}) {
+  const pr = getRosterProposal(state, proposalId);
+  if (!pr) throw new Error(`Unknown roster change: ${proposalId}`);
+  const e = rosterApprovalEligibility(state, pr, by);
+  if (!e.ok) throw new Error(e.reason);
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A rejection needs a reason.');
+  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today } : x)) };
+  return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change rejected: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} rejected the change proposed by ${people(s)[pr.proposedBy].name}. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
+}
+
+export function withdrawRosterChange(state, proposalId, { by, reason } = {}) {
+  const pr = getRosterProposal(state, proposalId);
+  if (!pr) throw new Error(`Unknown roster change: ${proposalId}`);
+  if (pr.status !== 'open') throw new Error('This change is closed.');
+  if (by !== pr.proposedBy) throw new Error('Only the proposer withdraws; others reject.');
+  requireActive(state, by, 'withdraw a roster change');
+  const why = (reason || '').trim();
+  if (why.length < 5) throw new Error('A withdrawal needs a reason.');
+  const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'withdrawn', withdrawal: { by, date: state.today, reason: why }, closedAt: state.today } : x)) };
+  return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change withdrawn: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} withdrew their proposal. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
 }
 
 // Derived capability fields (#4 follow-up). Nothing stores these; they are
@@ -229,15 +494,17 @@ export function lastEvaluated(state, capabilityId) {
 // else the focus capability's owner. Used as the author of records and
 // amendments.
 export function actor(state, capabilityId) {
-  if (state.actingAs && seed.people[state.actingAs]) return state.actingAs;
+  if (state.actingAs && isActivePerson(state, state.actingAs)) return state.actingAs;
   const cap = capabilityId ? getCapability(state, capabilityId) : null;
-  if (cap) return cap.owner;
+  if (cap && isActivePerson(state, cap.owner)) return cap.owner;
   const focus = focusCapability(state);
-  return focus ? focus.owner : Object.keys(seed.people)[0];
+  if (focus && isActivePerson(state, focus.owner)) return focus.owner;
+  return Object.keys(activePeople(state))[0];
 }
 
 export function setActingAs(state, personKey) {
-  if (personKey && !seed.people[personKey]) throw new Error(`Unknown person: ${personKey}`);
+  if (personKey && !people(state)[personKey]) throw new Error(`Unknown person: ${personKey}`);
+  if (personKey && !isActivePerson(state, personKey)) throw new Error(`${people(state)[personKey].name} is deactivated and cannot act.`);
   return { ...state, actingAs: personKey || null };
 }
 
@@ -273,7 +540,8 @@ export const RISK_OPTIONS = {
 export function addCapability(state, { name, summary, owner, risk, startingLevel, notDelegated = false, rationale = '', by } = {}) {
   const cleanName = (name || '').trim();
   if (!cleanName) throw new Error('A capability needs a name.');
-  if (!owner || !seed.people[owner]) throw new Error('Choose an owner.');
+  if (!owner || !people(state)[owner]) throw new Error('Choose an owner.');
+  if (!isActivePerson(state, owner)) throw new Error(`${people(state)[owner].name} is deactivated and cannot own a capability.`);
   const r = risk || {};
   for (const k of ['impact', 'reversibility', 'exposure']) {
     if (!RISK_OPTIONS[k].includes(r[k])) throw new Error(`Choose a risk ${k}.`);
@@ -282,7 +550,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
   if (!notDelegated && ![0, 1].includes(level)) throw new Error('Starting authority must be Level 0 or Level 1.');
   const reason = (rationale || '').trim();
   if (notDelegated && reason.length < 20) throw new Error('"Not delegated, by design" needs a written rationale.');
-  const author = by && seed.people[by] ? by : owner;
+  const author = by && people(state)[by] ? by : owner;
 
   let id = slugify(cleanName);
   if (getCapability(state, id)) {
@@ -306,7 +574,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
 
   const number = state.decisionRecords.length + 1;
   const recordId = `AC-${String(number).padStart(2, '0')}`;
-  const who = seed.people[author];
+  const who = people(state)[author];
   const record = {
     id: recordId,
     number,
@@ -343,7 +611,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
   s = logEvent(s, {
     kind: 'authority',
     title: notDelegated ? 'Capability added, not delegated by design' : `Capability added at ${authorityLabel(cap.authority)}`,
-    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${seed.people[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
+    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${people(state)[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
     capabilityId: id,
     link: `#/decisions/${recordId}`,
   });
@@ -520,7 +788,8 @@ export function amend(state, capabilityId, kind, { value, author, reason, meta =
   if (!VERSIONED_KINDS.includes(kind)) throw new Error(`Unknown versioned object: ${kind}`);
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (!author || !seed.people[author]) throw new Error('An amendment needs an author.');
+  if (!author || !people(state)[author]) throw new Error('An amendment needs an author.');
+  if (!isActivePerson(state, author)) throw new Error(`${people(state)[author].name} is deactivated and cannot author an amendment.`);
   if (!reason || !reason.trim()) throw new Error('An amendment needs a reason.');
   const d = capData(state, capabilityId);
   const prev = currentVersion(state, capabilityId, kind);
@@ -539,7 +808,7 @@ export function amend(state, capabilityId, kind, { value, author, reason, meta =
   // The version list is the only copy; the latest version is the current value.
   const s = updateCap(state, capabilityId, { versions });
   if (silent) return s;
-  const who = seed.people[author];
+  const who = people(state)[author];
   return logEvent(s, {
     kind: 'amendment',
     afterEvidence,
@@ -672,6 +941,7 @@ function openConditionText(option, state, capabilityId) {
 export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const check = canAuthorize(state, capabilityId);
   if (!check.ok) throw new Error(check.reason);
+  requireActive(state, by, 'authorize an authority change');
   const cap = getCapability(state, capabilityId);
   const d = capData(state, capabilityId);
   const option = d.decision.option;
@@ -712,7 +982,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
       : c
   );
 
-  const who = seed.people[by];
+  const who = people(state)[by];
   const verb = {
     'expand': 'expanded', 'expand-limits': 'expanded', 'hold': 'held', 'restrict': 'restricted', 'suspend': 'suspended', 'redesign': 'returned to redesign',
   }[option];
@@ -885,6 +1155,13 @@ export function createStore({ storage = null } = {}) {
 
 const ACTIONS = {
   amend,
+  addPerson,
+  editPerson,
+  deactivatePerson,
+  proposeRosterChange,
+  approveRosterChange,
+  rejectRosterChange,
+  withdrawRosterChange,
   saveCriteria,
   saveStakeholders,
   saveScenarios,
@@ -919,7 +1196,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 10) return null;
+    if (!parsed || parsed.version !== 12) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -976,7 +1253,7 @@ export function startContractDraft(state, capabilityId, { by } = {}) {
     templateName: template.name,
     template: template.sections,
     startedAt: state.today,
-    startedBy: by && seed.people[by] ? by : cap.owner,
+    startedBy: by && people(state)[by] ? by : cap.owner,
     lines,
     nextId: n + 1,
     confirmed: Object.fromEntries(SECTION_KEYS.map((k) => [k, false])),
@@ -1144,7 +1421,7 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
   const draft = d.contractDraft;
   if (!draft) throw new Error('No contract draft to finalize.');
   if (draft.finalizedAt) throw new Error('This contract is already finalized.');
-  if (!by || !seed.people[by]) throw new Error('A named person finalizes the contract.');
+  requireActive(state, by, 'finalize the contract');
   const check = canFinalizeContract(state, capabilityId);
   if (!check.ok) throw new Error(`Cannot finalize: ${check.blocks.map((b) => b.text).join(' ')}`);
   const value = draftValue(draft);
@@ -1177,7 +1454,7 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
   s = logEvent(s, {
     kind: 'contract-finalized',
     title: 'Contract finalized',
-    body: `${cap.name} contract v1 finalized by ${seed.people[by].name}. ${version.reason}`,
+    body: `${cap.name} contract v1 finalized by ${people(state)[by].name}. ${version.reason}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}?tab=contract`,
   });
@@ -1279,7 +1556,7 @@ export function defaultDeviations(defaults, submitted, textOf) {
 export function saveCriteria(state, capabilityId, { criteria, requirements, by, reason } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (!by || !seed.people[by]) throw new Error('A named person saves the criteria.');
+  requireActive(state, by, 'save the criteria');
   if (criteriaLocked(state, capabilityId)) throw new Error('Criteria are locked: performance results have been seen. Propose an amendment instead.');
   const c = cleanCriteria(criteria);
   const r = cleanRequirements(requirements);
@@ -1303,7 +1580,7 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   return logEvent(s, {
     kind: 'criteria-saved',
     title: first ? 'Success criteria and evidence requirements saved' : 'Success criteria and evidence requirements updated',
-    body: `${cap.name}: ${c.length} criteria and ${r.length} evidence requirements saved by ${seed.people[by].name} (criteria v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}).${deviations.length ? ` ${deviations.length} risk-derived default${deviations.length === 1 ? '' : 's'} ${deviations.length === 1 ? 'was' : 'were'} loosened or removed: ${text}` : ''} They lock on the first test run.`,
+    body: `${cap.name}: ${c.length} criteria and ${r.length} evidence requirements saved by ${people(state)[by].name} (criteria v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}).${deviations.length ? ` ${deviations.length} risk-derived default${deviations.length === 1 ? '' : 's'} ${deviations.length === 1 ? 'was' : 'were'} loosened or removed: ${text}` : ''} They lock on the first test run.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}?tab=criteria`,
   });
@@ -1364,20 +1641,19 @@ export function requirementLabel(req) {
 // named person.
 export function namedStakeholders(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
-  const listed = current(state, capabilityId, 'stakeholders').map((st) => st.person).filter((k) => seed.people[k]);
-  if (!listed.length) return Object.keys(seed.people);
-  return [...new Set([...(cap ? [cap.owner] : []), ...listed])];
+  const listed = current(state, capabilityId, 'stakeholders').map((st) => st.person).filter((k) => isActivePerson(state, k));
+  if (!listed.length) return Object.keys(activePeople(state));
+  return [...new Set([...(cap && isActivePerson(state, cap.owner) ? [cap.owner] : []), ...listed])];
 }
 
-// Risk eligibility comes only from the person's own team in `people`, never
-// from how a capability's stakeholder list labels them.
+// Risk eligibility is the recorded Risk approver right on an active person.
+// Never a team name, never a stakeholder label.
 export function isRiskStakeholder(state, capabilityId, personKey) {
-  const p = seed.people[personKey];
-  return Boolean(p && p.team === 'Risk');
+  return isRiskApprover(state, personKey);
 }
 
 export function riskStakeholders(state, capabilityId) {
-  return Object.keys(seed.people).filter((k) => isRiskStakeholder(state, capabilityId, k));
+  return Object.keys(activePeople(state)).filter((k) => isRiskStakeholder(state, capabilityId, k));
 }
 
 export function openProposal(state, capabilityId, kind) {
@@ -1446,7 +1722,7 @@ function applyCriteriaDirect(state, capabilityId, value, by, reason) {
 export function proposeAmendment(state, capabilityId, kind, { value, by, reason } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (!by || !seed.people[by]) throw new Error('A named person proposes an amendment.');
+  requireActive(state, by, 'propose an amendment');
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A proposal needs a reason (a sentence).');
   const clean = cleanAmendmentValue(state, capabilityId, kind, value);
@@ -1485,7 +1761,7 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     applied: null,
   };
   const s = updateCap(state, capabilityId, { proposals: [...d.proposals, proposal] });
-  const who = seed.people[by];
+  const who = people(state)[by];
   return logEvent(s, {
     kind: 'proposal',
     outcome: 'opened',
@@ -1500,9 +1776,9 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
 // opens, so nothing is recorded that can never complete.
 export function signoffFeasibility(state, capabilityId, required, eligible, proposedBy) {
   const cap = getCapability(state, capabilityId);
-  const who = seed.people[proposedBy] ? seed.people[proposedBy].name : 'you';
+  const who = people(state)[proposedBy] ? people(state)[proposedBy].name : 'you';
   if (required.ownerOnly) {
-    if (!eligible.includes(cap.owner)) return { ok: false, reason: `The owner (${seed.people[cap.owner].name}) must approve and is not available to. Ask someone else to propose.` };
+    if (!eligible.includes(cap.owner)) return { ok: false, reason: `The owner (${people(state)[cap.owner].name}) must approve and is not available to. Ask someone else to propose.` };
     return { ok: true };
   }
   if (eligible.length < required.approvers) {
@@ -1539,14 +1815,15 @@ export function approvalsComplete(proposal) {
 export function approvalEligibility(state, capabilityId, proposal, personKey) {
   const cap = getCapability(state, capabilityId);
   if (!proposal || proposal.status !== 'open') return { ok: false, role: null, reason: 'This proposal is closed.' };
-  if (!personKey || !seed.people[personKey]) return { ok: false, role: null, reason: 'Choose who is acting.' };
-  const name = seed.people[personKey].name;
+  if (!personKey || !people(state)[personKey]) return { ok: false, role: null, reason: 'Choose who is acting.' };
+  const name = people(state)[personKey].name;
+  if (!isActivePerson(state, personKey)) return { ok: false, role: null, reason: `${name} is deactivated and cannot approve.` };
   if (personKey === proposal.proposedBy) return { ok: false, role: null, reason: `${name} proposed this; the proposer never approves.` };
   if (proposal.approvals.some((a) => a.by === personKey)) return { ok: false, role: null, reason: `${name} has already approved.` };
   const req = proposal.required;
   const role = roleFor(state, capabilityId, personKey);
   if (req.ownerOnly) {
-    if (personKey !== cap.owner) return { ok: false, role: null, reason: `${name} cannot approve this. Needed: the owner (${seed.people[cap.owner].name}).` };
+    if (personKey !== cap.owner) return { ok: false, role: null, reason: `${name} cannot approve this. Needed: the owner (${people(state)[cap.owner].name}).` };
     return { ok: true, role: 'owner', reason: null };
   }
   const eligible = proposal.eligible || namedStakeholders(state, capabilityId);
@@ -1555,7 +1832,7 @@ export function approvalEligibility(state, capabilityId, proposal, personKey) {
   const remaining = req.approvers - proposal.approvals.length;
   const riskStill = req.riskRequired && !proposal.approvals.some((a) => a.role === 'risk');
   if (riskStill && remaining <= 1 && role !== 'risk') {
-    return { ok: false, role: null, reason: `${name} cannot take the last approval: at least one approver must be from Risk (${riskStakeholders(state, capabilityId).map((k) => seed.people[k].name).join(', ') || 'none named'}).` };
+    return { ok: false, role: null, reason: `${name} cannot take the last approval: at least one approver must be from Risk (${riskStakeholders(state, capabilityId).map((k) => people(state)[k].name).join(', ') || 'none named'}).` };
   }
   return { ok: true, role, reason: null };
 }
@@ -1569,7 +1846,7 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
   const approvals = [...proposal.approvals, { by, role: e.role, date: state.today }];
   let next = { ...proposal, approvals };
   let s = state;
-  const who = seed.people[by];
+  const who = people(state)[by];
   if (!approvalsComplete(next)) {
     s = updateCap(s, capabilityId, { proposals: capData(s, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
     const left = proposal.required.approvers - approvals.length;
@@ -1615,7 +1892,7 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
     version: proposal.kind === 'contract' ? applied.contract : proposal.kind === 'stakeholders' ? applied.stakeholders : applied.criteria,
     proposalId,
     title: `${label} after evidence`,
-    body: `${cap.name}: proposed by ${seed.people[proposal.proposedBy].name}, approved by ${approvals.map((a) => `${seed.people[a.by].name} (${roleLabel(a.role)})`).join(' and ')}. ${proposal.reason}`,
+    body: `${cap.name}: proposed by ${people(state)[proposal.proposedBy].name}, approved by ${approvals.map((a) => `${people(state)[a.by].name} (${roleLabel(a.role)})`).join(' and ')}. ${proposal.reason}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
   });
@@ -1628,6 +1905,7 @@ export function withdrawProposal(state, capabilityId, proposalId, { by, reason }
   if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
   if (proposal.status !== 'open') throw new Error('This proposal is closed.');
   if (!by || by !== proposal.proposedBy) throw new Error('Only the proposer can withdraw a proposal; others reject it.');
+  requireActive(state, by, 'withdraw a proposal');
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A withdrawal needs a reason (a sentence).');
   const next = { ...proposal, status: 'withdrawn', withdrawal: { by, date: state.today, reason: why }, closedAt: state.today };
@@ -1636,7 +1914,7 @@ export function withdrawProposal(state, capabilityId, proposalId, { by, reason }
     kind: 'proposal',
     outcome: 'withdrawn',
     title: `Amendment withdrawn: ${proposalId}`,
-    body: `${cap.name}: ${seed.people[by].name} withdrew their proposal. ${why}`,
+    body: `${cap.name}: ${people(state)[by].name} withdrew their proposal. ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
   });
@@ -1647,20 +1925,20 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
   const proposal = getProposal(state, capabilityId, proposalId);
   if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
   if (proposal.status !== 'open') throw new Error('This proposal is closed.');
-  if (!by || !seed.people[by]) throw new Error('A named person rejects a proposal.');
+  requireActive(state, by, 'reject a proposal');
   if (by === proposal.proposedBy) throw new Error('The proposer withdraws rather than rejects; someone else must reject.');
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A rejection needs a reason (a sentence).');
   const frozen = proposal.eligible || namedStakeholders(state, capabilityId);
   const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && frozen.includes(by));
-  if (!eligible) throw new Error(`${seed.people[by].name} is not eligible to reject this: ${requirementLabel(proposal.required)} decide.`);
+  if (!eligible) throw new Error(`${people(state)[by].name} is not eligible to reject this: ${requirementLabel(proposal.required)} decide.`);
   const next = { ...proposal, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today };
   const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
   return logEvent(s, {
     kind: 'proposal',
     outcome: 'rejected',
     title: `Amendment rejected: ${proposalId}`,
-    body: `${cap.name}: ${seed.people[by].name} rejected the proposal by ${seed.people[proposal.proposedBy].name}. ${why}`,
+    body: `${cap.name}: ${people(state)[by].name} rejected the proposal by ${people(state)[proposal.proposedBy].name}. ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
   });
@@ -1679,8 +1957,9 @@ function cleanStakeholders(state, stakeholders) {
     const team = (st.team || '').trim();
     const person = st.person;
     if (!team) throw new Error(`Stakeholder ${i + 1} needs a team.`);
-    if (!person || !seed.people[person]) throw new Error(`Stakeholder ${i + 1} needs a named person.`);
-    if (seen.has(person)) throw new Error(`${seed.people[person].name} is listed twice.`);
+    if (!person || !people(state)[person]) throw new Error(`Stakeholder ${i + 1} needs a named person.`);
+    if (!isActivePerson(state, person)) throw new Error(`${people(state)[person].name} is deactivated and cannot be a stakeholder.`);
+    if (seen.has(person)) throw new Error(`${people(state)[person].name} is listed twice.`);
     seen.add(person);
     const stance = STANCES.some(([k]) => k === st.stance) ? st.stance : 'undecided';
     const position = (st.position || '').trim() || (STANCES.find(([k]) => k === stance) || [])[1] || 'No position yet';
@@ -1695,7 +1974,7 @@ function cleanStakeholders(state, stakeholders) {
 export function saveStakeholders(state, capabilityId, { stakeholders, by, reason } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (!by || !seed.people[by]) throw new Error('A named person saves the stakeholders.');
+  requireActive(state, by, 'save the stakeholders');
   const list = cleanStakeholders(state, stakeholders);
   const before = current(state, capabilityId, 'stakeholders');
   const first = !before.length;
@@ -1766,7 +2045,7 @@ export function scenarioNudge(count) {
 export function saveScenarios(state, capabilityId, { scenarios, by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (!by || !seed.people[by]) throw new Error('A named person saves the scenario library.');
+  requireActive(state, by, 'save the scenario library');
   const d = capData(state, capabilityId);
   const list = cleanScenarios(scenarios);
   const groups = new Set(list.map((sc) => sc.group));
@@ -1775,7 +2054,7 @@ export function saveScenarios(state, capabilityId, { scenarios, by } = {}) {
   return logEvent(s, {
     kind: 'scenarios-saved',
     title: 'Scenario library saved',
-    body: `${cap.name}: ${list.length} scenarios across ${groups.size} group${groups.size === 1 ? '' : 's'} saved by ${seed.people[by].name}${list.some((x) => x.source === 'ai') ? ` (${list.filter((x) => x.source === 'ai').length} suggested by AI)` : ''}. ${scenarioNudge(list.length)}`,
+    body: `${cap.name}: ${list.length} scenarios across ${groups.size} group${groups.size === 1 ? '' : 's'} saved by ${people(state)[by].name}${list.some((x) => x.source === 'ai') ? ` (${list.filter((x) => x.source === 'ai').length} suggested by AI)` : ''}. ${scenarioNudge(list.length)}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/scenarios/edit`,
   });
@@ -1797,7 +2076,7 @@ export function addStarterScenarios(state, capabilityId, { by } = {}) {
 export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (!by || !seed.people[by]) throw new Error('A named person proposes an authority change.');
+  requireActive(state, by, 'propose an authority change');
   if (decisionRequired(state, capabilityId)) throw new Error('A decision is already open for this capability.');
   if (cap.status === 'not-delegated') throw new Error('This capability is not delegated by design. Start with a new decision record if that should change.');
   const target = Number(level);
@@ -1809,7 +2088,7 @@ export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   return logEvent(s, {
     kind: 'decision',
     title: `Authority decision opened: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,
-    body: `${cap.name}: ${seed.people[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. The system can recommend; a person authorizes.`,
+    body: `${cap.name}: ${people(state)[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. The system can recommend; a person authorizes.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/decision`,
   });

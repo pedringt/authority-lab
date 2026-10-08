@@ -1,7 +1,7 @@
 // Small rendering helpers. `html` escapes interpolated values; wrap trusted
 // markup in `raw()` to pass it through. Arrays are joined.
 
-import { STATUS_LABELS, AUTHORITY_LEVELS, people } from './data/seed.js';
+import { STATUS_LABELS, AUTHORITY_LEVELS, people as seedPeople } from './data/seed.js';
 import { authorityLabel } from './store.js';
 
 export function esc(value) {
@@ -47,9 +47,14 @@ export function fmtDateYear(iso) {
   return `${months[m - 1]} ${d}, ${y}`;
 }
 
+// The roster the helpers resolve people against. main.js sets it from state
+// on every render; tests and node renders get the seed unless they set one.
+let roster = seedPeople;
+export function setPeople(map) { roster = map || seedPeople; }
+
 export function person(key) {
   if (key === 'system') return { name: 'Software rule', role: 'Automatic restriction', team: 'System' };
-  return people[key] || { name: key, role: '', team: '' };
+  return roster[key] || { name: key, role: '', team: '' };
 }
 
 // Status tokens: pass | watch | fail | insufficient | restricted | decision | neutral

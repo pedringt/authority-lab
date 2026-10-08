@@ -188,7 +188,7 @@ Three objects are governed once there is something to protect. Changes to them b
 | Contract | The start of a pilot (a human-authorized move to Draft or above), while the `CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` setting is on | Before a pilot starts |
 | Stakeholders | The first performance results, for adding or removing people and for team labels | Position, stance and reasoning updates, always |
 
-**Who must approve.** The proposer never approves. For Low and Medium impact, one approver: the owner, or any other named stakeholder if the owner proposed. For High impact or financial exposure, two different approvers, at least one from Risk; the last slot is refused to a non-Risk person while no Risk approval exists. Owners can still propose. "Named stakeholders" are the owner and the people on the capability's list; whether one of them counts as Risk comes from their own team in the roster, never from how the list labels them. Use the "Acting as" picker to propose and to approve as each person.
+**Who must approve.** The proposer never approves. For Low and Medium impact, one approver: the owner, or any other named stakeholder if the owner proposed. For High impact or financial exposure, two different approvers, at least one from Risk; the last slot is refused to a non-Risk person while no Risk approval exists. Owners can still propose. "Named stakeholders" are the owner and the people on the capability's list; whether one of them counts as Risk is the recorded Risk approver right on the People page, never a team name or a label on the list. Use the "Acting as" picker to propose and to approve as each person.
 
 **What the sign-off screen shows.** The reason, how many approvers have signed and whether Risk has, who was eligible when the proposal opened, what would change, and, for criteria, readiness under both versions ("5 of 6 met now, 6 of 6 under the proposal") with a flag when the proposal makes the capability look more ready without new evidence.
 
@@ -207,6 +207,14 @@ Setup step 5 is the scenario library: name, situation and expected behaviour in 
 ### The first authority change
 
 After the first test run, the Decision history tab and the Setup page offer **Propose a move to Level N**, one level at a time. That opens the authority decision for the capability: criteria not yet measured, requirements 0 of N met, the test results in the evidence snapshot, stakeholder positions where recorded. A person authorizes as whoever is acting, which writes the capability's second record. A move to Draft sets the status to Pilot and starts no monitoring, because every case is approved by a person; monitoring begins only at Level 3.
+
+### People
+
+The **People** page is the workspace roster: name, title, team, whether the person is active, and two explicit, recorded rights. **Workspace admin** can change the roster; **Risk approver** can sign off as Risk. Rights are recorded on the person, never inferred from a team name. In the seed, Maya Chen and Jonas Lindqvist are workspace admins, and Daniel Okafor and Sofia Alvarez hold the Risk approver right.
+
+Only a workspace admin adds a person, edits a name, title or team, or deactivates someone, and every change records the admin and a reason as a new roster version, with the history and a before/after diff on the page. Nobody is ever deleted: records, approvals and stakeholder lists keep referring to people after they are deactivated. A deactivated person cannot be the acting person, cannot propose, cannot approve, and cannot be added as a stakeholder, and drops out of the pickers.
+
+Rights are governed. Granting or removing the Risk approver or workspace admin right, and deactivating anyone who holds a right, is a proposal made by a workspace admin and approved by someone else: a **different** workspace admin, or, for a Risk approver grant, an existing Risk approver. The proposer never approves. For a grant, the person receiving the right never approves either, so nobody grants a right to themselves and nobody waves through their own. For a removal, the person losing the right may approve it. A change that would leave no workspace admin is refused. Open roster changes, with approve, reject and withdraw, sit on the People page. Changing someone's team changes nothing about what they can approve: Risk eligibility is only ever the recorded right.
 
 ### Acting as
 
@@ -261,6 +269,7 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Stakeholder editor | Names the stakeholders and records positions when known; every save is a new version |
 | Scenario library | Adds a starter set or writes scenarios; results are seeded and deterministic |
 | Propose a move to Level N | After the first run, opens the authority decision for a new capability; authorizing writes its second record |
+| People | Workspace admins add, edit and deactivate people, each change versioned with a reason; rights are shown, never inferred |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 

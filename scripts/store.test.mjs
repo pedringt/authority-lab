@@ -16,6 +16,8 @@ import {
   openProposal, getProposal, approvalEligibility, proposalReadiness, evaluateRequirement, approvalsComplete, namedStakeholders, contractValueChecks,
   saveStakeholders, saveScenarios, addStarterScenarios, simulateScenario, scenarioNudge, proposeAuthority, STANCES, stakeholderMembershipChanged,
   withdrawProposal, signoffFeasibility, decisionRequired, proposedAuthority, lastDecisionId, lastEvaluated,
+  people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
+  proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
 } from '../src/store.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
@@ -62,8 +64,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 10);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v10');
+  assert.equal(s.version, 12);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v12');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(decisionRequired(s, RR), true);
@@ -256,7 +258,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 9, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 11, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -1556,4 +1558,246 @@ test('views and the entry point read the derived fields only through selectors',
     for (const m of src.matchAll(forbidden)) offenders.push(`${f}: ${m[0]}`);
   }
   assert.deepEqual(offenders, []);
+});
+
+// ---------------------------------------------------------------------------
+// People roster in state (#22)
+// ---------------------------------------------------------------------------
+
+test('the roster is version 1 of the seed, with explicit rights; everything reads it from state', () => {
+  const s = initialState();
+  assert.equal(rosterVersions(s).length, 1);
+  assert.deepEqual(Object.keys(people(s)).sort(), ['daniel', 'elena', 'jonas', 'maya', 'priya', 'sofia']);
+  assert.equal(isWorkspaceAdmin(s, 'maya'), true);
+  assert.equal(isWorkspaceAdmin(s, 'jonas'), true);
+  assert.equal(isWorkspaceAdmin(s, 'priya'), false);
+  assert.equal(isRiskApprover(s, 'daniel'), true);
+  assert.equal(isRiskApprover(s, 'sofia'), true);
+  assert.equal(isRiskApprover(s, 'maya'), false);
+  assert.ok(Object.values(people(s)).every((p) => p.active === true && p.rights && 'riskApprover' in p.rights && 'workspaceAdmin' in p.rights));
+  assert.equal(personRecord(s, 'nobody'), null);
+});
+
+test('only a workspace admin changes the roster, always with a reason; add, edit and deactivate write versions', () => {
+  let s = initialState();
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /not a workspace admin/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: '' }), /needs a reason/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: '', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' }), /name, a title and a team/);
+  const before = s.activity.length;
+  s = addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' });
+  assert.equal(rosterVersions(s).length, 2);
+  assert.deepEqual(personRecord(s, 'omar-haddad'), { name: 'Omar Haddad', role: 'Support Agent Lead', team: 'Support Operations', active: true, rights: { riskApprover: false, workspaceAdmin: false } });
+  assert.equal(rosterVersions(s)[1].author, 'maya');
+  assert.equal(rosterVersions(s)[1].reason, 'Joined the pilot team.');
+  assert.deepEqual(rosterVersions(s)[1].change, { kind: 'add', key: 'omar-haddad' });
+  assert.equal(Object.keys(rosterVersions(s)[1].before).length, 6, 'before kept');
+  assert.equal(s.activity.length, before + 1);
+  assert.equal(s.activity[0].kind, 'roster');
+  assert.equal(s.activity[0].surfaced, false);
+  // Duplicate names get distinct keys.
+  s = addPerson(s, { name: 'Omar Haddad', title: 'Analyst', team: 'Finance', by: 'jonas', reason: 'A second Omar.' });
+  assert.ok(personRecord(s, 'omar-haddad-2'));
+  // Edit name/title/team only.
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /not a workspace admin/);
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'maya', reason: 'Nothing happened here.' }), /Nothing changed/);
+  s = editPerson(s, 'omar-haddad', { title: 'Support Team Lead', by: 'maya', reason: 'Promoted to lead.' });
+  assert.equal(personRecord(s, 'omar-haddad').role, 'Support Team Lead');
+  assert.equal(rosterVersions(s).length, 4);
+  assert.match(s.activity[0].body, /title Support Agent Lead → Support Team Lead/);
+  // Deactivate: never delete.
+  s = deactivatePerson(s, 'omar-haddad-2', { by: 'jonas', reason: 'Left the company.' });
+  assert.equal(isActivePerson(s, 'omar-haddad-2'), false);
+  assert.ok(personRecord(s, 'omar-haddad-2'), 'still on the roster');
+  assert.equal(s.activity[0].surfaced, true, 'a deactivation is worth seeing');
+  assert.throws(() => deactivatePerson(s, 'omar-haddad-2', { by: 'jonas', reason: 'Again, please.' }), /already deactivated/);
+  // Deactivating a rights holder is a proposal (#23); see the rights tests.
+  assert.ok(openRosterProposal(deactivatePerson(s, 'jonas', { by: 'maya', reason: 'Moved to another team.' }), 'jonas'));
+  // Rights are not editable here (#23).
+  assert.equal(personRecord(s, 'omar-haddad').rights.workspaceAdmin, false);
+});
+
+test('a deactivated person cannot act, propose, approve, author or be a stakeholder, and leaves the pickers', () => {
+  let s = initialState();
+  s = { ...s, actingAs: 'elena' };
+  s = deactivatePerson(s, 'elena', { by: 'maya', reason: 'Left the company.' });
+  assert.equal(s.actingAs, null, 'acting-as falls back when the acting person is deactivated');
+  assert.throws(() => setActingAs(s, 'elena'), /deactivated and cannot act/);
+  assert.ok(!Object.keys(activePeople(s)).includes('elena'));
+  assert.equal(actor(s, RR), 'maya');
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value, by: 'elena', reason: REASON }), /deactivated and cannot propose/);
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
+  const p = openProposal(s, RR, 'criteria');
+  assert.ok(!p.eligible.includes('elena'), 'not eligible when frozen');
+  assert.throws(() => approveProposal(s, RR, p.id, { by: 'elena' }), /deactivated and cannot approve/);
+  assert.throws(() => rejectProposal(s, RR, p.id, { by: 'elena', reason: 'Not from here.' }), /deactivated/);
+  assert.throws(() => amend(s, RR, 'risk', { value: current(s, RR, 'risk'), author: 'elena', reason: 'Trying anyway.' }), /deactivated and cannot author/);
+  assert.throws(() => authorize(selectDecision(s, RR, 'hold'), RR, { by: 'elena' }), /deactivated and cannot authorize/);
+  assert.throws(() => addCapability(s, { name: 'X', owner: 'elena', risk: LOW_RISK, startingLevel: 0 }), /deactivated and cannot own/);
+  // Stakeholder lists: cannot add; existing entries stop counting as named stakeholders.
+  const [t, id] = withNewCap();
+  assert.throws(() => saveStakeholders(deactivatePerson(t, 'elena', { by: 'maya', reason: 'Left the company.' }), id, { stakeholders: [{ team: 'Finance', person: 'elena' }], by: 'priya' }), /deactivated and cannot be a stakeholder/);
+  assert.ok(!namedStakeholders(s, RR).includes('elena'));
+  // The seeded positions on record still name her; history is not rewritten.
+  assert.ok(current(s, RR, 'stakeholders').some((x) => x.person === 'elena'));
+  // The demo is unchanged.
+  assert.equal(readiness(s, RR).met, 5);
+});
+
+test('roster changes are available through the store and persist', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
+  const store = createStore({ storage });
+  store.dispatch('addPerson', { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' });
+  store.dispatch('editPerson', 'omar-haddad', { team: 'Support', by: 'jonas', reason: 'Team renamed.' });
+  store.dispatch('deactivatePerson', 'omar-haddad', { by: 'jonas', reason: 'Left the company.' });
+  const again = createStore({ storage });
+  assert.equal(rosterVersions(again.get()).length, 4);
+  assert.equal(isActivePerson(again.get(), 'omar-haddad'), false);
+  again.dispatch('reset');
+  assert.equal(rosterVersions(again.get()).length, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Approval rights as explicit, governed grants (#23)
+// ---------------------------------------------------------------------------
+
+test('repro: relabelling a team cannot create a Risk approver; the loosening does not apply without a Risk approver', () => {
+  let s = initialState();
+  s = editPerson(s, 'elena', { team: 'Risk', by: 'maya', reason: 'Relabel for the repro.' });
+  assert.equal(personRecord(s, 'elena').team, 'Risk');
+  assert.equal(isRiskApprover(s, 'elena'), false, 'team does not grant the right');
+  assert.equal(isRiskStakeholder(s, RR, 'elena'), false);
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'maya', reason: REASON });
+  s = approveProposal(s, RR, 'P-1', { by: 'elena' });
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /at least one approver must be from Risk/);
+  assert.equal(getProposal(s, RR, 'P-1').status, 'open');
+  assert.equal(versionsInForce(s, RR).requirements, 1, 'nothing applied');
+  // Only a recorded right counts: Daniel completes it.
+  s = approveProposal(s, RR, 'P-1', { by: 'daniel' });
+  assert.equal(getProposal(s, RR, 'P-1').status, 'approved');
+});
+
+test('no team-based Risk logic remains in the store or the views', () => {
+  const dir = new URL('../src', import.meta.url).pathname;
+  const files = [`${dir}/store.js`, ...readdirSync(`${dir}/views`).map((f) => `${dir}/views/${f}`), `${dir}/main.js`, `${dir}/ui.js`];
+  const offenders = [];
+  for (const f of files) {
+    const src = readFileSync(f, 'utf8');
+    for (const m of src.matchAll(/team\s*===?\s*['"]Risk['"]|['"]Risk['"]\s*===?\s*[\w.]*team/g)) offenders.push(`${f.split('/').slice(-2).join('/')}: ${m[0]}`);
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('rights are granted and removed through a proposal by an admin, approved by a different admin, never self-granted', () => {
+  let s = initialState();
+  assert.deepEqual(activeAdmins(s).sort(), ['jonas', 'maya']);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /not a workspace admin/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'riskApprover', grant: true, by: 'maya', reason: 'I want it.' }), /Nobody grants a right to themselves/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: true, by: 'maya', reason: 'Already has it.' }), /already holds/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: false, by: 'maya', reason: 'Never had it.' }), /does not hold/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'ok' }), /needs a reason/);
+  s = proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'Finance joins Risk sign-off.' });
+  const pr = openRosterProposal(s, 'elena');
+  assert.equal(pr.id, 'RP-1');
+  assert.deepEqual(pr.eligible.sort(), ['daniel', 'jonas', 'sofia'], 'other active admins plus existing Risk approvers for a Risk approver grant, frozen');
+  assert.equal(isRiskApprover(s, 'elena'), false, 'nothing applied yet');
+  assert.equal(s.activity[0].kind, 'roster');
+  assert.equal(s.activity[0].surfaced, true);
+  assert.throws(() => approveRosterChange(s, 'RP-1', { by: 'maya' }), /someone else must approve/);
+  assert.throws(() => approveRosterChange(s, 'RP-1', { by: 'priya' }), /neither a workspace admin nor a Risk approver/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'workspaceAdmin', grant: true, by: 'jonas', reason: 'Second change at once.' }), /already awaiting sign-off/);
+  s = approveRosterChange(s, 'RP-1', { by: 'jonas' });
+  assert.equal(getRosterProposal(s, 'RP-1').status, 'approved');
+  assert.equal(isRiskApprover(s, 'elena'), true);
+  const v = rosterVersions(s)[rosterVersions(s).length - 1];
+  assert.equal(v.author, 'maya');
+  assert.deepEqual(v.approvals.map((a) => a.by), ['jonas']);
+  assert.deepEqual(v.change, { kind: 'grant', key: 'elena', right: 'riskApprover' });
+  // Elena can now take the Risk slot on a capability proposal.
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  let t = proposeAmendment(s, RR, 'criteria', { value, by: 'maya', reason: REASON });
+  t = approveProposal(t, RR, 'P-1', { by: 'priya' });
+  t = approveProposal(t, RR, 'P-1', { by: 'elena' });
+  assert.equal(getProposal(t, RR, 'P-1').status, 'approved');
+  // Removal: same path; reject and withdraw are recorded.
+  s = proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: false, by: 'jonas', reason: 'Finance steps back from Risk sign-off.' });
+  assert.throws(() => rejectRosterChange(s, 'RP-2', { by: 'jonas', reason: 'Changed my mind.' }), /someone else must approve/);
+  const rej = rejectRosterChange(s, 'RP-2', { by: 'maya', reason: 'Keep her on for the quarter.' });
+  assert.equal(getRosterProposal(rej, 'RP-2').status, 'rejected');
+  assert.equal(isRiskApprover(rej, 'elena'), true);
+  assert.throws(() => withdrawRosterChange(s, 'RP-2', { by: 'maya', reason: 'Not mine.' }), /Only the proposer withdraws/);
+  const wd = withdrawRosterChange(s, 'RP-2', { by: 'jonas', reason: 'Raised too early.' });
+  assert.equal(getRosterProposal(wd, 'RP-2').status, 'withdrawn');
+  s = approveRosterChange(s, 'RP-2', { by: 'maya' });
+  assert.equal(isRiskApprover(s, 'elena'), false);
+});
+
+test('the last workspace admin cannot be removed or deactivated; a rights holder is deactivated only with sign-off', () => {
+  let s = initialState();
+  // Remove Jonas as admin (Maya proposes, Jonas... cannot approve his own removal? He is not the proposer, so he can).
+  s = proposeRosterChange(s, { kind: 'rights', person: 'jonas', right: 'workspaceAdmin', grant: false, by: 'maya', reason: 'Jonas moves to another workspace.' });
+  s = approveRosterChange(s, 'RP-1', { by: 'jonas' });
+  assert.deepEqual(activeAdmins(s), ['maya']);
+  // Now nothing about Maya's admin right can be proposed: removal would leave none, and no other admin could sign off anyway.
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'workspaceAdmin', grant: false, by: 'maya', reason: 'Stepping down.' }), /no workspace admin/);
+  assert.throws(() => deactivatePerson(s, 'maya', { by: 'maya', reason: 'Leaving somehow.' }), /no workspace admin/);
+  // Any other governed change now needs a second admin, which does not exist.
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'workspaceAdmin', grant: true, by: 'maya', reason: 'Finance needs an admin.' }), /No other workspace admin can sign this off/);
+  // A Risk approver grant still has approvers: the existing Risk approvers.
+  assert.deepEqual(openRosterProposal(proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'Finance joins Risk sign-off.' }), 'elena').eligible.sort(), ['daniel', 'sofia']);
+  // Deactivating a Risk approver goes through a proposal; a plain person does not.
+  let t = initialState();
+  const before = rosterVersions(t).length;
+  t = deactivatePerson(t, 'daniel', { by: 'maya', reason: 'Leaving the company next month.' });
+  assert.equal(rosterVersions(t).length, before, 'not applied yet');
+  const pr = openRosterProposal(t, 'daniel');
+  assert.equal(pr.kind, 'deactivate');
+  assert.equal(isActivePerson(t, 'daniel'), true);
+  t = approveRosterChange(t, pr.id, { by: 'jonas' });
+  assert.equal(isActivePerson(t, 'daniel'), false);
+  assert.equal(getRosterProposal(t, pr.id).status, 'approved');
+  assert.equal(rosterVersions(t)[rosterVersions(t).length - 1].author, 'maya');
+  // A person with no rights is deactivated directly.
+  t = deactivatePerson(t, 'priya', { by: 'maya', reason: 'Left the company.' });
+  assert.equal(isActivePerson(t, 'priya'), false);
+  assert.equal(openRosterProposal(t, 'priya'), null);
+  // Store actions.
+  const store = createStore({});
+  store.dispatch('proposeRosterChange', { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'Finance joins Risk sign-off.' });
+  store.dispatch('approveRosterChange', 'RP-1', { by: 'jonas' });
+  assert.equal(isRiskApprover(store.get(), 'elena'), true);
+});
+
+test('a grant cannot be approved by the person receiving it; a Risk approver grant can be approved by an existing Risk approver', () => {
+  // Repro: Maya proposes the Risk approver right for Jonas; Jonas cannot approve his own grant.
+  let s = initialState();
+  s = proposeRosterChange(s, { kind: 'rights', person: 'jonas', right: 'riskApprover', grant: true, by: 'maya', reason: 'Engineering joins Risk sign-off.' });
+  const pr = openRosterProposal(s, 'jonas');
+  assert.ok(!pr.eligible.includes('jonas'), 'the recipient is not in the frozen set');
+  assert.ok(!pr.eligible.includes('maya'), 'nor the proposer');
+  assert.deepEqual(pr.eligible.sort(), ['daniel', 'sofia'], 'existing Risk approvers can sign a Risk approver grant');
+  assert.throws(() => approveRosterChange(s, 'RP-1', { by: 'jonas' }), /receiving this right and cannot approve their own grant/);
+  assert.equal(isRiskApprover(s, 'jonas'), false);
+  s = approveRosterChange(s, 'RP-1', { by: 'sofia' });
+  assert.equal(isRiskApprover(s, 'jonas'), true);
+  assert.match(s.activity[0].body, /approved by Sofia Alvarez \(as a Risk approver\)/);
+  // A grant to Maya (an admin) also has an approver: Jonas or a Risk approver, not Maya.
+  let t = proposeRosterChange(initialState(), { kind: 'rights', person: 'maya', right: 'riskApprover', grant: true, by: 'jonas', reason: 'Product joins Risk sign-off.' });
+  assert.deepEqual(openRosterProposal(t, 'maya').eligible.sort(), ['daniel', 'sofia']);
+  assert.throws(() => approveRosterChange(t, 'RP-1', { by: 'maya' }), /cannot approve their own grant/);
+  t = approveRosterChange(t, 'RP-1', { by: 'daniel' });
+  assert.equal(isRiskApprover(t, 'maya'), true);
+  // A workspace admin grant is admins only: a Risk approver cannot sign it, and the recipient cannot.
+  let u = proposeRosterChange(initialState(), { kind: 'rights', person: 'priya', right: 'workspaceAdmin', grant: true, by: 'maya', reason: 'Operations needs an admin.' });
+  assert.deepEqual(openRosterProposal(u, 'priya').eligible, ['jonas']);
+  assert.throws(() => approveRosterChange(u, 'RP-1', { by: 'daniel' }), /not an active workspace admin/);
+  assert.throws(() => approveRosterChange(u, 'RP-1', { by: 'priya' }), /cannot approve their own grant/);
+  u = approveRosterChange(u, 'RP-1', { by: 'jonas' });
+  assert.equal(isWorkspaceAdmin(u, 'priya'), true);
+  // Removals keep the current rule: the subject may approve their own removal.
+  let v = proposeRosterChange(initialState(), { kind: 'rights', person: 'jonas', right: 'workspaceAdmin', grant: false, by: 'maya', reason: 'Jonas moves to another workspace.' });
+  v = approveRosterChange(v, 'RP-1', { by: 'jonas' });
+  assert.equal(isWorkspaceAdmin(v, 'jonas'), false);
 });

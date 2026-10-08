@@ -1,6 +1,6 @@
 import * as seed from './data/seed.js';
-import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired } from './store.js';
-import { html } from './ui.js';
+import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store.js';
+import { html, setPeople } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
 import { capabilityView } from './views/capability.js';
@@ -15,6 +15,7 @@ import { criteriaEditorView } from './views/criteria.js';
 import { proposeView, proposalView } from './views/proposals.js';
 import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
+import { peopleView } from './views/people.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -28,6 +29,7 @@ const NAV = [
   ['evidence', 'Evidence'],
   ['decisions', 'Decisions'],
   ['activity', 'Activity'],
+  ['people', 'People'],
 ];
 
 function safeStorage() {
@@ -57,6 +59,7 @@ function capabilityFor(state, query) {
 
 function render() {
   const state = store.get();
+  setPeople(people(state));
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;
   let view;
@@ -83,6 +86,7 @@ function render() {
       else { view = decisionsListView(state); title = 'Decisions'; }
       break;
     case 'activity': view = activityView(state, query); title = 'Activity'; break;
+    case 'people': view = peopleView(state, query); title = 'People'; break;
     default: view = overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
@@ -98,9 +102,10 @@ function render() {
   const contextCap = root === 'capabilities' && sub && sub !== 'new' ? sub : null;
   const current = actor(state, contextCap);
   const defaultOwner = contextCap && getCapability(state, contextCap) ? getCapability(state, contextCap).owner : focusCapability(state).owner;
+  const roster = people(state);
   acting.innerHTML = String(html`<label class="acting"><span class="acting-label">Acting as</span><select data-action="set-acting" aria-label="Acting as">
-    <option value="" ${state.actingAs ? '' : 'selected'}>${seed.people[defaultOwner].name} (owner)</option>
-    ${Object.entries(seed.people).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
+    <option value="" ${state.actingAs ? '' : 'selected'}>${(roster[defaultOwner] || roster[current]).name} (owner)</option>
+    ${Object.entries(activePeople(state)).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
   </select></label>`);
   acting.dataset.current = current;
 
@@ -130,7 +135,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form === 'save-scenarios') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -186,6 +191,11 @@ document.addEventListener('click', (e) => {
     catch (err) { alert(err.message); }
     return;
   }
+  if (action === 'approve-roster') {
+    try { store.dispatch('approveRosterChange', btn.dataset.proposal, { by: actor(store.get()) }); location.hash = `#/people?proposal=${btn.dataset.proposal}`; render(); }
+    catch (err) { location.hash = `#/people?error=${encodeURIComponent(err.message)}`; }
+    return;
+  }
   if (action === 'proposal-approve') {
     const pid = btn.dataset.proposal;
     try { store.dispatch('approveProposal', capId, pid, { by: actor(store.get(), capId) }); if (location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}/proposals/${pid}`; }
@@ -230,6 +240,49 @@ function readCriteriaRows(form) {
 }
 
 document.addEventListener('submit', (e) => {
+  const personForm = e.target.closest('[data-form="add-person"], [data-form="edit-person"], [data-form="deactivate-person"]');
+  if (personForm) {
+    e.preventDefault();
+    const f = new FormData(personForm);
+    const by = actor(store.get());
+    try {
+      if (personForm.dataset.form === 'add-person') store.dispatch('addPerson', { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
+      else if (personForm.dataset.form === 'edit-person') store.dispatch('editPerson', personForm.dataset.person, { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
+      else {
+        const before = store.get().rosterProposals.length;
+        store.dispatch('deactivatePerson', personForm.dataset.person, { by, reason: f.get('reason') });
+        const after = store.get().rosterProposals;
+        if (after.length > before) { location.hash = `#/people?proposal=${after[after.length - 1].id}`; return; }
+      }
+      location.hash = '#/people';
+      render();
+    } catch (err) {
+      location.hash = `#/people?error=${encodeURIComponent(err.message)}`;
+    }
+    return;
+  }
+  const rosterForm = e.target.closest('[data-form="propose-roster"], [data-form="reject-roster"], [data-form="withdraw-roster"]');
+  if (rosterForm) {
+    e.preventDefault();
+    const f = new FormData(rosterForm);
+    const by = actor(store.get());
+    try {
+      if (rosterForm.dataset.form === 'propose-roster') {
+        store.dispatch('proposeRosterChange', { kind: 'rights', person: rosterForm.dataset.person, right: rosterForm.dataset.right, grant: rosterForm.dataset.grant === '1', by, reason: f.get('reason') });
+        const list = store.get().rosterProposals;
+        location.hash = `#/people?proposal=${list[list.length - 1].id}`;
+      } else if (rosterForm.dataset.form === 'reject-roster') {
+        store.dispatch('rejectRosterChange', rosterForm.dataset.proposal, { by, reason: f.get('reason') });
+        location.hash = `#/people?proposal=${rosterForm.dataset.proposal}`; render();
+      } else {
+        store.dispatch('withdrawRosterChange', rosterForm.dataset.proposal, { by, reason: f.get('reason') });
+        location.hash = `#/people?proposal=${rosterForm.dataset.proposal}`; render();
+      }
+    } catch (err) {
+      location.hash = `#/people?error=${encodeURIComponent(err.message)}`;
+    }
+    return;
+  }
   const proposeForm = e.target.closest('[data-form="propose-criteria"], [data-form="propose-contract"]');
   if (proposeForm) {
     e.preventDefault();
