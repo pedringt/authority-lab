@@ -70,7 +70,7 @@ Locked criteria, and the contract once a pilot has started, change through a pro
 
 ## A new capability, end to end
 
-Status follows authority decisions only: In setup until a person authorizes the move to Draft, then Pilot. Each step must be real before the next: a contract before criteria, criteria before tests, tests before a decision. The Setup page tracks them.
+Expanding authority needs a pending proposal; restricting, suspending or redesigning does not, but still needs a named person, a rationale and a record. Status follows authority decisions only: In setup until a person authorizes the move to Draft, then Pilot. Each step must be real before the next: a contract before criteria, criteria before tests, tests before a decision. The Setup page tracks them.
 
 1. **Capabilities → Add capability**: name, summary, owner, risk profile, starting authority (Level 0 or 1). Writes the capability's first record.
 2. **Setup → Open the contract builder**: template plus suggestions, review each one, confirm the sections, finalize contract v1.

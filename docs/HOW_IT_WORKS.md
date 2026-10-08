@@ -152,7 +152,7 @@ Everything in Authority Lab is done one capability at a time. A new capability g
 | 6. Test run | Tests → Run test suite | The first evidence, and the **lock** on criteria and requirements | Anyone |
 | 7. First authority change | Decision history → Propose a move to Level N, then Authorize | The capability's **second decision record**; a move to Draft sets status Pilot | A named person authorizes |
 
-Status follows authority decisions only: a capability stays **In setup** until a person authorizes the move to Draft, then becomes **Pilot**. Finalizing a contract or saving criteria does not change it. Every tab of the capability is always visible; an empty tab says what is missing and links to the next step on the Setup page, which tracks the seven steps as Done, Next or Later.
+Expanding authority needs a pending proposal (the next level, proposed after a test run); restricting, suspending or redesigning does not, but still needs a named person, a rationale and a record. Status follows authority decisions only: a capability stays **In setup** until a person authorizes the move to Draft, then becomes **Pilot**. Finalizing a contract or saving criteria does not change it. Every tab of the capability is always visible; an empty tab says what is missing and links to the next step on the Setup page, which tracks the seven steps as Done, Next or Later.
 
 The sections that follow describe each step.
 
