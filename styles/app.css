@@ -419,3 +419,35 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
   .three-col, .check-grid { grid-template-columns: 1fr; }
   .acting select { max-width: 150px; }
 }
+
+/* Contract builder ------------------------------------------------------- */
+.progress-card { margin-bottom: 14px; }
+.progress-facts { display: flex; gap: 28px; flex-wrap: wrap; }
+.progress-facts > div { display: grid; }
+.progress-facts .fact-label { min-width: 0; }
+.contract-builder { display: grid; gap: 12px; }
+.contract-builder .card + .card { margin-top: 0; }
+.contract-section { border-top: 3px solid var(--border-strong); }
+.contract-section-may { border-top-color: var(--pass); }
+.contract-section-mustAsk { border-top-color: var(--watch); }
+.contract-section-mustNever { border-top-color: var(--fail); }
+.contract-section-escalation { border-top-color: var(--insuf); }
+.contract-section-autoRestriction { border-top-color: var(--restr); }
+.contract-section.is-confirmed { background: #fcfcfd; }
+.contract-section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.contract-section-head p { margin: 2px 0 0; }
+.contract-lines { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.contract-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; }
+.contract-line .line-text { flex: 1 1 320px; }
+.contract-line.is-pending { border-color: var(--insuf-bd); background: var(--insuf-bg); }
+.contract-line.is-rejected { opacity: 0.75; }
+.contract-line.is-rejected .line-text { text-decoration: line-through; color: var(--muted); }
+.contract-line.is-editing { padding: 6px; }
+.line-actions { display: flex; gap: 4px; margin-left: auto; }
+.line-add, .line-edit { display: flex; gap: 6px; align-items: center; width: 100%; }
+.line-add input, .line-edit input { flex: 1; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
+.line-add { margin: 4px 0 10px; }
+.contract-section-foot { display: flex; gap: 10px; align-items: center; }
+.rejected summary { font-size: 13px; color: var(--muted); cursor: pointer; margin-bottom: 6px; }
+.check-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; font-size: 14px; }
+.form-error.plain-list { gap: 4px; }

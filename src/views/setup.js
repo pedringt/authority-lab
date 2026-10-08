@@ -61,7 +61,7 @@ export function setupSteps(state, capabilityId) {
   const testsDone = Boolean(d.testRun.lastRun);
   const steps = [
     { id: 'define', title: 'Define the capability', done: true, text: `${cap.name} is defined with an owner and a risk profile. Its starting authority is ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=contract`, linkText: 'Risk profile' },
-    { id: 'contract', title: 'Finalize the delegation contract', done: contractDone, text: 'What the AI may do, must ask about, must never do, when it escalates, and when software pulls authority back. A template is picked by the risk profile.', soon: 'Contract builder (#5)' },
+    { id: 'contract', title: 'Finalize the delegation contract', done: contractDone, text: `What the AI may do, must ask about, must never do, when it escalates, and when software pulls authority back. A template is picked by the risk profile.${d.contractDraft && !d.contractDraft.finalizedAt ? ' A draft is in progress.' : ''}`, link: `#/capabilities/${cap.id}/contract/build`, linkText: d.contractDraft && !d.contractDraft.finalizedAt ? 'Continue the draft' : contractDone ? 'Contract' : 'Open the contract builder' },
     { id: 'criteria', title: 'Save success criteria and evidence requirements', done: criteriaDone, text: 'What good looks like, as thresholds, and what must be true before the first authority change. These lock on the first test run.', soon: 'Criteria editor (#6)' },
     { id: 'stakeholders', title: 'Name the stakeholders', done: stakeholdersDone, text: 'The people whose positions are recorded at decision time.', soon: 'Stakeholder editor (#8)' },
     { id: 'scenarios', title: 'Write the scenario library', done: scenariosDone, text: 'Standard, ambiguous, adversarial, high-impact and edge cases. Twenty to thirty is enough to start.', soon: 'Scenario library (#8)' },
@@ -99,7 +99,7 @@ export function setupView(state, capabilityId, query) {
   <ol class="setup-steps">${steps.map((st, i) => html`<li class="card setup-step ${st.done ? 'is-done' : ''} ${st.next ? 'is-next' : ''} ${focus === st.id ? 'is-focus' : ''}" id="step-${st.id}">
     <div class="setup-step-head"><span class="req-mark" aria-hidden="true">${st.done ? '✓' : i + 1}</span><strong>${st.title}</strong>${st.done ? badge('pass', 'Done') : st.next ? badge('decision', 'Next') : badge('neutral', 'Later')}</div>
     <p class="muted">${st.text}</p>
-    ${st.done && st.link ? html`<a href="${st.link}">${st.linkText}</a>` : ''}
+    ${st.done && st.link ? html`<a href="${st.id === 'contract' ? `#/capabilities/${cap.id}?tab=contract` : st.link}">${st.linkText}</a>` : ''}
     ${!st.done && st.link && st.needs !== false ? html`<a class="btn btn-sm" href="${st.link}">${st.linkText}</a>` : ''}
     ${!st.done && st.soon ? html`<p class="muted small">Not available in this prototype yet: ${st.soon}.</p>` : ''}
     ${!st.done && st.needs === false ? html`<p class="muted small">Waiting on an earlier step.</p>` : ''}
@@ -114,6 +114,6 @@ export function emptyState(state, capabilityId, what, stepId) {
   return html`<div class="empty-state card">
     <p><strong>${what}</strong></p>
     ${step ? html`<p class="muted">${step.done ? step.text : `Next setup step: ${step.title.toLowerCase()}. ${step.text}`}</p>` : ''}
-    <p><a class="btn btn-sm" href="#/capabilities/${capabilityId}/setup?step=${step ? step.id : ''}">Open setup${next ? ` · ${next.title}` : ''}</a></p>
+    <p>${step && !step.done && step.link && step.needs !== false ? html`<a class="btn btn-sm btn-primary" href="${step.link}">${step.linkText}</a> ` : ''}<a class="btn btn-sm" href="#/capabilities/${capabilityId}/setup?step=${step ? step.id : ''}">Open setup${next ? ` · ${next.title}` : ''}</a></p>
   </div>`;
 }

@@ -9,7 +9,10 @@ import {
   amend, currentVersion, versionsInForce, performanceResultsSeen, isSurfaced, VERSIONED_KINDS,
   activityEvents, amendmentsAfterEvidenceFor, versionFor, SURFACED_KINDS, current, versionList,
   addCapability, actor, setActingAs, vagueNameWarning, slugify,
+  startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection,
+  contractChecks, canFinalizeContract, finalizeContract, draftValue, contractSummary, SECTION_KEYS,
 } from '../src/store.js';
+import { pickTemplate, suggestLines } from '../src/data/contract-templates.js';
 import { diffValues } from '../src/diff.js';
 
 const RR = 'refund-recommendation';
@@ -46,8 +49,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 5);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v5');
+  assert.equal(s.version, 6);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v6');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(cap(s).decisionRequired, true);
@@ -237,7 +240,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 4, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 5, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -601,4 +604,192 @@ test('reset removes added capabilities and the acting-as choice', () => {
   assert.equal(s.capabilities.length, 5);
   assert.equal(s.actingAs, null);
   assert.deepEqual(s, initialState());
+});
+
+// ---------------------------------------------------------------------------
+// Contract builder (#5)
+// ---------------------------------------------------------------------------
+
+const FIN_RISK = { impact: 'High', reversibility: 'Recoverable with effort', exposure: 'Financial / consequential' };
+function withNewCap(risk = FIN_RISK, name = 'Refund execution under $50', summary = 'Executes small refunds to the original card.') {
+  const s = addCapability(initialState(), { name, summary, owner: 'priya', risk, startingLevel: 0 });
+  return [s, s.capabilities[s.capabilities.length - 1].id];
+}
+function reviewAll(s, id, decision = 'accept') {
+  for (const l of capData(s, id).contractDraft.lines.filter((l) => l.status === 'pending')) s = reviewSuggestion(s, id, l.id, { decision });
+  return s;
+}
+function confirmAll(s, id) {
+  for (const k of SECTION_KEYS) s = confirmSection(s, id, k, true);
+  return s;
+}
+
+test('templates are picked by the risk profile and suggestions by keywords, deterministically', () => {
+  const low = pickTemplate({ impact: 'Low', exposure: 'Internal only', reversibility: 'Easy to reverse' });
+  const fin = pickTemplate(FIN_RISK);
+  const irr = pickTemplate({ impact: 'High', exposure: 'Customer-facing', reversibility: 'Difficult to reverse' });
+  assert.equal(low.id, 'low-internal');
+  assert.equal(fin.id, 'high-financial');
+  assert.equal(irr.id, 'high-customer-irreversible');
+  assert.ok(fin.sections.mustAsk.some((t) => /fraud/i.test(t)));
+  assert.ok(irr.sections.mustAsk.some((t) => /cannot be undone/.test(t)));
+  assert.ok(fin.sections.autoRestriction.every((t) => /\d/.test(t)), 'template restriction rules carry numbers');
+  const a = suggestLines('Refund execution', 'Executes refunds to the original card.');
+  const b = suggestLines('Refund execution', 'Executes refunds to the original card.');
+  assert.deepEqual(a, b);
+  assert.ok(a.some((x) => x.section === 'mustNever' && /different payment method/.test(x.text)));
+  assert.ok(a.every((x) => x.because === 'refund'));
+  assert.deepEqual(suggestLines('Quarterly report', 'Nothing matches here.'), []);
+  const ids = new Set(a.map((x) => `${x.section}|${x.text}`));
+  assert.equal(ids.size, a.length, 'no duplicate suggestions');
+});
+
+test('starting a draft builds template lines (accepted) plus AI suggestions (pending), and refuses when a contract exists', () => {
+  let [s, id] = withNewCap();
+  s = startContractDraft(s, id, { by: 'priya' });
+  const draft = capData(s, id).contractDraft;
+  assert.equal(draft.templateId, 'high-financial');
+  const tpl = draft.lines.filter((l) => l.source === 'template');
+  const ai = draft.lines.filter((l) => l.source === 'ai');
+  assert.ok(tpl.length > 10 && tpl.every((l) => l.status === 'accepted'));
+  assert.ok(ai.length >= 4 && ai.every((l) => l.status === 'pending'));
+  assert.deepEqual(Object.values(draft.confirmed), [false, false, false, false, false]);
+  assert.equal(s.activity[0].kind, 'contract-draft');
+  assert.equal(s.activity[0].surfaced, false, 'starting a draft is a setup-type event');
+  // Starting again is a no-op while a draft is open.
+  assert.equal(startContractDraft(s, id), s);
+  // The seeded refund capability already has a contract.
+  assert.throws(() => startContractDraft(initialState(), RR), /already has a finalized contract/);
+});
+
+test('suggestions are reviewed one at a time; edits keep the original; rejections are kept', () => {
+  let [s, id] = withNewCap();
+  s = startContractDraft(s, id);
+  const ai = capData(s, id).contractDraft.lines.filter((l) => l.source === 'ai');
+  s = reviewSuggestion(s, id, ai[0].id, { decision: 'accept' });
+  assert.equal(capData(s, id).contractDraft.lines.filter((l) => l.status === 'pending').length, ai.length - 1, 'accepting one leaves the rest pending');
+  s = reviewSuggestion(s, id, ai[1].id, { decision: 'edit', text: 'Refunds or credits over $75.' });
+  const edited = capData(s, id).contractDraft.lines.find((l) => l.id === ai[1].id);
+  assert.equal(edited.status, 'edited');
+  assert.equal(edited.text, 'Refunds or credits over $75.');
+  assert.equal(edited.original, ai[1].text);
+  s = reviewSuggestion(s, id, ai[2].id, { decision: 'reject' });
+  assert.equal(capData(s, id).contractDraft.lines.find((l) => l.id === ai[2].id).status, 'rejected');
+  assert.ok(!draftValue(capData(s, id).contractDraft)[ai[2].section].includes(ai[2].text), 'rejected text is not in the contract');
+  assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'approve' }), /Unknown decision/);
+  assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'edit', text: '  ' }), /needs text/);
+  const tpl = capData(s, id).contractDraft.lines.find((l) => l.source === 'template');
+  assert.throws(() => reviewSuggestion(s, id, tpl.id, { decision: 'accept' }), /Only AI suggestions/);
+  // A section cannot be confirmed while it has pending suggestions.
+  const pendingSection = capData(s, id).contractDraft.lines.find((l) => l.status === 'pending').section;
+  assert.throws(() => confirmSection(s, id, pendingSection, true), /Review every suggestion/);
+});
+
+test('lines can be added, edited and removed; any change unconfirms the section', () => {
+  let [s, id] = withNewCap();
+  s = startContractDraft(s, id);
+  s = reviewAll(s, id);
+  s = confirmSection(s, id, 'may', true);
+  assert.equal(capData(s, id).contractDraft.confirmed.may, true);
+  s = addContractLine(s, id, 'may', 'Read the refund policy effective on the order date.');
+  assert.equal(capData(s, id).contractDraft.confirmed.may, false, 'adding a line unconfirms');
+  assert.ok(draftValue(capData(s, id).contractDraft).may.includes('Read the refund policy effective on the order date.'));
+  const tpl = capData(s, id).contractDraft.lines.find((l) => l.source === 'template' && l.section === 'mustNever');
+  s = editContractLine(s, id, tpl.id, tpl.text + ' Ever.');
+  assert.equal(capData(s, id).contractDraft.lines.find((l) => l.id === tpl.id).status, 'edited');
+  s = removeContractLine(s, id, tpl.id);
+  assert.equal(capData(s, id).contractDraft.lines.find((l) => l.id === tpl.id).status, 'removed');
+  const ai = capData(s, id).contractDraft.lines.find((l) => l.source === 'ai');
+  assert.throws(() => removeContractLine(s, id, ai.id), /Reject a suggestion/);
+  assert.throws(() => addContractLine(s, id, 'nope', 'x'), /Unknown section/);
+  assert.throws(() => addContractLine(s, id, 'may', ''), /needs text/);
+});
+
+test('software checks: empty hard limits above Low, contradictions, rules without a number or window, financial without a value limit', () => {
+  let [s, id] = withNewCap();
+  s = startContractDraft(s, id);
+  s = reviewAll(s, id, 'reject');
+  // Remove every "must never" and every restriction rule.
+  for (const l of capData(s, id).contractDraft.lines.filter((l) => ['mustNever', 'autoRestriction'].includes(l.section) && l.source === 'template')) s = removeContractLine(s, id, l.id);
+  let ids = contractChecks(s, id).map((c) => c.id);
+  assert.ok(ids.includes('empty-never'));
+  assert.ok(ids.includes('empty-auto'));
+  // A rule with no number or window.
+  s = addContractLine(s, id, 'autoRestriction', 'Too many errors returns the capability to Draft.');
+  assert.ok(contractChecks(s, id).some((c) => c.id.startsWith('rule-') && /number/.test(c.text)));
+  // A contradiction.
+  s = addContractLine(s, id, 'may', 'Override a fraud restriction.');
+  s = addContractLine(s, id, 'mustNever', 'Override a fraud restriction.');
+  assert.ok(contractChecks(s, id).some((c) => c.id.startsWith('contra-')));
+  // Financial without a value limit: remove template lines that mention value, and the "over $100" suggestion was rejected.
+  for (const l of capData(s, id).contractDraft.lines.filter((l) => /value limit|above the value/i.test(l.text) && l.status !== 'removed' && l.source !== 'ai')) s = removeContractLine(s, id, l.id);
+  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
+  // A limit that only appears under "must never" does not count.
+  s = addContractLine(s, id, 'mustNever', 'Issue a refund above $500.');
+  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'), 'must never alone is not an operating limit');
+  // A threshold under "must ask" does.
+  s = addContractLine(s, id, 'mustAsk', 'Refunds over $100.');
+  assert.ok(!contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
+  // So does a ceiling under "may".
+  s = removeContractLine(s, id, capData(s, id).contractDraft.lines.find((l) => l.text === 'Refunds over $100.').id);
+  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
+  s = addContractLine(s, id, 'may', 'Issue refunds of $50 or less.');
+  assert.ok(!contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
+  assert.equal(canFinalizeContract(s, id).ok, false);
+  // Low impact, internal: empty hard limits are allowed.
+  let [t, tid] = withNewCap({ impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, 'Quarterly summary', 'Summarises the quarter.');
+  t = startContractDraft(t, tid);
+  for (const l of capData(t, tid).contractDraft.lines.filter((l) => ['mustNever', 'autoRestriction'].includes(l.section))) t = removeContractLine(t, tid, l.id);
+  ids = contractChecks(t, tid).map((c) => c.id);
+  assert.ok(!ids.includes('empty-never') && !ids.includes('empty-auto'));
+});
+
+test('finalize needs every suggestion reviewed, every section confirmed and no blocking check; it writes contract v1 with the review', () => {
+  let [s, id] = withNewCap();
+  s = startContractDraft(s, id);
+  assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /still to accept/);
+  const ai = capData(s, id).contractDraft.lines.filter((l) => l.source === 'ai');
+  s = reviewSuggestion(s, id, ai[0].id, { decision: 'reject' });
+  for (const l of ai.slice(1)) s = reviewSuggestion(s, id, l.id, { decision: 'accept' });
+  assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /not yet confirmed/);
+  s = confirmAll(s, id);
+  assert.equal(canFinalizeContract(s, id).ok, true, JSON.stringify(contractChecks(s, id)));
+  assert.throws(() => finalizeContract(s, id, {}), /named person/);
+  const before = s.activity.length;
+  s = finalizeContract(s, id, { by: 'daniel' });
+  const v = currentVersion(s, id, 'contract');
+  assert.equal(v.version, 1);
+  assert.equal(v.author, 'daniel');
+  assert.equal(v.date, seed.TODAY);
+  assert.equal(v.afterEvidence, false);
+  assert.deepEqual(Object.keys(v.value), SECTION_KEYS);
+  assert.ok(v.value.mustNever.length > 0);
+  assert.equal(v.review.rejected.length, 1);
+  assert.equal(v.review.rejected[0].text, ai[0].text);
+  assert.equal(v.review.accepted, ai.length - 1);
+  assert.deepEqual(current(s, id, 'contract'), v.value);
+  assert.equal(capData(s, id).contractDraft.finalizedAt, seed.TODAY);
+  assert.equal(s.activity.length, before + 1);
+  assert.equal(s.activity[0].kind, 'contract-finalized');
+  assert.equal(s.activity[0].surfaced, true);
+  // Status follows authority decisions only.
+  assert.equal(getCapability(s, id).status, 'setup');
+  assert.deepEqual(getCapability(s, id).authority, { level: 0, limited: false });
+  // Finalized drafts are closed to edits.
+  assert.throws(() => addContractLine(s, id, 'may', 'More.'), /finalized/);
+  assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /already finalized/);
+  assert.throws(() => startContractDraft(s, id), /already has a finalized contract/);
+  assert.match(contractSummary(v.value, getCapability(s, id)), /must never/);
+});
+
+test('contract builder actions are available through the store and survive reload', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
+  const store = createStore({ storage });
+  store.dispatch('addCapability', { name: 'Order status lookup', owner: 'priya', risk: { impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Customer-facing' }, startingLevel: 1 });
+  const id = store.get().capabilities[store.get().capabilities.length - 1].id;
+  store.dispatch('startContractDraft', id, { by: 'priya' });
+  const again = createStore({ storage });
+  assert.ok(capData(again.get(), id).contractDraft);
+  assert.equal(capData(again.get(), id).contractDraft.templateId, 'low-customer');
 });

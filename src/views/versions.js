@@ -1,6 +1,7 @@
 import { html, badge, fmtDateYear, person, empty, kv } from '../ui.js';
 import { getCapability, versionList, VERSIONED_KINDS, KIND_LABELS } from '../store.js';
 import { diffTable } from './activity.js';
+import { contractReviewView } from './contract.js';
 
 // Every version of one versioned object for one capability, newest first.
 export function versionsView(state, capabilityId, query) {
@@ -24,6 +25,7 @@ export function versionsView(state, capabilityId, query) {
         ['Author', html`${who.name}${who.role ? html`, ${who.role}` : ''}`],
         ['Reason', v.reason],
       ])}
+      ${v.review ? contractReviewView(v.review) : ''}
       ${v.version > 1 ? html`<h4 class="version-sub">What changed from v${v.version - 1}</h4>${diffTable(v.before, v.value)}` : html`<details class="amendment"><summary>Contents</summary><pre class="version-raw">${JSON.stringify(v.value, null, 2)}</pre></details>`}
     </article>`;
   });

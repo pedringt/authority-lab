@@ -10,6 +10,7 @@ import { decisionsListView, decisionWorkspaceView, decisionRecordView } from './
 import { activityView } from './views/activity.js';
 import { versionsView } from './views/versions.js';
 import { addCapabilityView, setupView } from './views/setup.js';
+import { contractBuilderView } from './views/contract.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -62,6 +63,7 @@ function render() {
       else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub); title = 'Authority decision'; }
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'Versions'; }
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
+      else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Contract builder'; }
       else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
       break;
@@ -119,7 +121,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values) continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -150,6 +152,21 @@ document.addEventListener('click', (e) => {
       alert(err.message);
     }
   }
+  const builder = () => `#/capabilities/${capId}/contract/build`;
+  const tryDispatch = (fn) => {
+    try { fn(); if (location.hash.includes('?error=') || location.hash.includes('?edit=')) location.hash = builder(); }
+    catch (err) { location.hash = `${builder()}?error=${encodeURIComponent(err.message)}`; }
+  };
+  if (action === 'contract-start') tryDispatch(() => store.dispatch('startContractDraft', capId, { by: actor(store.get(), capId) }));
+  if (action === 'suggestion-accept') tryDispatch(() => store.dispatch('reviewSuggestion', capId, btn.dataset.line, { decision: 'accept' }));
+  if (action === 'suggestion-reject') tryDispatch(() => store.dispatch('reviewSuggestion', capId, btn.dataset.line, { decision: 'reject' }));
+  if (action === 'line-remove') tryDispatch(() => store.dispatch('removeContractLine', capId, btn.dataset.line));
+  if (action === 'section-confirm') tryDispatch(() => store.dispatch('confirmSection', capId, btn.dataset.section, true));
+  if (action === 'section-unconfirm') tryDispatch(() => store.dispatch('confirmSection', capId, btn.dataset.section, false));
+  if (action === 'contract-finalize') {
+    tryDispatch(() => store.dispatch('finalizeContract', capId, { by: actor(store.get(), capId) }));
+    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=contract`;
+  }
   if (action === 'reset') {
     store.dispatch('reset');
     stopSuite();
@@ -173,6 +190,21 @@ document.addEventListener('change', (e) => {
 });
 
 document.addEventListener('submit', (e) => {
+  const lineForm = e.target.closest('[data-form^="add-line-"], [data-form="edit-line"]');
+  if (lineForm) {
+    e.preventDefault();
+    const capId = parseRoute().parts[1];
+    const text = new FormData(lineForm).get('text');
+    const builder = `#/capabilities/${capId}/contract/build`;
+    try {
+      if (lineForm.dataset.form === 'edit-line') store.dispatch('editContractLine', capId, lineForm.dataset.line, text);
+      else store.dispatch('addContractLine', capId, lineForm.dataset.section, text);
+      if (location.hash !== builder) location.hash = builder; else render();
+    } catch (err) {
+      location.hash = `${builder}?error=${encodeURIComponent(err.message)}`;
+    }
+    return;
+  }
   const form = e.target.closest('[data-form="add-capability"]');
   if (!form) return;
   e.preventDefault();

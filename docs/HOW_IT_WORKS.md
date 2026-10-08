@@ -146,6 +146,14 @@ Adding the capability writes its first decision record, dated today and authoriz
 
 Every tab of a capability is always visible. A tab with nothing to show says what is missing and links to the **Setup** page, a checklist of the steps to the first authority decision: define, contract, criteria and requirements, stakeholders, scenarios, test run, decision. Steps whose editors are not built yet say so.
 
+### Building the contract
+
+From a capability's Setup page (or the empty Contract tab), **Open the contract builder** starts a draft. A starter template is picked from the risk profile: higher impact adds hard limits and tighter escalation; financial exposure adds fraud, chargeback and value-limit lines; "difficult to reverse" adds an approval line for anything that cannot be undone. On top of the template, seeded suggestions are generated from the capability's name and summary by keyword, each labelled **Suggested by AI** with the word that triggered it. Nothing calls a model; the same name always gets the same suggestions.
+
+Template lines start accepted. Each AI suggestion is pending until you **accept**, **edit** or **reject** it, one at a time; there is no accept-all. You can add your own lines, edit template lines, and remove them. Every change unconfirms its section, and all five sections must be confirmed again before finalizing. Rejected suggestions and removed template lines stay in the record.
+
+Software checks run on the draft and block finalizing when: "AI must never" or "Automatic restriction conditions" is empty above Low impact; the same line appears under "may" and "must never" (or "must ask"); a restriction rule has no number or no time/case window; a financial capability sets no value limit in "may" (a ceiling) or "must ask" (a threshold); a limit that only appears under "must never" does not count. The finalize panel shows a plain-English summary, what changed from the template, and who is finalizing. Finalizing writes contract v1, with the full review behind it (template, suggestions accepted, edited and rejected, lines added by hand), and records a "Contract finalized" event. It does not change authority or status; those follow decisions only.
+
 ### Acting as
 
 The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
@@ -193,6 +201,7 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Authorize authority change | Changes the capability's authority, writes an immutable record, starts monitoring if authority expanded |
 | Simulate threshold breach | Pushes severe errors over the limit; software restricts authority, creates an alert, an event and a record, and requires review |
 | Add capability | Defines a capability, its risk profile and starting authority; writes its first decision record |
+| Contract builder | Starts from a template, reviews each AI suggestion, runs the software checks, finalizes contract v1 |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 
