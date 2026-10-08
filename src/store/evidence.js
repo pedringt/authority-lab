@@ -4,7 +4,7 @@
 import * as seed from '../data/seed.js';
 import { defaultCriteria, defaultRequirements } from '../data/criteria-defaults.js';
 import { starterScenarios } from '../data/scenario-templates.js';
-import { getCapability, capData, updateCap, logEvent, fmtLong } from './state.js';
+import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionsInForce, performanceResultsSeen, testSummary } from './selectors.js';
 import { people, requireActive } from './people.js';
 import { amend } from './capabilities.js';
@@ -33,8 +33,10 @@ export function finishTestRun(state, capabilityId) {
   const lockedBefore = criteriaLocked(state, capabilityId);
   const summary = testSummary(state, capabilityId);
   const failed = d.scenarios.filter((s) => !s.pass);
+  // The run date is stored as runOn and formatted where it is shown, never
+  // baked into the text.
   const detail =
-    `Run on ${fmtLong(state.today)} in this session. ${summary.failed} failure${summary.failed === 1 ? '' : 's'} (${summary.highSeverity} high severity)` +
+    `${summary.failed} failure${summary.failed === 1 ? '' : 's'} (${summary.highSeverity} high severity)` +
     (failed.length ? `: ${failed.map((s) => `${s.id} ${s.name} (${s.severity})`).join(', ')}. ` : '. ') +
     'The suite replays recorded decisions, so results match the last recorded run until a scenario is re-recorded.';
   const existing = d.evidence.find((e) => e.source === 'Automated tests' && e.metric === 'Scenario pass rate');
@@ -43,6 +45,7 @@ export function finishTestRun(state, capabilityId) {
     value: `${summary.passed} of ${summary.total} passed`,
     status: summary.highSeverity ? 'watch' : summary.failed ? 'watch' : 'pass',
     date: state.today,
+    runOn: state.today,
     detail,
   };
   const evidence = existing ? d.evidence.map((e) => (e === existing ? item : e)) : [item, ...d.evidence];

@@ -126,9 +126,3 @@ export function logEvent(state, event) {
 export function reset() {
   return initialState();
 }
-
-export function fmtLong(iso) {
-  const [y, m, d] = iso.split('-').map(Number);
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  return `${months[m - 1]} ${d}, ${y}`;
-}

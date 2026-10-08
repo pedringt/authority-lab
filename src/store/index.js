@@ -6,7 +6,7 @@
 // This file is the store's public API. Views, main.js and tests import from
 // here only; the modules behind it are split by responsibility.
 
-export { emptyCapabilityData, VERSIONED_KINDS, initialState, getCapability, capData, reset, fmtLong } from './state.js';
+export { emptyCapabilityData, VERSIONED_KINDS, initialState, getCapability, capData, reset } from './state.js';
 export { currentVersion, EMPTY_CONTRACT, EMPTY_RISK, current, versionList, versionsInForce, MEASURED_SOURCES, performanceResultsSeen, SURFACED_KINDS, KIND_LABELS_ALL, activityEvents, versionFor, amendmentsAfterEvidenceFor, isSurfaced, lastDecisionId, proposedAuthority, decisionRequired, lastEvaluated, focusCapability, levelName, authorityLabel, readiness, testSummary } from './selectors.js';
 export { people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, snapshotPerson, addPerson, editPerson, deactivatePerson, RIGHTS, RIGHT_LABELS, activeAdmins, openRosterProposal, getRosterProposal, proposeRosterChange, rosterApprovalEligibility, approveRosterChange, rejectRosterChange, withdrawRosterChange, actor, setActingAs } from './people.js';
 export { vagueNameWarning, slugify, RISK_OPTIONS, addCapability, amend, KIND_LABELS } from './capabilities.js';

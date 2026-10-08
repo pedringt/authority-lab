@@ -41,6 +41,12 @@ export function html(strings, ...values) {
 let today = TODAY;
 export function setToday(iso) { today = iso || TODAY; }
 
+// Evidence detail text. A test run made in this session stores its date as
+// runOn; the date is formatted here, at render time.
+export function evidenceDetail(e) {
+  return e.runOn ? `Run on ${fmtDate(e.runOn)} in this session. ${e.detail}` : e.detail;
+}
+
 export function fmtDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
