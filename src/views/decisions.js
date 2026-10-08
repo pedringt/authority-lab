@@ -106,10 +106,12 @@ export function decisionWorkspaceView(state, capabilityId) {
 
   const check = canAuthorize(state, capabilityId);
   const rec = d.recommendation;
-  const options = seed.DECISION_OPTIONS.map((o) => html`<label class="option ${dec.option === o.id ? 'is-selected' : ''} ${rec && o.id === rec.option ? 'is-recommended' : ''}">
+  // A compact radio list: one line per option, its description as a tooltip.
+  const options = seed.DECISION_OPTIONS.map((o) => html`<label class="option-row ${dec.option === o.id ? 'is-selected' : ''} ${rec && o.id === rec.option ? 'is-recommended' : ''}" title="${o.description}">
     <input type="radio" name="decision-option" value="${o.id}" ${dec.option === o.id ? raw('checked') : ''} data-action="select-option" data-capability="${cap.id}">
-    <span class="option-body"><strong>${o.name}</strong><span class="muted small">${o.description}</span>${rec && o.id === rec.option ? html`<span class="badge badge-neutral">Recommended</span>` : ''}</span>
+    <span class="option-row-name">${o.name}</span>${rec && o.id === rec.option ? html`<span class="badge badge-neutral">Recommended</span>` : ''}
   </label>`);
+  const chosen = seed.DECISION_OPTIONS.find((o) => o.id === dec.option);
 
   const c = dec.conditions;
   const conditions = dec.option === 'expand-limits' ? html`<div class="card conditions">
@@ -122,10 +124,16 @@ export function decisionWorkspaceView(state, capabilityId) {
       <label class="check"><input type="checkbox" ${c.policyClear ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="policyClear"><span>Policy eligibility is clear (no exception needed)</span></label>
       <label class="check"><input type="checkbox" ${c.noChargeback ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="noChargeback"><span>No active chargeback</span></label>
     </div>
-    <div class="preview"><span class="fact-label">Plain-English preview</span><p>${conditionsPreview(c, cap)}</p></div>
+    <p class="muted small">The plain-English preview in the decision panel updates as you change these.</p>
+  </div>` : '';
+  const conditionWarnings = dec.option === 'expand-limits' ? html`
     ${!c.noFraudFlag ? notice('fail', 'Fraud-flagged accounts would be eligible for automatic action.', 'The contract lists fraud-flagged accounts under MUST ASK. The enforcement gate still blocks the action, but the condition should match the contract.') : ''}
-    ${c.maxValue > 100 ? notice('watch', 'This exceeds the $100 approval line in the contract.', r.unmet.length ? `The evidence requirement "${r.unmet[0].text}" is not met (currently ${r.unmet[0].current}).` : '') : ''}
-  </div>` : dec.option ? html`<div class="card conditions"><p class="eyebrow">Resulting authority</p><p>${scopeText(dec.option, c, cap)}</p><p class="muted small">${cap.name} would move from ${authorityLabel(cap.authority)} to ${authorityLabel(nextAuthority(dec.option, cap.authority))}.</p></div>` : '';
+    ${c.maxValue > 100 ? notice('watch', 'This exceeds the $100 approval line in the contract.', r.unmet.length ? `The evidence requirement "${r.unmet[0].text}" is not met (currently ${r.unmet[0].current}).` : '') : ''}` : '';
+  const preview = !dec.option
+    ? html`<p class="muted">Choose an option to see what it would allow.</p>`
+    : dec.option === 'expand-limits'
+      ? html`<p>${conditionsPreview(c, cap)}</p>`
+      : html`<p>${scopeText(dec.option, c, cap)}</p><p class="muted small">${cap.name} would move from ${authorityLabel(cap.authority)} to ${authorityLabel(nextAuthority(dec.option, cap.authority))}.</p>`;
 
   const criteria = current(state, cap.id, 'criteria');
   const stakeholders = current(state, cap.id, 'stakeholders');
@@ -144,6 +152,7 @@ export function decisionWorkspaceView(state, capabilityId) {
 
   <div class="decision-grid">
     <div class="decision-main">
+      ${conditions ? section('Conditions', conditions, { subtitle: 'For Expand with limits: when the AI may act on its own.' }) : ''}
       ${section('Evidence summary', html`
         ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}
         ${criteriaRows.length ? html`<div class="card table-card"><table class="table"><thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th></tr></thead><tbody>${criteriaRows}</tbody></table></div>` : ''}
@@ -161,11 +170,13 @@ export function decisionWorkspaceView(state, capabilityId) {
     </div>
 
     <div class="decision-side">
-      ${section('Decision', html`<div class="option-list" role="radiogroup" aria-label="Decision options">${options}</div>`, { subtitle: 'Authority can move down as well as up.' })}
-      ${conditions}
-      <div class="card authorize">
-        <p class="eyebrow">Human authorization</p>
-        <label class="field field-stack"><span>Decision rationale</span><textarea rows="5" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>
+      <div class="card decision-panel">
+        <p class="eyebrow">Decision</p>
+        <div class="option-rows" role="radiogroup" aria-label="Decision options">${options}</div>
+        <p class="muted small">Authority can move down as well as up.</p>
+        <div class="preview"><span class="fact-label">${chosen ? html`Chosen: <strong>${chosen.name}</strong> · plain-English preview` : 'Plain-English preview'}</span>${preview}</div>
+        ${conditionWarnings}
+        <label class="field field-stack"><span>Decision rationale</span><textarea rows="4" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>
         <p class="muted small">Authorizing as <strong>${authorizer.name}</strong>, ${authorizer.role}. This action changes what the AI is allowed to do in production for ${cap.name}. It writes an immutable decision record with the evidence snapshot above.</p>
         ${check.ok ? '' : html`<p class="form-error" role="status">${check.reason}</p>`}
         <button class="btn btn-primary btn-block" data-action="authorize" data-capability="${cap.id}" ${check.ok ? '' : raw('disabled')}>Authorize authority change</button>

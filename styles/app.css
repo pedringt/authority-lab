@@ -298,7 +298,7 @@ blockquote { margin: 0; color: var(--text-2); border-left: 3px solid var(--borde
 
 /* Decision workspace ---------------------------------------------------- */
 .decision-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; align-items: start; }
-.decision-side { position: sticky; top: 72px; }
+.decision-side { position: sticky; top: 112px; }
 .decision-side .section:first-child { margin-top: 28px; }
 .decision-main .section:first-child { margin-top: 28px; }
 .option-list { display: grid; gap: 6px; }
@@ -321,6 +321,21 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .preview p { margin: 4px 0 0; }
 .authorize { margin-top: 12px; border-top: 3px solid var(--accent); }
 .authorize .field { margin: 8px 0; }
+/* The decision panel stays in view while the evidence scrolls: options,
+   the chosen option's preview, the rationale and the Authorize button. */
+.decision-side { max-height: calc(100vh - 124px); overflow-y: auto; }
+.decision-side { margin-top: 28px; }
+.decision-panel { border-top: 3px solid var(--accent); display: grid; gap: 10px; }
+.decision-panel .eyebrow, .decision-panel p { margin: 0; }
+.decision-panel .field { margin: 0; }
+.decision-panel .notice { margin: 0; }
+.option-rows { display: grid; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.option-row { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 14px; cursor: pointer; }
+.option-row + .option-row { border-top: 1px solid var(--border); }
+.option-row:hover { background: var(--neutral-bg); }
+.option-row.is-selected { background: var(--accent-soft); font-weight: 600; }
+.option-row input { margin: 0; }
+.option-row .badge { margin-left: auto; }
 .form-error { color: var(--fail); font-size: 13px; }
 .position-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
 .position-list li { display: grid; grid-template-columns: 150px auto 1fr; gap: 10px; align-items: center; }
@@ -345,7 +360,7 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 @media (max-width: 960px) {
   .metric-grid, .attention-grid, .metric-grid-4 { grid-template-columns: repeat(2, 1fr); }
   .decision-grid { grid-template-columns: 1fr; }
-  .decision-side { position: static; }
+  .decision-side { position: static; max-height: none; overflow: visible; }
   .level-scale, .level-legend { grid-template-columns: repeat(5, 1fr); }
 }
 @media (max-width: 720px) {
