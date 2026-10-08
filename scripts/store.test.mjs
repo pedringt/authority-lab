@@ -18,7 +18,7 @@ import {
   withdrawProposal, signoffFeasibility, decisionRequired, proposedAuthority, lastDecisionId, lastEvaluated,
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
-  snapshotPerson,
+  snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
 } from '../src/store.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -69,8 +69,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 13);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v13');
+  assert.equal(s.version, 14);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v14');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(decisionRequired(s, RR), true);
@@ -263,7 +263,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 12, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 13, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -1883,4 +1883,117 @@ test('a deactivated person stays on the records they are on, as they were', () =
   setPeople(people(s));
   assert.ok(String(proposalView(s, RR, 'P-1', new URLSearchParams(''))).includes('Elena Rossi'));
   setPeople(null);
+});
+
+// ---------------------------------------------------------------------------
+// Coverage warnings (#25). Never block; explain the gap; link to People.
+// ---------------------------------------------------------------------------
+
+function removeRight(s, person, right, by = 'maya', approver = 'jonas') {
+  s = proposeRosterChange(s, { kind: 'rights', person, right, grant: false, by, reason: `${person} rotates off ${right}.` });
+  const pr = openRosterProposal(s, person);
+  return approveRosterChange(s, pr.id, { by: approver });
+}
+
+test('a High or Financial capability warns when fewer than two active Risk approvers are among its possible approvers', () => {
+  let s = initialState();
+  assert.equal(isHighOrFinancial(s, RR), true);
+  assert.equal(isHighOrFinancial(s, TC), false);
+  assert.deepEqual(riskCoverage(s, RR), { approvers: ['daniel', 'sofia'], needed: 2, short: false });
+  assert.equal(coverageWarning(s, RR), null);
+  assert.deepEqual(coverageWarnings(s), [], 'the seed has no gaps');
+  // Low impact never needs Risk coverage.
+  assert.equal(riskCoverage(s, TC).needed, 0);
+  // Remove Sofia's right: Refund recommendation and the other High/Financial capabilities drop to one.
+  s = removeRight(s, 'sofia', 'riskApprover');
+  const w = coverageWarning(s, RR);
+  assert.ok(w);
+  assert.match(w.title, /only one active Risk approver/);
+  assert.match(w.body, /Daniel Okafor is the only Risk approver/);
+  assert.equal(w.link, '#/capabilities/refund-recommendation?tab=stakeholders');
+  assert.deepEqual(w.links.map((l) => l.text), ['Stakeholders', 'People']);
+  assert.ok(coverageWarnings(s).some((x) => x.capabilityId === 'account-closure'));
+  assert.ok(!coverageWarnings(s).some((x) => x.capabilityId === TC));
+  // Nothing is blocked: proposing on the capability still works (Daniel can be the Risk approver if someone else proposes).
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  assert.ok(openProposal(proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON }), RR, 'criteria'));
+  // Deactivating Daniel too: no Risk approver at all.
+  s = proposeRosterChange(s, { kind: 'deactivate', person: 'daniel', by: 'maya', reason: 'Leaving the company.' });
+  s = approveRosterChange(s, openRosterProposal(s, 'daniel').id, { by: 'jonas' });
+  assert.match(coverageWarning(s, RR).title, /no active Risk approvers/);
+  // Granting the right to a listed person clears it.
+  s = proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'Finance covers Risk sign-off.' });
+  s = approveRosterChange(s, openRosterProposal(s, 'elena').id, { by: 'jonas' });
+  s = proposeRosterChange(s, { kind: 'rights', person: 'priya', right: 'riskApprover', grant: true, by: 'maya', reason: 'Operations covers Risk sign-off.' });
+  s = approveRosterChange(s, openRosterProposal(s, 'priya').id, { by: 'jonas' });
+  assert.equal(coverageWarning(s, RR), null);
+});
+
+test('an open proposal is flagged when its frozen approvers can no longer satisfy the rule, and withdrawing is suggested', () => {
+  let s = initialState();
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'daniel', reason: REASON });
+  const p = () => openProposal(s, RR, 'criteria') || getProposal(s, RR, 'P-1');
+  assert.deepEqual(proposalSatisfiable(s, RR, p()), { ok: true, reason: null });
+  assert.equal(proposalWarning(s, RR, p()), null);
+  // Sofia is the only frozen approver with the Risk right. Remove it: the proposal cannot complete.
+  s = removeRight(s, 'sofia', 'riskApprover');
+  const w = proposalWarning(s, RR, p());
+  assert.ok(w);
+  assert.match(w.title, /P-1 on Refund recommendation can no longer be signed off/);
+  assert.match(w.body, /none of the approvers frozen when it opened holds the Risk approver right now/);
+  assert.match(w.body, /withdraw it and propose again/);
+  assert.equal(w.link, '#/capabilities/refund-recommendation/proposals/P-1');
+  assert.ok(coverageWarnings(s, RR).some((x) => x.kind === 'proposal'));
+  // Approvals are still accepted where eligible; nothing is blocked, the gap is just explained.
+  s = approveProposal(s, RR, 'P-1', { by: 'maya' });
+  assert.equal(getProposal(s, RR, 'P-1').status, 'open');
+  // The proposer withdraws; the warning goes with it.
+  s = withdrawProposal(s, RR, 'P-1', { by: 'daniel', reason: 'Re-proposing with a fresh approver set.' });
+  assert.deepEqual(coverageWarnings(s).filter((x) => x.kind === 'proposal'), []);
+  // Deactivation of a frozen approver counts too (owner-only case).
+  let [t, id] = blankCap();
+  t = { ...t, capabilityData: { ...t.capabilityData, [id]: { ...capData(t, id), scenarios: seed.scenarios.slice(0, 2) } } };
+  const d = defaultsFor(t, id);
+  t = saveCriteria(t, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  t = runSuite(t, id);
+  t = proposeAmendment(t, id, 'criteria', { value: { criteria: current(t, id, 'criteria'), requirements: current(t, id, 'requirements') }, by: 'maya', reason: 'Non-owner proposing; the owner must approve.' });
+  assert.equal(proposalSatisfiable(t, id, openProposal(t, id, 'criteria')).ok, true);
+  t = deactivatePerson(t, 'priya', { by: 'maya', reason: 'Left the company.' });
+  assert.match(proposalSatisfiable(t, id, openProposal(t, id, 'criteria')).reason, /owner .* can no longer do so/);
+});
+
+test('removing a right or deactivating someone shows the impact and still goes through with a reason', () => {
+  let s = initialState();
+  // Hypothetical only: nothing is written.
+  const before = rosterVersions(s).length;
+  const impact = rosterChangeImpact(s, { kind: 'rights', person: 'sofia', right: 'riskApprover', grant: false });
+  assert.equal(rosterVersions(s).length, before);
+  assert.equal(impact.any, true);
+  assert.ok(impact.capabilities.some((c) => c.id === RR));
+  assert.deepEqual(impact.proposals, []);
+  // Granting never weakens coverage; Low-impact capabilities never appear.
+  assert.equal(rosterChangeImpact(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true }).any, false);
+  assert.ok(!impact.capabilities.some((c) => c.id === TC));
+  // With an open proposal frozen on Sofia as the only Risk approver, deactivating her is named on the proposal side too.
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'daniel', reason: REASON });
+  const impact2 = rosterChangeImpact(s, { kind: 'deactivate', person: 'sofia' });
+  assert.deepEqual(impact2.proposals.map((x) => x.id), ['P-1']);
+  // The roster proposal records the impact; a reason is required; it is not blocked.
+  assert.throws(() => proposeRosterChange(s, { kind: 'deactivate', person: 'sofia', by: 'maya', reason: '' }), /needs a reason/);
+  s = proposeRosterChange(s, { kind: 'deactivate', person: 'sofia', by: 'maya', reason: 'Leaving the company; Risk cover to be rebuilt.' });
+  const pr = openRosterProposal(s, 'sofia');
+  assert.equal(pr.impact.any, true);
+  assert.deepEqual(pr.impact.proposals.map((x) => x.id), ['P-1']);
+  s = approveRosterChange(s, pr.id, { by: 'jonas' });
+  assert.equal(isActivePerson(s, 'sofia'), false, 'went through');
+  assert.ok(coverageWarnings(s).some((w) => w.kind === 'proposal' && w.proposalId === 'P-1'));
+  // Direct deactivation of a person with no rights also records its impact on the version.
+  let u = proposeAmendment(initialState(), RR, 'criteria', { value, by: 'daniel', reason: REASON });
+  u = deactivatePerson(u, 'elena', { by: 'maya', reason: 'Left the company.' });
+  const v = rosterVersions(u)[rosterVersions(u).length - 1];
+  assert.equal(v.impact.any, false, 'Elena holds no right and is not needed for P-1');
+  // The seeded demo story is unaffected.
+  assert.deepEqual(coverageWarnings(initialState()), []);
 });

@@ -1,5 +1,5 @@
 import { html, raw, badge, notice, section, person, personAt, fmtDateYear, fmtDate, kv } from '../ui.js';
-import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins } from '../store.js';
+import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings } from '../store.js';
 import { diffTable } from './activity.js';
 
 // The people roster (#22). Workspace admins add, edit and deactivate; nobody
@@ -35,7 +35,9 @@ export function peopleView(state, query) {
       </td></tr>`;
     }
     if (deactivating === key && admin) {
+      const impact = rosterChangeImpact(state, { kind: 'deactivate', person: key });
       return html`<tr class="is-editing"><td colspan="6">
+        ${impactNote(impact)}
         <form class="line-edit people-form" data-form="deactivate-person" data-person="${key}">
           <span><strong>Deactivate ${p.name}?</strong> <span class="muted small">They stay on every record they are on; they can no longer act, propose, approve or be a stakeholder.${p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover) ? ' They hold a right, so this becomes a proposal for a different workspace admin to approve.' : ''}</span></span>
           <input type="text" name="reason" placeholder="Reason" maxlength="200" aria-label="Reason" required>
@@ -45,7 +47,9 @@ export function peopleView(state, query) {
       </td></tr>`;
     }
     if (rightPerson === key && RIGHT_LABELS[rightKey] && admin) {
+      const impact = rosterChangeImpact(state, { kind: 'rights', person: key, right: rightKey, grant: rightGrant });
       return html`<tr class="is-editing"><td colspan="6">
+        ${impactNote(impact)}
         <form class="line-edit people-form" data-form="propose-roster" data-person="${key}" data-right="${rightKey}" data-grant="${rightGrant ? '1' : '0'}">
           <span><strong>${rightGrant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[rightKey]}: ${p.name}</strong> <span class="muted small">Proposed by ${who.name}; approved by a different workspace admin${rightGrant && rightKey === 'riskApprover' ? ' or an existing Risk approver' : ''}, never by ${rightGrant ? 'the person receiving it' : 'the proposer'}.</span></span>
           <input type="text" name="reason" placeholder="Reason" maxlength="200" aria-label="Reason" required>
@@ -77,6 +81,7 @@ export function peopleView(state, query) {
     </div>
   </div>
   ${error ? notice('fail', 'Could not change the roster', error) : ''}
+  ${coverageWarnings(state).map((w) => html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>${w.title}</strong><p>${w.body}</p></div><a class="notice-link" href="${w.link === '#/people' ? `#/capabilities/${w.capabilityId}` : w.link}">${w.link === '#/people' ? 'Capability' : w.linkText}</a></div>`)}
   ${admin ? '' : notice('neutral', `Acting as ${who.name}, who is not a workspace admin`, 'Only a workspace admin adds, edits or deactivates people. Switch who is acting in the top bar to see the controls.')}
   <div class="card progress-card"><div class="progress-facts">
     <div><span class="fact-label">Active people</span><strong>${Object.keys(activePeople(state)).length}</strong></div>
@@ -123,6 +128,7 @@ function rosterProposals(state, acting, focusId) {
       ${kv([
         ['Proposed by', personAt(pr.proposedByAt, pr.proposedBy).name],
         ['Reason', pr.reason],
+        ...(pr.impact && pr.impact.any ? [['Coverage impact', html`${pr.impact.capabilities.length ? html`Would leave ${pr.impact.capabilities.map((c) => c.name).join(', ')} short of two Risk approvers. ` : ''}${pr.impact.proposals.length ? html`Would leave ${pr.impact.proposals.map((x) => `${x.id} on ${x.name}`).join(', ')} unable to complete as proposed.` : ''}`]] : []),
         ['Can approve', pr.eligible.map((k) => person(k).name).join(', ') || 'nobody'],
         ...(pr.approvals.length ? [['Approved by', pr.approvals.map((a) => `${personAt(a.byAt, a.by).name}, ${fmtDate(a.date)}`).join('; ')]] : []),
         ...(pr.rejection ? [['Rejected', `${personAt(pr.rejection.byAt, pr.rejection.by).name}: ${pr.rejection.reason}`]] : []),
@@ -136,4 +142,11 @@ function rosterProposals(state, acting, focusId) {
       </div>` : ''}
     </article>`;
   })}`, { subtitle: 'Rights grants and removals, and the deactivation of anyone holding a right. The proposer never approves.' });
+}
+
+// Shown on the propose-right and deactivate forms: what the change would do to
+// coverage. A warning, never a block; the reason field is already required.
+function impactNote(impact) {
+  if (!impact || !impact.any) return '';
+  return html`<div class="notice notice-watch impact-note" role="status"><div class="notice-body"><strong>This change would weaken sign-off coverage</strong><p>${impact.capabilities.length ? `${impact.capabilities.map((c) => c.name).join(', ')} would have fewer than two active Risk approvers among their possible approvers. ` : ''}${impact.proposals.length ? `${impact.proposals.map((x) => `${x.id} on ${x.name}`).join(', ')} could no longer be signed off as proposed; the proposer would need to withdraw and propose again. ` : ''}You can still go ahead; say why in the reason.</p></div></div>`;
 }

@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
-import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, personAt, notice, empty } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId } from '../store.js';
+import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, personAt, notice, empty, warningNotice } from '../ui.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings } from '../store.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -68,6 +68,7 @@ export function capabilityView(state, id, query) {
     </div>
   </div>
   ${summary}
+  ${coverageWarnings(state, id).map(warningNotice)}
   ${tabs}
   <div class="tab-panel">${body}</div>`;
 }

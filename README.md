@@ -84,6 +84,10 @@ Expanding authority needs a pending proposal; restricting, suspending or redesig
 
 The roster lives in versioned state (`state.roster`), seeded from `src/data/seed.js`. Each person has a name, title, team, `active` flag and explicit rights `{ riskApprover, workspaceAdmin }`. Only a workspace admin changes the roster (add, edit, deactivate; never delete), always with a reason, as a new version. Granting or removing a right, or deactivating a rights holder, is a proposal by an admin approved by someone else (a different admin, or an existing Risk approver for a Risk approver grant); the recipient of a grant never approves it; the last admin cannot be removed. Deactivated people cannot act, propose, approve or be stakeholders. Seed admins: Maya Chen, Jonas Lindqvist. Seed Risk approvers: Daniel Okafor, Sofia Alvarez.
 
+## Coverage warnings
+
+Warnings, never blocks: a High/Financial capability with fewer than two active Risk approvers among its possible approvers; an open proposal whose frozen approvers can no longer satisfy the rule (withdraw and re-propose); and, on the People page, what removing a right or deactivating someone would do to either. The reason is required; the impact is recorded on the roster change.
+
 ## Structure
 
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).

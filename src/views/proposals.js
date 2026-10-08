@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, fmtDateYear, kv } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS } from '../store.js';
+import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, fmtDateYear, kv, warningNotice } from '../ui.js';
+import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store.js';
 import { diffTable } from './activity.js';
 
 const KIND_TITLE = { criteria: 'success criteria and evidence requirements', contract: 'contract', stakeholders: 'stakeholders' };
@@ -118,6 +118,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
     </div>
   </div>
   ${error ? notice('fail', 'Could not record that', error) : ''}
+  ${(() => { const w = proposalWarning(state, capabilityId, p); return w ? warningNotice({ ...w, link: acting === p.proposedBy ? '#withdraw' : '#/people', linkText: acting === p.proposedBy ? 'Withdraw below' : 'People' }) : ''; })()}
   <div class="card">${kv([
     ['Reason', p.reason],
     ['Sign-off needed', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approver${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk: approved') : badge('neutral', 'Risk: pending')}</span>` : ''} <span class="muted small">${requirementLabel(req)}; the proposer never approves. Risk means the recorded Risk approver right.</span>`],
@@ -158,7 +159,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
 export function proposalsList(state, capabilityId, kind) {
   const list = capData(state, capabilityId).proposals.filter((p) => p.kind === kind);
   if (!list.length) return '';
-  return html`<div class="card"><p class="eyebrow">Proposed amendments</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${personAt(p.proposedByAt, p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected')} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
+  return html`<div class="card"><p class="eyebrow">Proposed amendments</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${personAt(p.proposedByAt, p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected')}${proposalWarning(state, capabilityId, p) ? html` ${badge('watch', 'Cannot complete as proposed')}` : ''} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
 }
 
 export function amendLink(state, capabilityId, kind) {

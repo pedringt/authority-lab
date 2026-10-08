@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt } from '../ui.js';
-import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId } from '../store.js';
+import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings } from '../store.js';
 
 function firstSentences(text, n) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
@@ -135,6 +135,24 @@ export function overviewView(state) {
     attention.push(html`<a class="card card-link attention" href="#/capabilities/${cap.id}/proposals/${p.id}">
       <div class="attention-head"><strong>Amendment awaiting sign-off</strong>${badge('decision', p.id)}</div>
       <p>${personAt(p.proposedByAt, p.proposedBy).name} proposed changing the ${p.kind === 'contract' ? 'contract' : 'success criteria'} after evidence. ${p.reason}</p>
+    </a>`);
+  });
+  // Coverage gaps roll into one card listing the affected capabilities; each
+  // open proposal that cannot complete gets its own.
+  const warnings = coverageWarnings(state);
+  const short = warnings.filter((w) => w.kind === 'coverage');
+  if (short.length) {
+    attention.push(html`<div class="card attention">
+      <div class="attention-head"><strong>Risk coverage: ${short.length} capabilit${short.length === 1 ? 'y' : 'ies'} short</strong>${badge('watch', 'Coverage')}</div>
+      <p>High-impact or financial changes need two approvers with at least one from Risk. These have fewer than two active Risk approvers among their possible approvers:</p>
+      <ul class="plain-list small">${short.map((w) => { const c = state.capabilities.find((x) => x.id === w.capabilityId); return html`<li><a href="#/capabilities/${c.id}?tab=stakeholders">${c.name}</a> <span class="muted">· ${w.title.replace(`${c.name} has `, '')}</span></li>`; })}</ul>
+      <p class="small">Usually the fix is adding an existing Risk approver to the capability's stakeholders. <a href="#/people">People</a></p>
+    </div>`);
+  }
+  warnings.filter((w) => w.kind === 'proposal').forEach((w) => {
+    attention.push(html`<a class="card card-link attention" href="${w.link}">
+      <div class="attention-head"><strong>${w.proposalId} cannot complete</strong>${badge('watch', 'Sign-off')}</div>
+      <p>${w.title}. The proposer can withdraw and propose again.</p>
     </a>`);
   });
   d.evidence.filter((e) => e.source === 'Incident' && e.status === 'fail').slice(0, 1).forEach((e) => {
