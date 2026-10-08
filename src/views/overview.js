@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate } from '../ui.js';
-import { focusCapability, capData, readiness, authorityLabel, testSummary, current } from '../store.js';
+import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId } from '../store.js';
 
 function firstSentences(text, n) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
@@ -14,13 +14,15 @@ export function overviewView(state) {
   const p = d.pilot;
   const tests = testSummary(state, cap.id);
   const decided = Boolean(d.decision.recordId);
+  const pending = decisionRequired(state, cap.id);
+  const proposed = proposedAuthority(state, cap.id);
   const breached = d.monitoring && d.monitoring.breached;
 
   const header = html`<div class="page-head">
     <div>
       <p class="eyebrow">${seed.workspace.name} · ${seed.workflow.name}</p>
       <h1>Where do we need to make a decision?</h1>
-      <p class="lede">${cap.decisionRequired
+      <p class="lede">${pending
         ? 'One capability in this workflow is waiting on an authority decision. The evidence, the open gap and the disagreement are below.'
         : breached
           ? 'One capability was restricted automatically and needs a human review before its authority can expand again.'
@@ -31,7 +33,7 @@ export function overviewView(state) {
   const alerts = state.alerts.map((a) => notice('fail', a.title, a.body, { link: a.link, linkText: 'Open monitoring' }));
 
   let pilotCard;
-  if (cap.decisionRequired) {
+  if (pending) {
     pilotCard = html`<div class="card card-hero">
       <div class="hero-grid">
         <div>
@@ -41,7 +43,7 @@ export function overviewView(state) {
           <div class="hero-facts">
             <div><span class="fact-label">Status</span>${capStatusBadge(cap.status)} ${p ? html`<span class="muted">${cap.pilotLabel || ''}${cap.pilotLabel ? ', ' : ''}${p.cases} cases since ${fmtDate(p.started)}</span>` : ''}</div>
             <div><span class="fact-label">Current authority</span>${authorityBadge(cap.authority)}</div>
-            <div><span class="fact-label">Proposed authority</span>${authorityBadge(cap.proposed)}</div>
+            <div><span class="fact-label">Proposed authority</span>${authorityBadge(proposed)}</div>
           </div>
         </div>
         <div class="hero-side">
@@ -74,7 +76,7 @@ export function overviewView(state) {
       </div>
     </div>`;
   } else {
-    const rec = state.decisionRecords.find((x) => x.id === (d.decision.recordId || cap.lastDecisionId));
+    const rec = state.decisionRecords.find((x) => x.id === (d.decision.recordId || lastDecisionId(state, cap.id)));
     const m = d.monitoring;
     pilotCard = html`<div class="card card-hero">
       <div class="hero-grid">

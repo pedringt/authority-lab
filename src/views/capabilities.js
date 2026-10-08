@@ -1,15 +1,15 @@
 import * as seed from '../data/seed.js';
 import { html, section, capStatusBadge, authorityBadge, levelScale, fmtDate, person } from '../ui.js';
-import { authorityLabel, current } from '../store.js';
+import { authorityLabel, current, decisionRequired, lastEvaluated } from '../store.js';
 
 export function capabilitiesView(state) {
   const rows = state.capabilities.map((c) => html`<tr>
     <td><a href="#/capabilities/${c.id}"><strong>${c.name}</strong></a><div class="muted small">${c.summary}</div></td>
     <td>${authorityBadge(c.authority)}</td>
-    <td>${capStatusBadge(c.status)}${c.decisionRequired ? html` <span class="badge badge-decision">Decision required</span>` : ''}</td>
+    <td>${capStatusBadge(c.status)}${decisionRequired(state, c.id) ? html` <span class="badge badge-decision">Decision required</span>` : ''}</td>
     <td class="muted">${current(state, c.id, 'risk').impact} impact · ${current(state, c.id, 'risk').exposure}</td>
     <td class="muted">${person(c.owner).name}</td>
-    <td class="muted">${fmtDate(c.lastEvaluated)}</td>
+    <td class="muted">${lastEvaluated(state, c.id) ? fmtDate(lastEvaluated(state, c.id)) : '—'}</td>
   </tr>`);
 
   const levels = html`<div class="level-legend">${seed.AUTHORITY_LEVELS.map((l) => html`<div class="level-legend-item"><strong>L${l.level} ${l.name}</strong><span>${l.description}</span></div>`)}</div>`;

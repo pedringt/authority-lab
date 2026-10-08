@@ -15,7 +15,7 @@ import {
   SETTINGS, pilotStarted, needsSignoff, signoffRequirements, isRiskStakeholder, proposeAmendment, approveProposal, rejectProposal,
   openProposal, getProposal, approvalEligibility, proposalReadiness, evaluateRequirement, approvalsComplete, namedStakeholders, contractValueChecks,
   saveStakeholders, saveScenarios, addStarterScenarios, simulateScenario, scenarioNudge, proposeAuthority, STANCES, stakeholderMembershipChanged,
-  withdrawProposal, signoffFeasibility,
+  withdrawProposal, signoffFeasibility, decisionRequired, proposedAuthority, lastDecisionId, lastEvaluated,
 } from '../src/store.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
@@ -62,11 +62,11 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 9);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v9');
+  assert.equal(s.version, 10);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v10');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
-  assert.equal(cap(s).decisionRequired, true);
+  assert.equal(decisionRequired(s, RR), true);
   assert.equal(capData(s, RR).scenarios.length, 26);
   assert.equal(capData(s, RR).evidence.length, 12);
   assert.equal(capData(s, RR).monitoring, null);
@@ -128,7 +128,7 @@ test('expand with limits: authority changes, record is written with snapshot and
   s = authorize(s, RR, { by: 'maya' });
   assert.deepEqual(cap(s).authority, { level: 3, limited: true });
   assert.equal(cap(s).status, 'monitoring');
-  assert.equal(cap(s).decisionRequired, false);
+  assert.equal(decisionRequired(s, RR), false);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
   assert.equal(rec.id, 'AC-04');
   assert.equal(rec.number, 4);
@@ -197,7 +197,7 @@ test('threshold breach restricts automatically, creates alert, event, record, re
 
 test('after a breach, expansion cannot be authorized until review', () => {
   let s = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
-  s = { ...s, capabilities: s.capabilities.map((c) => (c.id === RR ? { ...c, decisionRequired: true } : c)) };
+  s = { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...capData(s, RR), decision: { ...capData(s, RR).decision, proposed: { level: 3, limited: false } } } } };
   s = selectDecision(s, RR, 'expand');
   const check = canAuthorize(s, RR);
   assert.equal(check.ok, false);
@@ -215,7 +215,7 @@ test('a second capability gets its own decision and readiness, independent of th
   s = authorize(s, TC, { by: 'priya' });
   assert.deepEqual(cap(s, TC).authority, { level: 2, limited: false });
   assert.deepEqual(cap(s, RR).authority, { level: 2, limited: false });
-  assert.equal(cap(s, RR).decisionRequired, true);
+  assert.equal(decisionRequired(s, RR), true);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
   assert.equal(rec.capabilityId, TC);
   assert.equal(rec.authorizedBy, 'priya');
@@ -256,7 +256,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 8, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 9, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -518,6 +518,8 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   assert.deepEqual(c.authority, { level: 1, limited: false });
   assert.equal(c.status, 'setup');
   assert.equal(c.definedOn, seed.TODAY);
+  assert.equal(lastEvaluated(s, c.id), seed.TODAY, 'no evidence yet: falls back to the defined-on date, which is today');
+  assert.equal(lastDecisionId(s, c.id), s.decisionRecords[s.decisionRecords.length - 1].id);
   assert.equal(c.added, true);
   assert.deepEqual(Object.keys(c).filter((k) => ['contract', 'risk', 'criteria'].includes(k)), []);
   // Risk profile is version 1; the other objects have no version until authored.
@@ -547,7 +549,7 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'nobody', risk: LOW_RISK, startingLevel: 0 }), /owner/);
   assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: { impact: 'High' }, startingLevel: 0 }), /reversibility/);
   // The seeded demo is untouched.
-  assert.equal(cap(s).decisionRequired, true);
+  assert.equal(decisionRequired(s, RR), true);
   assert.equal(focusCapability(s).id, RR);
 });
 
@@ -1261,15 +1263,15 @@ test('a new capability can reach its second record: propose a move to Draft afte
   s = runSuite(s, id);
   assert.throws(() => proposeAuthority(s, id, 3, { by: 'priya' }), /one level at a time/);
   s = proposeAuthority(s, id, 2, { by: 'priya' });
-  assert.equal(getCapability(s, id).decisionRequired, true);
-  assert.deepEqual(getCapability(s, id).proposed, { level: 2, limited: false });
+  assert.equal(decisionRequired(s, id), true);
+  assert.deepEqual(proposedAuthority(s, id), { level: 2, limited: false });
   assert.equal(s.activity[0].kind, 'decision');
   assert.throws(() => proposeAuthority(s, id, 2, { by: 'priya' }), /already open/);
   s = authorize(selectDecision(s, id, 'expand'), id, { by: 'priya' });
   const c = getCapability(s, id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
   assert.equal(c.status, 'pilot');
-  assert.equal(c.decisionRequired, false);
+  assert.equal(decisionRequired(s, id), false);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
   assert.equal(rec.sequence, 2);
   assert.equal(rec.capabilityId, id);
@@ -1316,7 +1318,7 @@ test('end to end in the store: add → contract → criteria → stakeholders �
   assert.deepEqual(recs.map((r) => r.sequence), [1, 2]);
   assert.deepEqual(recs[1].versions, { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 });
   // The seeded demo is untouched.
-  assert.equal(getCapability(store.get(), RR).decisionRequired, true);
+  assert.equal(decisionRequired(store.get(), RR), true);
   assert.equal(readiness(store.get(), RR).met, 5);
 });
 
@@ -1499,4 +1501,59 @@ test('the proposer can withdraw an open proposal; it is recorded with a reason a
   store.dispatch('proposeAmendment', RR, 'criteria', { value, by: 'maya', reason: REASON });
   store.dispatch('withdrawProposal', RR, 'P-1', { by: 'maya', reason: 'Changed my mind after talking to Risk.' });
   assert.equal(getProposal(store.get(), RR, 'P-1').status, 'withdrawn');
+});
+
+// ---------------------------------------------------------------------------
+// Derived capability fields (#4 follow-up)
+// ---------------------------------------------------------------------------
+
+test('decisionRequired, proposed, lastDecisionId and lastEvaluated are derived, never stored on the capability', () => {
+  let s = initialState();
+  for (const c of s.capabilities) {
+    for (const k of ['decisionRequired', 'proposed', 'lastEvaluated', 'lastDecisionId']) assert.equal(k in c, false, `${c.id} stores no ${k}`);
+  }
+  // Seeded values match what the records and evidence say.
+  assert.equal(decisionRequired(s, RR), true);
+  assert.deepEqual(proposedAuthority(s, RR), { level: 3, limited: true });
+  assert.equal(lastDecisionId(s, RR), 'AC-02');
+  assert.equal(lastDecisionId(s, TC), 'AC-01');
+  assert.equal(lastDecisionId(s, 'account-closure'), null);
+  assert.equal(lastEvaluated(s, RR), '2026-10-06');
+  assert.equal(lastEvaluated(s, TC), '2026-09-28');
+  assert.equal(lastEvaluated(s, 'response-drafting'), '2026-10-02');
+  assert.equal(lastEvaluated(s, 'refund-execution-high-value'), '2026-09-24');
+  assert.equal(lastEvaluated(s, 'account-closure'), '2026-08-12', 'falls back to the defined-on date');
+  assert.equal(decisionRequired(s, TC), false);
+  assert.equal(proposedAuthority(s, TC), null);
+  // Authorizing clears the pending decision and moves the derived fields.
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  assert.equal(decisionRequired(s, RR), false);
+  assert.equal(proposedAuthority(s, RR), null);
+  assert.equal(lastDecisionId(s, RR), 'AC-04');
+  assert.equal(lastEvaluated(s, RR), '2026-10-06', 'a decision is not an evaluation');
+  assert.equal('decisionRequired' in cap(s), false);
+  // A breach writes an incident evidence item, which is an evaluation.
+  s = simulateBreach(s, RR);
+  assert.equal(lastDecisionId(s, RR), 'AC-05');
+  assert.equal(lastEvaluated(s, RR), seed.TODAY);
+  // Nothing proposed: cannot authorize.
+  assert.match(canAuthorize(selectDecision(s, RR, 'expand'), RR).reason, /No authority change is proposed/);
+  assert.equal(canAuthorize(selectDecision(s, RR, 'restrict'), RR).ok, true, 'restricting needs no proposed expansion');
+  // A test run alone moves lastEvaluated.
+  let [b, bid] = blankCap();
+  assert.equal(lastEvaluated(b, bid), seed.TODAY, 'defined today, no evidence');
+  const u = { ...b, capabilityData: { ...b.capabilityData, [bid]: { ...capData(b, bid), testRun: { status: 'not-run', lastRun: '2026-10-09', completed: [] } } } };
+  assert.equal(lastEvaluated(u, bid), '2026-10-09');
+});
+
+test('views and the entry point read the derived fields only through selectors', () => {
+  const files = [...readdirSync(new URL('../src/views', import.meta.url).pathname).map((f) => `../src/views/${f}`), '../src/main.js'];
+  const forbidden = /\b(cap|c|capability|x|rec)\.(decisionRequired|proposed|lastEvaluated|lastDecisionId)\b/g;
+  const offenders = [];
+  for (const f of files) {
+    if (!f.endsWith('.js')) continue;
+    const src = readFileSync(new URL(f, import.meta.url).pathname, 'utf8');
+    for (const m of src.matchAll(forbidden)) offenders.push(`${f}: ${m[0]}`);
+  }
+  assert.deepEqual(offenders, []);
 });

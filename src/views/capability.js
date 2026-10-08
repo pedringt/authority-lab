@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, notice, empty } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId } from '../store.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -26,22 +26,24 @@ export function capabilityView(state, id, query) {
   const risk = current(state, id, 'risk');
   const r = readiness(state, id);
   const owner = person(cap.owner);
+  const pending = decisionRequired(state, id);
+  const proposed = proposedAuthority(state, id);
 
   const summary = html`<div class="card cap-summary">
     <div class="cap-summary-grid">
       ${kv([
         ['Status', html`${capStatusBadge(cap.status)}${cap.pilotLabel ? html` <span class="muted">${cap.pilotLabel}</span>` : ''}`],
         ['Current authority', authorityBadge(cap.authority)],
-        ['Proposed authority', cap.proposed ? authorityBadge(cap.proposed) : html`<span class="muted">None proposed</span>`],
+        ['Proposed authority', proposed ? authorityBadge(proposed) : html`<span class="muted">None proposed</span>`],
         ['Risk', html`${risk.impact} impact · ${risk.exposure} · ${risk.reversibility}`],
         ['Owner', html`${owner.name}, ${owner.role}`],
-        ['Last evaluated', fmtDateYear(cap.lastEvaluated)],
+        ['Last evaluated', lastEvaluated(state, id) ? fmtDateYear(lastEvaluated(state, id)) : html`<span class="muted">Not yet</span>`],
         ['Evidence readiness', r.total
-          ? html`${r.met} of ${r.total} requirements met${cap.decisionRequired ? html` · <a href="#/capabilities/${cap.id}/decision">Open decision</a>` : ''}`
+          ? html`${r.met} of ${r.total} requirements met${pending ? html` · <a href="#/capabilities/${cap.id}/decision">Open decision</a>` : ''}`
           : html`<span class="muted">${cap.evidenceNote || 'No evidence requirements yet.'}</span>${nextStep(state, cap.id) ? html` · <a href="#/capabilities/${cap.id}/setup">Setup: ${nextStep(state, cap.id).title.toLowerCase()}</a>` : ''}`],
       ])}
     </div>
-    ${levelScale(cap.authority, cap.decisionRequired ? cap.proposed : null)}
+    ${levelScale(cap.authority, pending ? proposed : null)}
   </div>`;
 
   const tabs = html`<nav class="tabs" aria-label="Capability sections">${TABS
@@ -128,11 +130,12 @@ function criteriaTab(state, cap) {
       <thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th><th>Note</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>` : empty('No success criteria defined.')}
-    ${requirements.length ? section(`Evidence requirements for ${proposedChangeLabel(cap)}`, requirementsList(state, cap.id), { subtitle: 'A checklist, not a readiness score.' }) : ''}`;
+    ${requirements.length ? section(`Evidence requirements for ${proposedChangeLabel(cap, state)}`, requirementsList(state, cap.id), { subtitle: 'A checklist, not a readiness score.' }) : ''}`;
 }
 
-export function proposedChangeLabel(cap) {
-  return cap.proposed ? `${authorityLabel(cap.authority, { short: true })} → ${authorityLabel(cap.proposed, { short: true })}` : 'the next authority change';
+export function proposedChangeLabel(cap, state) {
+  const proposed = state ? proposedAuthority(state, cap.id) : null;
+  return proposed ? `${authorityLabel(cap.authority, { short: true })} → ${authorityLabel(proposed, { short: true })}` : 'the next authority change';
 }
 
 export function requirementsList(state, capabilityId) {
@@ -218,9 +221,9 @@ function stakeholdersTab(state, cap, d) {
 function decisionsTab(state, cap) {
   const records = state.decisionRecords.filter((x) => x.capabilityId === cap.id).slice().reverse();
   const d = capData(state, cap.id);
-  const canPropose = !cap.decisionRequired && cap.status !== 'not-delegated' && cap.authority.level < 2 && d.testRun.lastRun;
-  const propose = cap.decisionRequired
-    ? html`<div class="notice notice-decision"><div class="notice-body"><strong>Decision open</strong><p>A move to ${authorityLabel(cap.proposed)} is proposed.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/decision">Open</a></div>`
+  const canPropose = !decisionRequired(state, cap.id) && cap.status !== 'not-delegated' && cap.authority.level < 2 && d.testRun.lastRun;
+  const propose = decisionRequired(state, cap.id)
+    ? html`<div class="notice notice-decision"><div class="notice-body"><strong>Decision open</strong><p>A move to ${authorityLabel(proposedAuthority(state, cap.id))} is proposed.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/decision">Open</a></div>`
     : canPropose
       ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Ready for the first authority change</strong><p>The suite has run. Propose a move to ${authorityLabel({ level: cap.authority.level + 1, limited: false })}; a person authorizes it and that writes the capability's next record.</p></div><button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button></div>`
       : '';
