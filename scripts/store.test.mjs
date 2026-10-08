@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2136,4 +2136,62 @@ test('capabilities added in the demo have no simulated breach', () => {
   const id = s.capabilities[s.capabilities.length - 1].id;
   assert.equal(breachRule(s, id), null);
   assert.equal(simulateBreach(s, id), s);
+});
+
+// ---------------------------------------------------------------------------
+// Post-incident review (#54)
+// ---------------------------------------------------------------------------
+
+const FINDINGS = { whatHappened: 'Misroutes rose after the billing form changed.', cause: 'The new form sends disputes without a category.', changes: 'Added a category rule and a regression scenario.' };
+
+test('a review clears the lock and the alert but leaves authority reduced', () => {
+  let s = simulateBreach(initialState(), TC);
+  const owner = getCapability(s, TC).owner;
+  s = recordReview(s, TC, { by: owner, ...FINDINGS });
+  const c = getCapability(s, TC);
+  assert.deepEqual([c.authority.level, c.status, capData(s, TC).reviewRequired], [2, 'restricted', false]);
+  assert.equal(s.alerts.filter((a) => a.capabilityId === TC).length, 0, 'alert cleared');
+  const [rv] = capData(s, TC).reviews;
+  assert.equal(rv.restrictionRecordId, capData(s, TC).monitoring.breachRecordId);
+  assert.equal(reviewForRecord(s, rv.restrictionRecordId).id, rv.id, 'the restriction record can show its review');
+  assert.equal(s.activity[0].kind, 'review');
+  assert.equal(s.activity[0].surfaced, true);
+  // Expanding again still needs a proposal and a named authorization.
+  assert.equal(canAuthorize(selectDecision(s, TC, 'expand'), TC).ok, false);
+  assert.match(canAuthorize(selectDecision(s, TC, 'expand'), TC).reason, /proposed/);
+  assert.throws(() => recordReview(s, TC, { by: owner, ...FINDINGS }), /nothing to review/, 'one review per restriction');
+});
+
+test('only the owner or a Risk approver records a review; High/Financial needs a Risk approver', () => {
+  let s = simulateBreach(initialState(), TC);
+  assert.equal(reviewEligibility(s, TC, 'daniel').ok, true, 'a Risk approver');
+  assert.equal(reviewEligibility(s, TC, 'elena').ok, false, 'neither owner nor Risk approver');
+  assert.throws(() => recordReview(s, TC, { by: 'system', ...FINDINGS }), /Choose who is acting/, 'never the system');
+  assert.throws(() => recordReview(s, TC, { by: 'elena', ...FINDINGS }), /owner .* or a Risk approver/);
+  assert.throws(() => recordReview(s, TC, { by: 'daniel', ...FINDINGS, cause: 'n/a' }), /what caused it/);
+  // High/Financial: the owner alone is not enough without the right.
+  let r = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  const owner = getCapability(r, RR).owner;
+  assert.equal(isRiskApprover(r, owner), false);
+  assert.match(reviewEligibility(r, RR, owner).reason, /Risk approver records the review/);
+  // Relabelling someone's team as Risk grants nothing.
+  r = editPerson(r, 'elena', { name: 'Elena Rossi', title: 'Finance Business Partner', team: 'Risk', by: 'maya', reason: 'Testing a team relabel.' });
+  assert.equal(reviewEligibility(r, RR, 'elena').ok, false, 'team name is not the right');
+  // A deactivated Risk approver cannot record it.
+  r = deactivatePerson(r, 'elena', { by: 'maya', reason: 'Left the company.' });
+  assert.equal(reviewEligibility(r, RR, 'elena').ok, false);
+  r = recordReview(r, RR, { by: 'daniel', ...FINDINGS });
+  assert.equal(capData(r, RR).reviewRequired, false);
+});
+
+test('a review closes an open rule incident and its alert; authority never moves', () => {
+  let s = simulateBreach(initialState(), 'account-closure');
+  const before = getCapability(s, 'account-closure');
+  assert.equal(reviewNeeded(s, 'account-closure').incidents.length, 1);
+  s = recordReview(s, 'account-closure', { by: before.owner, ...FINDINGS });
+  assert.deepEqual(getCapability(s, 'account-closure').authority, before.authority);
+  assert.equal(getCapability(s, 'account-closure').status, before.status);
+  assert.equal(s.alerts.length, 0);
+  assert.ok(capData(s, 'account-closure').ruleIncidents.every((x) => x.reviewId));
+  assert.equal(reviewNeeded(s, 'account-closure').any, false);
 });

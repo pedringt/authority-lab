@@ -24,6 +24,8 @@ export function emptyCapabilityData() {
     ruleReadings: {},
     // Incidents opened by a contract's incident rules (#50). Never removed.
     ruleIncidents: [],
+    // Post-incident reviews (#54). Immutable; never removed.
+    reviews: [],
     reviewRequired: false,
     // Contract builder draft (#5). null until started; kept after finalize so
     // the review (including rejected suggestions) stays on record.

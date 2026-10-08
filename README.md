@@ -42,6 +42,7 @@ The tests cover the state transitions: running the suite, authorizing each decis
 6. **Decisions → Open authority decision**: choose **Expand with limits**, set the conditions, read the plain-English preview, write the rationale, authorize.
 7. **Decision record #04** is written with the evidence snapshot. The authority map updates.
 8. **Capability → Monitoring → Simulate threshold breach**: severe errors exceed 5% of the rolling 50; software returns the capability to Draft, creates an alert, an activity event and a restriction record, and locks expansion until a review is recorded.
+9. **Monitoring → Record the post-incident review**: Refund recommendation is High impact, so switch **Acting as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changed, and record it. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
 9. **Reset demo** (top right) restores the seeded state.
 
 ## Adding a capability

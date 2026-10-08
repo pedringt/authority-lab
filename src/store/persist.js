@@ -7,7 +7,7 @@ import { startContractDraft, reviewSuggestion, addContractLine, editContractLine
 import { selectDecision, setCondition, setRationale, authorize, proposeAuthority } from './decisions.js';
 import { startTestRun, advanceTestRun, saveCriteria, saveScenarios, addStarterScenarios } from './evidence.js';
 import { proposeAmendment, approveProposal, withdrawProposal, rejectProposal, saveStakeholders } from './proposals.js';
-import { simulateBreach } from './monitoring.js';
+import { simulateBreach, recordReview } from './monitoring.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
@@ -68,6 +68,7 @@ export const ACTIONS = {
   setRationale,
   authorize,
   simulateBreach,
+  recordReview,
   reset,
 };
 
