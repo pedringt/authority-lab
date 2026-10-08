@@ -13,6 +13,8 @@ import { addCapabilityView, setupView } from './views/setup.js';
 import { contractBuilderView } from './views/contract.js';
 import { criteriaEditorView } from './views/criteria.js';
 import { proposeView, proposalView } from './views/proposals.js';
+import { stakeholdersEditorView } from './views/stakeholders.js';
+import { scenariosEditorView } from './views/scenarios.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -67,6 +69,8 @@ function render() {
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Contract builder'; }
       else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = 'Success criteria'; }
+      else if (sub && action === 'stakeholders' && parts[3] === 'edit') { view = stakeholdersEditorView(state, sub, query); title = 'Stakeholders'; }
+      else if (sub && action === 'scenarios' && parts[3] === 'edit') { view = scenariosEditorView(state, sub, query); title = 'Scenario library'; }
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Amend'; }
       else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed amendment'; }
       else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
@@ -126,7 +130,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form === 'save-scenarios') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -171,6 +175,16 @@ document.addEventListener('click', (e) => {
   if (action === 'contract-finalize') {
     tryDispatch(() => store.dispatch('finalizeContract', capId, { by: actor(store.get(), capId) }));
     if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=contract`;
+  }
+  if (action === 'starter-add') {
+    try { store.dispatch('addStarterScenarios', capId, { by: actor(store.get(), capId) }); if (location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}/scenarios/edit`; }
+    catch (err) { location.hash = `#/capabilities/${capId}/scenarios/edit?error=${encodeURIComponent(err.message)}`; }
+    return;
+  }
+  if (action === 'propose-authority') {
+    try { store.dispatch('proposeAuthority', capId, Number(btn.dataset.level), { by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}/decision`; }
+    catch (err) { alert(err.message); }
+    return;
   }
   if (action === 'proposal-approve') {
     const pid = btn.dataset.proposal;
@@ -232,6 +246,32 @@ document.addEventListener('submit', (e) => {
     } catch (err) {
       location.hash = `#/capabilities/${capId}/amend/${kind}?error=${encodeURIComponent(err.message)}`;
     }
+    return;
+  }
+  const stForm = e.target.closest('[data-form="save-stakeholders"]');
+  if (stForm) {
+    e.preventDefault();
+    const capId = parseRoute().parts[1];
+    const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
+    // Keep the recorded position text unless the stance was changed.
+    const stakeholders = [...stForm.querySelectorAll('[data-rows="stakeholders"] tr')].map((tr) => ({ team: val(tr, 's-team'), person: val(tr, 's-person'), stance: val(tr, 's-stance'), position: val(tr, 's-stance') === val(tr, 's-stance-was') ? val(tr, 's-position') : '', quote: val(tr, 's-quote') }));
+    try {
+      const before = capData(store.get(), capId).proposals.length;
+      store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) });
+      const after = capData(store.get(), capId).proposals;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=stakeholders`;
+    }
+    catch (err) { location.hash = `#/capabilities/${capId}/stakeholders/edit?error=${encodeURIComponent(err.message)}`; }
+    return;
+  }
+  const scForm = e.target.closest('[data-form="save-scenarios"]');
+  if (scForm) {
+    e.preventDefault();
+    const capId = parseRoute().parts[1];
+    const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
+    const scenarios = [...scForm.querySelectorAll('[data-rows="scenarios"] tr')].map((tr) => ({ id: val(tr, 'sc-id') || undefined, source: val(tr, 'sc-source'), group: val(tr, 'sc-group'), name: val(tr, 'sc-name'), situation: val(tr, 'sc-situation'), expected: val(tr, 'sc-expected') }));
+    try { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/tests?capability=${capId}`; }
+    catch (err) { location.hash = `#/capabilities/${capId}/scenarios/edit?error=${encodeURIComponent(err.message)}`; }
     return;
   }
   const rejectForm = e.target.closest('[data-form="reject-proposal"]');

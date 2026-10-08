@@ -25,7 +25,7 @@ export function testsView(state, capabilityId, query) {
   const summaryLine = !t.total
     ? html`No scenarios have been written for ${cap.name} yet.`
     : t.status === 'complete'
-      ? html`<strong>${t.passed} of ${t.total} passed</strong> on today's run. ${t.failed} failed, ${t.highSeverity} high severity. Results were recorded as evidence <a href="#/evidence?capability=${cap.id}&source=Automated%20tests">${d.evidence.find((e) => e.source === 'Automated tests' && e.metric === 'Scenario pass rate')?.id || ''}</a>.`
+      ? html`<strong>${t.passed} of ${t.total} passed</strong> on today's run.${d.scenarios.some((x) => x.simulated) ? ' Results are simulated (seeded, deterministic).' : ''} ${t.failed} failed, ${t.highSeverity} high severity. Results were recorded as evidence <a href="#/evidence?capability=${cap.id}&source=Automated%20tests">${d.evidence.find((e) => e.source === 'Automated tests' && e.metric === 'Scenario pass rate')?.id || ''}</a>.`
       : t.status === 'running'
         ? html`Running ${t.completed} of ${t.total} scenarios against the current contract.`
         : t.lastRun
@@ -52,6 +52,7 @@ export function testsView(state, capabilityId, query) {
     <div class="page-actions">${runControl}</div>
   </div>
   ${capabilityPicker(state, cap.id, (id) => `#/tests?capability=${id}`)}
+  ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit the scenario library</a></p>` : ''}
   <div class="card run-summary"><p>${summaryLine}</p>${progress}</div>
   ${failureCallout}
   ${scenarioTable(state, cap.id, { filter, group })}`;
@@ -113,11 +114,12 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
     return html`<details class="${cls}" ${showResult && !s.pass ? raw('open') : ''}>
       <summary>
         <span class="scenario-id">${s.id}</span>
-        <span class="scenario-name"><strong>${s.name}</strong><span class="muted small"> · ${groupName(s.group)}</span></span>
+        <span class="scenario-name"><strong>${s.name}</strong><span class="muted small"> · ${groupName(s.group)}</span>${s.source === 'ai' ? html` <span class="badge badge-insufficient">Suggested by AI</span>` : ''}</span>
         <span class="scenario-status">
           ${showResult ? badge(s.pass ? 'pass' : 'fail') : pendingRun ? html`<span class="badge badge-neutral">Running</span>` : html`<span class="badge badge-neutral">Not run</span>`}
           ${showResult && s.severity !== 'None' ? html`<span class="badge badge-${s.severity === 'High' ? 'fail' : 'watch'}">${s.severity} severity</span>` : ''}
           ${showResult && s.escalated ? html`<span class="badge badge-neutral">Escalated</span>` : ''}
+          ${showResult && s.simulated ? html`<span class="badge badge-neutral" title="Seeded, deterministic result; no model was called">Simulated</span>` : ''}
         </span>
       </summary>
       <div class="scenario-body">
@@ -125,7 +127,7 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
           <div><dt>Scenario</dt><dd>${s.situation}</dd></div>
           <div><dt>Expected behavior</dt><dd>${s.expected}</dd></div>
           ${showResult ? html`
-            <div><dt>AI decision</dt><dd>${s.aiDecision}</dd></div>
+            <div><dt>AI decision</dt><dd>${s.aiDecision}${s.simulated ? html` <span class="muted small">(simulated)</span>` : ''}</dd></div>
             <div><dt>Outcome</dt><dd>${s.outcome}${s.failureType ? html` <span class="muted">(${s.failureType})</span>` : ''}</dd></div>
             <div><dt>Explanation</dt><dd>${s.explanation}</dd></div>
             <div><dt>Human reviewer</dt><dd>${s.reviewer}</dd></div>

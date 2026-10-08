@@ -470,3 +470,9 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .signoff-role { display: inline-block; margin-right: 6px; }
 .reject-form { margin-top: 12px; }
 @media (max-width: 720px) { .readiness-compare { grid-template-columns: 1fr; } }
+
+.table-scenarios input[type="text"] { min-width: 120px; }
+.sources-card { border-style: dashed; margin-top: 14px; }
+.table-edit select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
+.table-edit .field-stack { margin: 0; }
+.table-edit .field-stack > span:first-child { display: none; }

@@ -162,11 +162,23 @@ Saving writes criteria v1 and requirements v1, authored by whoever is acting. Be
 
 ### Changing the bar after evidence: proposals and sign-off
 
-Once criteria are locked, and once a pilot has started for the contract, an edit becomes a **proposal**: the proposed new version plus a reason, recorded immediately but applied only after sign-off. Who must approve follows the risk profile. The proposer never approves. Low and Medium impact: one approver, the owner, or any other named stakeholder if the owner proposed. High impact or financial exposure: two different approvers, at least one from Risk. Owners can still propose. Use the "Acting as" picker to approve as each person. A proposed contract must pass the same checks as the builder's finalize step before it can be submitted.
+Once criteria are locked, and once a pilot has started for the contract, an edit becomes a **proposal**: the proposed new version plus a reason, recorded immediately but applied only after sign-off. Who must approve follows the risk profile. The proposer never approves. Low and Medium impact: one approver, the owner, or any other named stakeholder if the owner proposed. High impact or financial exposure: two different approvers, at least one from Risk. Owners can still propose. Use the "Acting as" picker to approve as each person. A proposed contract must pass the same checks as the builder's finalize step before it can be submitted. Three guards keep this honest: Risk eligibility comes only from a person's own team, never from how a capability's stakeholder list labels them; the set of eligible approvers is frozen when a proposal opens, so later stakeholder edits cannot change who may approve it; and once performance results exist, adding or removing a stakeholder or changing a team label is itself a proposal with sign-off, while position and reasoning updates stay direct.
 
 The sign-off screen shows the reason, who has approved and who is still needed, what would change, and, for criteria, readiness under both versions ("5 of 6 met now, 6 of 6 under the proposal"). A proposal that makes the capability look more ready without new evidence is flagged for the approvers. Approving writes the new versions, authored by the proposer and carrying the approvals, and records a surfaced "amended after evidence" event; any later decision that relies on them is marked "Criteria amended after evidence". Rejecting needs a reason and is kept in the record. Only one proposal per object can be open at a time.
 
 The contract rule is a setting (`CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT`, on by default): before a pilot starts, contract edits write a new version directly.
+
+### Naming stakeholders
+
+Setup step 4 is a short editor: team, person, and, when known, their position and reasoning. Every save is a new version. Positions are kept as positions and shown on the Stakeholders tab and in the decision workspace; they are never averaged into a score. A capability's named stakeholders are also who can sign off amendments, so a High-impact or financial capability needs someone from Risk on the list.
+
+### Writing the scenario library
+
+Setup step 5 is the scenario library: name, situation and expected behaviour in each of the five groups (standard, ambiguous, adversarial, high impact, edge). A starter set of twenty scenarios, four per group, phrased for the capability and labelled "Suggested by AI", gets a team past the blank page; the editor nudges toward twenty to thirty in total. Results are seeded and deterministic: a new or changed scenario gets a simulated result when it is saved, labelled "Simulated" in the test results, and the same scenario always gets the same result, so the suite replays. Changing the library after a run clears that run; the next run re-records. The Evidence tab and page carry a placeholder card for the evidence sources a real deployment would connect.
+
+### The first authority change
+
+After the first test run, the Decision history tab and the Setup page offer **Propose a move to Level N**, one level at a time. That opens the authority decision for the capability: criteria not yet measured, requirements 0 of N met, the test results in the evidence snapshot, stakeholder positions where recorded. A person authorizes as whoever is acting, which writes the capability's second record. A move to Draft sets the status to Pilot and starts no monitoring, because every case is approved by a person; monitoring begins only at Level 3.
 
 ### Acting as
 
@@ -218,6 +230,9 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Contract builder | Starts from a template, reviews each AI suggestion, runs the software checks, finalizes contract v1 |
 | Criteria editor | Saves success criteria and evidence requirements (defaults from the risk profile); the first test run locks them |
 | Propose amendment | After the lock (criteria) or a pilot start (contract), submits a change for sign-off; approve or reject as whoever is acting |
+| Stakeholder editor | Names the stakeholders and records positions when known; every save is a new version |
+| Scenario library | Adds a starter set or writes scenarios; results are seeded and deterministic |
+| Propose a move to Level N | After the first run, opens the authority decision for a new capability; authorizing writes its second record |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 

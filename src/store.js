@@ -6,8 +6,9 @@
 import * as seed from './data/seed.js';
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-templates.js';
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
+import { starterScenarios } from './data/scenario-templates.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v8';
+export const STORAGE_KEY = 'authority-lab-state-v9';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -82,7 +83,7 @@ export function initialState() {
   // The contract and risk profile live in the version lists.
   const capabilities = seed.capabilities.map(({ contract, risk, ...rest }) => clone(rest));
   return {
-    version: 8,
+    version: 9,
     today: seed.TODAY,
     // Who is acting in the UI. null means "the owner of the capability in
     // context"; a person key overrides it (the "acting as" picker).
@@ -156,7 +157,7 @@ export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'mile
 
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
-  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', proposal: 'Proposal',
+  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', 'scenarios-saved': 'Scenarios saved', proposal: 'Proposal',
   decision: 'Decision', test: 'Test run', amendment: 'Amendment',
 };
 
@@ -400,8 +401,11 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function scopeText(option, conditions, cap) {
+export function scopeText(option, conditions, cap, next = null) {
   const noun = actionNoun(cap);
+  if (next && next.level === 2 && (option === 'expand' || option === 'expand-limits')) {
+    return `Draft. The AI prepares ${noun} for a person to approve on every case; nothing happens without that approval. Limited pilot.`;
+  }
   switch (option) {
     case 'expand':
       return `Automatic ${noun} on all eligible cases under approved policy conditions.`;
@@ -423,10 +427,11 @@ export function scopeText(option, conditions, cap) {
   }
 }
 
-export function nextAuthority(option, current) {
+export function nextAuthority(option, current, proposed = null) {
+  const target = proposed && proposed.level > current.level ? proposed.level : 3;
   switch (option) {
-    case 'expand': return { level: 3, limited: false };
-    case 'expand-limits': return { level: 3, limited: true };
+    case 'expand': return { level: target, limited: false };
+    case 'expand-limits': return { level: target, limited: true };
     case 'hold': return { ...current };
     case 'restrict': return { level: Math.max(0, current.level - 1), limited: false };
     case 'suspend': return { level: 0, limited: false };
@@ -638,7 +643,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const d = capData(state, capabilityId);
   const option = d.decision.option;
   const previous = { ...cap.authority };
-  const next = nextAuthority(option, previous);
+  const next = nextAuthority(option, previous, cap.proposed);
   const number = state.decisionRecords.length + 1;
   const id = `AC-${String(number).padStart(2, '0')}`;
 
@@ -654,19 +659,22 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     owner: cap.owner,
     authorizedBy: by,
     versions: versionsInForce(state, capabilityId),
-    scope: scopeText(option, d.decision.conditions, cap),
+    scope: scopeText(option, d.decision.conditions, cap, next),
     rationale: d.decision.rationale.trim(),
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
     openCondition: openConditionText(option, state, capabilityId),
-    conditions: option === 'expand-limits' ? { ...d.decision.conditions } : null,
+    conditions: option === 'expand-limits' && next.level >= 3 ? { ...d.decision.conditions } : null,
   };
 
+  const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
+  const statusAfter = expandingTo === 2 ? 'pilot' : expandingTo && expandingTo >= 3 ? 'monitoring' : STATUS_BY_OPTION[option];
   const capabilities = state.capabilities.map((c) =>
     c.id === cap.id
       ? {
           ...c,
           authority: next,
-          status: STATUS_BY_OPTION[option],
+          status: statusAfter,
+          pilotLabel: expandingTo === 2 ? 'Limited pilot' : c.pilotLabel,
           pilotLabel: undefined,
           decisionRequired: false,
           proposed: undefined,
@@ -696,7 +704,9 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     ...state.activity,
   ];
 
-  const expanding = option === 'expand' || option === 'expand-limits';
+  // Monitoring applies to autonomous authority (Level 3 and above). A move to
+  // Draft starts a pilot, which is human-approved on every case.
+  const expanding = (option === 'expand' || option === 'expand-limits') && next.level >= 3;
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'Authority automatically returns to Draft if the severe error rate exceeds 5% across the rolling 50-case window.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
@@ -848,6 +858,10 @@ export function createStore({ storage = null } = {}) {
 const ACTIONS = {
   amend,
   saveCriteria,
+  saveStakeholders,
+  saveScenarios,
+  addStarterScenarios,
+  proposeAuthority,
   proposeAmendment,
   approveProposal,
   rejectProposal,
@@ -876,7 +890,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 8) return null;
+    if (!parsed || parsed.version !== 9) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -1285,7 +1299,15 @@ export function pilotStarted(state, capabilityId) {
 export function needsSignoff(state, capabilityId, kind) {
   if (kind === 'criteria') return criteriaLocked(state, capabilityId);
   if (kind === 'contract') return SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT && pilotStarted(state, capabilityId);
+  if (kind === 'stakeholders') return performanceResultsSeen(state, capabilityId);
   throw new Error(`Unknown amendment kind: ${kind}`);
+}
+
+// Membership (who) and team labels are governed; position, stance and
+// reasoning are not.
+export function stakeholderMembershipChanged(before, after) {
+  const key = (list) => list.map((st) => `${st.person}|${st.team}`).sort().join(',');
+  return key(before) !== key(after);
 }
 
 // Who must approve (decision 7, revised): the proposer never approves.
@@ -1317,11 +1339,11 @@ export function namedStakeholders(state, capabilityId) {
   return listed.length ? [...set] : Object.keys(seed.people);
 }
 
+// Risk eligibility comes only from the person's own team in `people`, never
+// from how a capability's stakeholder list labels them.
 export function isRiskStakeholder(state, capabilityId, personKey) {
   const p = seed.people[personKey];
-  if (!p) return false;
-  if (p.team === 'Risk') return true;
-  return current(state, capabilityId, 'stakeholders').some((st) => st.person === personKey && st.team === 'Risk');
+  return Boolean(p && p.team === 'Risk');
 }
 
 export function riskStakeholders(state, capabilityId) {
@@ -1348,6 +1370,7 @@ function cleanContractValue(value) {
 // source) is kept, so the proposal's diff shows only the proposed change.
 function cleanAmendmentValue(state, capabilityId, kind, value) {
   if (kind === 'contract') return cleanContractValue(value);
+  if (kind === 'stakeholders') return cleanStakeholders(state, value);
   const c = cleanCriteria(value && value.criteria);
   const r = cleanRequirements(value && value.requirements);
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
@@ -1403,6 +1426,7 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
   }
   if (!needsSignoff(state, capabilityId, kind)) {
     if (kind === 'criteria') return applyCriteriaDirect(state, capabilityId, clean, by, why);
+    if (kind === 'stakeholders') return amend(state, capabilityId, 'stakeholders', { value: clean, author: by, reason: why });
     if (!versionList(state, capabilityId, 'contract').length) throw new Error('Finalize the contract in the builder first.');
     return amend(state, capabilityId, 'contract', { value: clean, author: by, reason: why });
   }
@@ -1417,8 +1441,10 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     date: state.today,
     reason: why,
     value: clean,
-    base: kind === 'contract' ? { contract: v.contract } : { criteria: v.criteria, requirements: v.requirements },
+    base: kind === 'contract' ? { contract: v.contract } : kind === 'stakeholders' ? { stakeholders: v.stakeholders } : { criteria: v.criteria, requirements: v.requirements },
     required: signoffRequirements(state, capabilityId, by),
+    // Frozen when the proposal opens; later stakeholder edits do not change it.
+    eligible: namedStakeholders(state, capabilityId).filter((k) => k !== by),
     approvals: [],
     status: 'open',
     rejection: null,
@@ -1429,7 +1455,7 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
   return logEvent(s, {
     kind: 'proposal',
     outcome: 'opened',
-    title: `Amendment proposed: ${kind === 'contract' ? 'contract' : 'success criteria and evidence requirements'}`,
+    title: `Amendment proposed: ${kind === 'contract' ? 'contract' : kind === 'stakeholders' ? 'stakeholders' : 'success criteria and evidence requirements'}`,
     body: `${cap.name}: ${who.name} proposed ${proposal.id} after evidence. Needs ${requirementLabel(proposal.required)}, never the proposer. Reason: ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
@@ -1468,7 +1494,8 @@ export function approvalEligibility(state, capabilityId, proposal, personKey) {
     if (personKey !== cap.owner) return { ok: false, role: null, reason: `${name} cannot approve this. Needed: the owner (${seed.people[cap.owner].name}).` };
     return { ok: true, role: 'owner', reason: null };
   }
-  if (!namedStakeholders(state, capabilityId).includes(personKey)) return { ok: false, role: null, reason: `${name} is not a named stakeholder of ${cap.name}.` };
+  const eligible = proposal.eligible || namedStakeholders(state, capabilityId);
+  if (!eligible.includes(personKey)) return { ok: false, role: null, reason: `${name} was not an eligible approver when this proposal opened.` };
   // Last slot on a High/Financial proposal must be Risk if none has signed yet.
   const remaining = req.approvers - proposal.approvals.length;
   const riskStill = req.riskRequired && !proposal.approvals.some((a) => a.role === 'risk');
@@ -1508,6 +1535,9 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
   if (proposal.kind === 'contract') {
     s = amend(s, capabilityId, 'contract', { value: proposal.value, author: proposal.proposedBy, reason: proposal.reason, meta, silent: true });
     applied.contract = versionsInForce(s, capabilityId).contract;
+  } else if (proposal.kind === 'stakeholders') {
+    s = amend(s, capabilityId, 'stakeholders', { value: proposal.value, author: proposal.proposedBy, reason: proposal.reason, meta, silent: true });
+    applied.stakeholders = versionsInForce(s, capabilityId).stakeholders;
   } else {
     const defaults = defaultsFor(s, capabilityId);
     const deviations = (kind, items, textOf) => defaultDeviations(defaults[kind], items, textOf).map((x) => ({ ...x, label: kind === 'criteria' ? (defaults.criteria.find((y) => y.id === x.id) || {}).name : null }));
@@ -1522,12 +1552,12 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
   }
   next = { ...next, status: 'approved', applied, closedAt: state.today };
   s = updateCap(s, capabilityId, { proposals: capData(s, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
-  const label = proposal.kind === 'contract' ? `Contract amended to v${applied.contract}` : `Success criteria amended to v${applied.criteria}, evidence requirements to v${applied.requirements}`;
+  const label = proposal.kind === 'contract' ? `Contract amended to v${applied.contract}` : proposal.kind === 'stakeholders' ? `Stakeholders amended to v${applied.stakeholders}` : `Success criteria amended to v${applied.criteria}, evidence requirements to v${applied.requirements}`;
   return logEvent(s, {
     kind: 'amendment',
     afterEvidence: true,
-    objectKind: proposal.kind === 'contract' ? 'contract' : 'criteria',
-    version: proposal.kind === 'contract' ? applied.contract : applied.criteria,
+    objectKind: proposal.kind === 'contract' ? 'contract' : proposal.kind === 'stakeholders' ? 'stakeholders' : 'criteria',
+    version: proposal.kind === 'contract' ? applied.contract : proposal.kind === 'stakeholders' ? applied.stakeholders : applied.criteria,
     proposalId,
     title: `${label} after evidence`,
     body: `${cap.name}: proposed by ${seed.people[proposal.proposedBy].name}, approved by ${approvals.map((a) => `${seed.people[a.by].name} (${roleLabel(a.role)})`).join(' and ')}. ${proposal.reason}`,
@@ -1545,7 +1575,8 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
   if (by === proposal.proposedBy) throw new Error('The proposer withdraws rather than rejects; someone else must reject.');
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A rejection needs a reason (a sentence).');
-  const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && namedStakeholders(state, capabilityId).includes(by));
+  const frozen = proposal.eligible || namedStakeholders(state, capabilityId);
+  const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && frozen.includes(by));
   if (!eligible) throw new Error(`${seed.people[by].name} is not eligible to reject this: ${requirementLabel(proposal.required)} decide.`);
   const next = { ...proposal, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today };
   const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
@@ -1556,5 +1587,156 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
     body: `${cap.name}: ${seed.people[by].name} rejected the proposal by ${seed.people[proposal.proposedBy].name}. ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Stakeholders and scenarios (#8)
+// ---------------------------------------------------------------------------
+
+export const STANCES = [['expand', 'Expand'], ['expand-limits', 'Expand with limits'], ['hold', 'Hold'], ['restrict', 'Restrict'], ['undecided', 'No position yet']];
+
+function cleanStakeholders(state, stakeholders) {
+  if (!Array.isArray(stakeholders) || !stakeholders.length) throw new Error('Name at least one stakeholder.');
+  const seen = new Set();
+  return stakeholders.map((st, i) => {
+    const team = (st.team || '').trim();
+    const person = st.person;
+    if (!team) throw new Error(`Stakeholder ${i + 1} needs a team.`);
+    if (!person || !seed.people[person]) throw new Error(`Stakeholder ${i + 1} needs a named person.`);
+    if (seen.has(person)) throw new Error(`${seed.people[person].name} is listed twice.`);
+    seen.add(person);
+    const stance = STANCES.some(([k]) => k === st.stance) ? st.stance : 'undecided';
+    const position = (st.position || '').trim() || (STANCES.find(([k]) => k === stance) || [])[1] || 'No position yet';
+    return { team, person, stance, position, quote: (st.quote || '').trim(), date: st.date || state.today };
+  });
+}
+
+// Save the stakeholder list. Before performance results exist every save is a
+// direct new version. After that, a change to who is listed or to a team
+// label goes through a proposal with sign-off; position, stance and
+// reasoning updates stay direct.
+export function saveStakeholders(state, capabilityId, { stakeholders, by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person saves the stakeholders.');
+  const list = cleanStakeholders(state, stakeholders);
+  const before = current(state, capabilityId, 'stakeholders');
+  const first = !before.length;
+  const why = (reason || '').trim() || (first ? 'Stakeholders named.' : 'Stakeholders updated.');
+  if (needsSignoff(state, capabilityId, 'stakeholders') && stakeholderMembershipChanged(before, list)) {
+    return proposeAmendment(state, capabilityId, 'stakeholders', { value: list, by, reason: (reason || '').trim() || 'Stakeholder membership change after performance results.' });
+  }
+  return amend(state, capabilityId, 'stakeholders', { value: list, author: by, reason: why });
+}
+
+// Deterministic simulated results for a person-written or starter scenario.
+// The same scenario always gets the same result, so the suite replays.
+function hash(text) {
+  let h = 2166136261;
+  for (const ch of text) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return h;
+}
+const FAIL_EVERY = { standard: 11, ambiguous: 7, adversarial: 6, 'high-impact': 5, edge: 5 };
+export function simulateScenario(sc) {
+  const h = hash(`${sc.group}|${sc.name}|${sc.situation}`);
+  const pass = h % (FAIL_EVERY[sc.group] || 7) !== 0;
+  const escalate = /escalat|route for human|approval|ask for/i.test(sc.expected || '');
+  const severity = pass ? 'None' : sc.group === 'high-impact' || sc.group === 'adversarial' ? 'High' : 'Medium';
+  const expected = (sc.expected || '').replace(/\.$/, '');
+  return {
+    pass,
+    severity,
+    escalated: pass && escalate,
+    aiDecision: pass ? `${escalate ? 'Escalated' : 'Produced the output'} as expected: ${expected.charAt(0).toLowerCase()}${expected.slice(1)}.` : escalate ? 'Produced an output instead of escalating.' : 'Produced an output that did not match the expected behaviour.',
+    outcome: pass ? (escalate ? 'Escalated correctly' : 'Correct output') : escalate ? 'Missed escalation' : 'Wrong output',
+    explanation: pass ? 'Simulated result (seeded, deterministic). The recorded decision matched the expected behaviour.' : 'Simulated result (seeded, deterministic). The recorded decision did not match the expected behaviour; treat as a real failure for the purpose of the pilot decision.',
+    reviewer: pass ? (escalate ? 'Human took the case' : 'Approved as recommended') : 'Overridden by the reviewer',
+    failureType: pass ? undefined : escalate ? 'Missing escalation' : 'Wrong answer',
+    simulated: true,
+  };
+}
+
+const GROUP_PREFIX = { standard: 'S', ambiguous: 'A', adversarial: 'X', 'high-impact': 'H', edge: 'E' };
+
+function cleanScenarios(list) {
+  if (!Array.isArray(list)) throw new Error('Scenarios must be a list.');
+  const counts = {};
+  return list.map((sc, i) => {
+    const group = seed.SCENARIO_GROUPS.some((g) => g.id === sc.group) ? sc.group : null;
+    if (!group) throw new Error(`Scenario ${i + 1} needs a group.`);
+    const name = (sc.name || '').trim();
+    const situation = (sc.situation || '').trim();
+    const expected = (sc.expected || '').trim();
+    if (!name || !situation || !expected) throw new Error(`Scenario ${i + 1} needs a name, a situation and an expected behaviour.`);
+    counts[group] = (counts[group] || 0) + 1;
+    const base = { id: sc.id || `${GROUP_PREFIX[group]}-${String(counts[group]).padStart(2, '0')}`, group, name, situation, expected, source: sc.source === 'ai' ? 'ai' : 'person' };
+    // Keep a recorded result if the scenario text is unchanged; otherwise simulate.
+    const keep = sc.pass !== undefined && sc.aiDecision && !sc.simulated ? { pass: sc.pass, severity: sc.severity, aiDecision: sc.aiDecision, outcome: sc.outcome, explanation: sc.explanation, reviewer: sc.reviewer, escalated: sc.escalated, incident: sc.incident, failureType: sc.failureType } : simulateScenario(base);
+    return { ...base, ...keep };
+  });
+}
+
+export function scenarioNudge(count) {
+  if (count === 0) return 'No scenarios yet. Twenty to thirty is enough to start: a few in every group, with the ugly ones included.';
+  if (count < 20) return `${count} scenario${count === 1 ? '' : 's'}. Aim for 20 to 30 before the first run, with at least two in every group.`;
+  if (count <= 30) return `${count} scenarios. That is a sound starting library.`;
+  return `${count} scenarios. More than 30 is fine, but make sure the groups stay balanced.`;
+}
+
+// Replace the scenario library. Results are simulated deterministically when
+// a scenario is new or changed. Not allowed after a test run has been
+// recorded for this library (the recorded results are evidence).
+export function saveScenarios(state, capabilityId, { scenarios, by } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person saves the scenario library.');
+  const d = capData(state, capabilityId);
+  const list = cleanScenarios(scenarios);
+  const groups = new Set(list.map((sc) => sc.group));
+  if (list.length && groups.size < 2) throw new Error('Cover at least two groups; a library of one kind of case proves little.');
+  let s = updateCap(state, capabilityId, { scenarios: list, testRun: d.testRun.lastRun ? { ...d.testRun, status: 'not-run', completed: [] } : d.testRun });
+  return logEvent(s, {
+    kind: 'scenarios-saved',
+    title: 'Scenario library saved',
+    body: `${cap.name}: ${list.length} scenarios across ${groups.size} group${groups.size === 1 ? '' : 's'} saved by ${seed.people[by].name}${list.some((x) => x.source === 'ai') ? ` (${list.filter((x) => x.source === 'ai').length} suggested by AI)` : ''}. ${scenarioNudge(list.length)}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/scenarios/edit`,
+  });
+}
+
+export function addStarterScenarios(state, capabilityId, { by } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  const d = capData(state, capabilityId);
+  const existing = d.scenarios;
+  const have = new Set(existing.map((sc) => sc.name));
+  const add = starterScenarios(cap).filter((sc) => !have.has(sc.name));
+  if (!add.length) throw new Error('The starter set is already in the library.');
+  return saveScenarios(state, capabilityId, { scenarios: [...existing, ...add], by });
+}
+
+// Open an authority decision for a capability: propose the next level. Needs
+// a recorded test run. Used to take a new capability to Draft (its second record).
+export function proposeAuthority(state, capabilityId, level, { by } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person proposes an authority change.');
+  if (cap.decisionRequired) throw new Error('A decision is already open for this capability.');
+  if (cap.status === 'not-delegated') throw new Error('This capability is not delegated by design. Start with a new decision record if that should change.');
+  const target = Number(level);
+  if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
+  if (!capData(state, capabilityId).testRun.lastRun) throw new Error('Run the test suite before proposing an authority change.');
+  if (target >= 3 && !capData(state, capabilityId).pilot) throw new Error('Level 3 needs pilot evidence. Run a pilot at Draft first.');
+  const capabilities = state.capabilities.map((c) => (c.id === capabilityId ? { ...c, proposed: { level: target, limited: false }, decisionRequired: true } : c));
+  const d = capData(state, capabilityId);
+  let s = { ...state, capabilities };
+  s = updateCap(s, capabilityId, { decision: { ...d.decision, option: null, recordId: null, rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
+  return logEvent(s, {
+    kind: 'decision',
+    title: `Authority decision opened: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,
+    body: `${cap.name}: ${seed.people[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. The system can recommend; a person authorizes.`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/decision`,
   });
 }

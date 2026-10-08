@@ -58,6 +58,16 @@ Setup step 3 opens an editor pre-filled from the risk profile, each row labelled
 
 Locked criteria, and the contract once a pilot has started, change through a proposal: a new version plus a reason, applied only after sign-off. The proposer never approves. Low/Medium impact: one approver (the owner, or another named stakeholder if the owner proposed). High impact or financial exposure: two distinct approvers, at least one from Risk. Contract proposals must pass the builder's checks. The sign-off screen shows readiness under both versions. Approvals and rejections are recorded; approving writes the versions with the approvals on them. The contract rule sits behind `SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` (on).
 
+## A new capability, end to end
+
+1. **Capabilities → Add capability**: name, summary, owner, risk profile, starting authority (Level 0 or 1). Writes the capability's first record.
+2. **Setup → Open the contract builder**: template plus suggestions, review each one, confirm the sections, finalize contract v1.
+3. **Setup → Open the editor**: success criteria and evidence requirements from the risk profile; save v1.
+4. **Setup → Open the editor** (stakeholders): name the people whose positions will be recorded.
+5. **Setup → Open the library**: add the starter set (20 scenarios, "Suggested by AI") or write your own; save.
+6. **Tests → Run test suite**: results are simulated deterministically; the first run locks the criteria.
+7. **Decision history → Propose a move to Level 2**, then **Authorize**: the capability's second record, status Pilot.
+
 ## Structure
 
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).

@@ -16,6 +16,7 @@ const KIND_TONE = {
   'contract-finalized': 'pass',
   'contract-draft': 'neutral',
   'criteria-saved': 'neutral',
+  'scenarios-saved': 'neutral',
   'criteria-locked': 'watch',
   decision: 'neutral',
   test: 'neutral',
