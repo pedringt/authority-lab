@@ -56,17 +56,18 @@ button { font: inherit; }
 .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 
 /* Shell ------------------------------------------------------------------ */
+/* Two rows: brand and the demo controls, then the section tabs. */
 .topbar {
-  display: flex; align-items: center; gap: 24px;
-  padding: 0 24px; height: 56px;
+  padding: 10px 24px 8px;
   background: var(--surface); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 20;
 }
+.topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 8px; }
 .brand { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .brand-name { font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
 .brand-sep { color: var(--border-strong); }
 .brand-ws { color: var(--muted); font-size: 14px; }
-.nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
+.nav { display: flex; flex-wrap: wrap; gap: 2px; }
 .nav-link {
   color: var(--text-2); padding: 6px 10px; border-radius: 999px; font-weight: 500; font-size: 14px;
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -76,8 +77,9 @@ button { font: inherit; }
 .nav-count { font-size: 11px; font-weight: 700; background: var(--decide); color: #fff; border-radius: 999px; min-width: 18px; height: 18px; display: inline-grid; place-items: center; padding: 0 5px; }
 .nav-link.is-active .nav-count { background: #fff; color: var(--accent); }
 .nav-count.is-alert { background: var(--fail); }
-.topbar-actions { display: flex; align-items: center; gap: 10px; }
-.demo-tag { font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; white-space: nowrap; }
+.demo-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 4px 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); font-size: 13px; }
+.demo-sep { width: 1px; height: 18px; background: var(--border-strong); }
+.demo-date { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .app { max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }
 .foot { max-width: 1120px; margin: 0 auto; padding: 0 24px 40px; color: var(--muted); font-size: 13px; }
@@ -340,11 +342,6 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .activity-meta { font-size: 13px; color: var(--muted); }
 
 /* Responsive ------------------------------------------------------------ */
-@media (max-width: 1100px) {
-  .topbar { flex-wrap: wrap; height: auto; padding: 10px 24px; gap: 8px 16px; }
-  .nav { order: 3; flex: 1 0 100%; }
-  .topbar-actions { margin-left: auto; }
-}
 @media (max-width: 960px) {
   .metric-grid, .attention-grid, .metric-grid-4 { grid-template-columns: repeat(2, 1fr); }
   .decision-grid { grid-template-columns: 1fr; }
@@ -353,9 +350,8 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 }
 @media (max-width: 720px) {
   html { font-size: 14px; }
-  .topbar { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; }
-  .nav { order: 3; flex: 1 0 100%; }
-  .topbar-actions { margin-left: auto; }
+  .topbar { padding: 10px 16px 8px; }
+  .demo-controls { border-radius: var(--radius); }
   .app, .foot { padding-left: 16px; padding-right: 16px; }
   .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .hero-grid { grid-template-columns: 1fr; gap: 16px; }
@@ -489,10 +485,7 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 
 .impact-note { margin: 0 0 8px; }
 /* Acting-as picker as a demo control ------------------------------------ */
-.acting { flex-wrap: wrap; }
 .acting-demo { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--watch); background: var(--watch-bg); border: 1px solid var(--watch-bd); border-radius: 3px; padding: 1px 5px; margin-right: 4px; }
-.acting-help { flex-basis: 100%; font-size: 11px; color: var(--muted); line-height: 1.2; }
-@media (max-width: 720px) { .acting-help { display: none; } }
 
 .notice-links { white-space: nowrap; font-weight: 600; }
 .attention ul.plain-list { margin: 6px 0; }
