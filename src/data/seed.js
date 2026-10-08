@@ -30,6 +30,7 @@ export const people = {
   daniel: { name: 'Daniel Okafor', role: 'Risk & Compliance Lead', team: 'Risk' },
   elena: { name: 'Elena Rossi', role: 'Finance Business Partner', team: 'Finance' },
   jonas: { name: 'Jonas Lindqvist', role: 'Engineering Lead, Support Platform', team: 'Engineering' },
+  sofia: { name: 'Sofia Alvarez', role: 'Risk Analyst', team: 'Risk' },
 };
 
 // ---------------------------------------------------------------------------
@@ -235,7 +236,7 @@ export const successCriteria = [
     target: 'Key stakeholders agree limited autonomy is appropriate',
     current: 'Divided on high-value cases',
     status: 'watch',
-    note: 'Four stakeholders recorded positions on Oct 6. All four support some expansion. Risk does not support autonomy above $50.',
+    note: 'Five stakeholders recorded positions on Oct 6. All five support some expansion. Risk does not support autonomy above $50.',
   },
 ];
 
@@ -602,13 +603,17 @@ export const stakeholders = [
     quote: 'Current evidence is insufficient to justify autonomous decisions above $50. Eighteen cases and two severe errors is not a track record. Fraud-signaled cases must stay with a human regardless of the gate.',
   },
   {
+    team: 'Risk', person: 'sofia', position: 'Hold high-value cases', stance: 'hold',
+    quote: 'Two of the three severe errors sat in the smallest segment. Until that segment has forty cases, I would not read anything into its accuracy.',
+  },
+  {
     team: 'Finance', person: 'elena', position: 'Support limited expansion', stance: 'expand-limits',
     quote: 'Refund cost has not materially increased during the pilot (+1.8% against a +2.1% seasonal baseline). I would want a cost ceiling monitored if automation goes live.',
   },
 ];
 
 export const stakeholderSummary = {
-  consensus: 'Limited expansion appears supported. All four positions accept automatic approval of low-value standard refunds.',
+  consensus: 'Limited expansion appears supported. All five positions accept automatic approval of low-value standard refunds.',
   disagreement: 'Authority for high-value refunds. Support Operations would expand the whole capability; Risk would not automate anything above $50.',
 };
 
@@ -656,7 +661,7 @@ export const decisionRecords = [
 
 export const activity = [
   { id: 'ACT-10', date: '2026-10-06', kind: 'review', surfaced: true, title: 'Stakeholder review completed',
-    body: 'Four positions recorded. Risk requested continued approval for high-value cases.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=stakeholders' },
+    body: 'Five positions recorded. Risk requested continued approval for high-value cases.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=stakeholders' },
   { id: 'ACT-09', date: '2026-10-05', kind: 'milestone', surfaced: true, title: 'Pilot threshold reached',
     body: '200 pilot cases completed. Evidence requirements for the Level 3 decision became evaluable.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=evidence' },
   { id: 'ACT-08', date: '2026-10-04', kind: 'mitigation', surfaced: true, title: 'Software gate added for fraud-flagged accounts',
@@ -770,6 +775,7 @@ const matureCapabilities = {
       { team: 'Support Operations', person: 'priya', stance: 'expand', position: 'Expand', quote: 'Misroutes cost minutes, not money, and agents fix them at the queue.', date: '2026-08-18' },
       { team: 'Engineering', person: 'jonas', stance: 'expand-limits', position: 'Expand with a misroute ceiling', quote: 'Fine to automate as long as the misroute rule returns it to Draft on its own.', date: '2026-08-18' },
       { team: 'Risk', person: 'daniel', stance: 'expand-limits', position: 'Expand, keep legal and safety tickets gated', quote: 'Low impact and reversible. The gate on legal and safety tickets is the only thing I need.', date: '2026-08-18' },
+      { team: 'Risk', person: 'sofia', stance: 'expand-limits', position: 'Expand with the misroute rule', quote: 'Agreed, provided the misroute rule is enforced by software and not by someone noticing.', date: '2026-08-18' },
     ],
     evidence: [
       { id: 'EV-TC-01', source: 'Operational metrics', metric: 'Misroute rate since expansion', value: '3.1% across 1,840 tickets', status: 'pass', risk: 'Low', segment: 'All', date: '2026-09-28', detail: 'Tickets re-queued by an agent after automatic assignment. Legal and safety tickets are gated and are not in this figure.', link: '#/capabilities/ticket-classification?tab=criteria' },
@@ -797,6 +803,7 @@ const matureCapabilities = {
       { team: 'Support Operations', person: 'priya', stance: 'hold', position: 'Hold at Draft', quote: 'Agents like the drafts, but 39% still need real work. Not ready to send anything unreviewed.', date: '2026-10-02' },
       { team: 'Product', person: 'maya', stance: 'hold', position: 'Hold until policy quotes are reliable', quote: 'Fix the policy-version retrieval first; the quality number should move on its own.', date: '2026-10-02' },
       { team: 'Risk', person: 'daniel', stance: 'hold', position: 'Hold; customer-facing text stays reviewed', quote: 'A misquoted policy that reaches a customer is a commitment. Draft is the right level.', date: '2026-10-02' },
+      { team: 'Risk', person: 'sofia', stance: 'hold', position: 'Hold until policy quotes are reliable', quote: 'The two outdated-window drafts are the same failure as the refund case. Fix retrieval first.', date: '2026-10-02' },
       { team: 'Engineering', person: 'jonas', stance: 'undecided', position: 'No position yet', quote: '', date: '2026-10-02' },
     ],
     evidence: [
@@ -824,6 +831,7 @@ const matureCapabilities = {
     ],
     stakeholders: [
       { team: 'Risk', person: 'daniel', stance: 'restrict', position: 'Restrict to Recommend', quote: 'The capability cannot stay at Draft while execution can duplicate. The judgment was fine; the mechanism was not.', date: '2026-09-24' },
+      { team: 'Risk', person: 'sofia', stance: 'restrict', position: 'Restrict until replayed', quote: 'A hundred clean executions in replay before anyone talks about Draft again.', date: '2026-09-24' },
       { team: 'Engineering', person: 'jonas', stance: 'restrict', position: 'Restrict and redesign the idempotency check', quote: 'A retry executed the same refund twice. That is a defect in our code, and I would rather fix it than argue about it.', date: '2026-09-24' },
       { team: 'Finance', person: 'elena', stance: 'restrict', position: 'Restrict until replayed', quote: 'One duplicate at $180 is small. The next one may not be.', date: '2026-09-24' },
       { team: 'Support Operations', person: 'priya', stance: 'restrict', position: 'Restrict; agents execute above $50', quote: 'Agents can carry the volume above $50 for a while. Fix it properly.', date: '2026-09-24' },
@@ -835,8 +843,8 @@ const matureCapabilities = {
   },
   'account-closure': {
     criteria: [
-      { id: 'quality', name: 'Quality', target: '≥ 99% correct closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'A wrong closure removes a customer. Even 99% would mean about one wrong closure a quarter at current volume.', source: 'Default for High impact, tightened' },
-      { id: 'severe-errors', name: 'Severe error rate', target: '0 wrong closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'Every wrong closure is severe. There is no acceptable rate.', source: 'Default for High impact, tightened' },
+      { id: 'quality', name: 'Quality', target: '≥ 99% correct closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'Tightened from the High-impact default of 92%. A wrong closure removes a customer; even 99% would mean about one wrong closure a quarter at current volume.', source: 'Default for High impact' },
+      { id: 'severe-errors', name: 'Severe error rate', target: '0 wrong closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'Tightened from the High-impact default of 2%. Every wrong closure is severe; there is no acceptable rate.', source: 'Default for High impact' },
       { id: 'reversibility', name: 'Reversibility', target: 'A closure can be undone within 30 days without data loss', current: 'Not possible today', status: 'fail', note: 'Closure is irreversible in the current system. This is the reason the capability stays at Level 0 by design.', source: 'Written by hand' },
       { id: 'review-burden', name: 'Human review burden', target: '≤ 30% of cases need meaningful correction', current: 'Not applicable: a person handles every closure', status: 'pending', note: 'About 30 closures a month, all by hand.', source: 'Default for every capability' },
       { id: 'cost', name: 'Cost', target: 'AI operating cost < $0.20 per case', current: 'Not applicable', status: 'pending', note: 'Volume is too low for cost to matter.', source: 'Default for every capability' },
@@ -844,13 +852,14 @@ const matureCapabilities = {
     ],
     requirements: [
       { id: 'min-cases', text: 'Minimum 200 pilot cases', current: '0', met: false, gap: 'There is no pilot and none is planned.', source: 'Default for High impact' },
-      { id: 'accuracy', text: 'Overall accuracy ≥ 99%', current: 'Not measured', met: false, source: 'Default for High impact, tightened' },
-      { id: 'severe', text: '0 wrong closures', current: 'Not measured', met: false, source: 'Default for High impact, tightened' },
+      { id: 'accuracy', text: 'Overall accuracy ≥ 99%', current: 'Not measured', met: false, gap: 'Tightened from the High-impact default of 92%.', source: 'Default for High impact' },
+      { id: 'severe', text: '0 wrong closures', current: 'Not measured', met: false, gap: 'Tightened from the High-impact default of 2%.', source: 'Default for High impact' },
       { id: 'reversal', text: 'Every pilot action reviewed before it took effect', current: 'Not applicable', met: false, source: 'Default for difficult-to-reverse actions' },
       { id: 'undo', text: 'A 30-day restore for closed accounts exists in production', current: 'Does not exist', met: false, gap: 'Until closure can be undone, no level above Observe will be considered. This is the condition that would reopen the decision.', source: 'Written by hand' },
     ],
     stakeholders: [
       { team: 'Risk', person: 'daniel', stance: 'hold', position: 'Not delegated, by design', quote: 'Difficult to reverse and about thirty a month. There is nothing to gain from delegating this.', date: '2026-08-12' },
+      { team: 'Risk', person: 'sofia', stance: 'hold', position: 'Not delegated, by design', quote: 'Irreversible and rare is the clearest case for Level 0 we have.', date: '2026-08-12' },
       { team: 'Support Operations', person: 'priya', stance: 'hold', position: 'Keep closures with a person', quote: 'A person closing thirty accounts a month is not a bottleneck.', date: '2026-08-12' },
       { team: 'Product', person: 'maya', stance: 'hold', position: 'Revisit only if closures become reversible', quote: 'If a 30-day restore ever ships, we can talk. Not before.', date: '2026-08-12' },
     ],

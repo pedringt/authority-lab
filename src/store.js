@@ -865,6 +865,7 @@ const ACTIONS = {
   proposeAmendment,
   approveProposal,
   rejectProposal,
+  withdrawProposal,
   addCapability,
   setActingAs,
   startContractDraft,
@@ -1329,14 +1330,15 @@ export function requirementLabel(req) {
   return 'two different approvers, at least one from Risk';
 }
 
-// Named stakeholders of a capability: the owner, the people in its stakeholder
-// list, and the Risk team. If no stakeholders are named yet, any named person.
+// Named stakeholders of a capability: the owner and the people in its
+// stakeholder list. Whether one of them counts as Risk is decided by their
+// team in the roster, not by the list. If no stakeholders are named yet, any
+// named person.
 export function namedStakeholders(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
   const listed = current(state, capabilityId, 'stakeholders').map((st) => st.person).filter((k) => seed.people[k]);
-  const risk = Object.keys(seed.people).filter((k) => seed.people[k].team === 'Risk');
-  const set = new Set([...(cap ? [cap.owner] : []), ...listed, ...risk]);
-  return listed.length ? [...set] : Object.keys(seed.people);
+  if (!listed.length) return Object.keys(seed.people);
+  return [...new Set([...(cap ? [cap.owner] : []), ...listed])];
 }
 
 // Risk eligibility comes only from the person's own team in `people`, never
@@ -1431,6 +1433,10 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     return amend(state, capabilityId, 'contract', { value: clean, author: by, reason: why });
   }
   if (openProposal(state, capabilityId, kind)) throw new Error('A proposal for this object is already awaiting sign-off. Approve or reject it first.');
+  const required = signoffRequirements(state, capabilityId, by);
+  const eligible = namedStakeholders(state, capabilityId).filter((k) => k !== by);
+  const feasible = signoffFeasibility(state, capabilityId, required, eligible, by);
+  if (!feasible.ok) throw new Error(feasible.reason);
   const d = capData(state, capabilityId);
   const v = versionsInForce(state, capabilityId);
   const proposal = {
@@ -1442,9 +1448,9 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     reason: why,
     value: clean,
     base: kind === 'contract' ? { contract: v.contract } : kind === 'stakeholders' ? { stakeholders: v.stakeholders } : { criteria: v.criteria, requirements: v.requirements },
-    required: signoffRequirements(state, capabilityId, by),
+    required,
     // Frozen when the proposal opens; later stakeholder edits do not change it.
-    eligible: namedStakeholders(state, capabilityId).filter((k) => k !== by),
+    eligible,
     approvals: [],
     status: 'open',
     rejection: null,
@@ -1460,6 +1466,27 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
   });
+}
+
+// Can the eligible approvers ever satisfy the rule? Checked when a proposal
+// opens, so nothing is recorded that can never complete.
+export function signoffFeasibility(state, capabilityId, required, eligible, proposedBy) {
+  const cap = getCapability(state, capabilityId);
+  const who = seed.people[proposedBy] ? seed.people[proposedBy].name : 'you';
+  if (required.ownerOnly) {
+    if (!eligible.includes(cap.owner)) return { ok: false, reason: `The owner (${seed.people[cap.owner].name}) must approve and is not available to. Ask someone else to propose.` };
+    return { ok: true };
+  }
+  if (eligible.length < required.approvers) {
+    return { ok: false, reason: `This needs ${required.approvers} approvers other than ${who}, and only ${eligible.length} named stakeholder${eligible.length === 1 ? ' is' : 's are'} eligible. Add stakeholders or ask someone else to propose.` };
+  }
+  if (required.riskRequired && !eligible.some((k) => isRiskStakeholder(state, capabilityId, k))) {
+    return { ok: false, reason: `No Risk approver other than ${who}. Add another Risk person to the stakeholders or ask someone else to propose.` };
+  }
+  if (required.riskRequired && required.approvers === 2 && eligible.length === 1) {
+    return { ok: false, reason: `Only one eligible approver other than ${who}; this needs two. Add stakeholders or ask someone else to propose.` };
+  }
+  return { ok: true };
 }
 
 export function roleLabel(role) {
@@ -1561,6 +1588,27 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
     proposalId,
     title: `${label} after evidence`,
     body: `${cap.name}: proposed by ${seed.people[proposal.proposedBy].name}, approved by ${approvals.map((a) => `${seed.people[a.by].name} (${roleLabel(a.role)})`).join(' and ')}. ${proposal.reason}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
+  });
+}
+
+// The proposer withdraws an open proposal. Recorded with a reason, like a rejection.
+export function withdrawProposal(state, capabilityId, proposalId, { by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  const proposal = getProposal(state, capabilityId, proposalId);
+  if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
+  if (proposal.status !== 'open') throw new Error('This proposal is closed.');
+  if (!by || by !== proposal.proposedBy) throw new Error('Only the proposer can withdraw a proposal; others reject it.');
+  const why = (reason || '').trim();
+  if (why.length < 10) throw new Error('A withdrawal needs a reason (a sentence).');
+  const next = { ...proposal, status: 'withdrawn', withdrawal: { by, date: state.today, reason: why }, closedAt: state.today };
+  const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
+  return logEvent(s, {
+    kind: 'proposal',
+    outcome: 'withdrawn',
+    title: `Amendment withdrawn: ${proposalId}`,
+    body: `${cap.name}: ${seed.people[by].name} withdrew their proposal. ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
   });

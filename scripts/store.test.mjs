@@ -15,6 +15,7 @@ import {
   SETTINGS, pilotStarted, needsSignoff, signoffRequirements, isRiskStakeholder, proposeAmendment, approveProposal, rejectProposal,
   openProposal, getProposal, approvalEligibility, proposalReadiness, evaluateRequirement, approvalsComplete, namedStakeholders, contractValueChecks,
   saveStakeholders, saveScenarios, addStarterScenarios, simulateScenario, scenarioNudge, proposeAuthority, STANCES, stakeholderMembershipChanged,
+  withdrawProposal, signoffFeasibility,
 } from '../src/store.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
@@ -43,7 +44,7 @@ test('seed is internally consistent', () => {
   assert.equal(seed.scenarios.filter((s) => s.severity === 'High').length, 1);
   assert.equal(seed.pilot.segments.reduce((n, s) => n + s.cases, 0), seed.pilot.cases);
   assert.equal(seed.capabilities.length, 5);
-  assert.equal(seed.stakeholders.length, 4);
+  assert.equal(seed.stakeholders.length, 5);
   const ids = new Set(seed.scenarios.map((s) => s.id));
   assert.equal(ids.size, 26, 'scenario ids are unique');
 });
@@ -950,8 +951,8 @@ test('who must sign off follows the risk profile; the gate follows the lock and 
   assert.deepEqual(signoffRequirements(s, RR, 'maya'), { approvers: 2, riskRequired: true, ownerOnly: false }, 'owner proposing on High still needs two incl. Risk');
   assert.deepEqual(signoffRequirements(s, TC, 'maya'), { approvers: 1, riskRequired: false, ownerOnly: true }, 'Low impact: the owner');
   assert.deepEqual(signoffRequirements(s, TC, 'priya'), { approvers: 1, riskRequired: false, ownerOnly: false }, 'Low impact, owner proposed: one other named stakeholder');
-  assert.deepEqual(namedStakeholders(s, RR).sort(), ['daniel', 'elena', 'maya', 'priya'].sort(), 'owner, listed stakeholders, Risk team');
-  assert.deepEqual(namedStakeholders(s, TC).sort(), ['daniel', 'jonas', 'priya'], 'ticket classification: its listed people plus Risk');
+  assert.deepEqual(namedStakeholders(s, RR).sort(), ['daniel', 'elena', 'maya', 'priya', 'sofia'], 'owner and listed stakeholders');
+  assert.deepEqual(namedStakeholders(s, TC).sort(), ['daniel', 'jonas', 'priya', 'sofia'], 'ticket classification: owner and listed people');
   const [nb, nbid] = blankCap();
   assert.deepEqual(namedStakeholders(nb, nbid).sort(), Object.keys(seed.people).sort(), 'no stakeholders listed: any named person');
   assert.equal(isRiskStakeholder(s, RR, 'daniel'), true);
@@ -1203,6 +1204,7 @@ test('stakeholders are saved as a version; positions default to "no position yet
   assert.ok(STANCES.some(([k]) => k === 'undecided'));
   // Named stakeholders now follow the list.
   assert.deepEqual(namedStakeholders(s, id).sort(), ['daniel', 'priya']);
+  assert.equal(isRiskStakeholder(s, id, 'sofia'), true, 'Sofia is Risk by roster');
 });
 
 test('scenario results are simulated deterministically; the starter set covers all five groups and is labelled', () => {
@@ -1351,7 +1353,7 @@ test('eligible approvers are frozen when a proposal opens', () => {
   const value = { criteria: current(s, TC, 'criteria'), requirements: current(s, TC, 'requirements').map((r) => (r.id === 'min-cases' ? { ...r, text: 'Minimum 30 pilot cases' } : r)) };
   s = proposeAmendment(s, TC, 'criteria', { value, by: 'priya', reason: 'Owner proposing; one other stakeholder must approve.' });
   const p = openProposal(s, TC, 'criteria');
-  assert.deepEqual(p.eligible.sort(), ['daniel', 'maya'], 'listed stakeholders plus Risk, minus the proposer, at open time');
+  assert.deepEqual(p.eligible.sort(), ['maya'], 'listed stakeholders minus the proposer, at open time');
   // Adding Elena afterwards (itself a proposal now) does not make her eligible on P-1.
   assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /not an eligible approver when this proposal opened/);
   // Nor does an applied membership change: approve the membership proposal first, then retry.
@@ -1435,8 +1437,66 @@ test('mature capabilities carry criteria, requirements and stakeholders in the e
   assert.equal(current(s, RR, 'criteria').length, 7);
   assert.equal(readiness(s, RR).met, 5);
   assert.equal(capData(s, RR).evidence.length, 12);
-  assert.equal(current(s, RR, 'stakeholders').length, 4);
+  assert.equal(current(s, RR, 'stakeholders').length, 5);
   assert.equal(focusCapability(s).id, RR);
   // Risk eligibility still comes from people, not from these lists.
   assert.equal(isRiskStakeholder(s, 'ticket-classification', 'jonas'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Feasibility at proposal time, and withdrawal (PR #19 review)
+// ---------------------------------------------------------------------------
+
+test('a proposal is refused when its eligible approvers can never satisfy the rule', () => {
+  let s = initialState();
+  const reqs = loosenedRequirements(s);
+  const value = { criteria: current(s, RR, 'criteria'), requirements: reqs };
+  // With Sofia on the list, Daniel can propose: Sofia is the other Risk approver.
+  const ok = proposeAmendment(s, RR, 'criteria', { value, by: 'daniel', reason: REASON });
+  assert.deepEqual(openProposal(ok, RR, 'criteria').eligible.sort(), ['elena', 'maya', 'priya', 'sofia']);
+  // Remove Sofia from the list (direct amend in the test): Daniel's proposal could never complete, so it is refused.
+  const noSofia = amend(s, RR, 'stakeholders', { value: current(s, RR, 'stakeholders').filter((x) => x.person !== 'sofia'), author: 'maya', reason: 'Test setup.' });
+  assert.throws(() => proposeAmendment(noSofia, RR, 'criteria', { value, by: 'daniel', reason: REASON }), /No Risk approver other than Daniel Okafor. Add another Risk person to the stakeholders or ask someone else to propose/);
+  assert.equal(capData(noSofia, RR).proposals.length, 0, 'nothing recorded');
+  // Someone else proposing on the same list is fine: Daniel is the Risk approver.
+  assert.ok(openProposal(proposeAmendment(noSofia, RR, 'criteria', { value, by: 'priya', reason: REASON }), RR, 'criteria'));
+  // Too few approvers: a High-impact capability whose only listed people are the owner and one other.
+  let [t, id] = withNewCap();
+  t = saveStakeholders(t, id, { stakeholders: [{ team: 'Support Operations', person: 'priya' }, { team: 'Risk', person: 'daniel' }], by: 'priya' });
+  t = addStarterScenarios(t, id, { by: 'priya' });
+  const d = defaultsFor(t, id);
+  t = saveCriteria(t, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  t = runSuite(t, id);
+  assert.throws(() => proposeAmendment(t, id, 'criteria', { value: { criteria: current(t, id, 'criteria'), requirements: current(t, id, 'requirements') }, by: 'priya', reason: 'Owner proposing with only one other person listed.' }), /needs 2 approvers other than Priya Natarajan, and only 1 named stakeholder is eligible/);
+  // Direct check of the helper.
+  assert.equal(signoffFeasibility(t, id, { approvers: 2, riskRequired: true, ownerOnly: false }, ['daniel', 'maya'], 'priya').ok, true);
+  assert.match(signoffFeasibility(t, id, { approvers: 2, riskRequired: true, ownerOnly: false }, ['maya', 'elena'], 'priya').reason, /No Risk approver/);
+});
+
+test('the proposer can withdraw an open proposal; it is recorded with a reason and a new proposal can follow', () => {
+  let s = initialState();
+  const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
+  assert.throws(() => withdrawProposal(s, RR, 'P-1', { by: 'maya', reason: 'Not mine to withdraw.' }), /Only the proposer can withdraw/);
+  assert.throws(() => withdrawProposal(s, RR, 'P-1', { by: 'priya', reason: 'no' }), /needs a reason/);
+  const before = s.activity.length;
+  s = withdrawProposal(s, RR, 'P-1', { by: 'priya', reason: 'Waiting for the next twenty cases instead.' });
+  const p = getProposal(s, RR, 'P-1');
+  assert.equal(p.status, 'withdrawn');
+  assert.equal(p.withdrawal.by, 'priya');
+  assert.equal(p.withdrawal.reason, 'Waiting for the next twenty cases instead.');
+  assert.equal(s.activity.length, before + 1);
+  assert.equal(s.activity[0].kind, 'proposal');
+  assert.equal(s.activity[0].outcome, 'withdrawn');
+  assert.equal(versionsInForce(s, RR).requirements, 1, 'nothing applied');
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'maya' }), /closed/);
+  assert.throws(() => withdrawProposal(s, RR, 'P-1', { by: 'priya', reason: 'Withdrawing again.' }), /closed/);
+  // A new proposal can open now.
+  s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
+  assert.equal(openProposal(s, RR, 'criteria').id, 'P-2');
+  // Through the store too.
+  const store = createStore({});
+  store.dispatch('proposeAmendment', RR, 'criteria', { value, by: 'maya', reason: REASON });
+  store.dispatch('withdrawProposal', RR, 'P-1', { by: 'maya', reason: 'Changed my mind after talking to Risk.' });
+  assert.equal(getProposal(store.get(), RR, 'P-1').status, 'withdrawn');
 });
