@@ -518,7 +518,7 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   assert.deepEqual(c.authority, { level: 1, limited: false });
   assert.equal(c.status, 'setup');
   assert.equal(c.definedOn, seed.TODAY);
-  assert.equal(lastEvaluated(s, c.id), seed.TODAY, 'derived from its first record');
+  assert.equal(lastEvaluated(s, c.id), seed.TODAY, 'no evidence yet: falls back to the defined-on date, which is today');
   assert.equal(lastDecisionId(s, c.id), s.decisionRecords[s.decisionRecords.length - 1].id);
   assert.equal(c.added, true);
   assert.deepEqual(Object.keys(c).filter((k) => ['contract', 'risk', 'criteria'].includes(k)), []);
@@ -1530,17 +1530,18 @@ test('decisionRequired, proposed, lastDecisionId and lastEvaluated are derived, 
   assert.equal(decisionRequired(s, RR), false);
   assert.equal(proposedAuthority(s, RR), null);
   assert.equal(lastDecisionId(s, RR), 'AC-04');
-  assert.equal(lastEvaluated(s, RR), seed.TODAY);
+  assert.equal(lastEvaluated(s, RR), '2026-10-06', 'a decision is not an evaluation');
   assert.equal('decisionRequired' in cap(s), false);
-  // A breach moves them again.
+  // A breach writes an incident evidence item, which is an evaluation.
   s = simulateBreach(s, RR);
   assert.equal(lastDecisionId(s, RR), 'AC-05');
+  assert.equal(lastEvaluated(s, RR), seed.TODAY);
   // Nothing proposed: cannot authorize.
   assert.match(canAuthorize(selectDecision(s, RR, 'expand'), RR).reason, /No authority change is proposed/);
   assert.equal(canAuthorize(selectDecision(s, RR, 'restrict'), RR).ok, true, 'restricting needs no proposed expansion');
   // A test run alone moves lastEvaluated.
   let [b, bid] = blankCap();
-  assert.equal(lastEvaluated(b, bid), seed.TODAY, 'first record today');
+  assert.equal(lastEvaluated(b, bid), seed.TODAY, 'defined today, no evidence');
   const u = { ...b, capabilityData: { ...b.capabilityData, [bid]: { ...capData(b, bid), testRun: { status: 'not-run', lastRun: '2026-10-09', completed: [] } } } };
   assert.equal(lastEvaluated(u, bid), '2026-10-09');
 });

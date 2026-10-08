@@ -210,8 +210,8 @@ export function decisionRequired(state, capabilityId) {
   return Boolean(proposedAuthority(state, capabilityId));
 }
 
-// The latest date anything was learned or decided about the capability: a
-// test run, an evidence item, the pilot, or a decision record. Falls back to
+// The latest date evidence was gathered about the capability: a test run, an
+// evidence item, or the pilot. Decisions are not evaluations. Falls back to
 // the date it was defined.
 export function lastEvaluated(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
@@ -220,7 +220,6 @@ export function lastEvaluated(state, capabilityId) {
     d.testRun.lastRun,
     ...d.evidence.map((e) => e.date),
     d.pilot ? (d.pilot.ended || d.pilot.lastCase) : null,
-    ...state.decisionRecords.filter((r) => r.capabilityId === capabilityId).map((r) => r.date),
   ].filter(Boolean);
   if (!dates.length) return cap ? cap.definedOn || null : null;
   return dates.reduce((a, b) => (a > b ? a : b));
