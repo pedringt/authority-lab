@@ -458,3 +458,6 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .criteria-form .section + .section { margin-top: 20px; }
 .criteria-form .btn-sm { margin-top: 8px; }
 .page-actions p { margin: 6px 0 0; max-width: 32ch; text-align: right; }
+
+.deviations { background: var(--watch-bg); border: 1px solid var(--watch-bd); border-radius: 4px; padding: 10px 12px; margin: 8px 0; }
+.deviations .plain-list { margin-bottom: 6px; }

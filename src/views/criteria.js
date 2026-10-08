@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDateYear } from '../ui.js';
-import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce } from '../store.js';
+import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS } from '../store.js';
 
 // Editor for success criteria and evidence requirements (#6). Before the
 // first test run the editors are open and every save is a new version. After
@@ -29,12 +29,12 @@ export function criteriaEditorView(state, capabilityId, query) {
     <td><input type="text" name="c-target" value="${c.target}" maxlength="120" aria-label="Target" required></td>
     <td><input type="text" name="c-note" value="${c.note || ''}" maxlength="240" aria-label="Note"></td>
     <td class="muted small">${c.source || 'Written by hand'}</td>
-    <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove criterion ${i + 1}">Remove</button></td>
+    <td>${CORE_CRITERIA.includes(c.id) ? html`<span class="muted small" title="Core row: adjust the threshold, but it cannot be removed">Core</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove criterion ${i + 1}">Remove</button>`}</td>
   </tr>`;
   const rrow = (r, i) => html`<tr>
     <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required></td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
-    <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove requirement ${i + 1}">Remove</button></td>
+    <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="Core row: adjust the count, but it cannot be removed">Core</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove requirement ${i + 1}">Remove</button>`}</td>
   </tr>`;
 
   return html`<div class="page-head">
@@ -60,7 +60,8 @@ export function criteriaEditorView(state, capabilityId, query) {
 
     <div class="card authorize">
       <p class="eyebrow">Save</p>
-      <label class="field field-stack"><span>Reason <span class="muted small">(optional before the lock)</span></span><input type="text" name="reason" maxlength="200" placeholder="${saved ? 'What changed and why.' : 'Saved before testing.'}"></label>
+      <label class="field field-stack"><span>Reason <span class="muted small">(required if a risk-derived default is loosened or removed; otherwise optional)</span></span><input type="text" name="reason" maxlength="200" placeholder="${saved ? 'What changed and why.' : 'Saved before testing.'}"></label>
+      <p class="muted small">Core rows (a quality threshold, a severe-error threshold, a minimum case count) can be adjusted but not removed. Lowering a default threshold, reducing a case count or removing a default row is kept on the version with your reason.</p>
       <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, writes ${saved ? `criteria v${v.criteria + 1} and requirements v${v.requirements + 1}` : 'criteria v1 and requirements v1'} for ${cap.name}, dated ${fmtDateYear(state.today)}. Until the first test run you can save again; after it, changes need a proposed amendment.</p>
       <button class="btn btn-primary btn-block" type="submit">${saved ? 'Save new versions' : 'Save criteria and requirements'}</button>
     </div>

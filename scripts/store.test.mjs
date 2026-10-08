@@ -11,7 +11,7 @@ import {
   addCapability, actor, setActingAs, vagueNameWarning, slugify,
   startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection,
   contractChecks, canFinalizeContract, finalizeContract, draftValue, contractSummary, SECTION_KEYS,
-  saveCriteria, criteriaSaved, criteriaLocked, canRunSuite, defaultsFor,
+  saveCriteria, criteriaSaved, criteriaLocked, canRunSuite, defaultsFor, defaultDeviations, CORE_CRITERIA, CORE_REQUIREMENTS,
 } from '../src/store.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
 import { pickTemplate, suggestLines } from '../src/data/contract-templates.js';
@@ -890,4 +890,37 @@ test('saveCriteria is available through the store', () => {
   const d = defaultsFor(store.get(), id);
   store.dispatch('saveCriteria', id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
   assert.equal(criteriaSaved(store.get(), id), true);
+});
+
+test('loosening or removing a risk-derived default needs a reason, stored on the version; core rows cannot be removed; one event per save', () => {
+  let [s, id] = withNewCap();
+  const d = defaultsFor(s, id);
+  const looser = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 88% correct decisions' } : c));
+  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya' }), /needs a short reason/);
+  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya', reason: 'ok' }), /needs a short reason/, 'a reason must be more than a word');
+  // Tightening needs no reason.
+  const tighter = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 95% correct decisions' } : c));
+  assert.doesNotThrow(() => saveCriteria(s, id, { criteria: tighter, requirements: d.requirements, by: 'priya' }));
+  // Core rows can be adjusted but not removed.
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria.filter((c) => c.id !== 'severe-errors'), requirements: d.requirements, by: 'priya', reason: 'Long enough reason.' }), /Core rows can be adjusted but not removed: a severe-error threshold/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements.filter((r) => r.id !== 'min-cases'), by: 'priya', reason: 'Long enough reason.' }), /a minimum case count/);
+  assert.deepEqual(CORE_CRITERIA, ['quality', 'severe-errors']);
+  assert.deepEqual(CORE_REQUIREMENTS, ['min-cases']);
+  // Removing a non-core default and loosening a count, with a reason: stored on each version.
+  const before = s.activity.length;
+  const fewer = d.requirements.filter((r) => r.id !== 'high-value').map((r) => (r.id === 'min-cases' ? { ...r, text: 'Minimum 150 pilot cases' } : r));
+  s = saveCriteria(s, id, { criteria: looser, requirements: fewer, by: 'priya', reason: 'Pilot volume is small; agreed with Risk.' });
+  assert.equal(s.activity.length - before, 1, 'one event per save');
+  assert.equal(s.activity[0].kind, 'criteria-saved');
+  assert.match(s.activity[0].body, /criteria v1, requirements v1/);
+  assert.match(s.activity[0].body, /loosened or removed: Pilot volume is small/);
+  const cv = currentVersion(s, id, 'criteria');
+  assert.deepEqual(cv.deviations, [{ id: 'quality', change: 'loosened', from: '≥ 92% correct decisions', to: '≥ 88% correct decisions', label: 'Quality' }]);
+  assert.equal(cv.reason, 'Pilot volume is small; agreed with Risk.');
+  const rv = currentVersion(s, id, 'requirements');
+  assert.deepEqual(rv.deviations.map((x) => [x.id, x.change]), [['min-cases', 'loosened'], ['high-value', 'removed']]);
+  // Detection handles both directions.
+  assert.deepEqual(defaultDeviations([{ id: 'a', t: '< 2% errors' }], [{ id: 'a', t: '< 3% errors' }], (x) => x.t).map((x) => x.change), ['loosened']);
+  assert.deepEqual(defaultDeviations([{ id: 'a', t: '< 2% errors' }], [{ id: 'a', t: '< 1% errors' }], (x) => x.t), []);
+  assert.deepEqual(defaultDeviations([{ id: 'a', t: 'Minimum 200 cases' }], [{ id: 'a', t: 'Minimum 200 cases' }], (x) => x.t), []);
 });

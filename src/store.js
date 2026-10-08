@@ -477,7 +477,7 @@ function logEvent(state, event) {
 
 // Write a new version of a versioned object. The previous versions stay as
 // they were. `author` is a person key; `reason` is required.
-export function amend(state, capabilityId, kind, { value, author, reason }) {
+export function amend(state, capabilityId, kind, { value, author, reason, meta = null, silent = false }) {
   if (!VERSIONED_KINDS.includes(kind)) throw new Error(`Unknown versioned object: ${kind}`);
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
@@ -494,10 +494,12 @@ export function amend(state, capabilityId, kind, { value, author, reason }) {
     afterEvidence,
     before: prev ? clone(prev.value) : null,
     value: clone(value),
+    ...(meta ? clone(meta) : {}),
   };
   const versions = { ...d.versions, [kind]: [...(d.versions[kind] || []), next] };
   // The version list is the only copy; the latest version is the current value.
   const s = updateCap(state, capabilityId, { versions });
+  if (silent) return s;
   const who = seed.people[author];
   return logEvent(s, {
     kind: 'amendment',
@@ -1184,6 +1186,38 @@ function cleanRequirements(items) {
   });
 }
 
+// Rows that can be adjusted but never removed.
+export const CORE_CRITERIA = ['quality', 'severe-errors'];
+export const CORE_REQUIREMENTS = ['min-cases'];
+const CORE_LABELS = { quality: 'a quality threshold', 'severe-errors': 'a severe-error threshold', 'min-cases': 'a minimum case count' };
+
+// A threshold's direction: "at least N" (≥, >, Minimum) is loosened by a
+// lower N; "at most N" (≤, <, Maximum) is loosened by a higher N.
+function threshold(text) {
+  const t = text || '';
+  const m = t.match(/(≥|>=|≤|<=|<|>|\bminimum\b|\bat least\b|\bmaximum\b|\bat most\b)\s*\$?\s*(\d+(?:\.\d+)?)/i);
+  if (!m) return null;
+  const op = m[1].toLowerCase();
+  const atLeast = ['≥', '>=', '>', 'minimum', 'at least'].includes(op);
+  return { atLeast, n: Number(m[2]) };
+}
+
+// Defaults that were removed or loosened, compared with the risk-derived
+// defaults for this capability.
+export function defaultDeviations(defaults, submitted, textOf) {
+  const out = [];
+  for (const d of defaults) {
+    const now = submitted.find((x) => x.id === d.id);
+    if (!now) { out.push({ id: d.id, change: 'removed', from: textOf(d), to: null }); continue; }
+    const a = threshold(textOf(d));
+    const b = threshold(textOf(now));
+    if (!a || !b) continue;
+    const loosened = a.atLeast ? b.n < a.n : b.n > a.n;
+    if (loosened) out.push({ id: d.id, change: 'loosened', from: textOf(d), to: textOf(now) });
+  }
+  return out;
+}
+
 // Save both objects before the first test run. Each save writes a new version
 // (never an edit); once locked, changes go through a proposed amendment (#7).
 export function saveCriteria(state, capabilityId, { criteria, requirements, by, reason } = {}) {
@@ -1193,15 +1227,27 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   if (criteriaLocked(state, capabilityId)) throw new Error('Criteria are locked: performance results have been seen. Propose an amendment instead.');
   const c = cleanCriteria(criteria);
   const r = cleanRequirements(requirements);
+  const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
+  if (missingCore.length) throw new Error(`Core rows can be adjusted but not removed: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
+  const defaults = defaultsFor(state, capabilityId);
+  const deviations = [
+    ...defaultDeviations(defaults.criteria, c, (x) => x.target).map((x) => ({ ...x, kind: 'criteria', label: (defaults.criteria.find((y) => y.id === x.id) || {}).name })),
+    ...defaultDeviations(defaults.requirements, r, (x) => x.text).map((x) => ({ ...x, kind: 'requirements', label: null })),
+  ];
+  const why = (reason || '').trim();
+  if (deviations.length && why.length < 10) {
+    throw new Error(`Removing or loosening a risk-derived default needs a short reason (${deviations.map((x) => `${x.label || x.from}: ${x.change}`).join('; ')}).`);
+  }
   const first = !criteriaSaved(state, capabilityId);
-  const why = (reason || '').trim() || (first ? 'Saved before testing.' : 'Edited before testing.');
-  let s = amend(state, capabilityId, 'criteria', { value: c, author: by, reason: why });
-  s = amend(s, capabilityId, 'requirements', { value: r, author: by, reason: why });
-  // The two amendment events are kept in Full history; one saved event summarises them.
+  const text = why || (first ? 'Saved before testing.' : 'Edited before testing.');
+  const meta = (kind) => ({ deviations: deviations.filter((x) => x.kind === kind).map(({ id, change, from, to, label }) => ({ id, change, from, to, label })) });
+  let s = amend(state, capabilityId, 'criteria', { value: c, author: by, reason: text, meta: meta('criteria'), silent: true });
+  s = amend(s, capabilityId, 'requirements', { value: r, author: by, reason: text, meta: meta('requirements'), silent: true });
+  // One event per save, naming both version numbers.
   return logEvent(s, {
     kind: 'criteria-saved',
     title: first ? 'Success criteria and evidence requirements saved' : 'Success criteria and evidence requirements updated',
-    body: `${cap.name}: ${c.length} criteria and ${r.length} evidence requirements saved by ${seed.people[by].name} (criteria v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}). They lock on the first test run.`,
+    body: `${cap.name}: ${c.length} criteria and ${r.length} evidence requirements saved by ${seed.people[by].name} (criteria v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}).${deviations.length ? ` ${deviations.length} risk-derived default${deviations.length === 1 ? '' : 's'} ${deviations.length === 1 ? 'was' : 'were'} loosened or removed: ${text}` : ''} They lock on the first test run.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}?tab=criteria`,
   });
