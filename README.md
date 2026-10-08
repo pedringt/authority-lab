@@ -12,6 +12,8 @@ It walks one AI capability, **Refund recommendation** in the fictional Northstar
 
 [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md) explains the product in plain terms: the building blocks, the screens, the demo story and what each control does.
 
+[docs/DECISIONS.md](docs/DECISIONS.md) records every product decision with its reasoning, the loopholes found in review, and the roadmap.
+
 ## Run it
 
 No build step, no dependencies, no network calls.

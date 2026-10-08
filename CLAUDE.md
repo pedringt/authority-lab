@@ -1,0 +1,37 @@
+# Authority Lab: notes for Claude Code
+
+A prototype for deciding what an AI capability should be allowed to do, based on evidence. **AI interprets. Software enforces. Humans authorize.**
+
+Read before working:
+- `docs/HOW_IT_WORKS.md`: the product, the screens and the rules as users see them.
+- `docs/DECISIONS.md`: every product decision with its reasoning, the roadmap and what's next. Check it before changing any rule.
+
+## Ground rules
+
+- Static app: plain HTML/CSS/JS, no build step, no dependencies, no network or model calls. Everything presented as AI output is seeded and deterministic: contract suggestions and scenarios carry a "Suggested by AI" badge, and the decision workspace's recommendation is labelled "System recommendation".
+- Errors from an action are shown inline on the page (an `error=` route parameter rendered as a notice), never in an `alert()` pop-up. A test enforces this.
+- The store lives in `src/store/`; `src/store/index.js` is the only entry point. Views read state through selectors and never change it directly.
+- Every new store transition gets a test in `scripts/*.test.mjs`. Run `npm test` before every push. CI runs it on Node 22 and 24.
+- The seeded demo story in `README.md` must keep playing out unchanged.
+- Update `README.md`, `docs/HOW_IT_WORKS.md` and `docs/DECISIONS.md` in the same PR when visible behaviour or a rule changes.
+
+## Governance rules: never weaken these without Paige's explicit approval
+
+- Records are immutable. Every authority level change writes a decision record. Edits create new versions and never overwrite.
+- Records name the person who acted and keep their name, title, team and rights as they were at the time.
+- After performance results exist (a test run, pilot or measured evidence), changes to criteria, requirements, stakeholder membership, and the contract once a pilot has started go through a proposal and sign-off.
+- The proposer never approves. Low/Medium impact needs one approver. High impact or Financial exposure needs two distinct approvers, at least one holding the Risk approver right.
+- Risk approval is an explicit recorded right on a person. It is never inferred from a team name or a capability label.
+- Granting a right: the approver is neither the proposer nor the recipient. Approvers are frozen when a proposal opens. Proposals that can't be satisfied are refused when proposed.
+- Expanding authority needs a pending proposal and goes one level at a time. Pulling authority back is always possible, but still needs a named person, a rationale and a record.
+- Warnings explain and link to the fix; they never block.
+
+When you change anything near these rules, write a test that tries to get around the rule and confirm it is refused.
+
+## How to work
+
+- One issue per branch and PR. The PR description is your report: what changed, the test count, screenshots for UI work (on the `pr-screenshots` branch, not `main`), and anything you weren't sure about.
+- **You may merge on your own** only housekeeping with no behaviour change, and only when CI is green, the test count is the same or higher, and no existing test changed except import paths.
+- **Leave open for Paige** anything visible to users, anything touching a governance rule, and anything you're unsure about.
+- Stop and ask when something needs a product decision. Don't decide it and carry on.
+- Production deploys from `main` (Vercel), so `main` must always be releasable.
