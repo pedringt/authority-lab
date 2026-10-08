@@ -19,6 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
+  parseRestrictionLine, restrictionRules,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2005,4 +2006,44 @@ test('no alert() pop-ups: every action error is shown inline on the page', () =>
   const files = [`${dir}/main.js`, `${dir}/ui.js`, ...readdirSync(`${dir}/views`).map((f) => `${dir}/views/${f}`)];
   const offenders = files.filter((f) => /\balert\(/.test(readFileSync(f, 'utf8'))).map((f) => f.split('/').slice(-2).join('/'));
   assert.deepEqual(offenders, []);
+});
+
+// ---------------------------------------------------------------------------
+// Restriction rules come from the contract (#48)
+// ---------------------------------------------------------------------------
+
+test('restriction lines parse into threshold, window and fallback level', () => {
+  assert.deepEqual(parseRestrictionLine('Misroute rate above 10% over 7 days returns the capability to Draft.'),
+    { text: 'Misroute rate above 10% over 7 days returns the capability to Draft.', kind: 'restrict', threshold: { type: 'pct', value: 10 }, window: { days: 7 }, fallback: 2 });
+  const words = parseRestrictionLine('Two confirmed hallucinated policy statements within 7 days returns the capability to Recommend.');
+  assert.deepEqual([words.threshold, words.window, words.fallback], [{ type: 'count', value: 2 }, { days: 7 }, 1]);
+  const rolling = parseRestrictionLine('Severe error rate above 5% across the rolling 50 autonomous cases returns the capability to Draft until reviewed.');
+  assert.deepEqual([rolling.threshold, rolling.window, rolling.fallback], [{ type: 'pct', value: 5 }, { cases: 50 }, 2]);
+  const incident = parseRestrictionLine('1 account change attempted by the AI in any 7-day window opens an incident; the capability stays at Observe.');
+  assert.equal(incident.kind, 'incident');
+  assert.equal(parseRestrictionLine('Error rate above 5% over 7 days pulls authority back.').fallback, null, 'no level named');
+});
+
+test('a rule is active only while the capability is above its fallback level; the contract decides the level', () => {
+  const s = initialState();
+  const rr = restrictionRules(s, RR);
+  assert.equal(rr.length, 4, 'every contract line is a rule');
+  assert.ok(rr.every((r) => r.fallback === 2 && !r.active), 'Refund recommendation is at Draft: its "returns to Draft" rules wait');
+  assert.match(rr[0].text, /rolling 50/, 'the demo rule is in the contract');
+  const up = { ...s, capabilities: s.capabilities.map((c) => (c.id === RR ? { ...c, authority: { level: 3, limited: true } } : c)) };
+  assert.ok(restrictionRules(up, RR).every((r) => r.active), 'above Draft they apply');
+  const [rd] = restrictionRules(s, 'response-drafting');
+  assert.deepEqual([rd.fallback, rd.active], [1, true], 'a Draft-level contract rule runs at Draft (the contract wins)');
+  const [rx] = restrictionRules(s, 'refund-execution-high-value');
+  assert.deepEqual([rx.fallback, rx.active], [0, true]);
+  const [ac] = restrictionRules(s, 'account-closure');
+  assert.deepEqual([ac.kind, ac.active, ac.fallback], ['incident', true, null], 'an incident rule never changes authority');
+});
+
+test('a restriction line that names no level falls back one level', () => {
+  let s = initialState();
+  const v = current(s, 'ticket-classification', 'contract');
+  s = amend(s, 'ticket-classification', 'contract', { value: { ...v, autoRestriction: ['Misroute rate above 10% over 7 days pulls authority back.'] }, author: 'maya', reason: 'Test: no level named.' });
+  const [r] = restrictionRules(s, 'ticket-classification');
+  assert.deepEqual([r.fallback, r.defaulted, r.active], [2, true, true]);
 });

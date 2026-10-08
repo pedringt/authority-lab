@@ -1,8 +1,53 @@
-// Monitoring: a simulated breach and the automatic restriction it triggers.
+// Monitoring: the restriction rules read from the contract, a simulated
+// breach, and the automatic restriction it triggers.
 
 import { getCapability, capData, updateCap } from './state.js';
-import { versionsInForce, authorityLabel } from './selectors.js';
+import { versionsInForce, authorityLabel, current, currentVersion } from './selectors.js';
 import { snapshotPerson } from './people.js';
+
+// Restriction rules come from the contract's "Automatic restriction" lines
+// (the contract wins, decided 2026-10-08). A line names its threshold, its
+// window and the level it falls back to; a line that names no level falls back
+// one level; a line that says the capability "stays at" a level opens an
+// incident and leaves authority alone.
+const LEVEL_NAMES = [['act within limits', 3], ['observe', 0], ['recommend', 1], ['draft', 2]];
+const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+const num = (w) => (w in NUMBER_WORDS ? NUMBER_WORDS[w] : Number(w));
+
+export function parseRestrictionLine(text) {
+  const t = String(text || '').toLowerCase();
+  const stays = /\bstays? at\b/.test(t);
+  const to = t.match(/\breturns?\s+(?:the\s+capability\s+)?to\s+(act within limits|observe|recommend|draft)\b/);
+  const fallback = to ? LEVEL_NAMES.find(([n]) => n === to[1])[1] : null;
+  const pct = t.match(/\b(?:above|exceeds?|over|more than)\s+(\d+(?:\.\d+)?)\s*%/);
+  const count = t.match(/^\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
+  const rolling = t.match(/\brolling\s+(\d+)/);
+  const days = t.match(/\b(\d+|seven|fourteen|thirty)[\s-]day/);
+  return {
+    text: String(text || ''),
+    kind: stays ? 'incident' : 'restrict',
+    threshold: pct ? { type: 'pct', value: Number(pct[1]) } : count ? { type: 'count', value: num(count[1]) } : null,
+    window: rolling ? { cases: Number(rolling[1]) } : days ? { days: Number(days[1]) || { seven: 7, fourteen: 14, thirty: 30 }[days[1]] } : null,
+    fallback,
+  };
+}
+
+// The capability's rules under its current contract and authority. A rule is
+// active while the capability is above its fallback level; an incident rule is
+// always active.
+export function restrictionRules(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  const contract = currentVersion(state, capabilityId, 'contract');
+  const lines = current(state, capabilityId, 'contract').autoRestriction || [];
+  const level = cap.authority.level;
+  return lines.map((line, i) => {
+    const r = parseRestrictionLine(line);
+    if (r.kind === 'incident') return { ...r, id: `rule-${i + 1}`, contractVersion: contract && contract.version, fallback: null, defaulted: false, active: true };
+    const named = r.fallback !== null;
+    const fallback = named ? r.fallback : Math.max(0, level - 1);
+    return { ...r, id: `rule-${i + 1}`, contractVersion: contract && contract.version, fallback, defaulted: !named, active: level > fallback };
+  });
+}
 
 export function simulateBreach(state, capabilityId) {
   const d = capData(state, capabilityId);
