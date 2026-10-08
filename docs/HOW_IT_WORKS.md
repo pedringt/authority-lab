@@ -168,6 +168,18 @@ The sign-off screen shows the reason, who has approved and who is still needed, 
 
 The contract rule is a setting (`CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT`, on by default): before a pilot starts, contract edits write a new version directly.
 
+### Naming stakeholders
+
+Setup step 4 is a short editor: team, person, and, when known, their position and reasoning. Every save is a new version. Positions are kept as positions and shown on the Stakeholders tab and in the decision workspace; they are never averaged into a score. A capability's named stakeholders are also who can sign off amendments, so a High-impact or financial capability needs someone from Risk on the list.
+
+### Writing the scenario library
+
+Setup step 5 is the scenario library: name, situation and expected behaviour in each of the five groups (standard, ambiguous, adversarial, high impact, edge). A starter set of twenty scenarios, four per group, phrased for the capability and labelled "Suggested by AI", gets a team past the blank page; the editor nudges toward twenty to thirty in total. Results are seeded and deterministic: a new or changed scenario gets a simulated result when it is saved, and the same scenario always gets the same result, so the suite replays. Changing the library after a run clears that run; the next run re-records. The Evidence tab and page carry a placeholder card for the evidence sources a real deployment would connect.
+
+### The first authority change
+
+After the first test run, the Decision history tab and the Setup page offer **Propose a move to Level N**, one level at a time. That opens the authority decision for the capability: criteria not yet measured, requirements 0 of N met, the test results in the evidence snapshot, stakeholder positions where recorded. A person authorizes as whoever is acting, which writes the capability's second record. A move to Draft sets the status to Pilot and starts no monitoring, because every case is approved by a person; monitoring begins only at Level 3.
+
 ### Acting as
 
 The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
@@ -218,6 +230,9 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Contract builder | Starts from a template, reviews each AI suggestion, runs the software checks, finalizes contract v1 |
 | Criteria editor | Saves success criteria and evidence requirements (defaults from the risk profile); the first test run locks them |
 | Propose amendment | After the lock (criteria) or a pilot start (contract), submits a change for sign-off; approve or reject as whoever is acting |
+| Stakeholder editor | Names the stakeholders and records positions when known; every save is a new version |
+| Scenario library | Adds a starter set or writes scenarios; results are seeded and deterministic |
+| Propose a move to Level N | After the first run, opens the authority decision for a new capability; authorizing writes its second record |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 

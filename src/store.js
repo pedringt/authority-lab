@@ -6,8 +6,9 @@
 import * as seed from './data/seed.js';
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-templates.js';
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
+import { starterScenarios } from './data/scenario-templates.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v8';
+export const STORAGE_KEY = 'authority-lab-state-v9';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -82,7 +83,7 @@ export function initialState() {
   // The contract and risk profile live in the version lists.
   const capabilities = seed.capabilities.map(({ contract, risk, ...rest }) => clone(rest));
   return {
-    version: 8,
+    version: 9,
     today: seed.TODAY,
     // Who is acting in the UI. null means "the owner of the capability in
     // context"; a person key overrides it (the "acting as" picker).
@@ -156,7 +157,7 @@ export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'mile
 
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
-  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', proposal: 'Proposal',
+  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', 'scenarios-saved': 'Scenarios saved', proposal: 'Proposal',
   decision: 'Decision', test: 'Test run', amendment: 'Amendment',
 };
 
@@ -400,8 +401,11 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function scopeText(option, conditions, cap) {
+export function scopeText(option, conditions, cap, next = null) {
   const noun = actionNoun(cap);
+  if (next && next.level === 2 && (option === 'expand' || option === 'expand-limits')) {
+    return `Draft. The AI prepares ${noun} for a person to approve on every case; nothing happens without that approval. Limited pilot.`;
+  }
   switch (option) {
     case 'expand':
       return `Automatic ${noun} on all eligible cases under approved policy conditions.`;
@@ -423,10 +427,11 @@ export function scopeText(option, conditions, cap) {
   }
 }
 
-export function nextAuthority(option, current) {
+export function nextAuthority(option, current, proposed = null) {
+  const target = proposed && proposed.level > current.level ? proposed.level : 3;
   switch (option) {
-    case 'expand': return { level: 3, limited: false };
-    case 'expand-limits': return { level: 3, limited: true };
+    case 'expand': return { level: target, limited: false };
+    case 'expand-limits': return { level: target, limited: true };
     case 'hold': return { ...current };
     case 'restrict': return { level: Math.max(0, current.level - 1), limited: false };
     case 'suspend': return { level: 0, limited: false };
@@ -638,7 +643,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const d = capData(state, capabilityId);
   const option = d.decision.option;
   const previous = { ...cap.authority };
-  const next = nextAuthority(option, previous);
+  const next = nextAuthority(option, previous, cap.proposed);
   const number = state.decisionRecords.length + 1;
   const id = `AC-${String(number).padStart(2, '0')}`;
 
@@ -654,19 +659,22 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     owner: cap.owner,
     authorizedBy: by,
     versions: versionsInForce(state, capabilityId),
-    scope: scopeText(option, d.decision.conditions, cap),
+    scope: scopeText(option, d.decision.conditions, cap, next),
     rationale: d.decision.rationale.trim(),
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
     openCondition: openConditionText(option, state, capabilityId),
-    conditions: option === 'expand-limits' ? { ...d.decision.conditions } : null,
+    conditions: option === 'expand-limits' && next.level >= 3 ? { ...d.decision.conditions } : null,
   };
 
+  const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
+  const statusAfter = expandingTo === 2 ? 'pilot' : expandingTo && expandingTo >= 3 ? 'monitoring' : STATUS_BY_OPTION[option];
   const capabilities = state.capabilities.map((c) =>
     c.id === cap.id
       ? {
           ...c,
           authority: next,
-          status: STATUS_BY_OPTION[option],
+          status: statusAfter,
+          pilotLabel: expandingTo === 2 ? 'Limited pilot' : c.pilotLabel,
           pilotLabel: undefined,
           decisionRequired: false,
           proposed: undefined,
@@ -696,7 +704,9 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     ...state.activity,
   ];
 
-  const expanding = option === 'expand' || option === 'expand-limits';
+  // Monitoring applies to autonomous authority (Level 3 and above). A move to
+  // Draft starts a pilot, which is human-approved on every case.
+  const expanding = (option === 'expand' || option === 'expand-limits') && next.level >= 3;
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'Authority automatically returns to Draft if the severe error rate exceeds 5% across the rolling 50-case window.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
@@ -848,6 +858,10 @@ export function createStore({ storage = null } = {}) {
 const ACTIONS = {
   amend,
   saveCriteria,
+  saveStakeholders,
+  saveScenarios,
+  addStarterScenarios,
+  proposeAuthority,
   proposeAmendment,
   approveProposal,
   rejectProposal,
@@ -876,7 +890,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 8) return null;
+    if (!parsed || parsed.version !== 9) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -1556,5 +1570,143 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
     body: `${cap.name}: ${seed.people[by].name} rejected the proposal by ${seed.people[proposal.proposedBy].name}. ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Stakeholders and scenarios (#8)
+// ---------------------------------------------------------------------------
+
+export const STANCES = [['expand', 'Expand'], ['expand-limits', 'Expand with limits'], ['hold', 'Hold'], ['restrict', 'Restrict'], ['undecided', 'No position yet']];
+
+export function saveStakeholders(state, capabilityId, { stakeholders, by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person saves the stakeholders.');
+  if (!Array.isArray(stakeholders) || !stakeholders.length) throw new Error('Name at least one stakeholder.');
+  const seen = new Set();
+  const list = stakeholders.map((st, i) => {
+    const team = (st.team || '').trim();
+    const person = st.person;
+    if (!team) throw new Error(`Stakeholder ${i + 1} needs a team.`);
+    if (!person || !seed.people[person]) throw new Error(`Stakeholder ${i + 1} needs a named person.`);
+    if (seen.has(person)) throw new Error(`${seed.people[person].name} is listed twice.`);
+    seen.add(person);
+    const stance = STANCES.some(([k]) => k === st.stance) ? st.stance : 'undecided';
+    const position = (st.position || '').trim() || (STANCES.find(([k]) => k === stance) || [])[1] || 'No position yet';
+    return { team, person, stance, position, quote: (st.quote || '').trim(), date: st.date || state.today };
+  });
+  const first = !current(state, capabilityId, 'stakeholders').length;
+  return amend(state, capabilityId, 'stakeholders', { value: list, author: by, reason: (reason || '').trim() || (first ? 'Stakeholders named.' : 'Stakeholders updated.') });
+}
+
+// Deterministic simulated results for a person-written or starter scenario.
+// The same scenario always gets the same result, so the suite replays.
+function hash(text) {
+  let h = 2166136261;
+  for (const ch of text) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return h;
+}
+const FAIL_EVERY = { standard: 11, ambiguous: 7, adversarial: 6, 'high-impact': 5, edge: 5 };
+export function simulateScenario(sc) {
+  const h = hash(`${sc.group}|${sc.name}|${sc.situation}`);
+  const pass = h % (FAIL_EVERY[sc.group] || 7) !== 0;
+  const escalate = /escalat|route for human|approval|ask for/i.test(sc.expected || '');
+  const severity = pass ? 'None' : sc.group === 'high-impact' || sc.group === 'adversarial' ? 'High' : 'Medium';
+  const expected = (sc.expected || '').replace(/\.$/, '');
+  return {
+    pass,
+    severity,
+    escalated: pass && escalate,
+    aiDecision: pass ? `${escalate ? 'Escalated' : 'Produced the output'} as expected: ${expected.charAt(0).toLowerCase()}${expected.slice(1)}.` : escalate ? 'Produced an output instead of escalating.' : 'Produced an output that did not match the expected behaviour.',
+    outcome: pass ? (escalate ? 'Escalated correctly' : 'Correct output') : escalate ? 'Missed escalation' : 'Wrong output',
+    explanation: pass ? 'Simulated result (seeded, deterministic). The recorded decision matched the expected behaviour.' : 'Simulated result (seeded, deterministic). The recorded decision did not match the expected behaviour; treat as a real failure for the purpose of the pilot decision.',
+    reviewer: pass ? (escalate ? 'Human took the case' : 'Approved as recommended') : 'Overridden by the reviewer',
+    failureType: pass ? undefined : escalate ? 'Missing escalation' : 'Wrong answer',
+    simulated: true,
+  };
+}
+
+const GROUP_PREFIX = { standard: 'S', ambiguous: 'A', adversarial: 'X', 'high-impact': 'H', edge: 'E' };
+
+function cleanScenarios(list) {
+  if (!Array.isArray(list)) throw new Error('Scenarios must be a list.');
+  const counts = {};
+  return list.map((sc, i) => {
+    const group = seed.SCENARIO_GROUPS.some((g) => g.id === sc.group) ? sc.group : null;
+    if (!group) throw new Error(`Scenario ${i + 1} needs a group.`);
+    const name = (sc.name || '').trim();
+    const situation = (sc.situation || '').trim();
+    const expected = (sc.expected || '').trim();
+    if (!name || !situation || !expected) throw new Error(`Scenario ${i + 1} needs a name, a situation and an expected behaviour.`);
+    counts[group] = (counts[group] || 0) + 1;
+    const base = { id: sc.id || `${GROUP_PREFIX[group]}-${String(counts[group]).padStart(2, '0')}`, group, name, situation, expected, source: sc.source === 'ai' ? 'ai' : 'person' };
+    // Keep a recorded result if the scenario text is unchanged; otherwise simulate.
+    const keep = sc.pass !== undefined && sc.aiDecision && !sc.simulated ? { pass: sc.pass, severity: sc.severity, aiDecision: sc.aiDecision, outcome: sc.outcome, explanation: sc.explanation, reviewer: sc.reviewer, escalated: sc.escalated, incident: sc.incident, failureType: sc.failureType } : simulateScenario(base);
+    return { ...base, ...keep };
+  });
+}
+
+export function scenarioNudge(count) {
+  if (count === 0) return 'No scenarios yet. Twenty to thirty is enough to start: a few in every group, with the ugly ones included.';
+  if (count < 20) return `${count} scenario${count === 1 ? '' : 's'}. Aim for 20 to 30 before the first run, with at least two in every group.`;
+  if (count <= 30) return `${count} scenarios. That is a sound starting library.`;
+  return `${count} scenarios. More than 30 is fine, but make sure the groups stay balanced.`;
+}
+
+// Replace the scenario library. Results are simulated deterministically when
+// a scenario is new or changed. Not allowed after a test run has been
+// recorded for this library (the recorded results are evidence).
+export function saveScenarios(state, capabilityId, { scenarios, by } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person saves the scenario library.');
+  const d = capData(state, capabilityId);
+  const list = cleanScenarios(scenarios);
+  const groups = new Set(list.map((sc) => sc.group));
+  if (list.length && groups.size < 2) throw new Error('Cover at least two groups; a library of one kind of case proves little.');
+  let s = updateCap(state, capabilityId, { scenarios: list, testRun: d.testRun.lastRun ? { ...d.testRun, status: 'not-run', completed: [] } : d.testRun });
+  return logEvent(s, {
+    kind: 'scenarios-saved',
+    title: 'Scenario library saved',
+    body: `${cap.name}: ${list.length} scenarios across ${groups.size} group${groups.size === 1 ? '' : 's'} saved by ${seed.people[by].name}${list.some((x) => x.source === 'ai') ? ` (${list.filter((x) => x.source === 'ai').length} suggested by AI)` : ''}. ${scenarioNudge(list.length)}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/scenarios/edit`,
+  });
+}
+
+export function addStarterScenarios(state, capabilityId, { by } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  const d = capData(state, capabilityId);
+  const existing = d.scenarios;
+  const have = new Set(existing.map((sc) => sc.name));
+  const add = starterScenarios(cap).filter((sc) => !have.has(sc.name));
+  if (!add.length) throw new Error('The starter set is already in the library.');
+  return saveScenarios(state, capabilityId, { scenarios: [...existing, ...add], by });
+}
+
+// Open an authority decision for a capability: propose the next level. Needs
+// a recorded test run. Used to take a new capability to Draft (its second record).
+export function proposeAuthority(state, capabilityId, level, { by } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person proposes an authority change.');
+  if (cap.decisionRequired) throw new Error('A decision is already open for this capability.');
+  if (cap.status === 'not-delegated') throw new Error('This capability is not delegated by design. Start with a new decision record if that should change.');
+  const target = Number(level);
+  if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
+  if (!capData(state, capabilityId).testRun.lastRun) throw new Error('Run the test suite before proposing an authority change.');
+  if (target >= 3 && !capData(state, capabilityId).pilot) throw new Error('Level 3 needs pilot evidence. Run a pilot at Draft first.');
+  const capabilities = state.capabilities.map((c) => (c.id === capabilityId ? { ...c, proposed: { level: target, limited: false }, decisionRequired: true } : c));
+  const d = capData(state, capabilityId);
+  let s = { ...state, capabilities };
+  s = updateCap(s, capabilityId, { decision: { ...d.decision, option: null, recordId: null, rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
+  return logEvent(s, {
+    kind: 'decision',
+    title: `Authority decision opened: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,
+    body: `${cap.name}: ${seed.people[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. The system can recommend; a person authorizes.`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/decision`,
   });
 }

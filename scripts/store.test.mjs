@@ -14,7 +14,9 @@ import {
   saveCriteria, criteriaSaved, criteriaLocked, canRunSuite, defaultsFor, defaultDeviations, CORE_CRITERIA, CORE_REQUIREMENTS,
   SETTINGS, pilotStarted, needsSignoff, signoffRequirements, isRiskStakeholder, proposeAmendment, approveProposal, rejectProposal,
   openProposal, getProposal, approvalEligibility, proposalReadiness, evaluateRequirement, approvalsComplete, namedStakeholders, contractValueChecks,
+  saveStakeholders, saveScenarios, addStarterScenarios, simulateScenario, scenarioNudge, proposeAuthority, STANCES,
 } from '../src/store.js';
+import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
 import { pickTemplate, suggestLines } from '../src/data/contract-templates.js';
 import { diffValues } from '../src/diff.js';
@@ -53,8 +55,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 8);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v8');
+  assert.equal(s.version, 9);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v9');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(cap(s).decisionRequired, true);
@@ -244,7 +246,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 7, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 8, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -470,7 +472,7 @@ test('views read the contract, risk, criteria, requirements and stakeholders onl
   const dir = new URL('../src/views', import.meta.url).pathname;
   // Allowed: a decision record's own version numbers, an evidence item's risk
   // level, the defaults object, and the versions-in-force number map.
-  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g, /\b(p\.value|p\.base|before)\.(contract|criteria|requirements)\b/g];
+  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g, /\b(p\.value|p\.base|before)\.(contract|criteria|requirements)\b/g, /versionsInForce\([^)]*\)\.(contract|criteria|requirements|risk|stakeholders)\b/g];
   const forbidden = /\.(contract|criteria|requirements|stakeholders|versions)\b|\b(cap|c|capability)\.risk\b/g;
   const offenders = [];
   for (const f of readdirSync(dir)) {
@@ -1161,4 +1163,144 @@ test('a proposed contract must pass the builder checks before it can be submitte
   const ok = proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [...c.mustNever, 'Issue a refund while a fraud review is open.'] }, by: 'priya', reason: 'Close the gap found in INC-01.' });
   assert.ok(openProposal(ok, RR, 'contract'));
   assert.deepEqual(contractValueChecks(s, RR, c).filter((x) => x.level === 'block'), []);
+});
+
+// ---------------------------------------------------------------------------
+// Stakeholders and scenarios (#8)
+// ---------------------------------------------------------------------------
+
+const MED_CF = { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Customer-facing' };
+
+test('stakeholders are saved as a version; positions default to "no position yet"; duplicates and unknown people are refused', () => {
+  let [s, id] = withNewCap(MED_CF, 'Order status lookup', 'Answers where an order is.');
+  assert.throws(() => saveStakeholders(s, id, { stakeholders: [], by: 'priya' }), /at least one/);
+  assert.throws(() => saveStakeholders(s, id, { stakeholders: [{ team: 'Risk', person: 'nobody' }], by: 'priya' }), /named person/);
+  assert.throws(() => saveStakeholders(s, id, { stakeholders: [{ team: 'Risk', person: 'daniel' }, { team: 'Risk', person: 'daniel' }], by: 'priya' }), /listed twice/);
+  s = saveStakeholders(s, id, { stakeholders: [{ team: 'Support Operations', person: 'priya', stance: 'expand', quote: 'Ready.' }, { team: 'Risk', person: 'daniel' }], by: 'priya' });
+  const list = current(s, id, 'stakeholders');
+  assert.equal(list.length, 2);
+  assert.equal(list[0].position, 'Expand');
+  assert.equal(list[1].stance, 'undecided');
+  assert.equal(list[1].position, 'No position yet');
+  assert.equal(list[1].date, seed.TODAY);
+  assert.equal(versionsInForce(s, id).stakeholders, 1);
+  assert.equal(currentVersion(s, id, 'stakeholders').author, 'priya');
+  assert.equal(s.activity[0].kind, 'amendment');
+  assert.equal(s.activity[0].surfaced, false, 'before evidence');
+  assert.ok(STANCES.some(([k]) => k === 'undecided'));
+  // Named stakeholders now follow the list.
+  assert.deepEqual(namedStakeholders(s, id).sort(), ['daniel', 'priya']);
+});
+
+test('scenario results are simulated deterministically; the starter set covers all five groups and is labelled', () => {
+  const a = simulateScenario({ group: 'high-impact', name: 'Risk flag present', situation: 'x', expected: 'Escalate to a person.' });
+  const b = simulateScenario({ group: 'high-impact', name: 'Risk flag present', situation: 'x', expected: 'Escalate to a person.' });
+  assert.deepEqual(a, b);
+  assert.equal(a.simulated, true);
+  const cap = { name: 'Order status lookup' };
+  const starter = starterScenarios(cap);
+  assert.equal(starter.length, 20);
+  assert.deepEqual([...new Set(starter.map((x) => x.group))].sort(), ['adversarial', 'ambiguous', 'edge', 'high-impact', 'standard']);
+  assert.ok(starter.every((x) => x.source === 'ai' && x.situation.startsWith('Order status lookup:')));
+  let [s, id] = withNewCap(MED_CF, 'Order status lookup', 'Answers where an order is.');
+  s = addStarterScenarios(s, id, { by: 'priya' });
+  const list = capData(s, id).scenarios;
+  assert.equal(list.length, 20);
+  assert.ok(list.every((x) => typeof x.pass === 'boolean' && x.aiDecision && x.outcome));
+  assert.ok(list.some((x) => !x.pass), 'a starter library has at least one failure');
+  assert.deepEqual(list.slice(0, 4).map((x) => x.id), ['S-01', 'S-02', 'S-03', 'S-04']);
+  assert.throws(() => addStarterScenarios(s, id, { by: 'priya' }), /already in the library/);
+  assert.equal(s.activity[0].kind, 'scenarios-saved');
+  assert.match(scenarioNudge(0), /No scenarios yet/);
+  assert.match(scenarioNudge(12), /Aim for 20 to 30/);
+  assert.match(scenarioNudge(24), /sound starting library/);
+});
+
+test('saving the library keeps recorded results for unchanged scenarios, simulates new ones, and clears a previous run', () => {
+  let [s, id] = withNewCap(MED_CF, 'Order status lookup', 'Answers where an order is.');
+  assert.throws(() => saveScenarios(s, id, { scenarios: [{ group: 'standard', name: 'A', situation: 'x', expected: 'y' }], by: 'priya' }), /at least two groups/);
+  assert.throws(() => saveScenarios(s, id, { scenarios: [{ group: 'standard', name: '', situation: 'x', expected: 'y' }, { group: 'edge', name: 'B', situation: 'x', expected: 'y' }], by: 'priya' }), /needs a name/);
+  s = addStarterScenarios(s, id, { by: 'priya' });
+  const d = defaultsFor(s, id);
+  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  s = runSuite(s, id);
+  assert.equal(capData(s, id).testRun.status, 'complete');
+  const before = capData(s, id).scenarios;
+  s = saveScenarios(s, id, { scenarios: [...before, { group: 'standard', name: 'Written by hand', situation: 'A new case.', expected: 'Produce the output.' }], by: 'priya' });
+  const after = capData(s, id).scenarios;
+  assert.equal(after.length, 21);
+  assert.deepEqual(after.slice(0, 20).map((x) => x.pass), before.map((x) => x.pass), 'unchanged scenarios keep their results');
+  assert.equal(after[20].source, 'person');
+  assert.equal(after[20].id, 'S-05');
+  assert.equal(capData(s, id).testRun.status, 'not-run', 'a changed library clears the last run');
+  assert.ok(capData(s, id).testRun.lastRun, 'the previous run stays on record');
+});
+
+test('a new capability can reach its second record: propose a move to Draft after the first run, then authorize it', () => {
+  let s = addCapability(initialState(), { name: 'Order status lookup', summary: 'Answers where an order is.', owner: 'priya', risk: MED_CF, startingLevel: 1 });
+  const id = s.capabilities[s.capabilities.length - 1].id;
+  assert.throws(() => proposeAuthority(s, id, 2, { by: 'priya' }), /Run the test suite/);
+  s = addStarterScenarios(s, id, { by: 'priya' });
+  const d = defaultsFor(s, id);
+  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  s = runSuite(s, id);
+  assert.throws(() => proposeAuthority(s, id, 3, { by: 'priya' }), /one level at a time/);
+  s = proposeAuthority(s, id, 2, { by: 'priya' });
+  assert.equal(getCapability(s, id).decisionRequired, true);
+  assert.deepEqual(getCapability(s, id).proposed, { level: 2, limited: false });
+  assert.equal(s.activity[0].kind, 'decision');
+  assert.throws(() => proposeAuthority(s, id, 2, { by: 'priya' }), /already open/);
+  s = authorize(selectDecision(s, id, 'expand'), id, { by: 'priya' });
+  const c = getCapability(s, id);
+  assert.deepEqual(c.authority, { level: 2, limited: false });
+  assert.equal(c.status, 'pilot');
+  assert.equal(c.decisionRequired, false);
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.equal(rec.sequence, 2);
+  assert.equal(rec.capabilityId, id);
+  assert.deepEqual(rec.previous, { level: 1, limited: false });
+  assert.deepEqual(rec.next, { level: 2, limited: false });
+  assert.match(rec.scope, /Draft/);
+  assert.equal(rec.conditions, null);
+  assert.equal(capData(s, id).monitoring, null, 'no monitoring at Draft');
+  assert.ok(rec.evidenceSnapshot.some((x) => /of 20 scenarios passed/.test(x)));
+  // Not-delegated capabilities cannot be proposed.
+  const nd = addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { impact: 'High', reversibility: 'Difficult to reverse', exposure: 'Customer-facing' }, notDelegated: true, rationale: 'Irreversible and rare; a person does it every time.' });
+  assert.throws(() => proposeAuthority(nd, nd.capabilities[nd.capabilities.length - 1].id, 1, { by: 'daniel' }), /not delegated by design/);
+});
+
+test('end to end in the store: add → contract → criteria → stakeholders → scenarios → run → authorize move to Draft (the capability\'s second record)', () => {
+  const store = createStore({});
+  store.dispatch('addCapability', { name: 'Order status lookup', summary: 'Answers where an order is from the carrier feed.', owner: 'priya', risk: MED_CF, startingLevel: 1, by: 'priya' });
+  const id = store.get().capabilities[store.get().capabilities.length - 1].id;
+  // Contract.
+  store.dispatch('startContractDraft', id, { by: 'priya' });
+  for (const l of capData(store.get(), id).contractDraft.lines.filter((l) => l.status === 'pending')) store.dispatch('reviewSuggestion', id, l.id, { decision: 'accept' });
+  for (const k of SECTION_KEYS) store.dispatch('confirmSection', id, k, true);
+  store.dispatch('finalizeContract', id, { by: 'priya' });
+  assert.equal(versionsInForce(store.get(), id).contract, 1);
+  // Criteria.
+  const d = defaultsFor(store.get(), id);
+  store.dispatch('saveCriteria', id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  // Stakeholders.
+  store.dispatch('saveStakeholders', id, { stakeholders: [{ team: 'Support Operations', person: 'priya', stance: 'expand' }, { team: 'Risk', person: 'daniel' }], by: 'priya' });
+  // Scenarios and run.
+  store.dispatch('addStarterScenarios', id, { by: 'priya' });
+  assert.equal(canRunSuite(store.get(), id).ok, true);
+  store.dispatch('startTestRun', id);
+  while (capData(store.get(), id).testRun.status === 'running') store.dispatch('advanceTestRun', id);
+  assert.equal(criteriaLocked(store.get(), id), true);
+  // Decision.
+  store.dispatch('proposeAuthority', id, 2, { by: 'priya' });
+  store.dispatch('selectDecision', id, 'expand');
+  store.dispatch('authorize', id, { by: 'priya' });
+  const c = getCapability(store.get(), id);
+  assert.deepEqual(c.authority, { level: 2, limited: false });
+  assert.equal(c.status, 'pilot');
+  const recs = store.get().decisionRecords.filter((r) => r.capabilityId === id);
+  assert.deepEqual(recs.map((r) => r.sequence), [1, 2]);
+  assert.deepEqual(recs[1].versions, { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 });
+  // The seeded demo is untouched.
+  assert.equal(getCapability(store.get(), RR).decisionRequired, true);
+  assert.equal(readiness(store.get(), RR).met, 5);
 });

@@ -52,6 +52,7 @@ export function testsView(state, capabilityId, query) {
     <div class="page-actions">${runControl}</div>
   </div>
   ${capabilityPicker(state, cap.id, (id) => `#/tests?capability=${id}`)}
+  ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit the scenario library</a></p>` : ''}
   <div class="card run-summary"><p>${summaryLine}</p>${progress}</div>
   ${failureCallout}
   ${scenarioTable(state, cap.id, { filter, group })}`;
@@ -113,7 +114,7 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
     return html`<details class="${cls}" ${showResult && !s.pass ? raw('open') : ''}>
       <summary>
         <span class="scenario-id">${s.id}</span>
-        <span class="scenario-name"><strong>${s.name}</strong><span class="muted small"> · ${groupName(s.group)}</span></span>
+        <span class="scenario-name"><strong>${s.name}</strong><span class="muted small"> · ${groupName(s.group)}</span>${s.source === 'ai' ? html` <span class="badge badge-insufficient">Suggested by AI</span>` : ''}</span>
         <span class="scenario-status">
           ${showResult ? badge(s.pass ? 'pass' : 'fail') : pendingRun ? html`<span class="badge badge-neutral">Running</span>` : html`<span class="badge badge-neutral">Not run</span>`}
           ${showResult && s.severity !== 'None' ? html`<span class="badge badge-${s.severity === 'High' ? 'fail' : 'watch'}">${s.severity} severity</span>` : ''}

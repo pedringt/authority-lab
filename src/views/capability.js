@@ -5,6 +5,7 @@ import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
 import { proposalsList, amendLink } from './proposals.js';
+import { evidenceSourcesCard } from './scenarios.js';
 
 const TABS = [
   ['contract', 'Contract'],
@@ -159,7 +160,7 @@ function testingTab(state, cap) {
 
 function evidenceTab(state, cap, d) {
   const p = d.pilot;
-  if (!p) return html`${emptyState(state, cap.id, d.evidence.length ? 'No pilot has been run for this capability.' : 'No evidence yet.', 'tests')}${d.evidence.length ? html`<p class="muted small">Other evidence is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>` : ''}`;
+  if (!p) return html`${emptyState(state, cap.id, d.evidence.length ? 'No pilot has been run for this capability.' : 'No evidence yet.', 'tests')}${d.evidence.length ? html`<p class="muted small">Other evidence is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>` : ''}${evidenceSourcesCard()}`;
   const rows = p.segments.map((s) => html`<tr class="${s.status === 'insufficient' ? 'row-insufficient' : ''}">
     <td><strong>${s.name}</strong></td>
     <td class="num">${s.cases}</td>
@@ -191,19 +192,21 @@ function evidenceTab(state, cap, d) {
 }
 
 function stakeholdersTab(state, cap, d) {
-  const tone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient' };
+  const tone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient', 'restrict': 'restricted', 'undecided': 'neutral' };
   const stakeholders = current(state, cap.id, 'stakeholders');
   if (!stakeholders.length) return emptyState(state, cap.id, 'No stakeholders named yet.', 'stakeholders');
+  const editLink = html`<p class="muted small"><a href="#/capabilities/${cap.id}/stakeholders/edit">Edit stakeholders</a> · every save is a new version.</p>`;
   const cards = stakeholders.map((s) => {
     const who = person(s.person);
     return html`<div class="card stakeholder">
       <div class="stakeholder-head"><div><strong>${s.team}</strong><div class="muted small">${who.name}, ${who.role}</div></div>${badge(tone[s.stance] || 'neutral', s.position)}</div>
-      <blockquote>${s.quote}</blockquote>
+      ${s.quote ? html`<blockquote>${s.quote}</blockquote>` : html`<p class="muted small">No position recorded yet.</p>`}
     </div>`;
   });
   const sum = d.stakeholderSummary;
   return html`
     <p class="muted">Positions recorded ${stakeholders[0] && stakeholders[0].date ? fmtDate(stakeholders[0].date) : 'Oct 6'}. They are kept as positions, not averaged into a score.</p>
+    ${editLink}
     <div class="stakeholder-grid">${cards}</div>
     ${sum ? html`<div class="two-col">
       <div class="card"><p class="eyebrow">Consensus</p><p>${sum.consensus}</p></div>
@@ -213,8 +216,15 @@ function stakeholdersTab(state, cap, d) {
 
 function decisionsTab(state, cap) {
   const records = state.decisionRecords.filter((x) => x.capabilityId === cap.id).slice().reverse();
-  if (!records.length) return empty('No authority decisions have been recorded for this capability.');
-  return html`<div class="card table-card"><table class="table">
+  const d = capData(state, cap.id);
+  const canPropose = !cap.decisionRequired && cap.status !== 'not-delegated' && cap.authority.level < 2 && d.testRun.lastRun;
+  const propose = cap.decisionRequired
+    ? html`<div class="notice notice-decision"><div class="notice-body"><strong>Decision open</strong><p>A move to ${authorityLabel(cap.proposed)} is proposed.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/decision">Open</a></div>`
+    : canPropose
+      ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Ready for the first authority change</strong><p>The suite has run. Propose a move to ${authorityLabel({ level: cap.authority.level + 1, limited: false })}; a person authorizes it and that writes the capability's next record.</p></div><button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button></div>`
+      : '';
+  if (!records.length) return html`${propose}${empty('No authority decisions have been recorded for this capability.')}`;
+  return html`${propose}<div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Date</th><th>Change</th><th>Decision</th><th>Authorized by</th></tr></thead>
     <tbody>${records.map((x) => html`<tr>
       <td><a href="#/decisions/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
