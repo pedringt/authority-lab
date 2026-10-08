@@ -291,6 +291,19 @@ blockquote { margin: 0; color: var(--text-2); border-left: 3px solid var(--borde
 .scenario-status { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .scenario-body { border-top: 1px solid var(--border); padding: 12px 14px 14px 82px; font-size: 14px; }
 .scenario-body .kv-stack > div { grid-template-columns: 130px 1fr; }
+.scenario-groups { display: grid; gap: 8px; }
+.scenario-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.scenario-group.has-fail { border-color: var(--fail-bd); }
+.scenario-group > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 12px 16px; }
+.scenario-group > summary::-webkit-details-marker { display: none; }
+.scenario-group > summary::before { content: '▸'; color: var(--muted); grid-column: 1; grid-row: 1; width: 1em; }
+.scenario-group[open] > summary::before { content: '▾'; }
+.scenario-group-name { grid-column: 1; grid-row: 1; padding-left: 1.4em; font-weight: 600; }
+.scenario-group-count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.scenario-group > .scenario-list { padding: 0 12px 12px; }
+.run-summary.is-cta { grid-template-columns: 1fr auto; align-items: center; }
+.run-summary.is-cta .run-cta { display: grid; justify-items: end; gap: 4px; }
+.run-cta p { max-width: 36ch; text-align: right; margin: 0; }
 .is-pending summary { color: var(--text-2); }
 
 /* Evidence -------------------------------------------------------------- */

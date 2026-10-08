@@ -49,10 +49,10 @@ export function testsView(state, capabilityId, query) {
       <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/tests?capability=${id}`)}</h1>
       <p class="lede">The testing ground: ${t.total} seeded scenarios in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}), run against the capability's current contract. No real model call is made; results replay the recorded decisions so the demo is repeatable.</p>
     </div>
-    <div class="page-actions">${runControl}</div>
+    ${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}
   </div>
   ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit the scenario library</a></p>` : ''}
-  <div class="card run-summary"><p>${summaryLine}</p>${progress}</div>
+  <div class="card run-summary ${t.status === 'not-run' && t.total ? 'is-cta' : ''}"><p>${summaryLine}</p>${t.status === 'not-run' && t.total ? html`<div class="run-cta">${runControl}</div>` : ''}${progress}</div>
   ${failureCallout}
   ${scenarioTable(state, cap.id, { filter, group })}`;
 }
@@ -124,7 +124,7 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
 
   const groupName = (id) => (seed.SCENARIO_GROUPS.find((g) => g.id === id) || { name: id }).name;
 
-  const items = rows.map((s) => {
+  const item = (s) => {
     const done = hasResults && completed.has(s.id);
     const pendingRun = t.status === 'running' && !done;
     const showResult = done || (compact && !hasResults);
@@ -154,8 +154,36 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
         </dl>
       </div>
     </details>`;
-  });
+  };
 
-  return html`${filters}
-    ${items.length ? html`<div class="scenario-list">${items}</div>` : html`<p class="empty">${d.scenarios.length ? 'No scenarios match this filter.' : 'No scenarios yet.'}</p>`}`;
+  const empty = html`<p class="empty">${d.scenarios.length ? 'No scenarios match this filter.' : 'No scenarios yet.'}</p>`;
+  if (compact) return html`${filters}${rows.length ? html`<div class="scenario-list">${rows.map(item)}</div>` : empty}`;
+  if (!rows.length) return html`${filters}${empty}`;
+
+  // The full list is grouped. Before a run every group is collapsed with its
+  // count; after a run, groups with failures come first and are open.
+  const filtering = group !== 'all' || (hasResults && filter !== 'all');
+  const groupIds = [...seed.SCENARIO_GROUPS.map((g) => g.id), ...new Set(d.scenarios.map((s) => s.group).filter((g) => !seed.SCENARIO_GROUPS.some((x) => x.id === g)))];
+  let groups = groupIds.map((id) => {
+    const all = d.scenarios.filter((s) => s.group === id);
+    const run = all.filter((s) => completed.has(s.id));
+    return { id, all, run, failed: run.filter((s) => !s.pass), shown: rows.filter((s) => s.group === id) };
+  }).filter((x) => x.shown.length);
+  if (hasResults) groups = [...groups.filter((x) => x.failed.length), ...groups.filter((x) => !x.failed.length)];
+
+  const groupCount = (x) => {
+    if (t.status === 'complete') return `${x.run.length - x.failed.length} of ${x.all.length} passed`;
+    if (t.status === 'running') return `${x.run.length} of ${x.all.length} run`;
+    return `${x.all.length} scenario${x.all.length === 1 ? '' : 's'}`;
+  };
+  const sections = groups.map((x) => html`<details class="scenario-group ${x.failed.length ? 'has-fail' : ''}" id="scenario-group-${x.id}" ${filtering || x.failed.length ? raw('open') : ''}>
+    <summary>
+      <span class="scenario-group-name">${groupName(x.id)}</span>
+      <span class="scenario-group-count">${groupCount(x)}${filtering && x.shown.length !== x.all.length ? ` · ${x.shown.length} shown` : ''}</span>
+      <span class="scenario-status">${x.failed.length ? html`<span class="badge badge-fail">${x.failed.length} failed</span>` : hasResults && t.status === 'complete' ? badge('pass') : !hasResults ? html`<span class="badge badge-neutral">Not run</span>` : ''}</span>
+    </summary>
+    <div class="scenario-list">${x.shown.map(item)}</div>
+  </details>`);
+
+  return html`${filters}<div class="scenario-groups">${sections}</div>`;
 }

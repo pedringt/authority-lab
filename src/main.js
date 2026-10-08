@@ -116,8 +116,12 @@ function render() {
 
   const y = window.scrollY;
   const saved = captureForms();
+  // Keep sections the person opened open across re-renders of the same page
+  // (a test run re-renders on every step).
+  const opened = lastRoute === location.hash ? [...app.querySelectorAll('details[id][open]')].map((el) => el.id) : [];
   app.innerHTML = String(view);
   restoreForms(saved);
+  for (const id of opened) { const el = document.getElementById(id); if (el) el.open = true; }
   if (lastRoute === location.hash) window.scrollTo(0, y); else window.scrollTo(0, 0);
   lastRoute = location.hash;
 }
