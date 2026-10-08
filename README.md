@@ -54,11 +54,23 @@ For a new capability, **Setup → Open the contract builder** starts from a temp
 
 Setup step 3 opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Core rows (quality, severe errors, minimum cases) cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed amendment (#7). Defaults live in `src/data/criteria-defaults.js`.
 
+## Sign-off rules in one place
+
+| Object | Needs sign-off from | Approvers |
+|---|---|---|
+| Criteria and requirements | the first performance results | Low/Medium: 1 (the owner, or another named stakeholder if the owner proposed). High or Financial: 2 distinct, at least one from Risk |
+| Contract | a pilot start (setting on) | same |
+| Stakeholder membership and team labels | the first performance results | same; positions and reasoning stay direct |
+
+The proposer never approves. Risk is judged by the person's own team. Eligible approvers are frozen when the proposal opens, infeasible proposals are refused with a reason, the proposer can withdraw, others can reject, and everything stays in the record.
+
 ## Amendments after evidence
 
 Locked criteria, and the contract once a pilot has started, change through a proposal: a new version plus a reason, applied only after sign-off. The proposer never approves. Low/Medium impact: one approver (the owner, or another named stakeholder if the owner proposed). High impact or financial exposure: two distinct approvers, at least one from Risk. Contract proposals must pass the builder's checks. The sign-off screen shows readiness under both versions. Approvals and rejections are recorded; approving writes the versions with the approvals on them. The contract rule sits behind `SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` (on).
 
 ## A new capability, end to end
+
+Status follows authority decisions only: In setup until a person authorizes the move to Draft, then Pilot. Each step must be real before the next: a contract before criteria, criteria before tests, tests before a decision. The Setup page tracks them.
 
 1. **Capabilities → Add capability**: name, summary, owner, risk profile, starting authority (Level 0 or 1). Writes the capability's first record.
 2. **Setup → Open the contract builder**: template plus suggestions, review each one, confirm the sections, finalize contract v1.
