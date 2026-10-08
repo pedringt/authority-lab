@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, section, capStatusBadge, authorityBadge, levelScale, fmtDate, person } from '../ui.js';
+import { html, section, capStatusBadge, authorityBadge, levelScale, fmtDate, person, levelTip } from '../ui.js';
 import { authorityLabel, current, decisionRequired, lastEvaluated } from '../store/index.js';
 
 export function capabilitiesView(state) {
@@ -12,7 +12,7 @@ export function capabilitiesView(state) {
     <td class="muted">${lastEvaluated(state, c.id) ? fmtDate(lastEvaluated(state, c.id)) : '—'}</td>
   </tr>`);
 
-  const levels = html`<div class="level-legend">${seed.AUTHORITY_LEVELS.map((l) => html`<div class="level-legend-item"><strong>L${l.level} ${l.name}</strong><span>${l.description}</span></div>`)}</div>`;
+  const levels = html`<div class="level-legend">${seed.AUTHORITY_LEVELS.map((l) => html`<div class="level-legend-item" title="${levelTip(l.level)}"><strong>L${l.level} ${l.name}</strong><span>${l.description}</span></div>`)}</div>`;
 
   return html`<div class="page-head">
     <div>

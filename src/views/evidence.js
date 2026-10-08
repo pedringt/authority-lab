@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, badge, section, fmtDate } from '../ui.js';
+import { html, badge, section, fmtDate, evidenceDetail } from '../ui.js';
 import { capData, getCapability, current } from '../store/index.js';
 import { requirementsList, proposedChangeLabel } from './capability.js';
 import { capabilityHeading, filterBar } from './tests.js';
@@ -52,7 +52,7 @@ export function evidenceView(state, capabilityId, query) {
       ${badge(e.status)}
     </div>
     <p class="evidence-value">${e.value}</p>
-    <p class="muted">${e.detail}</p>
+    <p class="muted">${evidenceDetail(e)}</p>
     <div class="evidence-meta"><span>${fmtDate(e.date)}</span><span>${e.segment === 'All' ? 'All segments' : e.segment}</span><span>${e.risk} risk</span><a href="${e.link}">Source</a></div>
   </article>`);
 

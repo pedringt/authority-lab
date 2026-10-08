@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, notice, section, person, fmtDateYear, selectField } from '../ui.js';
+import { html, raw, notice, section, person, fmtDate, selectField } from '../ui.js';
 import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal, activePeople, people } from '../store/index.js';
 
 export function stakeholdersEditorView(state, capabilityId, query) {
@@ -36,7 +36,7 @@ export function stakeholdersEditorView(state, capabilityId, query) {
     <button class="btn btn-sm" type="button" data-action="row-add" data-kind="stakeholders">Add stakeholder</button>
     <div class="card authorize">
       <p class="eyebrow">Save</p>
-      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, writes stakeholders v${v + 1} for ${cap.name}, dated ${fmtDateYear(state.today)}. Every save is a new version.</p>
+      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, writes stakeholders v${v + 1} for ${cap.name}, dated ${fmtDate(state.today)}. Every save is a new version.</p>
       <button class="btn btn-primary btn-block" type="submit">${v ? 'Save new version' : 'Save stakeholders'}</button>
     </div>
   </form>

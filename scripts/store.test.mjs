@@ -111,6 +111,8 @@ test('test suite runs to completion for one capability and updates its evidence 
   assert.equal(ev.value, '24 of 26 passed');
   assert.equal(ev.date, seed.TODAY);
   assert.match(ev.detail, /H-04/);
+  assert.equal(ev.runOn, seed.TODAY, 'the run date is stored as a field');
+  assert.doesNotMatch(ev.detail, /\b20\d\d\b|Run on/, 'no date is baked into the stored text');
   assert.equal(s.activity[0].kind, 'test');
   assert.equal(s.activity[0].surfaced, true);
   assert.equal(s.activity[0].capabilityId, RR);

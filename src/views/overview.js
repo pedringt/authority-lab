@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt } from '../ui.js';
+import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt, authorityText, evidenceDetail } from '../ui.js';
 import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings } from '../store/index.js';
 
 function firstSentences(text, n) {
@@ -158,7 +158,7 @@ export function overviewView(state) {
   d.evidence.filter((e) => e.source === 'Incident' && e.status === 'fail').slice(0, 1).forEach((e) => {
     attention.push(html`<a class="card card-link attention" href="${e.link}">
       <div class="attention-head"><strong>${e.metric}</strong>${badge('fail', e.value.includes('mitigated') ? 'Mitigated' : 'Fail')}</div>
-      <p>${firstSentences(e.detail, 2)}${tests.status === 'complete' && d.scenarios.some((sc) => sc.incident && e.metric.includes(sc.incident)) ? ' Reproduced on today’s run.' : ''}</p>
+      <p>${firstSentences(evidenceDetail(e), 2)}${tests.status === 'complete' && d.scenarios.some((sc) => sc.incident && e.metric.includes(sc.incident)) ? ' Reproduced on today’s run.' : ''}</p>
     </a>`);
   });
 
@@ -173,7 +173,7 @@ export function overviewView(state) {
     <thead><tr><th>Capability</th><th>Authority</th><th>Status</th></tr></thead>
     <tbody>${state.capabilities.map((c) => html`<tr>
       <td><a href="#/capabilities/${c.id}">${c.name}</a></td>
-      <td>${authorityLabel(c.authority)}</td>
+      <td>${authorityText(c.authority)}</td>
       <td>${capStatusBadge(c.status)}</td>
     </tr>`)}</tbody>
   </table>`;

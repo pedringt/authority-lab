@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, fmtDateYear, selectField } from '../ui.js';
+import { html, raw, badge, notice, section, person, fmtDate, selectField } from '../ui.js';
 import { getCapability, capData, actor, scenarioNudge } from '../store/index.js';
 
 export function scenariosEditorView(state, capabilityId, query) {
@@ -41,7 +41,7 @@ export function scenariosEditorView(state, capabilityId, query) {
     <button class="btn btn-sm" type="button" data-action="row-add" data-kind="scenarios">Add scenario</button>
     <div class="card authorize">
       <p class="eyebrow">Save</p>
-      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, replaces the library for ${cap.name}, dated ${fmtDateYear(state.today)}. New or changed scenarios get a simulated, deterministic result when saved.</p>
+      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, replaces the library for ${cap.name}, dated ${fmtDate(state.today)}. New or changed scenarios get a simulated, deterministic result when saved.</p>
       <button class="btn btn-primary btn-block" type="submit">Save scenario library</button>
     </div>
   </form>
