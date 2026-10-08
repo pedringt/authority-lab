@@ -724,6 +724,17 @@ test('software checks: empty hard limits above Low, contradictions, rules withou
   // Financial without a value limit: remove template lines that mention value, and the "over $100" suggestion was rejected.
   for (const l of capData(s, id).contractDraft.lines.filter((l) => /value limit|above the value/i.test(l.text) && l.status !== 'removed' && l.source !== 'ai')) s = removeContractLine(s, id, l.id);
   assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
+  // A limit that only appears under "must never" does not count.
+  s = addContractLine(s, id, 'mustNever', 'Issue a refund above $500.');
+  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'), 'must never alone is not an operating limit');
+  // A threshold under "must ask" does.
+  s = addContractLine(s, id, 'mustAsk', 'Refunds over $100.');
+  assert.ok(!contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
+  // So does a ceiling under "may".
+  s = removeContractLine(s, id, capData(s, id).contractDraft.lines.find((l) => l.text === 'Refunds over $100.').id);
+  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
+  s = addContractLine(s, id, 'may', 'Issue refunds of $50 or less.');
+  assert.ok(!contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
   assert.equal(canFinalizeContract(s, id).ok, false);
   // Low impact, internal: empty hard limits are allowed.
   let [t, tid] = withNewCap({ impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, 'Quarterly summary', 'Summarises the quarter.');

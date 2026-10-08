@@ -1036,8 +1036,10 @@ export function contractChecks(state, capabilityId) {
     if (!hasNumber(t) || !hasWindow(t)) out.push({ id: `rule-${norm(t).slice(0, 20)}`, level: 'block', section: 'autoRestriction', text: `"${t}" has no ${!hasNumber(t) ? 'number' : 'time or case window'}. A restriction rule needs a threshold and a window so software can apply it.` });
   }
   if (risk.exposure === 'Financial / consequential') {
-    const limited = [...value.mustAsk, ...value.mustNever, ...value.may].some(hasValueLimit);
-    if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: 'This is a financial capability and the contract sets no value limit. Add a line such as "Refunds over $100" under "AI must ask".' });
+    // A ceiling in "may" or a threshold in "must ask" counts. A limit that
+    // only appears under "must never" is not an operating limit.
+    const limited = [...value.may, ...value.mustAsk].some(hasValueLimit);
+    if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: 'This is a financial capability and the contract sets no value limit. Add a ceiling under "AI may" or a threshold such as "Refunds over $100" under "AI must ask". A limit that only appears under "AI must never" does not count.' });
   }
   const pending = draft.lines.filter((l) => l.status === 'pending').length;
   if (pending) out.push({ id: 'pending', level: 'block', section: null, text: `${pending} suggestion${pending === 1 ? '' : 's'} still to accept, edit or reject.` });
