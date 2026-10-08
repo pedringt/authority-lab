@@ -70,7 +70,7 @@ function render() {
   switch (root) {
     case 'capabilities':
       if (sub === 'new') { view = addCapabilityView(state, query); title = 'Add a capability'; }
-      else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub); title = 'Authority decision'; }
+      else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub, query); title = 'Authority decision'; }
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'Versions'; }
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Contract builder'; }
@@ -163,20 +163,26 @@ function restoreForms(saved) {
 // ---------------------------------------------------------------------------
 
 // Run a store action. If it throws, show the message inline on `errorRoute`
-// (as ?error=...), or in an alert when there is no route to show it on.
-// Anything the action does on success (navigating, clearing a stale
-// ?error=, re-rendering) stays inside `fn`.
+// (as an error= parameter). Anything the action does on success (navigating,
+// clearing a stale error, re-rendering) stays inside `fn`.
 function dispatchOr(errorRoute, fn) {
   try { fn(); }
-  catch (err) {
-    if (errorRoute) location.hash = `${errorRoute}?error=${encodeURIComponent(err.message)}`;
-    else alert(err.message);
-  }
+  catch (err) { location.hash = `${errorRoute}${errorRoute.includes('?') ? '&' : '?'}error=${encodeURIComponent(err.message)}`; }
 }
 
-// On success, drop a stale ?error= (or ?edit=) by going back to `route`.
+// On success, drop a stale error= (or edit=) by going back to `route`.
 function clearErrorOn(route, ...params) {
-  if (params.some((p) => location.hash.includes(`?${p}=`))) location.hash = route;
+  const query = new URLSearchParams(location.hash.split('?')[1] || '');
+  if (params.some((p) => query.has(p))) location.hash = route;
+}
+
+// The current route without its error= parameter: where an action started
+// from this page shows its error.
+function here() {
+  const [path, qs] = location.hash.split('?');
+  const query = new URLSearchParams(qs || '');
+  query.delete('error');
+  return query.toString() ? `${path}?${query}` : path;
 }
 
 // Row menus (details.menu) close on an outside click, on Escape, and after a choice.
@@ -193,10 +199,10 @@ document.addEventListener('click', (e) => {
   if (!btn || btn.tagName === 'INPUT' || btn.tagName === 'TEXTAREA') return;
   const action = btn.dataset.action;
   const capId = btn.dataset.capability;
-  if (action === 'run-tests') dispatchOr(null, () => runSuite(capId));
+  if (action === 'run-tests') { const route = here(); dispatchOr(route, () => { runSuite(capId); clearErrorOn(route, 'error'); }); }
   if (action === 'simulate-breach') store.dispatch('simulateBreach', capId);
   if (action === 'authorize') {
-    dispatchOr(null, () => {
+    dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
       const rec = capData(store.get(), capId).decision.recordId;
       location.hash = `#/decisions/${rec}`;
@@ -220,7 +226,7 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (action === 'propose-authority') {
-    dispatchOr(null, () => { store.dispatch('proposeAuthority', capId, Number(btn.dataset.level), { by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}/decision`; });
+    dispatchOr(here(), () => { store.dispatch('proposeAuthority', capId, Number(btn.dataset.level), { by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}/decision`; });
     return;
   }
   if (action === 'approve-roster') {

@@ -83,7 +83,7 @@ export function amendedNote(state, record) {
   return notice('watch', 'Criteria amended after evidence', `${amended.map((a) => `${KIND_LABELS[a.kind]} v${a.version} by ${person(a.author).name}: ${a.reason}`).join(' ')} The bar this decision was measured against changed after results were seen.`, { link: `#/capabilities/${cap.id}/versions?kind=${amended[0].kind}&version=${amended[0].version}`, linkText: 'See the change' });
 }
 
-export function decisionWorkspaceView(state, capabilityId) {
+export function decisionWorkspaceView(state, capabilityId, query = new URLSearchParams()) {
   const cap = getCapability(state, capabilityId);
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
   const d = capData(state, capabilityId);
@@ -178,6 +178,7 @@ export function decisionWorkspaceView(state, capabilityId) {
         ${conditionWarnings}
         <label class="field field-stack"><span>Decision rationale</span><textarea rows="4" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>
         <p class="muted small">Authorizing as <strong>${authorizer.name}</strong>, ${authorizer.role}. This action changes what the AI is allowed to do in production for ${cap.name}. It writes an immutable decision record with the evidence snapshot above.</p>
+        ${query.get('error') ? notice('fail', 'Could not authorize', query.get('error')) : ''}
         ${check.ok ? '' : html`<p class="form-error" role="status">${check.reason}</p>`}
         <button class="btn btn-primary btn-block" data-action="authorize" data-capability="${cap.id}" ${check.ok ? '' : raw('disabled')}>Authorize authority change</button>
       </div>
