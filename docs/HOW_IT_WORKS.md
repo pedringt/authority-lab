@@ -158,7 +158,15 @@ Software checks run on the draft and block finalizing when: "AI must never" or "
 
 Setup step 3 opens an editor pre-filled from the risk profile: quality and severe-error thresholds scale with impact, the minimum pilot size scales with impact, financial exposure adds a minimum number of high-value cases, customer-facing exposure adds a customer-visible-errors criterion, and difficult-to-reverse actions add a review-before-effect requirement. Every row says where its default came from; you can edit, remove and add rows. Three core rows (a quality threshold, a severe-error threshold, a minimum case count) can be adjusted but not removed. Lowering a default threshold, reducing a default case count or removing a default row needs a short reason, which is stored on the version and shown beside its diff. "Current" values are not typed; evidence fills them in later.
 
-Saving writes criteria v1 and requirements v1, authored by whoever is acting. Before the first test run you can save again, and each save is a new version. The Run test suite button stays disabled until both are saved, because the first run **locks** them: the moment performance results exist (a recorded test run, a pilot, or a measured evidence item, the same definition as "after evidence"), the editors become read-only and a "Success criteria locked" event is recorded. From then on, changing the bar is a proposed amendment with sign-off, which arrives with the next issue.
+Saving writes criteria v1 and requirements v1, authored by whoever is acting. Before the first test run you can save again, and each save is a new version. The Run test suite button stays disabled until both are saved, because the first run **locks** them: the moment performance results exist (a recorded test run, a pilot, or a measured evidence item, the same definition as "after evidence"), the editors become read-only and a "Success criteria locked" event is recorded. From then on, changing the bar is a proposed amendment with sign-off (next section).
+
+### Changing the bar after evidence: proposals and sign-off
+
+Once criteria are locked, and once a pilot has started for the contract, an edit becomes a **proposal**: the proposed new version plus a reason, recorded immediately but applied only after sign-off. Who must approve follows the risk profile. The proposer never approves. Low and Medium impact: one approver, the owner, or any other named stakeholder if the owner proposed. High impact or financial exposure: two different approvers, at least one from Risk. Owners can still propose. Use the "Acting as" picker to approve as each person. A proposed contract must pass the same checks as the builder's finalize step before it can be submitted.
+
+The sign-off screen shows the reason, who has approved and who is still needed, what would change, and, for criteria, readiness under both versions ("5 of 6 met now, 6 of 6 under the proposal"). A proposal that makes the capability look more ready without new evidence is flagged for the approvers. Approving writes the new versions, authored by the proposer and carrying the approvals, and records a surfaced "amended after evidence" event; any later decision that relies on them is marked "Criteria amended after evidence". Rejecting needs a reason and is kept in the record. Only one proposal per object can be open at a time.
+
+The contract rule is a setting (`CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT`, on by default): before a pilot starts, contract edits write a new version directly.
 
 ### Acting as
 
@@ -209,6 +217,7 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Add capability | Defines a capability, its risk profile and starting authority; writes its first decision record |
 | Contract builder | Starts from a template, reviews each AI suggestion, runs the software checks, finalizes contract v1 |
 | Criteria editor | Saves success criteria and evidence requirements (defaults from the risk profile); the first test run locks them |
+| Propose amendment | After the lock (criteria) or a pilot start (contract), submits a change for sign-off; approve or reject as whoever is acting |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 

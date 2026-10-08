@@ -20,8 +20,8 @@ export function criteriaEditorView(state, capabilityId, query) {
 
   if (locked) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p><h1>Success criteria and evidence requirements</h1><p class="lede">Locked. Performance results have been seen for ${cap.name}, so criteria v${v.criteria} and requirements v${v.requirements} cannot be edited in place.</p></div></div>
-      ${notice('watch', 'Criteria are locked', 'Changing the bar after seeing results needs a proposed amendment with sign-off (arrives with #7). The current versions are on the capability page.', { link: `#/capabilities/${cap.id}?tab=criteria`, linkText: 'Success criteria' })}
-      <button class="btn" disabled title="Arrives with #7">Propose amendment</button>`;
+      ${notice('watch', 'Criteria are locked', 'Changing the bar after seeing results needs a proposed amendment with sign-off. The current versions are on the capability page.', { link: `#/capabilities/${cap.id}?tab=criteria`, linkText: 'Success criteria' })}
+      <a class="btn btn-primary" href="#/capabilities/${cap.id}/amend/criteria">Propose amendment</a>`;
   }
 
   const row = (c, i) => html`<tr>

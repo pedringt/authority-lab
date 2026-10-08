@@ -12,6 +12,7 @@ import { versionsView } from './views/versions.js';
 import { addCapabilityView, setupView } from './views/setup.js';
 import { contractBuilderView } from './views/contract.js';
 import { criteriaEditorView } from './views/criteria.js';
+import { proposeView, proposalView } from './views/proposals.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -66,6 +67,8 @@ function render() {
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Contract builder'; }
       else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = 'Success criteria'; }
+      else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Amend'; }
+      else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed amendment'; }
       else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
       break;
@@ -123,7 +126,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -169,6 +172,12 @@ document.addEventListener('click', (e) => {
     tryDispatch(() => store.dispatch('finalizeContract', capId, { by: actor(store.get(), capId) }));
     if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=contract`;
   }
+  if (action === 'proposal-approve') {
+    const pid = btn.dataset.proposal;
+    try { store.dispatch('approveProposal', capId, pid, { by: actor(store.get(), capId) }); if (location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}/proposals/${pid}`; }
+    catch (err) { location.hash = `#/capabilities/${capId}/proposals/${pid}?error=${encodeURIComponent(err.message)}`; }
+    return;
+  }
   if (action === 'row-add') {
     const tpl = document.getElementById(`row-${btn.dataset.kind}`);
     const body = app.querySelector(`[data-rows="${btn.dataset.kind}"]`);
@@ -198,15 +207,47 @@ document.addEventListener('change', (e) => {
   }
 });
 
+function readCriteriaRows(form) {
+  const rows = (kind) => [...form.querySelectorAll(`[data-rows="${kind}"] tr`)];
+  const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
+  const criteria = rows('criteria').map((tr) => ({ id: val(tr, 'c-id') || undefined, name: val(tr, 'c-name'), target: val(tr, 'c-target'), note: val(tr, 'c-note'), source: val(tr, 'c-source') || undefined, current: val(tr, 'c-current') || undefined, status: val(tr, 'c-status') || undefined }));
+  const requirements = rows('requirements').map((tr) => ({ id: val(tr, 'r-id') || undefined, text: val(tr, 'r-text'), source: val(tr, 'r-source') || undefined }));
+  return { criteria, requirements };
+}
+
 document.addEventListener('submit', (e) => {
+  const proposeForm = e.target.closest('[data-form="propose-criteria"], [data-form="propose-contract"]');
+  if (proposeForm) {
+    e.preventDefault();
+    const capId = parseRoute().parts[1];
+    const kind = proposeForm.dataset.form === 'propose-contract' ? 'contract' : 'criteria';
+    const value = kind === 'contract'
+      ? Object.fromEntries([...proposeForm.querySelectorAll('textarea')].map((t) => [t.name, t.value.split('\n')]))
+      : readCriteriaRows(proposeForm);
+    try {
+      const before = capData(store.get(), capId).proposals.length;
+      store.dispatch('proposeAmendment', capId, kind, { value, by: actor(store.get(), capId), reason: proposeForm.reason.value });
+      const after = capData(store.get(), capId).proposals;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=${kind === 'contract' ? 'contract' : 'criteria'}`;
+    } catch (err) {
+      location.hash = `#/capabilities/${capId}/amend/${kind}?error=${encodeURIComponent(err.message)}`;
+    }
+    return;
+  }
+  const rejectForm = e.target.closest('[data-form="reject-proposal"]');
+  if (rejectForm) {
+    e.preventDefault();
+    const capId = parseRoute().parts[1];
+    const pid = rejectForm.dataset.proposal;
+    try { store.dispatch('rejectProposal', capId, pid, { by: actor(store.get(), capId), reason: rejectForm.reason.value }); location.hash = `#/capabilities/${capId}/proposals/${pid}`; render(); }
+    catch (err) { location.hash = `#/capabilities/${capId}/proposals/${pid}?error=${encodeURIComponent(err.message)}`; }
+    return;
+  }
   const critForm = e.target.closest('[data-form="save-criteria"]');
   if (critForm) {
     e.preventDefault();
     const capId = parseRoute().parts[1];
-    const rows = (kind) => [...critForm.querySelectorAll(`[data-rows="${kind}"] tr`)];
-    const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
-    const criteria = rows('criteria').map((tr) => ({ id: val(tr, 'c-id') || undefined, name: val(tr, 'c-name'), target: val(tr, 'c-target'), note: val(tr, 'c-note'), source: val(tr, 'c-source') || undefined }));
-    const requirements = rows('requirements').map((tr) => ({ id: val(tr, 'r-id') || undefined, text: val(tr, 'r-text'), source: val(tr, 'r-source') || undefined }));
+    const { criteria, requirements } = readCriteriaRows(critForm);
     try {
       store.dispatch('saveCriteria', capId, { criteria, requirements, by: actor(store.get(), capId), reason: critForm.reason.value });
       location.hash = `#/capabilities/${capId}?tab=criteria`;

@@ -7,7 +7,7 @@ import * as seed from './data/seed.js';
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-templates.js';
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v7';
+export const STORAGE_KEY = 'authority-lab-state-v8';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -27,6 +27,8 @@ export function emptyCapabilityData() {
     // Contract builder draft (#5). null until started; kept after finalize so
     // the review (including rejected suggestions) stays on record.
     contractDraft: null,
+    // Proposed amendments awaiting or past sign-off (#7). Never removed.
+    proposals: [],
     // Versioned objects (decision 2). Each entry is a list of versions; the
     // current value is the last one. Versions are never edited.
     versions: { contract: [], criteria: [], requirements: [], risk: [], stakeholders: [] },
@@ -80,7 +82,7 @@ export function initialState() {
   // The contract and risk profile live in the version lists.
   const capabilities = seed.capabilities.map(({ contract, risk, ...rest }) => clone(rest));
   return {
-    version: 7,
+    version: 8,
     today: seed.TODAY,
     // Who is acting in the UI. null means "the owner of the capability in
     // context"; a person key overrides it (the "acting as" picker).
@@ -150,11 +152,11 @@ export function performanceResultsSeen(state, capabilityId) {
 // contract finalized, plus mitigations and stakeholder reviews. Setup-type
 // events (for example "criteria defined") sit in Full history. An amendment
 // is surfaced only when it was made after performance results were seen.
-export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision']);
+export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision', 'proposal']);
 
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
-  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved',
+  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', proposal: 'Proposal',
   decision: 'Decision', test: 'Test run', amendment: 'Amendment',
 };
 
@@ -846,6 +848,9 @@ export function createStore({ storage = null } = {}) {
 const ACTIONS = {
   amend,
   saveCriteria,
+  proposeAmendment,
+  approveProposal,
+  rejectProposal,
   addCapability,
   setActingAs,
   startContractDraft,
@@ -871,7 +876,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 7) return null;
+    if (!parsed || parsed.version !== 8) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -1034,13 +1039,10 @@ const hasNumber = (t) => /\d/.test(t) || /\b(one|two|three|four|five|six|seven|e
 const hasWindow = (t) => /\b(\d+|one|two|three|seven|fourteen|thirty)\s*(-|\s)?(day|days|hour|hours|week|weeks|case|cases|minute|minutes)\b/i.test(t) || /rolling/i.test(t);
 const hasValueLimit = (t) => /\$\s?\d|\b\d+\s?(usd|eur|gbp|dollars)\b|\bvalue limit\b|\babove\s+\$?\d/i.test(t);
 
-// Software checks on a draft. `block` stops finalize; `warn` does not.
-export function contractChecks(state, capabilityId) {
-  const d = capData(state, capabilityId);
-  const draft = d.contractDraft;
-  if (!draft) return [];
+// Software checks on a contract value, shared by the builder and by contract
+// proposals. `block` stops finalize or submission; `warn` does not.
+export function contractValueChecks(state, capabilityId, value) {
   const risk = current(state, capabilityId, 'risk');
-  const value = draftValue(draft);
   const out = [];
   const aboveLow = risk.impact && risk.impact !== 'Low';
   if (aboveLow && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `"AI must never" cannot be empty for a ${risk.impact.toLowerCase()}-impact capability.` });
@@ -1058,11 +1060,20 @@ export function contractChecks(state, capabilityId) {
     const limited = [...value.may, ...value.mustAsk].some(hasValueLimit);
     if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: 'This is a financial capability and the contract sets no value limit. Add a ceiling under "AI may" or a threshold such as "Refunds over $100" under "AI must ask". A limit that only appears under "AI must never" does not count.' });
   }
+  for (const k of ['may', 'escalation']) if (!value[k].length) out.push({ id: `empty-${k}`, level: 'warn', section: k, text: `"${SECTION_LABELS[k]}" is empty.` });
+  return out;
+}
+
+// Checks on the builder's draft: the value checks plus review completeness.
+export function contractChecks(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  const draft = d.contractDraft;
+  if (!draft) return [];
+  const out = contractValueChecks(state, capabilityId, draftValue(draft));
   const pending = draft.lines.filter((l) => l.status === 'pending').length;
   if (pending) out.push({ id: 'pending', level: 'block', section: null, text: `${pending} suggestion${pending === 1 ? '' : 's'} still to accept, edit or reject.` });
   const unconfirmed = SECTION_KEYS.filter((k) => !draft.confirmed[k]);
   if (unconfirmed.length) out.push({ id: 'unconfirmed', level: 'block', section: null, text: `${unconfirmed.length} section${unconfirmed.length === 1 ? '' : 's'} not yet confirmed: ${unconfirmed.map((k) => SECTION_LABELS[k]).join(', ')}.` });
-  for (const k of ['may', 'escalation']) if (!value[k].length) out.push({ id: `empty-${k}`, level: 'warn', section: k, text: `"${SECTION_LABELS[k]}" is empty.` });
   return out;
 }
 
@@ -1134,8 +1145,10 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
 // Success criteria and evidence requirements (#6)
 // ---------------------------------------------------------------------------
 
+// Saved means a non-empty version of both objects exists. Seeded capabilities
+// without criteria carry an empty version 1, which does not count.
 export function criteriaSaved(state, capabilityId) {
-  return versionList(state, capabilityId, 'criteria').length > 0 && versionList(state, capabilityId, 'requirements').length > 0;
+  return current(state, capabilityId, 'criteria').length > 0 && current(state, capabilityId, 'requirements').length > 0;
 }
 
 // Criteria lock (decision 6): saved, and performance results have been seen.
@@ -1250,5 +1263,298 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
     body: `${cap.name}: ${c.length} criteria and ${r.length} evidence requirements saved by ${seed.people[by].name} (criteria v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}).${deviations.length ? ` ${deviations.length} risk-derived default${deviations.length === 1 ? '' : 's'} ${deviations.length === 1 ? 'was' : 'were'} loosened or removed: ${text}` : ''} They lock on the first test run.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}?tab=criteria`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Amendments after evidence need sign-off (#7)
+// ---------------------------------------------------------------------------
+
+// Assumption, not yet confirmed (decision 7): the same sign-off applies to
+// contract edits once a pilot has started. One named setting so it can be
+// switched off.
+export const SETTINGS = { CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT: true };
+
+// A pilot has started once a person has moved the capability to Draft or
+// above, or pilot data exists.
+export function pilotStarted(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  return Boolean(d.pilot) || state.decisionRecords.some((r) => r.capabilityId === capabilityId && r.next && r.next.level >= 2 && r.authorizedBy !== 'system');
+}
+
+export function needsSignoff(state, capabilityId, kind) {
+  if (kind === 'criteria') return criteriaLocked(state, capabilityId);
+  if (kind === 'contract') return SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT && pilotStarted(state, capabilityId);
+  throw new Error(`Unknown amendment kind: ${kind}`);
+}
+
+// Who must approve (decision 7, revised): the proposer never approves.
+// Low/Medium impact: one approver, the owner, or any other named stakeholder
+// if the owner proposed. High impact or Financial exposure: two distinct
+// approvers, at least one from Risk. Owners can still propose.
+export function signoffRequirements(state, capabilityId, proposedBy = null) {
+  const cap = getCapability(state, capabilityId);
+  const risk = current(state, capabilityId, 'risk');
+  const high = risk.impact === 'High' || risk.exposure === 'Financial / consequential';
+  if (high) return { approvers: 2, riskRequired: true, ownerOnly: false };
+  const ownerProposed = Boolean(cap && proposedBy && proposedBy === cap.owner);
+  return { approvers: 1, riskRequired: false, ownerOnly: !ownerProposed };
+}
+
+export function requirementLabel(req) {
+  if (!req) return '';
+  if (req.approvers === 1) return req.ownerOnly ? 'the owner' : 'one other named stakeholder (the owner proposed)';
+  return 'two different approvers, at least one from Risk';
+}
+
+// Named stakeholders of a capability: the owner, the people in its stakeholder
+// list, and the Risk team. If no stakeholders are named yet, any named person.
+export function namedStakeholders(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  const listed = current(state, capabilityId, 'stakeholders').map((st) => st.person).filter((k) => seed.people[k]);
+  const risk = Object.keys(seed.people).filter((k) => seed.people[k].team === 'Risk');
+  const set = new Set([...(cap ? [cap.owner] : []), ...listed, ...risk]);
+  return listed.length ? [...set] : Object.keys(seed.people);
+}
+
+export function isRiskStakeholder(state, capabilityId, personKey) {
+  const p = seed.people[personKey];
+  if (!p) return false;
+  if (p.team === 'Risk') return true;
+  return current(state, capabilityId, 'stakeholders').some((st) => st.person === personKey && st.team === 'Risk');
+}
+
+export function riskStakeholders(state, capabilityId) {
+  return Object.keys(seed.people).filter((k) => isRiskStakeholder(state, capabilityId, k));
+}
+
+export function openProposal(state, capabilityId, kind) {
+  return capData(state, capabilityId).proposals.find((p) => p.kind === kind && p.status === 'open') || null;
+}
+
+export function getProposal(state, capabilityId, proposalId) {
+  return capData(state, capabilityId).proposals.find((p) => p.id === proposalId) || null;
+}
+
+function cleanContractValue(value) {
+  const v = {};
+  for (const k of SECTION_KEYS) v[k] = (Array.isArray(value && value[k]) ? value[k] : []).map((t) => String(t).trim()).filter(Boolean);
+  if (!v.may.length && !v.mustAsk.length && !v.mustNever.length) throw new Error('A contract needs at least one line.');
+  return v;
+}
+
+// Submitted rows carry only what a person edits (name, target, note, text).
+// Everything measured or recorded on the base row (current, status, met, gap,
+// source) is kept, so the proposal's diff shows only the proposed change.
+function cleanAmendmentValue(state, capabilityId, kind, value) {
+  if (kind === 'contract') return cleanContractValue(value);
+  const c = cleanCriteria(value && value.criteria);
+  const r = cleanRequirements(value && value.requirements);
+  const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
+  if (missingCore.length) throw new Error(`Core rows can be adjusted but not removed: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
+  const baseC = current(state, capabilityId, 'criteria');
+  const baseR = current(state, capabilityId, 'requirements');
+  const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? { ...b, name: x.name, target: x.target, note: x.note } : x; });
+  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); return b ? { ...b, text: x.text } : x; });
+  return { criteria, requirements };
+}
+
+// Re-evaluate a requirement's "met" when its threshold changed and the current
+// value is a number. Otherwise the stored judgment stands.
+export function evaluateRequirement(req, baseReq) {
+  const t = threshold(req.text);
+  const base = baseReq ? threshold(baseReq.text) : null;
+  const n = parseFloat(String(req.current || '').replace(/[^0-9.]/g, ''));
+  if (!t || Number.isNaN(n) || !/^\s*\$?\d/.test(String(req.current || ''))) return Boolean(req.met);
+  if (base && base.n === t.n && base.atLeast === t.atLeast) return Boolean(req.met);
+  return t.atLeast ? n >= t.n : n < t.n;
+}
+
+// Readiness now and under a proposal, e.g. "5 of 6 met now, 6 of 6 under the proposal".
+export function proposalReadiness(state, capabilityId, proposal) {
+  const now = readiness(state, capabilityId);
+  if (!proposal || proposal.kind !== 'criteria') return { now, proposed: null };
+  const base = current(state, capabilityId, 'requirements');
+  const reqs = proposal.value.requirements.map((r) => {
+    const b = base.find((x) => x.id === r.id);
+    const merged = { ...r, current: b ? b.current : r.current, met: b ? b.met : r.met, gap: b ? b.gap : r.gap };
+    return { ...merged, met: evaluateRequirement(merged, b) };
+  });
+  return { now, proposed: { met: reqs.filter((r) => r.met).length, total: reqs.length, unmet: reqs.filter((r) => !r.met), requirements: reqs } };
+}
+
+function applyCriteriaDirect(state, capabilityId, value, by, reason) {
+  return saveCriteria(state, capabilityId, { criteria: value.criteria, requirements: value.requirements, by, reason });
+}
+
+// Propose a change to locked criteria/requirements, or to the contract once a
+// pilot has started. Before those points the change is applied directly as a
+// new version. `by` is whoever is acting.
+export function proposeAmendment(state, capabilityId, kind, { value, by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
+  if (!by || !seed.people[by]) throw new Error('A named person proposes an amendment.');
+  const why = (reason || '').trim();
+  if (why.length < 10) throw new Error('A proposal needs a reason (a sentence).');
+  const clean = cleanAmendmentValue(state, capabilityId, kind, value);
+  if (kind === 'contract') {
+    const blocks = contractValueChecks(state, capabilityId, clean).filter((c) => c.level === 'block');
+    if (blocks.length) throw new Error(`The proposed contract fails ${blocks.length} check${blocks.length === 1 ? '' : 's'}: | ${blocks.map((b) => b.text).join(' | ')}`);
+  }
+  if (!needsSignoff(state, capabilityId, kind)) {
+    if (kind === 'criteria') return applyCriteriaDirect(state, capabilityId, clean, by, why);
+    if (!versionList(state, capabilityId, 'contract').length) throw new Error('Finalize the contract in the builder first.');
+    return amend(state, capabilityId, 'contract', { value: clean, author: by, reason: why });
+  }
+  if (openProposal(state, capabilityId, kind)) throw new Error('A proposal for this object is already awaiting sign-off. Approve or reject it first.');
+  const d = capData(state, capabilityId);
+  const v = versionsInForce(state, capabilityId);
+  const proposal = {
+    id: `P-${d.proposals.length + 1}`,
+    kind,
+    capabilityId,
+    proposedBy: by,
+    date: state.today,
+    reason: why,
+    value: clean,
+    base: kind === 'contract' ? { contract: v.contract } : { criteria: v.criteria, requirements: v.requirements },
+    required: signoffRequirements(state, capabilityId, by),
+    approvals: [],
+    status: 'open',
+    rejection: null,
+    applied: null,
+  };
+  const s = updateCap(state, capabilityId, { proposals: [...d.proposals, proposal] });
+  const who = seed.people[by];
+  return logEvent(s, {
+    kind: 'proposal',
+    outcome: 'opened',
+    title: `Amendment proposed: ${kind === 'contract' ? 'contract' : 'success criteria and evidence requirements'}`,
+    body: `${cap.name}: ${who.name} proposed ${proposal.id} after evidence. Needs ${requirementLabel(proposal.required)}, never the proposer. Reason: ${why}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
+  });
+}
+
+export function roleLabel(role) {
+  return role === 'owner' ? 'the owner' : role === 'risk' ? 'a Risk stakeholder' : 'a named stakeholder';
+}
+
+function roleFor(state, capabilityId, personKey) {
+  const cap = getCapability(state, capabilityId);
+  if (isRiskStakeholder(state, capabilityId, personKey)) return 'risk';
+  if (cap && personKey === cap.owner) return 'owner';
+  return 'stakeholder';
+}
+
+export function approvalsComplete(proposal) {
+  const req = proposal.required;
+  if (proposal.approvals.length < req.approvers) return false;
+  if (req.riskRequired && !proposal.approvals.some((a) => a.role === 'risk')) return false;
+  return true;
+}
+
+// Whether the acting person can approve this proposal now, and why not.
+export function approvalEligibility(state, capabilityId, proposal, personKey) {
+  const cap = getCapability(state, capabilityId);
+  if (!proposal || proposal.status !== 'open') return { ok: false, role: null, reason: 'This proposal is closed.' };
+  if (!personKey || !seed.people[personKey]) return { ok: false, role: null, reason: 'Choose who is acting.' };
+  const name = seed.people[personKey].name;
+  if (personKey === proposal.proposedBy) return { ok: false, role: null, reason: `${name} proposed this; the proposer never approves.` };
+  if (proposal.approvals.some((a) => a.by === personKey)) return { ok: false, role: null, reason: `${name} has already approved.` };
+  const req = proposal.required;
+  const role = roleFor(state, capabilityId, personKey);
+  if (req.ownerOnly) {
+    if (personKey !== cap.owner) return { ok: false, role: null, reason: `${name} cannot approve this. Needed: the owner (${seed.people[cap.owner].name}).` };
+    return { ok: true, role: 'owner', reason: null };
+  }
+  if (!namedStakeholders(state, capabilityId).includes(personKey)) return { ok: false, role: null, reason: `${name} is not a named stakeholder of ${cap.name}.` };
+  // Last slot on a High/Financial proposal must be Risk if none has signed yet.
+  const remaining = req.approvers - proposal.approvals.length;
+  const riskStill = req.riskRequired && !proposal.approvals.some((a) => a.role === 'risk');
+  if (riskStill && remaining <= 1 && role !== 'risk') {
+    return { ok: false, role: null, reason: `${name} cannot take the last approval: at least one approver must be from Risk (${riskStakeholders(state, capabilityId).map((k) => seed.people[k].name).join(', ') || 'none named'}).` };
+  }
+  return { ok: true, role, reason: null };
+}
+
+export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
+  const cap = getCapability(state, capabilityId);
+  const proposal = getProposal(state, capabilityId, proposalId);
+  if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
+  const e = approvalEligibility(state, capabilityId, proposal, by);
+  if (!e.ok) throw new Error(e.reason);
+  const approvals = [...proposal.approvals, { by, role: e.role, date: state.today }];
+  let next = { ...proposal, approvals };
+  let s = state;
+  const who = seed.people[by];
+  if (!approvalsComplete(next)) {
+    s = updateCap(s, capabilityId, { proposals: capData(s, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
+    const left = proposal.required.approvers - approvals.length;
+    const riskStill = proposal.required.riskRequired && !approvals.some((a) => a.role === 'risk');
+    return logEvent(s, {
+      kind: 'proposal',
+      outcome: 'approval',
+      title: `Approval recorded on ${proposalId}`,
+      body: `${cap.name}: ${who.name} approved as ${roleLabel(e.role)}. Still needed: ${left} more approver${left === 1 ? '' : 's'}${riskStill ? ', from Risk' : ''}.`,
+      capabilityId,
+      link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
+    });
+  }
+  // Fully approved: apply as new versions, authored by the proposer, with the
+  // approvals on the version.
+  const meta = { proposalId, proposedBy: proposal.proposedBy, approvals };
+  const applied = {};
+  if (proposal.kind === 'contract') {
+    s = amend(s, capabilityId, 'contract', { value: proposal.value, author: proposal.proposedBy, reason: proposal.reason, meta, silent: true });
+    applied.contract = versionsInForce(s, capabilityId).contract;
+  } else {
+    const defaults = defaultsFor(s, capabilityId);
+    const deviations = (kind, items, textOf) => defaultDeviations(defaults[kind], items, textOf).map((x) => ({ ...x, label: kind === 'criteria' ? (defaults.criteria.find((y) => y.id === x.id) || {}).name : null }));
+    // Requirements keep their measured "current" values; "met" is re-evaluated
+    // where the threshold changed and the value is a number.
+    const requirements = proposalReadiness(s, capabilityId, proposal).proposed.requirements;
+    const criteria = proposal.value.criteria;
+    s = amend(s, capabilityId, 'criteria', { value: criteria, author: proposal.proposedBy, reason: proposal.reason, meta: { ...meta, deviations: deviations('criteria', criteria, (x) => x.target) }, silent: true });
+    s = amend(s, capabilityId, 'requirements', { value: requirements, author: proposal.proposedBy, reason: proposal.reason, meta: { ...meta, deviations: deviations('requirements', requirements, (x) => x.text) }, silent: true });
+    applied.criteria = versionsInForce(s, capabilityId).criteria;
+    applied.requirements = versionsInForce(s, capabilityId).requirements;
+  }
+  next = { ...next, status: 'approved', applied, closedAt: state.today };
+  s = updateCap(s, capabilityId, { proposals: capData(s, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
+  const label = proposal.kind === 'contract' ? `Contract amended to v${applied.contract}` : `Success criteria amended to v${applied.criteria}, evidence requirements to v${applied.requirements}`;
+  return logEvent(s, {
+    kind: 'amendment',
+    afterEvidence: true,
+    objectKind: proposal.kind === 'contract' ? 'contract' : 'criteria',
+    version: proposal.kind === 'contract' ? applied.contract : applied.criteria,
+    proposalId,
+    title: `${label} after evidence`,
+    body: `${cap.name}: proposed by ${seed.people[proposal.proposedBy].name}, approved by ${approvals.map((a) => `${seed.people[a.by].name} (${roleLabel(a.role)})`).join(' and ')}. ${proposal.reason}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
+  });
+}
+
+export function rejectProposal(state, capabilityId, proposalId, { by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  const proposal = getProposal(state, capabilityId, proposalId);
+  if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
+  if (proposal.status !== 'open') throw new Error('This proposal is closed.');
+  if (!by || !seed.people[by]) throw new Error('A named person rejects a proposal.');
+  if (by === proposal.proposedBy) throw new Error('The proposer withdraws rather than rejects; someone else must reject.');
+  const why = (reason || '').trim();
+  if (why.length < 10) throw new Error('A rejection needs a reason (a sentence).');
+  const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && namedStakeholders(state, capabilityId).includes(by));
+  if (!eligible) throw new Error(`${seed.people[by].name} is not eligible to reject this: ${requirementLabel(proposal.required)} decide.`);
+  const next = { ...proposal, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today };
+  const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
+  return logEvent(s, {
+    kind: 'proposal',
+    outcome: 'rejected',
+    title: `Amendment rejected: ${proposalId}`,
+    body: `${cap.name}: ${seed.people[by].name} rejected the proposal by ${seed.people[proposal.proposedBy].name}. ${why}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
   });
 }
