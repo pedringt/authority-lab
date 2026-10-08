@@ -54,6 +54,13 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 - **One date format.** "Oct 7", with the year only when it isn't the workspace's current year. Dates are stored as data and formatted when shown, never baked into stored text. Every authority level has a tooltip with its description. (#43)
 - **Errors are inline, never pop-ups.** Every action that can fail shows its error on the page it was started from. A test keeps `alert()` out of the UI. (#36, #44)
 
+### Monitoring (roadmap item 6, being planned)
+
+- **Restriction rules come from the contract.** Each capability's monitoring rules are derived from its contract's "Automatic restriction" lines, using the number and window the contract checks already require. No separate rule editor. (Decided 2026-10-08.)
+- **"Simulate threshold breach" stays on the seeded capabilities only.** Capabilities added in the demo get monitoring but no simulate button. (Decided 2026-10-08.)
+- **Open: when monitoring starts.** Recommended: rules run from Level 3 (Act within limits) up, where the AI acts without per-case approval. At Levels 1–2 a person approves every case, so the numbers are tracked and shown but nothing is restricted automatically.
+- **Open: how far a breach pulls back.** Recommended: one level, to the last authorized level (the usual "roll back to last known good"), with review required before expanding again. This matches what Refund recommendation already does (Level 3 → Draft), so the demo story is unchanged.
+
 ## Loopholes found in review, and their fixes
 
 Each one now has a test that tries the bypass and confirms it is refused.
@@ -72,7 +79,8 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 2. ~~People and roles~~ (done).
 3. ~~Housekeeping: CI, error handling, store split~~ (done: #35, #36, #37).
 4. ~~UI readability pass~~ (done: #38–#44): two-row header, filter bar, collapsed test groups, sticky decision panel, People "Manage" menu, one date format, level tooltips, inline errors instead of pop-ups.
-5. **Monitoring and automatic restriction for every capability** (next). Today only Refund recommendation's restriction rule runs; other contracts state rules nothing enforces.
-6. Empty-workspace path: set up the workspace and workflow first.
-7. Smaller rule changes: lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
-8. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning.
+5. **Header nav cleanup** (next, small). The section tabs don't line up with the brand, and their spacing comes only from pill padding. Proposed: underline tabs flush with the brand, an even gap, the active tab underlined on the header's bottom border, quieter count badges. Nothing added.
+6. **Monitoring and automatic restriction for every capability.** Today only Refund recommendation's restriction rule runs; other contracts state rules nothing enforces. Two questions are open (see Monitoring above).
+7. Empty-workspace path: set up the workspace and workflow first.
+8. Smaller rule changes: lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
+9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning.
