@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-} from '../src/store.js';
+} from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
 import { proposalView } from '../src/views/proposals.js';
@@ -1686,7 +1686,7 @@ test('repro: relabelling a team cannot create a Risk approver; the loosening doe
 
 test('no team-based Risk logic remains in the store or the views', () => {
   const dir = new URL('../src', import.meta.url).pathname;
-  const files = [`${dir}/store.js`, ...readdirSync(`${dir}/views`).map((f) => `${dir}/views/${f}`), `${dir}/main.js`, `${dir}/ui.js`];
+  const files = [...readdirSync(`${dir}/store`).map((f) => `${dir}/store/${f}`), ...readdirSync(`${dir}/views`).map((f) => `${dir}/views/${f}`), `${dir}/main.js`, `${dir}/ui.js`];
   const offenders = [];
   for (const f of files) {
     const src = readFileSync(f, 'utf8');

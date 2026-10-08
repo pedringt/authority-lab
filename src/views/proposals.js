@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, fmtDateYear, kv, warningNotice } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store.js';
+import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 const KIND_TITLE = { criteria: 'success criteria and evidence requirements', contract: 'contract', stakeholders: 'stakeholders' };

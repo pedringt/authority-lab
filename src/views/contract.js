@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDateYear } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS } from '../store.js';
+import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 const SECTION_HELP = {

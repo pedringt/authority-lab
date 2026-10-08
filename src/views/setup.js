@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, selectField, person, section, kv } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId, activePeople } from '../store.js';
+import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId, activePeople } from '../store/index.js';
 
 // Add a capability: define it, give it a risk profile, choose its starting
 // authority. One page, three sections, one submit. Nothing starts above Level 1.

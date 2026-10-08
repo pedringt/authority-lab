@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, section, capStatusBadge, authorityBadge, levelScale, fmtDate, person } from '../ui.js';
-import { authorityLabel, current, decisionRequired, lastEvaluated } from '../store.js';
+import { authorityLabel, current, decisionRequired, lastEvaluated } from '../store/index.js';
 
 export function capabilitiesView(state) {
   const rows = state.capabilities.map((c) => html`<tr>

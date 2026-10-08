@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store.js';
+import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store/index.js';
 import { html, setPeople } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';

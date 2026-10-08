@@ -1,5 +1,5 @@
 import { html, raw, badge, notice, section, person, personAt, fmtDateYear, fmtDate, kv } from '../ui.js';
-import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings } from '../store.js';
+import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 // The people roster (#22). Workspace admins add, edit and deactivate; nobody

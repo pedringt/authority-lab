@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDateYear, selectField } from '../ui.js';
-import { getCapability, capData, actor, scenarioNudge } from '../store.js';
+import { getCapability, capData, actor, scenarioNudge } from '../store/index.js';
 
 export function scenariosEditorView(state, capabilityId, query) {
   const cap = getCapability(state, capabilityId);

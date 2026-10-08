@@ -2,7 +2,7 @@
 // markup in `raw()` to pass it through. Arrays are joined.
 
 import { STATUS_LABELS, AUTHORITY_LEVELS, people as seedPeople } from './data/seed.js';
-import { authorityLabel } from './store.js';
+import { authorityLabel } from './store/index.js';
 
 export function esc(value) {
   return String(value)

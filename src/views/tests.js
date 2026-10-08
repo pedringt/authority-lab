@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, fmtDate } from '../ui.js';
-import { testSummary, capData, getCapability, canRunSuite } from '../store.js';
+import { testSummary, capData, getCapability, canRunSuite } from '../store/index.js';
 
 const FILTERS = [
   ['all', 'All'],

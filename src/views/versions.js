@@ -1,5 +1,5 @@
 import { html, badge, fmtDateYear, person, personAt, rightsNote, empty, kv } from '../ui.js';
-import { getCapability, versionList, VERSIONED_KINDS, KIND_LABELS } from '../store.js';
+import { getCapability, versionList, VERSIONED_KINDS, KIND_LABELS } from '../store/index.js';
 import { diffTable, deviationsView } from './activity.js';
 import { contractReviewView } from './contract.js';
 
