@@ -56,7 +56,7 @@ Setup step 3 opens an editor pre-filled from the risk profile, each row labelled
 
 ## Amendments after evidence
 
-Locked criteria, and the contract once a pilot has started, change through a proposal: a new version plus a reason, applied only after sign-off. The owner approves for Low/Medium impact; the owner plus a Risk stakeholder for High impact or financial exposure; never the proposer (a Risk stakeholder stands in when the owner proposes). The sign-off screen shows readiness under both versions. Approvals and rejections are recorded; approving writes the versions with the approvals on them. The contract rule sits behind `SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` (on).
+Locked criteria, and the contract once a pilot has started, change through a proposal: a new version plus a reason, applied only after sign-off. The proposer never approves. Low/Medium impact: one approver (the owner, or another named stakeholder if the owner proposed). High impact or financial exposure: two distinct approvers, at least one from Risk. Contract proposals must pass the builder's checks. The sign-off screen shows readiness under both versions. Approvals and rejections are recorded; approving writes the versions with the approvals on them. The contract rule sits behind `SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` (on).
 
 ## Structure
 

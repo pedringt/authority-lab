@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDate, fmtDateYear, kv } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, roleLabel, openProposal, getProposal, approvalEligibility, proposalReadiness, riskStakeholders, criteriaLocked, pilotStarted, SETTINGS, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS } from '../store.js';
+import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS } from '../store.js';
 import { diffTable } from './activity.js';
 
 const KIND_TITLE = { criteria: 'success criteria and evidence requirements', contract: 'contract' };
@@ -13,7 +13,7 @@ export function proposeView(state, capabilityId, kind, query) {
   const error = query.get('error');
   const acting = person(actor(state, capabilityId));
   const gated = needsSignoff(state, capabilityId, kind);
-  const required = signoffRequirements(state, capabilityId);
+  const required = signoffRequirements(state, capabilityId, actor(state, capabilityId));
   const open = openProposal(state, capabilityId, kind);
   const hasContract = versionList(state, capabilityId, 'contract').length > 0;
   const hasCriteria = versionList(state, capabilityId, 'criteria').length > 0;
@@ -28,16 +28,21 @@ export function proposeView(state, capabilityId, kind, query) {
       <h1>Amend the ${KIND_TITLE[kind]}</h1>
       <p class="lede">${gated
         ? kind === 'criteria'
-          ? `Performance results have been seen, so the criteria are locked. Your change becomes a proposal that needs ${required.map(roleLabel).join(' and ')} to approve, and the approver cannot be the proposer.`
-          : `A pilot has started, so contract edits need sign-off (${required.map(roleLabel).join(' and ')}, not the proposer). This rule is a setting that can be switched off.`
+          ? `Performance results have been seen, so the criteria are locked. Your change becomes a proposal that needs ${requirementLabel(required)} to approve; the proposer never approves.`
+          : `A pilot has started, so contract edits need sign-off (${requirementLabel(required)}; the proposer never approves). This rule is a setting that can be switched off.`
         : `No sign-off is needed yet: ${kind === 'criteria' ? 'the criteria are not locked' : 'no pilot has started'}. Saving writes a new version directly.`}</p>
     </div>
   </div>
-  ${error ? notice('fail', 'Could not submit', error) : ''}`;
+  ${error ? (error.includes(' | ')
+    ? html`<div class="notice notice-fail" role="alert"><div class="notice-body"><strong>${error.split(' | ')[0]}</strong><ul class="plain-list">${error.split(' | ').slice(1).filter(Boolean).map((t) => html`<li>${t}</li>`)}</ul></div></div>`
+    : notice('fail', 'Could not submit', error)) : ''}`;
 
   if (kind === 'contract') {
     const c = current(state, capabilityId, 'contract');
+    const currentChecks = contractValueChecks(state, capabilityId, c);
     return html`${head}
+    ${notice('neutral', 'The same checks as the builder apply before you can submit', 'Empty hard limits above Low impact, a line under both "may" and "must never" or "must ask", a restriction rule with no number or window, and a financial capability with no value limit under "may" or "must ask" all block submission.')}
+    ${currentChecks.filter((x) => x.level === 'block').length ? notice('watch', 'The current contract would not pass these checks as it stands', currentChecks.filter((x) => x.level === 'block').map((x) => x.text).join(' ')) : ''}
     <form class="setup-form" data-form="propose-contract" novalidate>
       ${SECTION_KEYS.map((k) => html`<div class="card"><label class="field field-stack"><span>${SECTION_LABELS[k]} <span class="muted small">one line per row</span></span><textarea name="${k}" rows="${Math.max(3, c[k].length + 1)}">${c[k].join('\\n')}</textarea></label></div>`)}
       ${reasonAndSubmit(state, cap, kind, gated, required, acting)}
@@ -72,7 +77,7 @@ function reasonAndSubmit(state, cap, kind, gated, required, acting) {
     <p class="eyebrow">${gated ? 'Propose' : 'Save'}</p>
     <label class="field field-stack"><span>Reason</span><input type="text" name="reason" maxlength="240" placeholder="Why the bar should change." required></label>
     <p class="muted small">${gated
-      ? `Proposing as ${acting.name}, ${acting.role}. The proposal is recorded now; the new version is written only when ${required.map(roleLabel).join(' and ')} have approved. ${acting.name} cannot approve their own proposal. Rejected proposals are kept in the record.`
+      ? `Proposing as ${acting.name}, ${acting.role}. The proposal is recorded now; the new version is written only after ${requirementLabel(required)} approve. ${acting.name} cannot approve their own proposal. Rejected proposals are kept in the record.`
       : `Saving as ${acting.name}, ${acting.role}, writes a new version of the ${KIND_TITLE[kind]} for ${cap.name}.`}</p>
     <button class="btn btn-primary btn-block" type="submit">${gated ? 'Submit proposal for sign-off' : 'Save new version'}</button>
   </div>`;
@@ -88,7 +93,8 @@ export function proposalView(state, capabilityId, proposalId, query) {
   const who = person(acting);
   const elig = approvalEligibility(state, capabilityId, p, acting);
   const r = proposalReadiness(state, capabilityId, p);
-  const done = new Set(p.approvals.map((a) => a.role));
+  const req = p.required;
+  const riskDone = p.approvals.some((a) => a.role === 'risk');
   const status = p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved and applied') : badge('fail', 'Rejected');
 
   const before = p.kind === 'contract'
@@ -108,7 +114,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
   ${error ? notice('fail', 'Could not record that', error) : ''}
   <div class="card">${kv([
     ['Reason', p.reason],
-    ['Sign-off needed', html`${p.required.map((role) => html`<span class="signoff-role">${done.has(role) ? badge('pass', `${roleLabel(role)}: approved`) : badge('neutral', `${roleLabel(role)}: pending`)}</span> `)}<span class="muted small">Two different people; never the proposer.</span>`],
+    ['Sign-off needed', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approver${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk: approved') : badge('neutral', 'Risk: pending')}</span>` : ''} <span class="muted small">${requirementLabel(req)}; the proposer never approves.</span>`],
     ['Approvals so far', p.approvals.length ? html`<ul class="plain-list">${p.approvals.map((a) => html`<li>${person(a.by).name} as ${roleLabel(a.role)}, ${fmtDate(a.date)}</li>`)}</ul>` : html`<span class="muted">None yet</span>`],
     ...(p.rejection ? [['Rejected', html`${person(p.rejection.by).name}, ${fmtDate(p.rejection.date)}: ${p.rejection.reason}`]] : []),
     ...(p.applied ? [['Applied as', Object.entries(p.applied).map(([k, v]) => `${KIND_LABELS[k]} v${v}`).join(', ')]] : []),
@@ -124,8 +130,8 @@ export function proposalView(state, capabilityId, proposalId, query) {
 
   ${p.status === 'open' ? section('Sign-off', html`<div class="card authorize">
     <p class="eyebrow">Acting as ${who.name}, ${who.role}</p>
-    ${elig.roles.length
-      ? html`<p>${who.name} can approve as ${roleLabel(elig.roles[0])}.</p><button class="btn btn-primary" data-action="proposal-approve" data-capability="${cap.id}" data-proposal="${p.id}">Approve as ${roleLabel(elig.roles[0])}</button>`
+    ${elig.ok
+      ? html`<p>${who.name} can approve as ${roleLabel(elig.role)}.</p><button class="btn btn-primary" data-action="proposal-approve" data-capability="${cap.id}" data-proposal="${p.id}">Approve as ${roleLabel(elig.role)}</button>`
       : html`<p class="muted">${elig.reason}</p>`}
     <form class="line-add reject-form" data-form="reject-proposal" data-proposal="${p.id}">
       <input type="text" name="reason" maxlength="240" placeholder="Reason for rejecting…" aria-label="Rejection reason">

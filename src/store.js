@@ -1039,13 +1039,10 @@ const hasNumber = (t) => /\d/.test(t) || /\b(one|two|three|four|five|six|seven|e
 const hasWindow = (t) => /\b(\d+|one|two|three|seven|fourteen|thirty)\s*(-|\s)?(day|days|hour|hours|week|weeks|case|cases|minute|minutes)\b/i.test(t) || /rolling/i.test(t);
 const hasValueLimit = (t) => /\$\s?\d|\b\d+\s?(usd|eur|gbp|dollars)\b|\bvalue limit\b|\babove\s+\$?\d/i.test(t);
 
-// Software checks on a draft. `block` stops finalize; `warn` does not.
-export function contractChecks(state, capabilityId) {
-  const d = capData(state, capabilityId);
-  const draft = d.contractDraft;
-  if (!draft) return [];
+// Software checks on a contract value, shared by the builder and by contract
+// proposals. `block` stops finalize or submission; `warn` does not.
+export function contractValueChecks(state, capabilityId, value) {
   const risk = current(state, capabilityId, 'risk');
-  const value = draftValue(draft);
   const out = [];
   const aboveLow = risk.impact && risk.impact !== 'Low';
   if (aboveLow && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `"AI must never" cannot be empty for a ${risk.impact.toLowerCase()}-impact capability.` });
@@ -1063,11 +1060,20 @@ export function contractChecks(state, capabilityId) {
     const limited = [...value.may, ...value.mustAsk].some(hasValueLimit);
     if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: 'This is a financial capability and the contract sets no value limit. Add a ceiling under "AI may" or a threshold such as "Refunds over $100" under "AI must ask". A limit that only appears under "AI must never" does not count.' });
   }
+  for (const k of ['may', 'escalation']) if (!value[k].length) out.push({ id: `empty-${k}`, level: 'warn', section: k, text: `"${SECTION_LABELS[k]}" is empty.` });
+  return out;
+}
+
+// Checks on the builder's draft: the value checks plus review completeness.
+export function contractChecks(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  const draft = d.contractDraft;
+  if (!draft) return [];
+  const out = contractValueChecks(state, capabilityId, draftValue(draft));
   const pending = draft.lines.filter((l) => l.status === 'pending').length;
   if (pending) out.push({ id: 'pending', level: 'block', section: null, text: `${pending} suggestion${pending === 1 ? '' : 's'} still to accept, edit or reject.` });
   const unconfirmed = SECTION_KEYS.filter((k) => !draft.confirmed[k]);
   if (unconfirmed.length) out.push({ id: 'unconfirmed', level: 'block', section: null, text: `${unconfirmed.length} section${unconfirmed.length === 1 ? '' : 's'} not yet confirmed: ${unconfirmed.map((k) => SECTION_LABELS[k]).join(', ')}.` });
-  for (const k of ['may', 'escalation']) if (!value[k].length) out.push({ id: `empty-${k}`, level: 'warn', section: k, text: `"${SECTION_LABELS[k]}" is empty.` });
   return out;
 }
 
@@ -1282,16 +1288,33 @@ export function needsSignoff(state, capabilityId, kind) {
   throw new Error(`Unknown amendment kind: ${kind}`);
 }
 
-// Who must approve: the owner for Low/Medium impact; the owner plus a Risk
-// stakeholder for High impact or Financial exposure. Two different people.
-// Assumption: when the owner is the proposer, nobody can fill the owner role,
-// so a Risk stakeholder stands in for it.
+// Who must approve (decision 7, revised): the proposer never approves.
+// Low/Medium impact: one approver, the owner, or any other named stakeholder
+// if the owner proposed. High impact or Financial exposure: two distinct
+// approvers, at least one from Risk. Owners can still propose.
 export function signoffRequirements(state, capabilityId, proposedBy = null) {
   const cap = getCapability(state, capabilityId);
   const risk = current(state, capabilityId, 'risk');
-  const roles = risk.impact === 'High' || risk.exposure === 'Financial / consequential' ? ['owner', 'risk'] : ['owner'];
-  if (cap && proposedBy && proposedBy === cap.owner) return [...new Set(roles.map((r) => (r === 'owner' ? 'risk' : r)))];
-  return roles;
+  const high = risk.impact === 'High' || risk.exposure === 'Financial / consequential';
+  if (high) return { approvers: 2, riskRequired: true, ownerOnly: false };
+  const ownerProposed = Boolean(cap && proposedBy && proposedBy === cap.owner);
+  return { approvers: 1, riskRequired: false, ownerOnly: !ownerProposed };
+}
+
+export function requirementLabel(req) {
+  if (!req) return '';
+  if (req.approvers === 1) return req.ownerOnly ? 'the owner' : 'one other named stakeholder (the owner proposed)';
+  return 'two different approvers, at least one from Risk';
+}
+
+// Named stakeholders of a capability: the owner, the people in its stakeholder
+// list, and the Risk team. If no stakeholders are named yet, any named person.
+export function namedStakeholders(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  const listed = current(state, capabilityId, 'stakeholders').map((st) => st.person).filter((k) => seed.people[k]);
+  const risk = Object.keys(seed.people).filter((k) => seed.people[k].team === 'Risk');
+  const set = new Set([...(cap ? [cap.owner] : []), ...listed, ...risk]);
+  return listed.length ? [...set] : Object.keys(seed.people);
 }
 
 export function isRiskStakeholder(state, capabilityId, personKey) {
@@ -1374,6 +1397,10 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A proposal needs a reason (a sentence).');
   const clean = cleanAmendmentValue(state, capabilityId, kind, value);
+  if (kind === 'contract') {
+    const blocks = contractValueChecks(state, capabilityId, clean).filter((c) => c.level === 'block');
+    if (blocks.length) throw new Error(`The proposed contract fails ${blocks.length} check${blocks.length === 1 ? '' : 's'}: | ${blocks.map((b) => b.text).join(' | ')}`);
+  }
   if (!needsSignoff(state, capabilityId, kind)) {
     if (kind === 'criteria') return applyCriteriaDirect(state, capabilityId, clean, by, why);
     if (!versionList(state, capabilityId, 'contract').length) throw new Error('Finalize the contract in the builder first.');
@@ -1403,33 +1430,52 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     kind: 'proposal',
     outcome: 'opened',
     title: `Amendment proposed: ${kind === 'contract' ? 'contract' : 'success criteria and evidence requirements'}`,
-    body: `${cap.name}: ${who.name} proposed ${proposal.id} after evidence. Needs ${proposal.required.map(roleLabel).join(' and ')}, not the proposer. Reason: ${why}`,
+    body: `${cap.name}: ${who.name} proposed ${proposal.id} after evidence. Needs ${requirementLabel(proposal.required)}, never the proposer. Reason: ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
   });
 }
 
 export function roleLabel(role) {
-  return role === 'owner' ? 'the owner' : 'a Risk stakeholder';
+  return role === 'owner' ? 'the owner' : role === 'risk' ? 'a Risk stakeholder' : 'a named stakeholder';
 }
 
-// Which required roles the acting person could satisfy on this proposal, and
-// why not if none.
+function roleFor(state, capabilityId, personKey) {
+  const cap = getCapability(state, capabilityId);
+  if (isRiskStakeholder(state, capabilityId, personKey)) return 'risk';
+  if (cap && personKey === cap.owner) return 'owner';
+  return 'stakeholder';
+}
+
+export function approvalsComplete(proposal) {
+  const req = proposal.required;
+  if (proposal.approvals.length < req.approvers) return false;
+  if (req.riskRequired && !proposal.approvals.some((a) => a.role === 'risk')) return false;
+  return true;
+}
+
+// Whether the acting person can approve this proposal now, and why not.
 export function approvalEligibility(state, capabilityId, proposal, personKey) {
   const cap = getCapability(state, capabilityId);
-  if (!proposal || proposal.status !== 'open') return { roles: [], reason: 'This proposal is closed.' };
-  if (!personKey || !seed.people[personKey]) return { roles: [], reason: 'Choose who is acting.' };
-  if (personKey === proposal.proposedBy) return { roles: [], reason: `${seed.people[personKey].name} proposed this; someone else must approve it.` };
-  if (proposal.approvals.some((a) => a.by === personKey)) return { roles: [], reason: `${seed.people[personKey].name} has already approved.` };
-  const done = new Set(proposal.approvals.map((a) => a.role));
-  const roles = [];
-  if (proposal.required.includes('owner') && !done.has('owner') && personKey === cap.owner) roles.push('owner');
-  if (proposal.required.includes('risk') && !done.has('risk') && isRiskStakeholder(state, capabilityId, personKey)) roles.push('risk');
-  if (!roles.length) {
-    const missing = proposal.required.filter((r) => !done.has(r));
-    return { roles: [], reason: `${seed.people[personKey].name} cannot approve this. Still needed: ${missing.map((r) => r === 'owner' ? `the owner (${seed.people[cap.owner].name})` : `a Risk stakeholder (${riskStakeholders(state, capabilityId).map((k) => seed.people[k].name).join(', ') || 'none named'})`).join(' and ')}.` };
+  if (!proposal || proposal.status !== 'open') return { ok: false, role: null, reason: 'This proposal is closed.' };
+  if (!personKey || !seed.people[personKey]) return { ok: false, role: null, reason: 'Choose who is acting.' };
+  const name = seed.people[personKey].name;
+  if (personKey === proposal.proposedBy) return { ok: false, role: null, reason: `${name} proposed this; the proposer never approves.` };
+  if (proposal.approvals.some((a) => a.by === personKey)) return { ok: false, role: null, reason: `${name} has already approved.` };
+  const req = proposal.required;
+  const role = roleFor(state, capabilityId, personKey);
+  if (req.ownerOnly) {
+    if (personKey !== cap.owner) return { ok: false, role: null, reason: `${name} cannot approve this. Needed: the owner (${seed.people[cap.owner].name}).` };
+    return { ok: true, role: 'owner', reason: null };
   }
-  return { roles, reason: null };
+  if (!namedStakeholders(state, capabilityId).includes(personKey)) return { ok: false, role: null, reason: `${name} is not a named stakeholder of ${cap.name}.` };
+  // Last slot on a High/Financial proposal must be Risk if none has signed yet.
+  const remaining = req.approvers - proposal.approvals.length;
+  const riskStill = req.riskRequired && !proposal.approvals.some((a) => a.role === 'risk');
+  if (riskStill && remaining <= 1 && role !== 'risk') {
+    return { ok: false, role: null, reason: `${name} cannot take the last approval: at least one approver must be from Risk (${riskStakeholders(state, capabilityId).map((k) => seed.people[k].name).join(', ') || 'none named'}).` };
+  }
+  return { ok: true, role, reason: null };
 }
 
 export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
@@ -1437,22 +1483,20 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
   const proposal = getProposal(state, capabilityId, proposalId);
   if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
   const e = approvalEligibility(state, capabilityId, proposal, by);
-  if (!e.roles.length) throw new Error(e.reason);
-  // One approval per person; it satisfies one role (owner first), so High
-  // impact always needs two different people.
-  const role = e.roles[0];
-  const approvals = [...proposal.approvals, { by, role, date: state.today }];
-  const complete = proposal.required.every((r) => approvals.some((a) => a.role === r));
+  if (!e.ok) throw new Error(e.reason);
+  const approvals = [...proposal.approvals, { by, role: e.role, date: state.today }];
   let next = { ...proposal, approvals };
   let s = state;
   const who = seed.people[by];
-  if (!complete) {
+  if (!approvalsComplete(next)) {
     s = updateCap(s, capabilityId, { proposals: capData(s, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
+    const left = proposal.required.approvers - approvals.length;
+    const riskStill = proposal.required.riskRequired && !approvals.some((a) => a.role === 'risk');
     return logEvent(s, {
       kind: 'proposal',
       outcome: 'approval',
       title: `Approval recorded on ${proposalId}`,
-      body: `${cap.name}: ${who.name} approved as ${roleLabel(role)}. Still needed: ${proposal.required.filter((r) => !approvals.some((a) => a.role === r)).map(roleLabel).join(' and ')}.`,
+      body: `${cap.name}: ${who.name} approved as ${roleLabel(e.role)}. Still needed: ${left} more approver${left === 1 ? '' : 's'}${riskStill ? ', from Risk' : ''}.`,
       capabilityId,
       link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
     });
@@ -1501,8 +1545,8 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
   if (by === proposal.proposedBy) throw new Error('The proposer withdraws rather than rejects; someone else must reject.');
   const why = (reason || '').trim();
   if (why.length < 10) throw new Error('A rejection needs a reason (a sentence).');
-  const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by);
-  if (!eligible) throw new Error(`${seed.people[by].name} is neither the owner nor a Risk stakeholder.`);
+  const eligible = by === cap.owner || isRiskStakeholder(state, capabilityId, by) || (!proposal.required.ownerOnly && namedStakeholders(state, capabilityId).includes(by));
+  if (!eligible) throw new Error(`${seed.people[by].name} is not eligible to reject this: ${requirementLabel(proposal.required)} decide.`);
   const next = { ...proposal, status: 'rejected', rejection: { by, date: state.today, reason: why }, closedAt: state.today };
   const s = updateCap(state, capabilityId, { proposals: capData(state, capabilityId).proposals.map((p) => (p.id === proposalId ? next : p)) });
   return logEvent(s, {
