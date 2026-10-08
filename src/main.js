@@ -106,12 +106,11 @@ function render() {
   // A demo control: a real version would know who is signed in. Only active
   // people can be chosen.
   acting.innerHTML = String(html`<label class="acting" title="Demo control. A real version would use sign-in; this picker stands in for it so the demo can show different people proposing, approving and authorizing.">
-    <span class="acting-label"><span class="acting-demo">Demo</span> acting as</span>
+    <span class="acting-label">Acting as</span>
     <select data-action="set-acting" aria-label="Demo: acting as">
       <option value="" ${state.actingAs ? '' : 'selected'}>${(roster[defaultOwner] || roster[current]).name} (owner)</option>
       ${Object.entries(activePeople(state)).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
     </select>
-    <span class="acting-help">Stands in for sign-in.</span>
   </label>`);
   acting.dataset.current = current;
 

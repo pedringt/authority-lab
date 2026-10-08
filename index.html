@@ -11,17 +11,22 @@
 <body>
   <a class="skip" href="#app">Skip to content</a>
   <header class="topbar" id="topbar">
-    <div class="brand">
-      <a class="brand-name" href="#/overview">Authority Lab</a>
-      <span class="brand-sep" aria-hidden="true">/</span>
-      <span class="brand-ws">Northstar Support</span>
+    <div class="topbar-row">
+      <div class="brand">
+        <a class="brand-name" href="#/overview">Authority Lab</a>
+        <span class="brand-sep" aria-hidden="true">/</span>
+        <span class="brand-ws">Northstar Support</span>
+      </div>
+      <div class="demo-controls" role="group" aria-label="Demo controls" title="Seeded demo data. No real customers, money or model calls.">
+        <span class="acting-demo">Demo</span>
+        <div id="acting"></div>
+        <span class="demo-sep" aria-hidden="true"></span>
+        <span class="demo-date">Oct 7, 2026</span>
+        <span class="demo-sep" aria-hidden="true"></span>
+        <button class="btn btn-ghost btn-sm" data-action="reset" title="Restore the seeded prototype state">Reset demo</button>
+      </div>
     </div>
     <nav class="nav" id="nav" aria-label="Primary"></nav>
-    <div class="topbar-actions">
-      <div id="acting"></div>
-      <span class="demo-tag" title="Seeded demo data. No real customers, money or model calls.">Demo · Oct 7, 2026</span>
-      <button class="btn btn-ghost btn-sm" data-action="reset" title="Restore the seeded prototype state">Reset demo</button>
-    </div>
   </header>
   <main class="app" id="app" tabindex="-1"></main>
   <footer class="foot">
