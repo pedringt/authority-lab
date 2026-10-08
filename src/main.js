@@ -156,27 +156,39 @@ function restoreForms(saved) {
 // Events
 // ---------------------------------------------------------------------------
 
+// Run a store action. If it throws, show the message inline on `errorRoute`
+// (as ?error=...), or in an alert when there is no route to show it on.
+// Anything the action does on success (navigating, clearing a stale
+// ?error=, re-rendering) stays inside `fn`.
+function dispatchOr(errorRoute, fn) {
+  try { fn(); }
+  catch (err) {
+    if (errorRoute) location.hash = `${errorRoute}?error=${encodeURIComponent(err.message)}`;
+    else alert(err.message);
+  }
+}
+
+// On success, drop a stale ?error= (or ?edit=) by going back to `route`.
+function clearErrorOn(route, ...params) {
+  if (params.some((p) => location.hash.includes(`?${p}=`))) location.hash = route;
+}
+
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.tagName === 'INPUT' || btn.tagName === 'TEXTAREA') return;
   const action = btn.dataset.action;
   const capId = btn.dataset.capability;
-  if (action === 'run-tests') { try { runSuite(capId); } catch (err) { alert(err.message); } }
+  if (action === 'run-tests') dispatchOr(null, () => runSuite(capId));
   if (action === 'simulate-breach') store.dispatch('simulateBreach', capId);
   if (action === 'authorize') {
-    try {
+    dispatchOr(null, () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
       const rec = capData(store.get(), capId).decision.recordId;
       location.hash = `#/decisions/${rec}`;
-    } catch (err) {
-      alert(err.message);
-    }
+    });
   }
   const builder = () => `#/capabilities/${capId}/contract/build`;
-  const tryDispatch = (fn) => {
-    try { fn(); if (location.hash.includes('?error=') || location.hash.includes('?edit=')) location.hash = builder(); }
-    catch (err) { location.hash = `${builder()}?error=${encodeURIComponent(err.message)}`; }
-  };
+  const tryDispatch = (fn) => dispatchOr(builder(), () => { fn(); clearErrorOn(builder(), 'error', 'edit'); });
   if (action === 'contract-start') tryDispatch(() => store.dispatch('startContractDraft', capId, { by: actor(store.get(), capId) }));
   if (action === 'suggestion-accept') tryDispatch(() => store.dispatch('reviewSuggestion', capId, btn.dataset.line, { decision: 'accept' }));
   if (action === 'suggestion-reject') tryDispatch(() => store.dispatch('reviewSuggestion', capId, btn.dataset.line, { decision: 'reject' }));
@@ -188,24 +200,22 @@ document.addEventListener('click', (e) => {
     if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=contract`;
   }
   if (action === 'starter-add') {
-    try { store.dispatch('addStarterScenarios', capId, { by: actor(store.get(), capId) }); if (location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}/scenarios/edit`; }
-    catch (err) { location.hash = `#/capabilities/${capId}/scenarios/edit?error=${encodeURIComponent(err.message)}`; }
+    const route = `#/capabilities/${capId}/scenarios/edit`;
+    dispatchOr(route, () => { store.dispatch('addStarterScenarios', capId, { by: actor(store.get(), capId) }); clearErrorOn(route, 'error'); });
     return;
   }
   if (action === 'propose-authority') {
-    try { store.dispatch('proposeAuthority', capId, Number(btn.dataset.level), { by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}/decision`; }
-    catch (err) { alert(err.message); }
+    dispatchOr(null, () => { store.dispatch('proposeAuthority', capId, Number(btn.dataset.level), { by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}/decision`; });
     return;
   }
   if (action === 'approve-roster') {
-    try { store.dispatch('approveRosterChange', btn.dataset.proposal, { by: actor(store.get()) }); location.hash = `#/people?proposal=${btn.dataset.proposal}`; render(); }
-    catch (err) { location.hash = `#/people?error=${encodeURIComponent(err.message)}`; }
+    dispatchOr('#/people', () => { store.dispatch('approveRosterChange', btn.dataset.proposal, { by: actor(store.get()) }); location.hash = `#/people?proposal=${btn.dataset.proposal}`; render(); });
     return;
   }
   if (action === 'proposal-approve') {
     const pid = btn.dataset.proposal;
-    try { store.dispatch('approveProposal', capId, pid, { by: actor(store.get(), capId) }); if (location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}/proposals/${pid}`; }
-    catch (err) { location.hash = `#/capabilities/${capId}/proposals/${pid}?error=${encodeURIComponent(err.message)}`; }
+    const route = `#/capabilities/${capId}/proposals/${pid}`;
+    dispatchOr(route, () => { store.dispatch('approveProposal', capId, pid, { by: actor(store.get(), capId) }); clearErrorOn(route, 'error'); });
     return;
   }
   if (action === 'row-add') {
@@ -251,7 +261,7 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = new FormData(personForm);
     const by = actor(store.get());
-    try {
+    dispatchOr('#/people', () => {
       if (personForm.dataset.form === 'add-person') store.dispatch('addPerson', { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
       else if (personForm.dataset.form === 'edit-person') store.dispatch('editPerson', personForm.dataset.person, { name: f.get('name'), title: f.get('title'), team: f.get('team'), by, reason: f.get('reason') });
       else {
@@ -262,9 +272,7 @@ document.addEventListener('submit', (e) => {
       }
       location.hash = '#/people';
       render();
-    } catch (err) {
-      location.hash = `#/people?error=${encodeURIComponent(err.message)}`;
-    }
+    });
     return;
   }
   const rosterForm = e.target.closest('[data-form="propose-roster"], [data-form="reject-roster"], [data-form="withdraw-roster"]');
@@ -272,7 +280,7 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = new FormData(rosterForm);
     const by = actor(store.get());
-    try {
+    dispatchOr('#/people', () => {
       if (rosterForm.dataset.form === 'propose-roster') {
         store.dispatch('proposeRosterChange', { kind: 'rights', person: rosterForm.dataset.person, right: rosterForm.dataset.right, grant: rosterForm.dataset.grant === '1', by, reason: f.get('reason') });
         const list = store.get().rosterProposals;
@@ -284,9 +292,7 @@ document.addEventListener('submit', (e) => {
         store.dispatch('withdrawRosterChange', rosterForm.dataset.proposal, { by, reason: f.get('reason') });
         location.hash = `#/people?proposal=${rosterForm.dataset.proposal}`; render();
       }
-    } catch (err) {
-      location.hash = `#/people?error=${encodeURIComponent(err.message)}`;
-    }
+    });
     return;
   }
   const proposeForm = e.target.closest('[data-form="propose-criteria"], [data-form="propose-contract"]');
@@ -297,14 +303,12 @@ document.addEventListener('submit', (e) => {
     const value = kind === 'contract'
       ? Object.fromEntries([...proposeForm.querySelectorAll('textarea')].map((t) => [t.name, t.value.split('\n')]))
       : readCriteriaRows(proposeForm);
-    try {
+    dispatchOr(`#/capabilities/${capId}/amend/${kind}`, () => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('proposeAmendment', capId, kind, { value, by: actor(store.get(), capId), reason: proposeForm.reason.value });
       const after = capData(store.get(), capId).proposals;
       location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=${kind === 'contract' ? 'contract' : 'criteria'}`;
-    } catch (err) {
-      location.hash = `#/capabilities/${capId}/amend/${kind}?error=${encodeURIComponent(err.message)}`;
-    }
+    });
     return;
   }
   const stForm = e.target.closest('[data-form="save-stakeholders"]');
@@ -314,13 +318,12 @@ document.addEventListener('submit', (e) => {
     const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
     // Keep the recorded position text unless the stance was changed.
     const stakeholders = [...stForm.querySelectorAll('[data-rows="stakeholders"] tr')].map((tr) => ({ team: val(tr, 's-team'), person: val(tr, 's-person'), stance: val(tr, 's-stance'), position: val(tr, 's-stance') === val(tr, 's-stance-was') ? val(tr, 's-position') : '', quote: val(tr, 's-quote') }));
-    try {
+    dispatchOr(`#/capabilities/${capId}/stakeholders/edit`, () => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) });
       const after = capData(store.get(), capId).proposals;
       location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=stakeholders`;
-    }
-    catch (err) { location.hash = `#/capabilities/${capId}/stakeholders/edit?error=${encodeURIComponent(err.message)}`; }
+    });
     return;
   }
   const scForm = e.target.closest('[data-form="save-scenarios"]');
@@ -329,8 +332,7 @@ document.addEventListener('submit', (e) => {
     const capId = parseRoute().parts[1];
     const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
     const scenarios = [...scForm.querySelectorAll('[data-rows="scenarios"] tr')].map((tr) => ({ id: val(tr, 'sc-id') || undefined, source: val(tr, 'sc-source'), group: val(tr, 'sc-group'), name: val(tr, 'sc-name'), situation: val(tr, 'sc-situation'), expected: val(tr, 'sc-expected') }));
-    try { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/tests?capability=${capId}`; }
-    catch (err) { location.hash = `#/capabilities/${capId}/scenarios/edit?error=${encodeURIComponent(err.message)}`; }
+    dispatchOr(`#/capabilities/${capId}/scenarios/edit`, () => { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/tests?capability=${capId}`; });
     return;
   }
   const withdrawForm = e.target.closest('[data-form="withdraw-proposal"]');
@@ -338,8 +340,8 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const capId = parseRoute().parts[1];
     const pid = withdrawForm.dataset.proposal;
-    try { store.dispatch('withdrawProposal', capId, pid, { by: actor(store.get(), capId), reason: withdrawForm.reason.value }); location.hash = `#/capabilities/${capId}/proposals/${pid}`; render(); }
-    catch (err) { location.hash = `#/capabilities/${capId}/proposals/${pid}?error=${encodeURIComponent(err.message)}`; }
+    const route = `#/capabilities/${capId}/proposals/${pid}`;
+    dispatchOr(route, () => { store.dispatch('withdrawProposal', capId, pid, { by: actor(store.get(), capId), reason: withdrawForm.reason.value }); location.hash = route; render(); });
     return;
   }
   const rejectForm = e.target.closest('[data-form="reject-proposal"]');
@@ -347,8 +349,8 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const capId = parseRoute().parts[1];
     const pid = rejectForm.dataset.proposal;
-    try { store.dispatch('rejectProposal', capId, pid, { by: actor(store.get(), capId), reason: rejectForm.reason.value }); location.hash = `#/capabilities/${capId}/proposals/${pid}`; render(); }
-    catch (err) { location.hash = `#/capabilities/${capId}/proposals/${pid}?error=${encodeURIComponent(err.message)}`; }
+    const route = `#/capabilities/${capId}/proposals/${pid}`;
+    dispatchOr(route, () => { store.dispatch('rejectProposal', capId, pid, { by: actor(store.get(), capId), reason: rejectForm.reason.value }); location.hash = route; render(); });
     return;
   }
   const critForm = e.target.closest('[data-form="save-criteria"]');
@@ -356,12 +358,10 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const capId = parseRoute().parts[1];
     const { criteria, requirements } = readCriteriaRows(critForm);
-    try {
+    dispatchOr(`#/capabilities/${capId}/criteria/edit`, () => {
       store.dispatch('saveCriteria', capId, { criteria, requirements, by: actor(store.get(), capId), reason: critForm.reason.value });
       location.hash = `#/capabilities/${capId}?tab=criteria`;
-    } catch (err) {
-      location.hash = `#/capabilities/${capId}/criteria/edit?error=${encodeURIComponent(err.message)}`;
-    }
+    });
     return;
   }
   const lineForm = e.target.closest('[data-form^="add-line-"], [data-form="edit-line"]');
@@ -370,13 +370,11 @@ document.addEventListener('submit', (e) => {
     const capId = parseRoute().parts[1];
     const text = new FormData(lineForm).get('text');
     const builder = `#/capabilities/${capId}/contract/build`;
-    try {
+    dispatchOr(builder, () => {
       if (lineForm.dataset.form === 'edit-line') store.dispatch('editContractLine', capId, lineForm.dataset.line, text);
       else store.dispatch('addContractLine', capId, lineForm.dataset.section, text);
       if (location.hash !== builder) location.hash = builder; else render();
-    } catch (err) {
-      location.hash = `${builder}?error=${encodeURIComponent(err.message)}`;
-    }
+    });
     return;
   }
   const form = e.target.closest('[data-form="add-capability"]');
@@ -384,7 +382,7 @@ document.addEventListener('submit', (e) => {
   e.preventDefault();
   const f = new FormData(form);
   const starting = f.get('starting');
-  try {
+  dispatchOr('#/capabilities/new', () => {
     const before = store.get().capabilities.length;
     store.dispatch('addCapability', {
       name: f.get('name'),
@@ -398,9 +396,7 @@ document.addEventListener('submit', (e) => {
     });
     const added = store.get().capabilities[before];
     location.hash = `#/capabilities/${added.id}/setup`;
-  } catch (err) {
-    location.hash = `#/capabilities/new?error=${encodeURIComponent(err.message)}`;
-  }
+  });
 });
 
 document.addEventListener('input', (e) => {
