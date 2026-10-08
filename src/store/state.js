@@ -22,6 +22,8 @@ export function emptyCapabilityData() {
     // Simulated readings for the contract's restriction rules, keyed by the
     // rule's line (#49). Empty until something is measured.
     ruleReadings: {},
+    // Incidents opened by a contract's incident rules (#50). Never removed.
+    ruleIncidents: [],
     reviewRequired: false,
     // Contract builder draft (#5). null until started; kept after finalize so
     // the review (including rejected suggestions) stays on record.

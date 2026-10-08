@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, levelName } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -284,33 +284,35 @@ function rulesCard(state, cap) {
 
 function monitoringTab(state, cap, d) {
   const m = d.monitoring;
-  if (!m) {
-    const st = monitoringStatus(state, cap.id);
-    const applying = st.rules.filter((r) => r.active).length;
-    const head = !st.rules.length
-      ? notice('neutral', 'Nothing to monitor', `${cap.name}'s contract has no automatic restriction lines.`)
-      : st.running
-        ? notice('pass', 'Monitoring is running', `${applying} of ${st.rules.length} restriction rule${st.rules.length === 1 ? '' : 's'} appl${applying === 1 ? 'ies' : 'y'} to ${cap.name} at ${authorityLabel(cap.authority)}. Software checks ${applying === 1 ? 'it' : 'them'} against the readings below.`)
-        : notice('neutral', 'No restriction rule applies yet', `${cap.name} is at ${authorityLabel(cap.authority)}. Its rules apply once it is above the level they return it to.`);
-    return html`${head}${rulesCard(state, cap)}`;
-  }
-  const pct = Math.round((m.severeErrorsInWindow / m.rollingWindow) * 1000) / 10;
-  return html`
-    ${m.breached
-      ? notice('fail', 'Authority automatically restricted', `Severe error rate reached ${pct}% across the rolling ${m.rollingWindow}-case window, above the ${m.thresholdPct}% limit. ${cap.name} returned to ${authorityLabel(cap.authority)}. A human review is required before authority can expand again.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Restriction record' })
-      : notice('pass', `Expanded ${m.windowDays} days ago (simulated)`, `Authority change ${m.recordId} is in its monitoring period. The restriction rules below are enforced by software; nobody has to notice a problem for them to fire.`, { link: `#/decisions/${m.recordId}`, linkText: 'Decision record' })}
-    <div class="metric-grid metric-grid-4">
+  const st = monitoringStatus(state, cap.id);
+  const applying = st.rules.filter((r) => r.active).length;
+  const demo = breachRule(state, cap.id);
+  const head = m && m.breached
+    ? notice('fail', 'Authority automatically restricted', `${cap.name} returned to ${authorityLabel(cap.authority)}. The contract rule was crossed: ${m.reading}. A human review is required before authority can expand again.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Restriction record' })
+    : m && m.recordId
+      ? notice('pass', `Expanded ${m.windowDays} days ago (simulated)`, `Authority change ${m.recordId} is in its monitoring period. The restriction rules below are enforced by software; nobody has to notice a problem for them to fire.`, { link: `#/decisions/${m.recordId}`, linkText: 'Decision record' })
+      : !st.rules.length
+        ? notice('neutral', 'Nothing to monitor', `${cap.name}'s contract has no automatic restriction lines.`)
+        : st.running
+          ? notice('pass', 'Monitoring is running', `${applying} of ${st.rules.length} restriction rule${st.rules.length === 1 ? '' : 's'} appl${applying === 1 ? 'ies' : 'y'} to ${cap.name} at ${authorityLabel(cap.authority)}. Software checks ${applying === 1 ? 'it' : 'them'} against the readings below.`)
+          : notice('neutral', 'No restriction rule applies yet', `${cap.name} is at ${authorityLabel(cap.authority)}. Its rules apply once it is above the level they return it to.`);
+  const metrics = m && m.autonomousActions != null ? html`<div class="metric-grid metric-grid-4">
       <div class="metric card"><div class="metric-top"><span class="metric-label">Autonomous actions</span></div><div class="metric-value">${m.autonomousActions}</div></div>
       <div class="metric card"><div class="metric-top"><span class="metric-label">Escalated to a human</span></div><div class="metric-value">${m.escalated}</div></div>
       <div class="metric card"><div class="metric-top"><span class="metric-label">Human reversals</span></div><div class="metric-value">${m.reversals}</div></div>
       <div class="metric card"><div class="metric-top"><span class="metric-label">Incidents</span>${m.incidents ? badge('fail') : badge('pass')}</div><div class="metric-value">${m.incidents}</div></div>
-    </div>
-    ${rulesCard(state, cap)}
-    <div class="card rule-card ${m.breached ? 'is-breached' : ''}">
-      ${m.breached
-        ? html`<p class="eyebrow">What fired</p><p>${m.rule}</p><ul class="plain-list"><li class="muted small">Errors in the window:</li>${m.errors.map((e) => html`<li>${e}</li>`)}</ul>
-          <p class="muted small">What happened when the rule fired: the metric crossed the threshold, the capability changed from autonomous to approval-required, a system event and a restriction record were created, the Overview shows an alert, and the Activity history records why.</p>`
-        : html`<p class="eyebrow">Demo control</p><p class="muted small">This injects severe errors into the rolling window to show what the rule does.</p>
-          <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">Simulate threshold breach</button>`}
-    </div>`;
+    </div>` : '';
+  const incidents = d.ruleIncidents || [];
+  const fired = m && m.breached
+    ? html`<div class="card rule-card is-breached"><p class="eyebrow">What fired</p><p>${m.rule}</p><ul class="plain-list"><li class="muted small">What went wrong:</li>${m.errors.map((e) => html`<li>${e}</li>`)}</ul>
+        <p class="muted small">What happened when the rule fired: the reading crossed the contract's limit, ${cap.name} moved to ${levelName(cap.authority.level)}, a system event and a restriction record were created, the Overview shows an alert, and the Activity history records why.</p></div>`
+    : '';
+  const opened = incidents.length
+    ? html`<div class="card rule-card is-breached"><p class="eyebrow">Incidents opened by a contract rule</p>${incidents.map((x) => html`<p><strong>${x.incidentId}</strong>, ${fmtDate(x.date)}: ${x.errors.join(' ')} <span class="muted small">Authority unchanged.</span></p>`)}</div>`
+    : '';
+  const control = demo
+    ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
+        <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
+    : '';
+  return html`${head}${metrics}${rulesCard(state, cap)}${fired}${opened}${control}`;
 }

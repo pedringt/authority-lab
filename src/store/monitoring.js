@@ -2,7 +2,7 @@
 // breach, and the automatic restriction it triggers.
 
 import { getCapability, capData, updateCap } from './state.js';
-import { versionsInForce, authorityLabel, current, currentVersion } from './selectors.js';
+import { versionsInForce, authorityLabel, current, currentVersion, levelName } from './selectors.js';
 import { snapshotPerson } from './people.js';
 
 // Restriction rules come from the contract's "Automatic restriction" lines
@@ -68,22 +68,66 @@ export function monitoringStatus(state, capabilityId) {
   return { running: rules.some((r) => r.active), rules };
 }
 
-export function simulateBreach(state, capabilityId) {
+// How a reading reads against its rule: "6% across the rolling 50-case window
+// (limit 5%)", "2 in 7 days (limit 2)".
+export function readingText(rule, value) {
+  const t = rule.threshold;
+  const w = rule.window || {};
+  const span = w.cases ? ` across the rolling ${w.cases}-case window` : w.days ? ` over ${w.days} days` : '';
+  return t && t.type === 'pct' ? `${value}%${span} (limit ${t.value}%)` : `${value}${w.days ? ` in ${w.days} days` : span} (limit ${t ? t.value : '?'})`;
+}
+
+const FALLBACK_SCOPE = {
+  0: 'Observe. The AI produces no operational output until a review is recorded.',
+  1: 'Recommend. The AI only recommends; a person decides every case until a review is recorded.',
+  2: 'Draft. Every decision requires human approval until a review is recorded.',
+  3: 'Act Within Limits. Automatic action only inside the recorded conditions until a review is recorded.',
+};
+
+// The demo breach for a seeded capability: the seeded breach names the
+// contract rule it crosses and the reading that crosses it (#50). Capabilities
+// added in the demo have no seeded breach, so nothing to simulate.
+export function breachRule(state, capabilityId) {
   const d = capData(state, capabilityId);
-  if (!d.monitoring || d.monitoring.breached) return state;
+  if (!d.breach || !d.breach.rule) return null;
+  if ((d.monitoring && d.monitoring.breached) || (d.ruleIncidents || []).some((x) => x.rule === d.breach.rule)) return null;
+  const rule = monitoringStatus(state, capabilityId).rules.find((r) => r.text === d.breach.rule);
+  return rule && rule.active ? rule : null;
+}
+
+// Cross a contract rule. A restriction rule moves the capability to the level
+// its line names (one level down if none), writes an automatic decision
+// record, an alert, an incident and activity, and requires a review before
+// authority can expand again. An incident rule opens an incident and leaves
+// authority alone.
+export function simulateBreach(state, capabilityId) {
+  const rule = breachRule(state, capabilityId);
+  if (!rule) return state;
+  const d = capData(state, capabilityId);
   const cap = getCapability(state, capabilityId);
-  const previous = { ...cap.authority };
-  const next = { level: 2, limited: false };
   const m = d.monitoring;
-  const breach = d.breach || {
-    severeErrorsInWindow: Math.floor((m.thresholdPct / 100) * m.rollingWindow) + 1,
-    errors: ['Severe errors injected by the demo control.'],
-  };
-  const errors = breach.severeErrorsInWindow;
-  const pct = Math.round((errors / m.rollingWindow) * 1000) / 10;
+  const breach = d.breach;
+  // The rolling-window rule counts severe errors in the live window.
+  const windowed = m && rule.window && rule.window.cases === m.rollingWindow && breach.severeErrorsInWindow;
+  const value = windowed ? Math.round((breach.severeErrorsInWindow / m.rollingWindow) * 1000) / 10 : breach.value;
+  const reading = readingText(rule, value);
+  const contractV = rule.contractVersion ? `contract v${rule.contractVersion}` : 'the contract';
+  const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
+  const incidentId = `INC-${String(incidentNumber).padStart(2, '0')}`;
+  const evidenceId = `EV-${String(d.evidence.length + 1).padStart(2, '0')}`;
+  const ruleReadings = { ...(d.ruleReadings || {}), [rule.text]: value };
+
+  if (rule.kind === 'incident') {
+    const evidence = [{ id: evidenceId, source: 'Incident', metric: `${incidentId}: contract rule triggered`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `${breach.errors.join(' ')} The contract rule "${rule.text}" opened this incident. Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
+    const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'Incident opened by a contract rule', body: `${cap.name}: ${breach.errors.join(' ')} Authority unchanged.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
+    const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: breach.errors }] });
+    return { ...s, activity };
+  }
+
+  const previous = { ...cap.authority };
+  const next = { level: rule.fallback, limited: false };
   const number = state.decisionRecords.length + 1;
   const id = `AC-${String(number).padStart(2, '0')}`;
-
   const record = {
     id,
     number,
@@ -98,86 +142,47 @@ export function simulateBreach(state, capabilityId) {
     authorizedBy: 'system',
     authorizedByAt: null,
     versions: versionsInForce(state, capabilityId),
-    scope: 'Draft. Every decision requires human approval until a review is recorded.',
-    rationale: `Automatic restriction. Severe error rate reached ${pct}% across the rolling ${m.rollingWindow}-case window, above the ${m.thresholdPct}% limit set in authority change ${m.recordId}. No human authorized this change; the rule was authorized in advance.`,
+    scope: FALLBACK_SCOPE[next.level],
+    rationale: `Automatic restriction. The contract rule "${rule.text}" was crossed: ${reading}. The rule was agreed in ${contractV}${m && m.recordId ? ` and in force since authority change ${m.recordId}` : ''}. No human authorized this change; the rule was authorized in advance.`,
     evidenceSnapshot: [
-      `${errors} severe errors in the last ${m.rollingWindow} autonomous cases (${pct}%)`,
-      `${m.autonomousActions + 7} autonomous actions since expansion`,
-      `Threshold: ${m.thresholdPct}%`,
+      ...(windowed ? [`${breach.severeErrorsInWindow} severe errors in the last ${m.rollingWindow} autonomous cases (${value}%)`, `${m.autonomousActions + 7} autonomous actions since expansion`] : [`Reading: ${reading}`]),
+      `Rule: ${rule.text}`,
     ],
     openCondition: 'Human review required before authority can expand again.',
     conditions: null,
   };
-
   const alert = {
     id: `ALERT-${Date.now()}`,
     date: state.today,
     severity: 'high',
     capabilityId: cap.id,
     title: 'Authority automatically restricted',
-    body: `${cap.name} returned to Draft. Severe error rate reached ${pct}% in the rolling ${m.rollingWindow}-case window (limit ${m.thresholdPct}%). A human review is required before authority can expand again.`,
+    body: `${cap.name} returned to ${levelName(next.level)}. Reading ${reading}. A human review is required before authority can expand again.`,
     link: `#/capabilities/${cap.id}?tab=monitoring`,
   };
-
   const activity = [
-    {
-      id: `ACT-${Date.now()}-b`,
-      date: state.today,
-      kind: 'restriction',
-      surfaced: true,
-      title: 'Authority automatically restricted',
-      body: `Severe error rate exceeded the allowed threshold (${pct}% against ${m.thresholdPct}% across ${m.rollingWindow} cases). ${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)} by rule. Review item opened.`,
-      capabilityId: cap.id,
-      link: `#/decisions/${id}`,
-    },
-    {
-      id: `ACT-${Date.now()}-a`,
-      date: state.today,
-      kind: 'failure',
-      surfaced: true,
-      title: 'Monitoring threshold breached',
-      body: `${errors} severe errors recorded in the rolling ${m.rollingWindow}-case window after expansion.`,
-      capabilityId: cap.id,
-      link: `#/capabilities/${cap.id}?tab=monitoring`,
-    },
+    { id: `ACT-${Date.now()}-b`, date: state.today, kind: 'restriction', surfaced: true, title: 'Authority automatically restricted', body: `The contract rule was crossed: ${reading}. ${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)} by rule. Review item opened.`, capabilityId: cap.id, link: `#/decisions/${id}` },
+    { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'Monitoring threshold breached', body: `${cap.name}: ${reading}. ${breach.errors.length} error${breach.errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` },
     ...state.activity,
   ];
-
-  const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
   const evidence = [
-    {
-      id: `EV-${String(d.evidence.length + 1).padStart(2, '0')}`,
-      source: 'Incident',
-      metric: `INC-${String(incidentNumber).padStart(2, '0')}: monitoring threshold breached`,
-      value: `${pct}% severe errors in rolling ${m.rollingWindow}`,
-      status: 'fail',
-      risk: 'High',
-      segment: 'Standard',
-      date: state.today,
-      detail: `${errors} severe errors in the rolling ${m.rollingWindow}-case window after expansion. ${breach.errors.join(' ')} Authority was returned to Draft automatically.`,
-      link: `#/decisions/${id}`,
-    },
+    { id: evidenceId, source: 'Incident', metric: `${incidentId}: monitoring threshold breached`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${breach.errors.join(' ')} Authority was returned to ${levelName(next.level)} automatically.`, link: `#/decisions/${id}` },
     ...d.evidence,
   ];
-
-  const capabilities = state.capabilities.map((c) =>
-    c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c
-  );
-
-  const windowRule = restrictionRules(state, capabilityId).find((r) => r.window && r.window.cases === m.rollingWindow && r.threshold && r.threshold.type === 'pct');
+  const capabilities = state.capabilities.map((c) => (c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c));
   const s = updateCap(state, capabilityId, {
     evidence,
-    ruleReadings: windowRule ? { ...(d.ruleReadings || {}), [windowRule.text]: pct } : d.ruleReadings,
+    ruleReadings,
     reviewRequired: true,
     monitoring: {
-      ...m,
+      ...(m || {}),
       breached: true,
-      severeErrorsInWindow: errors,
-      autonomousActions: m.autonomousActions + 7,
-      incidents: (m.incidents || 0) + 1,
+      rule: rule.text,
+      reading,
       errors: breach.errors,
       breachedAt: state.today,
       breachRecordId: id,
+      ...(windowed ? { severeErrorsInWindow: breach.severeErrorsInWindow, autonomousActions: m.autonomousActions + 7, incidents: (m.incidents || 0) + 1 } : {}),
     },
   });
   return { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity, alerts: [alert, ...state.alerts] };
