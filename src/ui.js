@@ -1,7 +1,7 @@
 // Small rendering helpers. `html` escapes interpolated values; wrap trusted
 // markup in `raw()` to pass it through. Arrays are joined.
 
-import { STATUS_LABELS, AUTHORITY_LEVELS, people as seedPeople } from './data/seed.js';
+import { STATUS_LABELS, AUTHORITY_LEVELS, TODAY, people as seedPeople } from './data/seed.js';
 import { authorityLabel } from './store/index.js';
 
 export function esc(value) {
@@ -35,16 +35,16 @@ export function html(strings, ...values) {
   return new Raw(out);
 }
 
+// One date format everywhere: "Oct 7", with the year only when it is not the
+// current year ("Dec 12, 2025"). The current year is the workspace's today,
+// which main.js sets from state on every render.
+let today = TODAY;
+export function setToday(iso) { today = iso || TODAY; }
+
 export function fmtDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[m - 1]} ${d}`;
-}
-
-export function fmtDateYear(iso) {
-  const [y, m, d] = iso.split('-').map(Number);
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  return `${months[m - 1]} ${d}, ${y}`;
+  return y === Number(today.slice(0, 4)) ? `${months[m - 1]} ${d}` : `${months[m - 1]} ${d}, ${y}`;
 }
 
 // The roster the helpers resolve people against. main.js sets it from state
@@ -106,9 +106,20 @@ export function capStatusBadge(status) {
   return badge(tone, label);
 }
 
+// The tooltip on every authority level: what the level lets the AI do.
+export function levelTip(level) {
+  const l = AUTHORITY_LEVELS[level];
+  return l ? `Level ${l.level}, ${l.name}: ${l.description}` : '';
+}
+
+// An authority label in running text or a table cell, with the level tooltip.
+export function authorityText(auth, opts) {
+  return html`<span class="has-tip" title="${levelTip(auth.level)}">${authorityLabel(auth, opts)}</span>`;
+}
+
 export function authorityBadge(auth) {
   const tone = auth.level >= 3 ? 'authority-act' : auth.level === 0 ? 'authority-none' : 'authority-human';
-  return html`<span class="authority ${tone}" title="${AUTHORITY_LEVELS[auth.level].description}">${authorityLabel(auth)}</span>`;
+  return html`<span class="authority ${tone}" title="${levelTip(auth.level)}">${authorityLabel(auth)}</span>`;
 }
 
 export function levelScale(current, proposed) {
@@ -119,7 +130,7 @@ export function levelScale(current, proposed) {
       proposed && l.level === proposed.level ? 'is-proposed' : '',
       current && l.level < current.level ? 'is-below' : '',
     ].join(' ');
-    return html`<li class="${cls}"><span class="level-num">L${l.level}</span><span class="level-name">${l.name}</span>${
+    return html`<li class="${cls}" title="${levelTip(l.level)}"><span class="level-num">L${l.level}</span><span class="level-name">${l.name}</span>${
       current && l.level === current.level ? html`<span class="level-tag">Current</span>` : ''
     }${proposed && l.level === proposed.level && (!current || current.level !== l.level) ? html`<span class="level-tag level-tag-proposed">Proposed</span>` : ''}</li>`;
   })}</ol>`;

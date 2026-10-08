@@ -1,4 +1,4 @@
-import { html, badge, fmtDateYear, person, personAt, rightsNote, empty, kv } from '../ui.js';
+import { html, badge, fmtDate, person, personAt, rightsNote, empty, kv } from '../ui.js';
 import { getCapability, versionList, VERSIONED_KINDS, KIND_LABELS } from '../store/index.js';
 import { diffTable, deviationsView } from './activity.js';
 import { contractReviewView } from './contract.js';
@@ -21,7 +21,7 @@ export function versionsView(state, capabilityId, query) {
         <div class="version-badges">${v.version === versions[0].version ? badge('pass', 'Current') : ''}${v.afterEvidence ? badge('watch', 'After evidence') : ''}</div>
       </div>
       ${kv([
-        ['Written', fmtDateYear(v.date)],
+        ['Written', fmtDate(v.date)],
         ['Author', html`${who.name}${who.role ? html`, ${who.role}` : ''}${rightsNote(v.authorAt)}${v.approvals ? html`<div class="muted small">Approved by ${v.approvals.map((a, i) => html`${i ? ', ' : ''}${personAt(a.byAt, a.by).name}${a.role ? ` (as ${a.role === 'risk' ? 'Risk approver' : a.role === 'owner' ? 'owner' : 'stakeholder'})` : ''}${rightsNote(a.byAt)}`)}</div>` : ''}`],
         ['Reason', v.reason],
       ])}

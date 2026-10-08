@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, fmtDateYear } from '../ui.js';
+import { html, raw, badge, notice, section, person, fmtDate } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS } from '../store/index.js';
 import { diffTable } from './activity.js';
 
@@ -98,7 +98,7 @@ export function contractBuilderView(state, capabilityId, query) {
     </div>
     <div class="card authorize">
       <p class="eyebrow">Human finalization</p>
-      <p class="muted small">Finalizing as <strong>${acting.name}</strong>, ${acting.role}, creates contract v1 for ${cap.name}, dated ${fmtDateYear(state.today)}. The contract is enforced by software; later changes are amendments with their own record. This does not change authority: ${cap.name} stays at its current level until a decision is authorized.</p>
+      <p class="muted small">Finalizing as <strong>${acting.name}</strong>, ${acting.role}, creates contract v1 for ${cap.name}, dated ${fmtDate(state.today)}. The contract is enforced by software; later changes are amendments with their own record. This does not change authority: ${cap.name} stays at its current level until a decision is authorized.</p>
       ${can.ok ? '' : html`<ul class="plain-list form-error">${can.blocks.map((b) => html`<li>${b.text}</li>`)}</ul>`}
       <button class="btn btn-primary btn-block" data-action="contract-finalize" data-capability="${cap.id}" ${can.ok ? '' : raw('disabled')}>Finalize contract v1</button>
     </div>`, { subtitle: `${warns.length ? `${warns.length} warning${warns.length === 1 ? '' : 's'} do not block.` : ''}` })}`;

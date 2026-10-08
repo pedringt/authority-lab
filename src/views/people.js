@@ -1,4 +1,4 @@
-import { html, raw, badge, notice, section, person, personAt, fmtDateYear, fmtDate, kv } from '../ui.js';
+import { html, raw, badge, notice, section, person, personAt, fmtDate, kv } from '../ui.js';
 import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings } from '../store/index.js';
 import { diffTable } from './activity.js';
 
@@ -113,7 +113,7 @@ export function peopleView(state, query) {
     <button class="btn btn-primary" type="submit">Add person</button>
   </div></form>`) : ''}
   ${section('Roster history', html`${versions.map((v) => html`<article class="card version"><div class="version-head"><div><span class="eyebrow">Roster · version ${v.version}</span><h3>${v.version === 1 ? 'Seed roster' : v.reason}</h3></div></div>
-    ${kv([['Written', fmtDateYear(v.date)], ['By', v.author ? html`${personAt(v.authorAt, v.author).name}${v.approvals ? html` · approved by ${v.approvals.map((a) => personAt(a.byAt, a.by).name).join(', ')}` : ''}` : 'Seed'], ['Reason', v.reason]])}
+    ${kv([['Written', fmtDate(v.date)], ['By', v.author ? html`${personAt(v.authorAt, v.author).name}${v.approvals ? html` · approved by ${v.approvals.map((a) => personAt(a.byAt, a.by).name).join(', ')}` : ''}` : 'Seed'], ['Reason', v.reason]])}
     ${v.version > 1 ? html`<h4 class="version-sub">What changed from v${v.version - 1}</h4>${diffTable(flatten(v.before), flatten(v.value))}` : ''}
   </article>`)}`, { subtitle: 'Every change is a new version with its author and reason.' })}`;
 }
@@ -131,7 +131,7 @@ function rosterProposals(state, acting, focusId) {
     const e = rosterApprovalEligibility(state, pr, acting);
     const status = pr.status === 'open' ? badge('decision', 'Awaiting sign-off') : pr.status === 'approved' ? badge('pass', 'Approved and applied') : pr.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected');
     return html`<article class="card roster-proposal ${pr.id === focusId ? 'is-highlight' : ''}" id="${pr.id}">
-      <div class="version-head"><div><span class="eyebrow">${pr.id} · ${fmtDateYear(pr.date)}</span><h3>${describe(pr)}</h3></div><div>${status}</div></div>
+      <div class="version-head"><div><span class="eyebrow">${pr.id} · ${fmtDate(pr.date)}</span><h3>${describe(pr)}</h3></div><div>${status}</div></div>
       ${kv([
         ['Proposed by', personAt(pr.proposedByAt, pr.proposedBy).name],
         ['Reason', pr.reason],

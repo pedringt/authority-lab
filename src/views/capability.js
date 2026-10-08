@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, personAt, notice, empty, warningNotice } from '../ui.js';
+import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText } from '../ui.js';
 import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
@@ -37,7 +37,7 @@ export function capabilityView(state, id, query) {
         ['Proposed authority', proposed ? authorityBadge(proposed) : html`<span class="muted">None proposed</span>`],
         ['Risk', html`${risk.impact} impact · ${risk.exposure} · ${risk.reversibility}`],
         ['Owner', html`${owner.name}, ${owner.role}`],
-        ['Last evaluated', lastEvaluated(state, id) ? fmtDateYear(lastEvaluated(state, id)) : html`<span class="muted">Not yet</span>`],
+        ['Last evaluated', lastEvaluated(state, id) ? fmtDate(lastEvaluated(state, id)) : html`<span class="muted">Not yet</span>`],
         ['Evidence readiness', r.total
           ? html`${r.met} of ${r.total} requirements met${pending ? html` · <a href="#/capabilities/${cap.id}/decision">Open decision</a>` : ''}`
           : html`<span class="muted">${cap.evidenceNote || 'No evidence requirements yet.'}</span>${nextStep(state, cap.id) ? html` · <a href="#/capabilities/${cap.id}/setup">Setup: ${nextStep(state, cap.id).title.toLowerCase()}</a>` : ''}`],
@@ -234,7 +234,7 @@ function decisionsTab(state, cap) {
     <tbody>${records.map((x) => html`<tr>
       <td><a href="#/decisions/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
       <td>${fmtDate(x.date)}</td>
-      <td>${x.previous ? html`${authorityLabel(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityLabel(x.next, { short: true })}</td>
+      <td>${x.previous ? html`${authorityText(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityText(x.next, { short: true })}</td>
       <td>${optionLabel(x.option)}</td>
       <td>${personAt(x.authorizedByAt, x.authorizedBy).name}</td>
     </tr>`)}</tbody>

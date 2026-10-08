@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, fmtDateYear } from '../ui.js';
+import { html, raw, badge, notice, section, person, fmtDate } from '../ui.js';
 import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS } from '../store/index.js';
 
 // Editor for success criteria and evidence requirements (#6). Before the
@@ -62,7 +62,7 @@ export function criteriaEditorView(state, capabilityId, query) {
       <p class="eyebrow">Save</p>
       <label class="field field-stack"><span>Reason <span class="muted small">(required if a risk-derived default is loosened or removed; otherwise optional)</span></span><input type="text" name="reason" maxlength="200" placeholder="${saved ? 'What changed and why.' : 'Saved before testing.'}"></label>
       <p class="muted small">Core rows (a quality threshold, a severe-error threshold, a minimum case count) can be adjusted but not removed. Lowering a default threshold, reducing a case count or removing a default row is kept on the version with your reason.</p>
-      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, writes ${saved ? `criteria v${v.criteria + 1} and requirements v${v.requirements + 1}` : 'criteria v1 and requirements v1'} for ${cap.name}, dated ${fmtDateYear(state.today)}. Until the first test run you can save again; after it, changes need a proposed amendment.</p>
+      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, writes ${saved ? `criteria v${v.criteria + 1} and requirements v${v.requirements + 1}` : 'criteria v1 and requirements v1'} for ${cap.name}, dated ${fmtDate(state.today)}. Until the first test run you can save again; after it, changes need a proposed amendment.</p>
       <button class="btn btn-primary btn-block" type="submit">${saved ? 'Save new versions' : 'Save criteria and requirements'}</button>
     </div>
   </form>

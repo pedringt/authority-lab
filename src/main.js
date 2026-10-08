@@ -1,6 +1,6 @@
 import * as seed from './data/seed.js';
 import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store/index.js';
-import { html, setPeople } from './ui.js';
+import { html, setPeople, setToday } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
 import { capabilityView } from './views/capability.js';
@@ -60,6 +60,7 @@ function capabilityFor(state, query) {
 function render() {
   const state = store.get();
   setPeople(people(state));
+  setToday(state.today);
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;
   let view;

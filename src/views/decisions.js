@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person, personAt, rightsNote } from '../ui.js';
+import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
 import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
@@ -24,7 +24,7 @@ export function decisionsListView(state) {
       <td><a href="#/decisions/${x.id}"><strong>Authority change #${String(x.number).padStart(2, '0')}</strong></a></td>
       <td>${getCapability(state, x.capabilityId).name}</td>
       <td>${fmtDate(x.date)}</td>
-      <td>${x.previous ? html`${authorityLabel(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityLabel(x.next, { short: true })}${x.previous && x.next.level < x.previous.level ? html` <span class="badge badge-restricted">Down</span>` : ''}</td>
+      <td>${x.previous ? html`${authorityText(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityText(x.next, { short: true })}${x.previous && x.next.level < x.previous.level ? html` <span class="badge badge-restricted">Down</span>` : ''}</td>
       <td>${optionLabel(x.option)}</td>
       <td>${personAt(x.authorizedByAt, x.authorizedBy).name}</td>
     </tr>`)}</tbody>
@@ -42,7 +42,7 @@ export function decisionRecordView(state, id) {
     <div>
       <p class="eyebrow"><a href="#/decisions">Decisions</a> · ${auto ? 'Automatic restriction' : 'Human authorization'}</p>
       <h1>Authority change #${String(x.number).padStart(2, '0')}</h1>
-      <p class="lede"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${fmtDateYear(x.date)}</p>
+      <p class="lede"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${fmtDate(x.date)}</p>
     </div>
   </div>
   ${auto ? notice('fail', 'This change was made by a software rule, not by a person.', 'The rule was authorized in advance as part of the expansion decision. Humans authorize expanded authority; software may reduce it when a predefined condition is triggered.') : ''}
@@ -70,7 +70,7 @@ export function decisionRecordView(state, id) {
     ])}
     ${x.versions ? html`<div class="record-foot"><span class="fact-label">Based on</span><div class="based-on">${VERSIONED_KINDS.map((k) => x.versions[k] ? html`<a href="#/capabilities/${cap.id}/versions?kind=${k}&version=${x.versions[k]}">${KIND_LABELS[k]} v${x.versions[k]}</a>` : html`<span class="muted">${KIND_LABELS[k]}: none yet</span>`)}</div></div>` : ''}
     ${amendedNote(state, x)}
-    <p class="muted small record-foot">Record ${x.id}${x.sequence ? html`, record ${x.sequence} for ${cap.name}` : ''}, written ${fmtDateYear(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was. People are shown as they were when it was written.</p>
+    <p class="muted small record-foot">Record ${x.id}${x.sequence ? html`, record ${x.sequence} for ${cap.name}` : ''}, written ${fmtDate(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was. People are shown as they were when it was written.</p>
   </div>`;
 }
 
@@ -94,7 +94,7 @@ export function decisionWorkspaceView(state, capabilityId) {
   const proposed = proposedAuthority(state, capabilityId);
   if (dec.recordId && !pending) {
     const rec = state.decisionRecords.find((x) => x.id === dec.recordId);
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/decisions">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was recorded as <a href="#/decisions/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a> on ${fmtDateYear(rec.date)}.</p></div></div>
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/decisions">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was recorded as <a href="#/decisions/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a> on ${fmtDate(rec.date)}.</p></div></div>
       ${d.reviewRequired
         ? notice('fail', 'Review required', 'Authority was restricted automatically after the decision. A post-incident review must be recorded before a new expansion can be authorized. Use Reset demo to replay the flow.', { link: `#/decisions/${d.monitoring.breachRecordId}`, linkText: 'Restriction record' })
         : notice('pass', 'Authority is set', `${cap.name} is at ${authorityLabel(cap.authority)}. A new decision would create a new record; this prototype replays the flow through Reset demo.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Monitoring' })}`;
@@ -145,7 +145,7 @@ export function decisionWorkspaceView(state, capabilityId) {
     <div>
       <p class="eyebrow"><a href="#/decisions">Decisions</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Authority decision</h1>
-      <p class="lede">Current: <strong>${authorityLabel(cap.authority)}</strong>. Proposed: <strong>${authorityLabel(proposed)}</strong>. ${rec ? 'The system has summarized the evidence and made a recommendation. ' : ''}A named person decides.</p>
+      <p class="lede">Current: <strong>${authorityText(cap.authority)}</strong>. Proposed: <strong>${authorityText(proposed)}</strong>. ${rec ? 'The system has summarized the evidence and made a recommendation. ' : ''}A named person decides.</p>
     </div>
   </div>
   <div class="card">${levelScale(cap.authority, proposed)}</div>

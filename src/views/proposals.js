@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, fmtDateYear, kv, warningNotice } from '../ui.js';
+import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, kv, warningNotice } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store/index.js';
 import { diffTable } from './activity.js';
 
@@ -114,7 +114,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Proposed amendment</p>
       <h1>${p.id}: ${p.kind === 'contract' ? 'Contract' : p.kind === 'stakeholders' ? 'Stakeholders' : 'Success criteria and evidence requirements'}</h1>
-      <p class="lede">Proposed by <strong>${personAt(p.proposedByAt, p.proposedBy).name}</strong> on ${fmtDateYear(p.date)}, against ${p.kind === 'contract' ? `contract v${p.base.contract}` : p.kind === 'stakeholders' ? `stakeholders v${p.base.stakeholders}` : `criteria v${p.base.criteria} and requirements v${p.base.requirements}`}. ${status}</p>
+      <p class="lede">Proposed by <strong>${personAt(p.proposedByAt, p.proposedBy).name}</strong> on ${fmtDate(p.date)}, against ${p.kind === 'contract' ? `contract v${p.base.contract}` : p.kind === 'stakeholders' ? `stakeholders v${p.base.stakeholders}` : `criteria v${p.base.criteria} and requirements v${p.base.requirements}`}. ${status}</p>
     </div>
   </div>
   ${error ? notice('fail', 'Could not record that', error) : ''}

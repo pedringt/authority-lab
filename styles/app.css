@@ -131,6 +131,8 @@ button { font: inherit; }
 .badge-decision { color: var(--decide); background: var(--decide-bg); border-color: var(--decide-bd); }
 .badge-neutral { color: var(--neutral); background: var(--neutral-bg); border-color: var(--neutral-bd); }
 
+.has-tip { text-decoration: underline dotted var(--border-strong); text-underline-offset: 3px; cursor: help; }
+.level-step, .authority { cursor: help; }
 .authority {
   display: inline-block; font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 4px;
   border: 1px solid var(--border-strong); background: var(--surface); font-family: var(--mono); letter-spacing: -0.01em;

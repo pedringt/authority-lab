@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt } from '../ui.js';
+import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt, authorityText } from '../ui.js';
 import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings } from '../store/index.js';
 
 function firstSentences(text, n) {
@@ -173,7 +173,7 @@ export function overviewView(state) {
     <thead><tr><th>Capability</th><th>Authority</th><th>Status</th></tr></thead>
     <tbody>${state.capabilities.map((c) => html`<tr>
       <td><a href="#/capabilities/${c.id}">${c.name}</a></td>
-      <td>${authorityLabel(c.authority)}</td>
+      <td>${authorityText(c.authority)}</td>
       <td>${capStatusBadge(c.status)}</td>
     </tr>`)}</tbody>
   </table>`;
