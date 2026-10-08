@@ -96,7 +96,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
   const r = proposalReadiness(state, capabilityId, p);
   const req = p.required;
   const riskDone = p.approvals.some((a) => a.role === 'risk');
-  const status = p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved and applied') : badge('fail', 'Rejected');
+  const status = p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved and applied') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected');
 
   const before = p.kind === 'contract'
     ? versionList(state, capabilityId, 'contract').find((v) => v.version === p.base.contract)?.value
@@ -124,6 +124,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
     ['Eligible approvers', html`<span class="muted small">Frozen when the proposal opened: ${(p.eligible || []).map((k) => person(k).name).join(', ') || 'none'}.</span>`],
     ['Approvals so far', p.approvals.length ? html`<ul class="plain-list">${p.approvals.map((a) => html`<li>${person(a.by).name} as ${roleLabel(a.role)}, ${fmtDate(a.date)}</li>`)}</ul>` : html`<span class="muted">None yet</span>`],
     ...(p.rejection ? [['Rejected', html`${person(p.rejection.by).name}, ${fmtDate(p.rejection.date)}: ${p.rejection.reason}`]] : []),
+    ...(p.withdrawal ? [['Withdrawn', html`${person(p.withdrawal.by).name}, ${fmtDate(p.withdrawal.date)}: ${p.withdrawal.reason}`]] : []),
     ...(p.applied ? [['Applied as', Object.entries(p.applied).map(([k, v]) => `${KIND_LABELS[k]} v${v}`).join(', ')]] : []),
   ])}</div>
 
@@ -140,11 +141,16 @@ export function proposalView(state, capabilityId, proposalId, query) {
     ${elig.ok
       ? html`<p>${who.name} can approve as ${roleLabel(elig.role)}.</p><button class="btn btn-primary" data-action="proposal-approve" data-capability="${cap.id}" data-proposal="${p.id}">Approve as ${roleLabel(elig.role)}</button>`
       : html`<p class="muted">${elig.reason}</p>`}
-    <form class="line-add reject-form" data-form="reject-proposal" data-proposal="${p.id}">
-      <input type="text" name="reason" maxlength="240" placeholder="Reason for rejecting…" aria-label="Rejection reason">
-      <button class="btn btn-sm btn-danger" type="submit">Reject</button>
-    </form>
-    <p class="muted small">Switch who is acting in the top bar to approve as someone else. Rejected proposals stay in the record.</p>
+    ${acting === p.proposedBy
+      ? html`<form class="line-add reject-form" data-form="withdraw-proposal" data-proposal="${p.id}">
+          <input type="text" name="reason" maxlength="240" placeholder="Reason for withdrawing…" aria-label="Withdrawal reason">
+          <button class="btn btn-sm" type="submit">Withdraw</button>
+        </form>`
+      : html`<form class="line-add reject-form" data-form="reject-proposal" data-proposal="${p.id}">
+          <input type="text" name="reason" maxlength="240" placeholder="Reason for rejecting…" aria-label="Rejection reason">
+          <button class="btn btn-sm btn-danger" type="submit">Reject</button>
+        </form>`}
+    <p class="muted small">Switch who is acting in the top bar to approve as someone else. The proposer can withdraw; others reject. Both stay in the record.</p>
   </div>`) : ''}`;
 }
 
@@ -152,7 +158,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
 export function proposalsList(state, capabilityId, kind) {
   const list = capData(state, capabilityId).proposals.filter((p) => p.kind === kind);
   if (!list.length) return '';
-  return html`<div class="card"><p class="eyebrow">Proposed amendments</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${person(p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved') : badge('fail', 'Rejected')} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
+  return html`<div class="card"><p class="eyebrow">Proposed amendments</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${person(p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Awaiting sign-off') : p.status === 'approved' ? badge('pass', 'Approved') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected')} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
 }
 
 export function amendLink(state, capabilityId, kind) {

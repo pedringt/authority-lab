@@ -130,7 +130,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form === 'save-scenarios') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form === 'save-scenarios') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -272,6 +272,15 @@ document.addEventListener('submit', (e) => {
     const scenarios = [...scForm.querySelectorAll('[data-rows="scenarios"] tr')].map((tr) => ({ id: val(tr, 'sc-id') || undefined, source: val(tr, 'sc-source'), group: val(tr, 'sc-group'), name: val(tr, 'sc-name'), situation: val(tr, 'sc-situation'), expected: val(tr, 'sc-expected') }));
     try { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/tests?capability=${capId}`; }
     catch (err) { location.hash = `#/capabilities/${capId}/scenarios/edit?error=${encodeURIComponent(err.message)}`; }
+    return;
+  }
+  const withdrawForm = e.target.closest('[data-form="withdraw-proposal"]');
+  if (withdrawForm) {
+    e.preventDefault();
+    const capId = parseRoute().parts[1];
+    const pid = withdrawForm.dataset.proposal;
+    try { store.dispatch('withdrawProposal', capId, pid, { by: actor(store.get(), capId), reason: withdrawForm.reason.value }); location.hash = `#/capabilities/${capId}/proposals/${pid}`; render(); }
+    catch (err) { location.hash = `#/capabilities/${capId}/proposals/${pid}?error=${encodeURIComponent(err.message)}`; }
     return;
   }
   const rejectForm = e.target.closest('[data-form="reject-proposal"]');
