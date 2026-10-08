@@ -67,6 +67,7 @@ export function capabilityView(state, id, query) {
       <p class="lede">${cap.summary}${risk.note ? html` ${risk.note}` : ''}</p>
     </div>
   </div>
+  ${query.get('error') ? notice('fail', 'Could not complete that action', query.get('error')) : ''}
   ${summary}
   ${coverageWarnings(state, id).map(warningNotice)}
   ${tabs}

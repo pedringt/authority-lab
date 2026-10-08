@@ -51,6 +51,7 @@ export function testsView(state, capabilityId, query) {
     </div>
     ${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}
   </div>
+  ${query.get('error') ? notice('fail', 'Could not run the test suite', query.get('error')) : ''}
   ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit the scenario library</a></p>` : ''}
   <div class="card run-summary ${t.status === 'not-run' && t.total ? 'is-cta' : ''}"><p>${summaryLine}</p>${t.status === 'not-run' && t.total ? html`<div class="run-cta">${runControl}</div>` : ''}${progress}</div>
   ${failureCallout}

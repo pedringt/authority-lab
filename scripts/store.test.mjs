@@ -1999,3 +1999,10 @@ test('removing a right or deactivating someone shows the impact and still goes t
   // The seeded demo story is unaffected.
   assert.deepEqual(coverageWarnings(initialState()), []);
 });
+
+test('no alert() pop-ups: every action error is shown inline on the page', () => {
+  const dir = new URL('../src', import.meta.url).pathname;
+  const files = [`${dir}/main.js`, `${dir}/ui.js`, ...readdirSync(`${dir}/views`).map((f) => `${dir}/views/${f}`)];
+  const offenders = files.filter((f) => /\balert\(/.test(readFileSync(f, 'utf8'))).map((f) => f.split('/').slice(-2).join('/'));
+  assert.deepEqual(offenders, []);
+});
