@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDateYear } from '../ui.js';
-import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS } from '../store.js';
+import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS } from '../store/index.js';
 
 // Editor for success criteria and evidence requirements (#6). Before the
 // first test run the editors are open and every save is a new version. After

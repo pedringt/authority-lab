@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, fmtDate, person } from '../ui.js';
-import { getCapability, activityEvents, versionFor, KIND_LABELS_ALL, KIND_LABELS } from '../store.js';
+import { getCapability, activityEvents, versionFor, KIND_LABELS_ALL, KIND_LABELS } from '../store/index.js';
 import { diffValues, prettyPath } from '../diff.js';
 
 const KIND_TONE = {

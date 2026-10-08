@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, section, fmtDate } from '../ui.js';
-import { capData, getCapability, current } from '../store.js';
+import { capData, getCapability, current } from '../store/index.js';
 import { requirementsList, proposedChangeLabel } from './capability.js';
 import { capabilityPicker } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';

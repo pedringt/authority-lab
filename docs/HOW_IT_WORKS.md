@@ -292,7 +292,7 @@ State is kept in your browser, so you can refresh without losing your place.
 The prototype is a static web app: plain HTML, CSS and JavaScript, no build step, no dependencies, no server.
 
 - `src/data/seed.js` holds all the fictional data: the workspace, capabilities, contracts, criteria, scenarios, pilot results, evidence, stakeholders, past decisions, activity and the monitoring rule.
-- `src/store.js` holds the rules for how state changes: running tests, choosing and authorizing a decision, the automatic restriction, reset. These are plain functions with tests.
+- `src/store/` (imported through `src/store/index.js`) holds the rules for how state changes: running tests, choosing and authorizing a decision, the automatic restriction, reset. These are plain functions with tests.
 - `src/views/` holds one module per screen. Screens read state and draw it; they never change it directly.
 - `styles/app.css` is the design. Colour always carries a state (pass, watch, fail, insufficient evidence, restricted, decision required) and is always paired with a word.
 

@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, fmtDateYear, person, personAt, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {

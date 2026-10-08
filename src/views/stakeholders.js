@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, notice, section, person, fmtDateYear, selectField } from '../ui.js';
-import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal, activePeople, people } from '../store.js';
+import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal, activePeople, people } from '../store/index.js';
 
 export function stakeholdersEditorView(state, capabilityId, query) {
   const cap = getCapability(state, capabilityId);

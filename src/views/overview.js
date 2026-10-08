@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt } from '../ui.js';
-import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings } from '../store.js';
+import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings } from '../store/index.js';
 
 function firstSentences(text, n) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
