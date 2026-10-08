@@ -154,6 +154,12 @@ Template lines start accepted. Each AI suggestion is pending until you **accept*
 
 Software checks run on the draft and block finalizing when: "AI must never" or "Automatic restriction conditions" is empty above Low impact; the same line appears under "may" and "must never" (or "must ask"); a restriction rule has no number or no time/case window; a financial capability sets no value limit in "may" (a ceiling) or "must ask" (a threshold); a limit that only appears under "must never" does not count. The finalize panel shows a plain-English summary, what changed from the template, and who is finalizing. Finalizing writes contract v1, with the full review behind it (template, suggestions accepted, edited and rejected, lines added by hand), and records a "Contract finalized" event. It does not change authority or status; those follow decisions only.
 
+### Setting success criteria and evidence requirements
+
+Setup step 3 opens an editor pre-filled from the risk profile: quality and severe-error thresholds scale with impact, the minimum pilot size scales with impact, financial exposure adds a minimum number of high-value cases, customer-facing exposure adds a customer-visible-errors criterion, and difficult-to-reverse actions add a review-before-effect requirement. Every row says where its default came from; you can edit, remove and add rows. Three core rows (a quality threshold, a severe-error threshold, a minimum case count) can be adjusted but not removed. Lowering a default threshold, reducing a default case count or removing a default row needs a short reason, which is stored on the version and shown beside its diff. "Current" values are not typed; evidence fills them in later.
+
+Saving writes criteria v1 and requirements v1, authored by whoever is acting. Before the first test run you can save again, and each save is a new version. The Run test suite button stays disabled until both are saved, because the first run **locks** them: the moment performance results exist (a recorded test run, a pilot, or a measured evidence item, the same definition as "after evidence"), the editors become read-only and a "Success criteria locked" event is recorded. From then on, changing the bar is a proposed amendment with sign-off, which arrives with the next issue.
+
 ### Acting as
 
 The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
@@ -202,6 +208,7 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Simulate threshold breach | Pushes severe errors over the limit; software restricts authority, creates an alert, an event and a record, and requires review |
 | Add capability | Defines a capability, its risk profile and starting authority; writes its first decision record |
 | Contract builder | Starts from a template, reviews each AI suggestion, runs the software checks, finalizes contract v1 |
+| Criteria editor | Saves success criteria and evidence requirements (defaults from the risk profile); the first test run locks them |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 

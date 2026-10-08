@@ -15,6 +15,8 @@ const KIND_TONE = {
   'criteria-locked': 'neutral',
   'contract-finalized': 'pass',
   'contract-draft': 'neutral',
+  'criteria-saved': 'neutral',
+  'criteria-locked': 'watch',
   decision: 'neutral',
   test: 'neutral',
 };
@@ -70,9 +72,15 @@ function amendmentDetail(state, a) {
   if (!v) return '';
   return html`<details class="amendment">
     <summary>Before / after · ${KIND_LABELS[a.objectKind]} v${v.version - 1} → v${v.version}${v.afterEvidence ? html` ${badge('watch', 'After evidence')}` : ''}</summary>
+    ${deviationsView(v)}
     ${diffTable(v.before, v.value)}
     <p class="muted small"><a href="#/capabilities/${a.capabilityId}/versions?kind=${a.objectKind}&version=${v.version}">All versions of the ${KIND_LABELS[a.objectKind].toLowerCase()}</a></p>
   </details>`;
+}
+
+export function deviationsView(v) {
+  if (!v || !v.deviations || !v.deviations.length) return '';
+  return html`<div class="deviations"><p class="fact-label">Risk-derived defaults loosened or removed</p><ul class="plain-list">${v.deviations.map((x) => html`<li>${badge('watch', x.change === 'removed' ? 'Removed' : 'Loosened')} ${x.label ? html`<strong>${x.label}</strong>: ` : ''}${x.from}${x.to ? html` → ${x.to}` : ''}</li>`)}</ul><p class="muted small">Reason: ${v.reason}</p></div>`;
 }
 
 export function diffTable(before, after) {

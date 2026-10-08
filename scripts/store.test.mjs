@@ -11,7 +11,9 @@ import {
   addCapability, actor, setActingAs, vagueNameWarning, slugify,
   startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection,
   contractChecks, canFinalizeContract, finalizeContract, draftValue, contractSummary, SECTION_KEYS,
+  saveCriteria, criteriaSaved, criteriaLocked, canRunSuite, defaultsFor, defaultDeviations, CORE_CRITERIA, CORE_REQUIREMENTS,
 } from '../src/store.js';
+import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
 import { pickTemplate, suggestLines } from '../src/data/contract-templates.js';
 import { diffValues } from '../src/diff.js';
 
@@ -49,8 +51,8 @@ test('the capability id is hard-coded only in the seed', () => {
 
 test('initial state: data is per capability', () => {
   const s = initialState();
-  assert.equal(s.version, 6);
-  assert.equal(STORAGE_KEY, 'authority-lab-state-v6');
+  assert.equal(s.version, 7);
+  assert.equal(STORAGE_KEY, 'authority-lab-state-v7');
   assert.deepEqual(Object.keys(s.capabilityData).sort(), seed.capabilities.map((c) => c.id).sort());
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(cap(s).decisionRequired, true);
@@ -240,7 +242,7 @@ test('store persists per-capability state and discards an interrupted run on rel
   store3.dispatch('reset');
   assert.deepEqual(store3.get(), initialState());
   // Older payloads are ignored.
-  mem.set(STORAGE_KEY, JSON.stringify({ version: 5, decisionRecords: [] }));
+  mem.set(STORAGE_KEY, JSON.stringify({ version: 6, decisionRecords: [] }));
   assert.deepEqual(createStore({ storage }).get(), initialState());
 });
 
@@ -464,7 +466,9 @@ test('diffValues reports added, removed and changed entries with readable paths'
 
 test('views read the contract, risk, criteria, requirements and stakeholders only through selectors', () => {
   const dir = new URL('../src/views', import.meta.url).pathname;
-  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g];
+  // Allowed: a decision record's own version numbers, an evidence item's risk
+  // level, the defaults object, and the versions-in-force number map.
+  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g];
   const forbidden = /\.(contract|criteria|requirements|stakeholders|versions)\b|\b(cap|c|capability)\.risk\b/g;
   const offenders = [];
   for (const f of readdirSync(dir)) {
@@ -792,4 +796,131 @@ test('contract builder actions are available through the store and survive reloa
   const again = createStore({ storage });
   assert.ok(capData(again.get(), id).contractDraft);
   assert.equal(capData(again.get(), id).contractDraft.templateId, 'low-customer');
+});
+
+// ---------------------------------------------------------------------------
+// Success criteria and evidence requirements (#6)
+// ---------------------------------------------------------------------------
+
+test('defaults come from the risk profile and say where they came from', () => {
+  const high = defaultCriteria(FIN_RISK);
+  const low = defaultCriteria({ impact: 'Low', exposure: 'Internal only', reversibility: 'Easy to reverse' });
+  assert.equal(high.find((c) => c.id === 'quality').target, '≥ 92% correct decisions');
+  assert.equal(low.find((c) => c.id === 'quality').target, '≥ 85% correct decisions');
+  assert.equal(high.find((c) => c.id === 'quality').source, 'Default for High impact');
+  assert.ok(high.every((c) => c.source));
+  assert.ok(defaultCriteria({ ...FIN_RISK, exposure: 'Customer-facing' }).some((c) => c.id === 'customer-harm'));
+  const req = defaultRequirements(FIN_RISK);
+  assert.equal(req.find((r) => r.id === 'min-cases').text, 'Minimum 200 pilot cases');
+  assert.ok(req.some((r) => r.id === 'high-value' && r.source === 'Default for financial exposure'));
+  assert.ok(!defaultRequirements({ impact: 'Low', exposure: 'Internal only' }).some((r) => r.id === 'high-value'));
+  assert.ok(defaultRequirements({ impact: 'High', exposure: 'Customer-facing', reversibility: 'Difficult to reverse' }).some((r) => r.id === 'reversal'));
+  const [s, id] = withNewCap();
+  assert.deepEqual(defaultsFor(s, id).criteria, high);
+});
+
+test('saving writes v1 of both; saving again before the lock writes v2; readiness reads the saved requirements', () => {
+  let [s, id] = withNewCap();
+  assert.equal(criteriaSaved(s, id), false);
+  const d = defaultsFor(s, id);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements }), /named person/);
+  assert.throws(() => saveCriteria(s, id, { criteria: [], requirements: d.requirements, by: 'priya' }), /at least one success criterion/);
+  assert.throws(() => saveCriteria(s, id, { criteria: [{ name: 'Quality', target: '' }], requirements: d.requirements, by: 'priya' }), /needs a name and a target/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: [{ text: ' ' }], by: 'priya' }), /needs text/);
+  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  assert.equal(criteriaSaved(s, id), true);
+  assert.equal(criteriaLocked(s, id), false);
+  assert.deepEqual(versionsInForce(s, id), { contract: 0, criteria: 1, requirements: 1, risk: 1, stakeholders: 0 });
+  const saved = current(s, id, 'criteria');
+  assert.equal(saved.find((c) => c.id === 'quality').current, 'Not yet measured');
+  assert.equal(saved.find((c) => c.id === 'quality').status, 'pending');
+  assert.equal(readiness(s, id).total, d.requirements.length);
+  assert.equal(readiness(s, id).met, 0);
+  assert.equal(s.activity[0].kind, 'criteria-saved');
+  assert.equal(s.activity[0].surfaced, false);
+  assert.equal(currentVersion(s, id, 'criteria').afterEvidence, false);
+  // Edit before the lock: new versions, nothing overwritten.
+  s = saveCriteria(s, id, { criteria: [...saved, { name: 'Refund cost', target: 'No unexplained increase above 5%' }], requirements: current(s, id, 'requirements'), by: 'priya', reason: 'Finance asked for a cost line.' });
+  assert.equal(versionsInForce(s, id).criteria, 2);
+  assert.equal(versionList(s, id, 'criteria')[0].value.length, saved.length);
+  assert.equal(current(s, id, 'criteria').find((c) => c.name === 'Refund cost').source, 'Written by hand');
+  assert.equal(currentVersion(s, id, 'criteria').reason, 'Finance asked for a cost line.');
+});
+
+test('the run gate: no run until criteria are saved; the first run locks them and surfaces one event', () => {
+  // A new capability with scenarios borrowed from the seed.
+  let [s, id] = withNewCap({ impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, 'Ticket tagging', 'Adds routing tags.');
+  s = { ...s, capabilityData: { ...s.capabilityData, [id]: { ...capData(s, id), scenarios: seed.scenarios.slice(0, 3) } } };
+  assert.equal(canRunSuite(s, id).ok, false);
+  assert.match(canRunSuite(s, id).reason, /Save success criteria/);
+  assert.throws(() => startTestRun(s, id), /before the first test run/);
+  const d = defaultsFor(s, id);
+  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  assert.equal(canRunSuite(s, id).ok, true);
+  assert.equal(criteriaLocked(s, id), false);
+  s = runSuite(s, id);
+  assert.equal(capData(s, id).testRun.status, 'complete');
+  assert.equal(criteriaLocked(s, id), true, 'performanceResultsSeen after the first run');
+  assert.equal(s.activity[0].kind, 'criteria-locked');
+  assert.equal(s.activity[0].surfaced, true);
+  assert.match(s.activity[0].body, /criteria v1 and evidence requirements v1/);
+  // Locked: saving throws; a second run does not log the lock again.
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' }), /locked/);
+  const before = s.activity.filter((e) => e.kind === 'criteria-locked').length;
+  s = runSuite(s, id);
+  assert.equal(s.activity.filter((e) => e.kind === 'criteria-locked').length, before);
+  // A capability with no scenarios cannot run regardless.
+  assert.equal(canRunSuite(initialState(), TC).ok, false);
+  assert.match(canRunSuite(initialState(), TC).reason, /No scenarios/);
+});
+
+test('the seeded refund capability is already locked and its demo run logs no lock event', () => {
+  let s = initialState();
+  assert.equal(criteriaLocked(s, RR), true);
+  assert.throws(() => saveCriteria(s, RR, { criteria: current(s, RR, 'criteria'), requirements: current(s, RR, 'requirements'), by: 'maya' }), /locked/);
+  s = runSuite(s);
+  assert.equal(s.activity.filter((e) => e.kind === 'criteria-locked').length, 0);
+  assert.equal(s.activity[0].kind, 'test');
+});
+
+test('saveCriteria is available through the store', () => {
+  const store = createStore({});
+  store.dispatch('addCapability', { name: 'Order status lookup', owner: 'priya', risk: { impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Customer-facing' }, startingLevel: 1 });
+  const id = store.get().capabilities[store.get().capabilities.length - 1].id;
+  const d = defaultsFor(store.get(), id);
+  store.dispatch('saveCriteria', id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  assert.equal(criteriaSaved(store.get(), id), true);
+});
+
+test('loosening or removing a risk-derived default needs a reason, stored on the version; core rows cannot be removed; one event per save', () => {
+  let [s, id] = withNewCap();
+  const d = defaultsFor(s, id);
+  const looser = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 88% correct decisions' } : c));
+  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya' }), /needs a short reason/);
+  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya', reason: 'ok' }), /needs a short reason/, 'a reason must be more than a word');
+  // Tightening needs no reason.
+  const tighter = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 95% correct decisions' } : c));
+  assert.doesNotThrow(() => saveCriteria(s, id, { criteria: tighter, requirements: d.requirements, by: 'priya' }));
+  // Core rows can be adjusted but not removed.
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria.filter((c) => c.id !== 'severe-errors'), requirements: d.requirements, by: 'priya', reason: 'Long enough reason.' }), /Core rows can be adjusted but not removed: a severe-error threshold/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements.filter((r) => r.id !== 'min-cases'), by: 'priya', reason: 'Long enough reason.' }), /a minimum case count/);
+  assert.deepEqual(CORE_CRITERIA, ['quality', 'severe-errors']);
+  assert.deepEqual(CORE_REQUIREMENTS, ['min-cases']);
+  // Removing a non-core default and loosening a count, with a reason: stored on each version.
+  const before = s.activity.length;
+  const fewer = d.requirements.filter((r) => r.id !== 'high-value').map((r) => (r.id === 'min-cases' ? { ...r, text: 'Minimum 150 pilot cases' } : r));
+  s = saveCriteria(s, id, { criteria: looser, requirements: fewer, by: 'priya', reason: 'Pilot volume is small; agreed with Risk.' });
+  assert.equal(s.activity.length - before, 1, 'one event per save');
+  assert.equal(s.activity[0].kind, 'criteria-saved');
+  assert.match(s.activity[0].body, /criteria v1, requirements v1/);
+  assert.match(s.activity[0].body, /loosened or removed: Pilot volume is small/);
+  const cv = currentVersion(s, id, 'criteria');
+  assert.deepEqual(cv.deviations, [{ id: 'quality', change: 'loosened', from: '≥ 92% correct decisions', to: '≥ 88% correct decisions', label: 'Quality' }]);
+  assert.equal(cv.reason, 'Pilot volume is small; agreed with Risk.');
+  const rv = currentVersion(s, id, 'requirements');
+  assert.deepEqual(rv.deviations.map((x) => [x.id, x.change]), [['min-cases', 'loosened'], ['high-value', 'removed']]);
+  // Detection handles both directions.
+  assert.deepEqual(defaultDeviations([{ id: 'a', t: '< 2% errors' }], [{ id: 'a', t: '< 3% errors' }], (x) => x.t).map((x) => x.change), ['loosened']);
+  assert.deepEqual(defaultDeviations([{ id: 'a', t: '< 2% errors' }], [{ id: 'a', t: '< 1% errors' }], (x) => x.t), []);
+  assert.deepEqual(defaultDeviations([{ id: 'a', t: 'Minimum 200 cases' }], [{ id: 'a', t: 'Minimum 200 cases' }], (x) => x.t), []);
 });

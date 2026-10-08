@@ -44,7 +44,7 @@ export function addCapabilityView(state, query) {
       </div>
       <label class="field field-stack"><span>Rationale <span class="muted small">(required for "not delegated"; otherwise optional)</span></span><textarea name="rationale" rows="3" placeholder="Why this starting point."></textarea></label>
       <p class="muted small">Adding the capability writes its first decision record, authorized by <strong>${acting.name}</strong> (${acting.role}), dated ${seed.TODAY.replace(/(\d+)-(\d+)-(\d+)/, '$2/$3/$1')}. Change who is acting in the top bar.</p>
-      <button class="btn btn-primary" type="submit">Add capability and write record #01</button>
+      <button class="btn btn-primary" type="submit">Add capability and write its first record</button>
     </div>`)}
   </form>`;
 }
@@ -62,7 +62,7 @@ export function setupSteps(state, capabilityId) {
   const steps = [
     { id: 'define', title: 'Define the capability', done: true, text: `${cap.name} is defined with an owner and a risk profile. Its starting authority is ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=contract`, linkText: 'Risk profile' },
     { id: 'contract', title: 'Finalize the delegation contract', done: contractDone, text: `What the AI may do, must ask about, must never do, when it escalates, and when software pulls authority back. A template is picked by the risk profile.${d.contractDraft && !d.contractDraft.finalizedAt ? ' A draft is in progress.' : ''}`, link: `#/capabilities/${cap.id}/contract/build`, linkText: d.contractDraft && !d.contractDraft.finalizedAt ? 'Continue the draft' : contractDone ? 'Contract' : 'Open the contract builder' },
-    { id: 'criteria', title: 'Save success criteria and evidence requirements', done: criteriaDone, text: 'What good looks like, as thresholds, and what must be true before the first authority change. These lock on the first test run.', soon: 'Criteria editor (#6)' },
+    { id: 'criteria', title: 'Save success criteria and evidence requirements', done: criteriaDone, text: 'What good looks like, as thresholds, and what must be true before the first authority change. These lock on the first test run.', link: `#/capabilities/${cap.id}/criteria/edit`, linkText: criteriaDone ? 'Success criteria' : 'Open the editor' },
     { id: 'stakeholders', title: 'Name the stakeholders', done: stakeholdersDone, text: 'The people whose positions are recorded at decision time.', soon: 'Stakeholder editor (#8)' },
     { id: 'scenarios', title: 'Write the scenario library', done: scenariosDone, text: 'Standard, ambiguous, adversarial, high-impact and edge cases. Twenty to thirty is enough to start.', soon: 'Scenario library (#8)' },
     { id: 'tests', title: 'Run the test suite', done: testsDone, text: 'The first run locks the criteria and produces the first evidence.', link: `#/tests?capability=${cap.id}`, linkText: 'Testing ground', needs: scenariosDone && criteriaDone },
@@ -99,7 +99,7 @@ export function setupView(state, capabilityId, query) {
   <ol class="setup-steps">${steps.map((st, i) => html`<li class="card setup-step ${st.done ? 'is-done' : ''} ${st.next ? 'is-next' : ''} ${focus === st.id ? 'is-focus' : ''}" id="step-${st.id}">
     <div class="setup-step-head"><span class="req-mark" aria-hidden="true">${st.done ? '✓' : i + 1}</span><strong>${st.title}</strong>${st.done ? badge('pass', 'Done') : st.next ? badge('decision', 'Next') : badge('neutral', 'Later')}</div>
     <p class="muted">${st.text}</p>
-    ${st.done && st.link ? html`<a href="${st.id === 'contract' ? `#/capabilities/${cap.id}?tab=contract` : st.link}">${st.linkText}</a>` : ''}
+    ${st.done && st.link ? html`<a href="${st.id === 'contract' ? `#/capabilities/${cap.id}?tab=contract` : st.id === 'criteria' ? `#/capabilities/${cap.id}?tab=criteria` : st.link}">${st.linkText}</a>` : ''}
     ${!st.done && st.link && st.needs !== false ? html`<a class="btn btn-sm" href="${st.link}">${st.linkText}</a>` : ''}
     ${!st.done && st.soon ? html`<p class="muted small">Not available in this prototype yet: ${st.soon}.</p>` : ''}
     ${!st.done && st.needs === false ? html`<p class="muted small">Waiting on an earlier step.</p>` : ''}

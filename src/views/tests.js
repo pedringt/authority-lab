@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, fmtDate } from '../ui.js';
-import { testSummary, capData, getCapability } from '../store.js';
+import { testSummary, capData, getCapability, canRunSuite } from '../store.js';
 
 const FILTERS = [
   ['all', 'All'],
@@ -17,9 +17,10 @@ export function testsView(state, capabilityId, query) {
   const group = query.get('group') || 'all';
   const d = capData(state, capabilityId);
 
+  const gate = canRunSuite(state, capabilityId);
   const runControl = t.status === 'running'
     ? html`<button class="btn btn-primary" disabled>Running… ${t.completed} of ${t.total}</button>`
-    : html`<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${t.total ? '' : raw('disabled')}>${t.status === 'complete' ? 'Run test suite again' : 'Run test suite'}</button>`;
+    : html`<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${gate.ok ? '' : raw('disabled')} title="${gate.ok ? '' : gate.reason}">${t.status === 'complete' ? 'Run test suite again' : 'Run test suite'}</button>${gate.ok || !t.total ? '' : html`<p class="muted small">${gate.reason} <a href="#/capabilities/${cap.id}/criteria/edit">Open the editor</a></p>`}`;
 
   const summaryLine = !t.total
     ? html`No scenarios have been written for ${cap.name} yet.`

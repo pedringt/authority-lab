@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, fmtDateYear, person, notice, empty } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList } from '../store.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved } from '../store.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -104,17 +104,22 @@ function contractTab(state, cap, d) {
 function criteriaTab(state, cap) {
   const criteria = current(state, cap.id, 'criteria');
   const requirements = current(state, cap.id, 'requirements');
-  if (!criteria.length && !requirements.length) return emptyState(state, cap.id, 'No success criteria or evidence requirements yet.', 'criteria');
+  if (!criteriaSaved(state, cap.id)) return emptyState(state, cap.id, 'No success criteria or evidence requirements yet.', 'criteria');
+  const locked = criteriaLocked(state, cap.id);
   const rows = criteria.map((c) => html`<tr>
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
     <td>${c.current}</td>
-    <td>${badge(c.status)}</td>
+    <td>${c.status === 'pending' ? badge('neutral', 'Not yet measured') : badge(c.status)}</td>
     <td class="muted">${c.note}</td>
   </tr>`);
   const defining = state.decisionRecords.find((x) => x.capabilityId === cap.id && x.number === 2);
+  const v = versionList(state, cap.id, 'criteria');
   return html`
-    <p class="muted">Defined before the pilot started${defining ? html`, as part of authority change <a href="#/decisions/${defining.id}">${defining.id}</a>` : ''}. These are the thresholds the decision is measured against, not a score.</p>
+    ${locked
+      ? html`<div class="notice notice-watch"><div class="notice-body"><strong>Locked since the first performance results</strong><p>Criteria v${v.length} and requirements v${versionList(state, cap.id, 'requirements').length}. Changing the bar after seeing results needs a proposed amendment with sign-off (arrives with #7).</p></div><button class="btn btn-sm" disabled title="Arrives with #7">Propose amendment</button></div>`
+      : html`<div class="notice notice-neutral"><div class="notice-body"><strong>Open until the first test run</strong><p>Criteria v${v.length} and requirements v${versionList(state, cap.id, 'requirements').length}. Every save writes a new version; the first test run locks them.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/criteria/edit">Edit</a></div>`}
+    <p class="muted">${defining ? html`Defined before the pilot started, as part of authority change <a href="#/decisions/${defining.id}">${defining.id}</a>. ` : ''}These are the thresholds the decision is measured against, not a score.</p>
     ${rows.length ? html`<div class="card table-card"><table class="table table-criteria">
       <thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th><th>Note</th></tr></thead>
       <tbody>${rows}</tbody>
