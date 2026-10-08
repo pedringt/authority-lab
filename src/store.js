@@ -8,7 +8,7 @@ import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-t
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
 import { starterScenarios } from './data/scenario-templates.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v9';
+export const STORAGE_KEY = 'authority-lab-state-v10';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -22,7 +22,7 @@ export function emptyCapabilityData() {
     monitoringRule: null,
     breach: null,
     testRun: { status: 'not-run', lastRun: null, completed: [] },
-    decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true }, rationale: '', recordId: null },
+    decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true }, rationale: '', recordId: null, proposed: null },
     monitoring: null,
     reviewRequired: false,
     // Contract builder draft (#5). null until started; kept after finalize so
@@ -61,6 +61,8 @@ function seededCapabilityData(id) {
       conditions: s.defaultConditions ? clone(s.defaultConditions) : base.decision.conditions,
       rationale: s.defaultRationale || '',
       recordId: null,
+      // The pending authority change, if a decision is open.
+      proposed: s.pendingDecision ? clone(s.pendingDecision) : null,
     },
   };
 }
@@ -69,7 +71,7 @@ export function initialState() {
   const capabilityData = Object.fromEntries(seed.capabilities.map((c) => {
     const d = seededCapabilityData(c.id);
     const sd = seed.capabilityData[c.id] || {};
-    const stamp = { date: c.definedOn || c.lastEvaluated, author: c.owner };
+    const stamp = { date: c.definedOn || seed.TODAY, author: c.owner };
     d.versions = {
       contract: [firstVersion(c.contract, stamp)],
       criteria: [firstVersion(sd.criteria || [], stamp)],
@@ -80,10 +82,11 @@ export function initialState() {
     return [c.id, d];
   }));
   // The capability object holds identity and current authority/status only.
-  // The contract and risk profile live in the version lists.
-  const capabilities = seed.capabilities.map(({ contract, risk, ...rest }) => clone(rest));
+  // The contract and risk profile live in the version lists; the pending
+  // decision, last decision and last-evaluated date are derived by selectors.
+  const capabilities = seed.capabilities.map(({ contract, risk, proposed, decisionRequired, lastEvaluated, lastDecisionId, ...rest }) => clone(rest));
   return {
-    version: 9,
+    version: 10,
     today: seed.TODAY,
     // Who is acting in the UI. null means "the owner of the capability in
     // context"; a person key overrides it (the "acting as" picker).
@@ -191,6 +194,38 @@ export function isSurfaced(event) {
   return SURFACED_KINDS.has(event.kind);
 }
 
+// Derived capability fields (#4 follow-up). Nothing stores these; they are
+// computed from the decision records, the pending decision and the evidence,
+// so they cannot drift.
+export function lastDecisionId(state, capabilityId) {
+  const recs = state.decisionRecords.filter((r) => r.capabilityId === capabilityId);
+  return recs.length ? recs[recs.length - 1].id : null;
+}
+
+export function proposedAuthority(state, capabilityId) {
+  return capData(state, capabilityId).decision.proposed || null;
+}
+
+export function decisionRequired(state, capabilityId) {
+  return Boolean(proposedAuthority(state, capabilityId));
+}
+
+// The latest date anything was learned or decided about the capability: a
+// test run, an evidence item, the pilot, or a decision record. Falls back to
+// the date it was defined.
+export function lastEvaluated(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  const d = capData(state, capabilityId);
+  const dates = [
+    d.testRun.lastRun,
+    ...d.evidence.map((e) => e.date),
+    d.pilot ? (d.pilot.ended || d.pilot.lastCase) : null,
+    ...state.decisionRecords.filter((r) => r.capabilityId === capabilityId).map((r) => r.date),
+  ].filter(Boolean);
+  if (!dates.length) return cap ? cap.definedOn || null : null;
+  return dates.reduce((a, b) => (a > b ? a : b));
+}
+
 // The person acting right now: the picked person, else the capability's owner,
 // else the focus capability's owner. Used as the author of records and
 // amendments.
@@ -264,9 +299,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     owner,
     authority: { level, limited: false },
     status: notDelegated ? 'not-delegated' : 'setup',
-    decisionRequired: false,
     definedOn: state.today,
-    lastEvaluated: state.today,
     added: true,
   };
   const data = emptyCapabilityData();
@@ -325,11 +358,11 @@ export function focusCapability(state) {
   const caps = state.capabilities;
   const alerted = caps.find((c) => c.status === 'review-required');
   if (alerted) return alerted;
-  const pending = caps.find((c) => c.decisionRequired);
+  const pending = caps.find((c) => decisionRequired(state, c.id));
   if (pending) return pending;
   const monitored = caps.find((c) => capData(state, c.id).monitoring);
   if (monitored) return monitored;
-  return caps.slice().sort((a, b) => (a.lastEvaluated < b.lastEvaluated ? 1 : -1))[0];
+  return caps.slice().sort((a, b) => ((lastEvaluated(state, a.id) || '') < (lastEvaluated(state, b.id) || '') ? 1 : -1))[0];
 }
 
 export function levelName(level) {
@@ -602,6 +635,7 @@ export function setRationale(state, capabilityId, rationale) {
 export function canAuthorize(state, capabilityId) {
   const d = capData(state, capabilityId).decision;
   if (!d.option) return { ok: false, reason: 'Choose a decision option first.' };
+  if ((d.option === 'expand' || d.option === 'expand-limits') && !d.proposed) return { ok: false, reason: 'No authority change is proposed for this capability. Propose the next level first.' };
   if (!d.rationale || d.rationale.trim().length < 20) return { ok: false, reason: 'Write a decision rationale (at least a sentence).' };
   const expanding = d.option === 'expand' || d.option === 'expand-limits';
   if (expanding && capData(state, capabilityId).reviewRequired) {
@@ -643,7 +677,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const d = capData(state, capabilityId);
   const option = d.decision.option;
   const previous = { ...cap.authority };
-  const next = nextAuthority(option, previous, cap.proposed);
+  const next = nextAuthority(option, previous, proposedAuthority(state, capabilityId));
   const number = state.decisionRecords.length + 1;
   const id = `AC-${String(number).padStart(2, '0')}`;
 
@@ -674,12 +708,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
           ...c,
           authority: next,
           status: statusAfter,
-          pilotLabel: expandingTo === 2 ? 'Limited pilot' : c.pilotLabel,
-          pilotLabel: undefined,
-          decisionRequired: false,
-          proposed: undefined,
-          lastEvaluated: state.today,
-          lastDecisionId: id,
+          pilotLabel: expandingTo === 2 ? 'Limited pilot' : undefined,
         }
       : c
   );
@@ -710,7 +739,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'Authority automatically returns to Draft if the severe error rate exceeds 5% across the rolling 50-case window.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
-  const s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id }, monitoring });
+  const s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null }, monitoring });
   return { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
 }
 
@@ -805,7 +834,7 @@ export function simulateBreach(state, capabilityId) {
   ];
 
   const capabilities = state.capabilities.map((c) =>
-    c.id === cap.id ? { ...c, authority: next, status: 'review-required', lastEvaluated: state.today, lastDecisionId: id } : c
+    c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c
   );
 
   const s = updateCap(state, capabilityId, {
@@ -891,7 +920,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 9) return null;
+    if (!parsed || parsed.version !== 10) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -1770,16 +1799,14 @@ export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
   if (!by || !seed.people[by]) throw new Error('A named person proposes an authority change.');
-  if (cap.decisionRequired) throw new Error('A decision is already open for this capability.');
+  if (decisionRequired(state, capabilityId)) throw new Error('A decision is already open for this capability.');
   if (cap.status === 'not-delegated') throw new Error('This capability is not delegated by design. Start with a new decision record if that should change.');
   const target = Number(level);
   if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
   if (!capData(state, capabilityId).testRun.lastRun) throw new Error('Run the test suite before proposing an authority change.');
   if (target >= 3 && !capData(state, capabilityId).pilot) throw new Error('Level 3 needs pilot evidence. Run a pilot at Draft first.');
-  const capabilities = state.capabilities.map((c) => (c.id === capabilityId ? { ...c, proposed: { level: target, limited: false }, decisionRequired: true } : c));
   const d = capData(state, capabilityId);
-  let s = { ...state, capabilities };
-  s = updateCap(s, capabilityId, { decision: { ...d.decision, option: null, recordId: null, rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
   return logEvent(s, {
     kind: 'decision',
     title: `Authority decision opened: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,
