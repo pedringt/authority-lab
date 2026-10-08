@@ -216,6 +216,15 @@ Only a workspace admin adds a person, edits a name, title or team, or deactivate
 
 Rights are governed. Granting or removing the Risk approver or workspace admin right, and deactivating anyone who holds a right, is a proposal made by a workspace admin and approved by someone else: a **different** workspace admin, or, for a Risk approver grant, an existing Risk approver. The proposer never approves. For a grant, the person receiving the right never approves either, so nobody grants a right to themselves and nobody waves through their own. For a removal, the person losing the right may approve it. A change that would leave no workspace admin is refused. Open roster changes, with approve, reject and withdraw, sit on the People page. Changing someone's team changes nothing about what they can approve: Risk eligibility is only ever the recorded right.
 
+### Coverage warnings
+
+Sign-off only works if the right people exist. Two warnings watch for that, and neither blocks anything; they explain the gap and point at the People page.
+
+- **Risk coverage.** A High-impact or financial capability needs two approvers with at least one from Risk, and one of the two could be the proposer, so it needs at least two active Risk approvers among its possible approvers (the owner and the people on its stakeholder list). When it has fewer, the capability page and the Overview say so and name who is left.
+- **A proposal that can no longer complete.** A proposal freezes its eligible approvers when it opens. If one of them is deactivated or loses the Risk approver right and the rule can no longer be satisfied, the sign-off screen, the proposal lists and the Overview flag it and suggest that the proposer withdraw and propose again, which freezes a fresh set.
+
+When a workspace admin proposes removing a right or deactivating someone, the form shows what that change would do to coverage: which capabilities would fall short and which open proposals could no longer complete. The change still goes through; the reason, which is always required, is where to say why. The impact is kept on the roster change so the approving admin sees it too.
+
 ### Acting as
 
 The top bar has an "Acting as" picker. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
@@ -270,6 +279,7 @@ The top bar has an "Acting as" picker. It defaults to the owner of the capabilit
 | Scenario library | Adds a starter set or writes scenarios; results are seeded and deterministic |
 | Propose a move to Level N | After the first run, opens the authority decision for a new capability; authorizing writes its second record |
 | People | Workspace admins add, edit and deactivate people, each change versioned with a reason; rights are shown, never inferred |
+| Coverage warnings | Flag a High/Financial capability short of two active Risk approvers and any open proposal that can no longer complete; never block; the People page forms show the impact of a change before it is proposed |
 | Acting as | Chooses who is authoring records from this screen; defaults to the capability owner |
 | Reset demo | Restores the seeded state, removing any added capabilities |
 

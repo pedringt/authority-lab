@@ -157,6 +157,11 @@ export function notice(tone, title, body, { link, linkText } = {}) {
   </div>`;
 }
 
+// A coverage warning (#25): explains a gap, links to People, never blocks.
+export function warningNotice(w) {
+  return html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>${w.title}</strong><p>${w.body}</p></div><a class="notice-link" href="${w.link}">${w.linkText}</a></div>`;
+}
+
 export function empty(text) {
   return html`<p class="empty">${text}</p>`;
 }

@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt } from '../ui.js';
-import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId } from '../store.js';
+import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings } from '../store.js';
 
 function firstSentences(text, n) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
@@ -135,6 +135,12 @@ export function overviewView(state) {
     attention.push(html`<a class="card card-link attention" href="#/capabilities/${cap.id}/proposals/${p.id}">
       <div class="attention-head"><strong>Amendment awaiting sign-off</strong>${badge('decision', p.id)}</div>
       <p>${personAt(p.proposedByAt, p.proposedBy).name} proposed changing the ${p.kind === 'contract' ? 'contract' : 'success criteria'} after evidence. ${p.reason}</p>
+    </a>`);
+  });
+  coverageWarnings(state).forEach((w) => {
+    attention.push(html`<a class="card card-link attention" href="${w.link}">
+      <div class="attention-head"><strong>${w.kind === 'coverage' ? `Risk coverage: ${state.capabilities.find((c) => c.id === w.capabilityId).name}` : `${w.proposalId} cannot complete`}</strong>${badge('watch', w.kind === 'coverage' ? 'Coverage' : 'Sign-off')}</div>
+      <p>${w.title}. ${w.kind === 'coverage' ? 'Add a Risk approver on the People page.' : 'The proposer can withdraw and propose again.'}</p>
     </a>`);
   });
   d.evidence.filter((e) => e.source === 'Incident' && e.status === 'fail').slice(0, 1).forEach((e) => {

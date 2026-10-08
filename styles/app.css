@@ -486,3 +486,5 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .rights-actions { display: flex; gap: 10px; margin-top: 4px; }
 .roster-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .roster-proposal + .roster-proposal { margin-top: 10px; }
+
+.impact-note { margin: 0 0 8px; }

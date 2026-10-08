@@ -8,7 +8,7 @@ import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from './data/contract-t
 import { defaultCriteria, defaultRequirements } from './data/criteria-defaults.js';
 import { starterScenarios } from './data/scenario-templates.js';
 
-export const STORAGE_KEY = 'authority-lab-state-v13';
+export const STORAGE_KEY = 'authority-lab-state-v14';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -87,7 +87,7 @@ export function initialState() {
   // decision, last decision and last-evaluated date are derived by selectors.
   const capabilities = seed.capabilities.map(({ contract, risk, proposed, decisionRequired, lastEvaluated, lastDecisionId, ...rest }) => clone(rest));
   return {
-    version: 13,
+    version: 14,
     today: seed.TODAY,
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
@@ -309,7 +309,7 @@ export function deactivatePerson(state, key, { by, reason } = {}) {
   if (p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover)) {
     return proposeRosterChange(state, { kind: 'deactivate', person: key, by, reason: why });
   }
-  return applyDeactivation(state, key, { by, reason: why });
+  return applyDeactivation(state, key, { by, reason: why, meta: { impact: rosterChangeImpact(state, { kind: 'deactivate', person: key }) } });
 }
 
 function applyDeactivation(state, key, { by, reason, meta = null } = {}) {
@@ -382,10 +382,12 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
   if (isGrant && right === 'riskApprover') eligible = [...new Set([...eligible, ...Object.keys(activePeople(state)).filter((k) => isRiskApprover(state, k) && k !== by)])];
   if (isGrant) eligible = eligible.filter((k) => k !== person);
   if (!eligible.length) throw new Error(isGrant && right === 'riskApprover' ? 'No other workspace admin or Risk approver can sign this off.' : 'No other workspace admin can sign this off. Grant the Workspace admin right to someone else first.');
+  const impact = rosterChangeImpact(state, { kind, person, right, grant });
   const pr = {
     id: `RP-${state.rosterProposals.length + 1}`,
     kind,
     person,
+    impact,
     right: kind === 'rights' ? right : null,
     grant: kind === 'rights' ? Boolean(grant) : null,
     proposedBy: by,
@@ -1217,7 +1219,7 @@ function load(storage) {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 13) return null;
+    if (!parsed || parsed.version !== 14) return null;
     // A run interrupted by a reload restarts cleanly.
     for (const id of Object.keys(parsed.capabilityData || {})) {
       const d = parsed.capabilityData[id];
@@ -2115,4 +2117,110 @@ export function proposeAuthority(state, capabilityId, level, { by } = {}) {
     capabilityId,
     link: `#/capabilities/${capabilityId}/decision`,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Coverage warnings (#25). Warnings never block anything; they explain a gap
+// and point at the People page.
+// ---------------------------------------------------------------------------
+
+export function isHighOrFinancial(state, capabilityId) {
+  const risk = current(state, capabilityId, 'risk');
+  return risk.impact === 'High' || risk.exposure === 'Financial / consequential';
+}
+
+// Active Risk approvers among a capability's possible approvers. A High or
+// Financial capability needs two, because one of them could be the proposer.
+export function riskCoverage(state, capabilityId) {
+  const approvers = namedStakeholders(state, capabilityId).filter((k) => isRiskApprover(state, k));
+  const needed = isHighOrFinancial(state, capabilityId) ? 2 : 0;
+  return { approvers, needed, short: approvers.length < needed };
+}
+
+export function coverageWarning(state, capabilityId) {
+  const c = riskCoverage(state, capabilityId);
+  if (!c.short) return null;
+  const cap = getCapability(state, capabilityId);
+  const names = c.approvers.map((k) => people(state)[k].name);
+  return {
+    id: `coverage-${capabilityId}`,
+    capabilityId,
+    kind: 'coverage',
+    title: `${cap.name} has ${c.approvers.length === 0 ? 'no' : 'only one'} active Risk approver${c.approvers.length === 1 ? '' : 's'} among its possible approvers`,
+    body: `High-impact or financial changes need two approvers with at least one from Risk, and one of the two could be the proposer. ${names.length ? `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} the only Risk approver${names.length === 1 ? '' : 's'} on this capability's list.` : 'Nobody on this capability\u2019s list holds the Risk approver right.'} Add a Risk approver to the stakeholders, or grant the right to someone already listed.`,
+    link: '#/people',
+    linkText: 'People',
+  };
+}
+
+// Can an open capability proposal still be completed by its frozen approvers,
+// given who is active and who holds the Risk approver right now?
+export function proposalSatisfiable(state, capabilityId, proposal) {
+  if (!proposal || proposal.status !== 'open') return { ok: true, reason: null };
+  const cap = getCapability(state, capabilityId);
+  const req = proposal.required;
+  const done = proposal.approvals;
+  const eligible = (proposal.eligible || []).filter((k) => isActivePerson(state, k) && !done.some((a) => a.by === k));
+  const riskDone = done.some((a) => a.role === 'risk');
+  const left = req.approvers - done.length;
+  if (left <= 0 && (!req.riskRequired || riskDone)) return { ok: true, reason: null };
+  if (req.ownerOnly) {
+    if (!isActivePerson(state, cap.owner) || !eligible.includes(cap.owner)) return { ok: false, reason: `The owner (${people(state)[cap.owner].name}) must approve and can no longer do so.` };
+    return { ok: true, reason: null };
+  }
+  if (eligible.length < left) return { ok: false, reason: `${left} more approver${left === 1 ? '' : 's'} needed but only ${eligible.length} of the approvers frozen when it opened ${eligible.length === 1 ? 'is' : 'are'} still active.` };
+  if (req.riskRequired && !riskDone && !eligible.some((k) => isRiskApprover(state, k))) return { ok: false, reason: 'A Risk approval is still needed and none of the approvers frozen when it opened holds the Risk approver right now.' };
+  return { ok: true, reason: null };
+}
+
+export function proposalWarning(state, capabilityId, proposal) {
+  const r = proposalSatisfiable(state, capabilityId, proposal);
+  if (r.ok) return null;
+  const cap = getCapability(state, capabilityId);
+  return {
+    id: `proposal-${capabilityId}-${proposal.id}`,
+    capabilityId,
+    proposalId: proposal.id,
+    kind: 'proposal',
+    title: `${proposal.id} on ${cap.name} can no longer be signed off as proposed`,
+    body: `${r.reason} The approvers were frozen when the proposal opened (${(proposal.eligible || []).map((k) => people(state)[k] ? people(state)[k].name : k).join(', ')}). The proposer can withdraw it and propose again, which freezes a fresh set.`,
+    link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
+    linkText: 'Open the proposal',
+  };
+}
+
+// Every current warning in the workspace.
+export function coverageWarnings(state, capabilityId = null) {
+  const caps = capabilityId ? [getCapability(state, capabilityId)].filter(Boolean) : state.capabilities;
+  const out = [];
+  for (const c of caps) {
+    const w = coverageWarning(state, c.id);
+    if (w) out.push(w);
+    for (const p of capData(state, c.id).proposals.filter((x) => x.status === 'open')) {
+      const pw = proposalWarning(state, c.id, p);
+      if (pw) out.push(pw);
+    }
+  }
+  return out;
+}
+
+// What a roster change would do to coverage: the capabilities that would fall
+// short and the open proposals that could no longer be signed off. Computed on
+// a hypothetical roster; nothing is written.
+export function rosterChangeImpact(state, { kind, person, right, grant } = {}) {
+  const roster = people(state);
+  const p = roster[person];
+  if (!p) return { capabilities: [], proposals: [], any: false };
+  let next;
+  if (kind === 'deactivate') next = { ...p, active: false };
+  else if (kind === 'rights' && RIGHT_LABELS[right]) next = { ...p, rights: { ...p.rights, [right]: Boolean(grant) } };
+  else return { capabilities: [], proposals: [], any: false };
+  const hypothetical = { ...state, roster: { ...state.roster, versions: [...state.roster.versions, { version: state.roster.versions.length + 1, value: { ...roster, [person]: next } }] } };
+  const before = coverageWarnings(state).map((w) => w.id);
+  const after = coverageWarnings(hypothetical).filter((w) => !before.includes(w.id));
+  return {
+    capabilities: after.filter((w) => w.kind === 'coverage').map((w) => ({ id: w.capabilityId, name: getCapability(state, w.capabilityId).name })),
+    proposals: after.filter((w) => w.kind === 'proposal').map((w) => ({ id: w.proposalId, capabilityId: w.capabilityId, name: getCapability(state, w.capabilityId).name })),
+    any: after.length > 0,
+  };
 }
