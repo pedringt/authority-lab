@@ -1,5 +1,5 @@
 import { html, raw, badge, notice, section, person, personAt, fmtDate, kv } from '../ui.js';
-import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings, workspaceOf } from '../store/index.js';
+import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 // The people roster (#22). Workspace admins add, edit and deactivate; nobody
@@ -87,7 +87,8 @@ export function peopleView(state, query) {
       <p class="lede">Everyone who can act in this workspace. Rights are explicit and recorded: <strong>workspace admin</strong> changes the roster; <strong>Risk approver</strong> can sign off as Risk. Nobody is deleted; records keep referring to people after they are deactivated.</p>
     </div>
   </div>
-  ${error ? notice('fail', 'Could not change the roster', error) : ''}
+  ${error ? notice('fail', query.get('workspace') === 'edit' ? 'Could not rename the workspace' : 'Could not change the roster', error) : ''}
+  ${workspaceSection(state, admin, who, query.get('workspace') === 'edit')}
   ${coverageWarnings(state).map((w) => html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>${w.title}</strong><p>${w.body}</p></div><a class="notice-link" href="${w.link === '#/people' ? `#/capabilities/${w.capabilityId}` : w.link}">${w.link === '#/people' ? 'Capability' : w.linkText}</a></div>`)}
   ${admin ? '' : notice('neutral', `Acting as ${who.name}, who is not a workspace admin`, 'Only a workspace admin adds, edits or deactivates people. Switch who is acting in the top bar to see the controls.')}
   <div class="card progress-card"><div class="progress-facts">
@@ -116,6 +117,34 @@ export function peopleView(state, query) {
     ${kv([['Written', fmtDate(v.date)], ['By', v.author ? html`${personAt(v.authorAt, v.author).name}${v.approvals ? html` · approved by ${v.approvals.map((a) => personAt(a.byAt, a.by).name).join(', ')}` : ''}` : 'Seed'], ['Reason', v.reason]])}
     ${v.version > 1 ? html`<h4 class="version-sub">What changed from v${v.version - 1}</h4>${diffTable(flatten(v.before), flatten(v.value))}` : ''}
   </article>`)}`, { subtitle: 'Every change is a new version with its author and reason.' })}`;
+}
+
+// The "Workspace" section (#60): the workspace and its workflow, an Edit
+// control for workspace admins (a direct edit with a required reason), and
+// the history of every change.
+function workspaceSection(state, admin, who, editing) {
+  const ws = workspaceOf(state);
+  const wf = workflowOf(state);
+  const history = (state.workspaceHistory || []).slice().reverse();
+  const body = editing && admin
+    ? html`<form class="card setup-form" data-form="rename-workspace">
+        <div class="two-col">
+          <label class="field field-stack"><span>Workspace name</span><input type="text" name="ws-name" value="${ws.name}" maxlength="60" required></label>
+          <label class="field field-stack"><span>Workflow name</span><input type="text" name="wf-name" value="${wf.name}" maxlength="60" required></label>
+          <label class="field field-stack"><span>Workspace description</span><input type="text" name="ws-description" value="${ws.description}" maxlength="160"></label>
+          <label class="field field-stack"><span>Workflow description</span><input type="text" name="wf-description" value="${wf.description}" maxlength="200"></label>
+        </div>
+        <label class="field field-stack"><span>Reason</span><input type="text" name="reason" maxlength="200" placeholder="Why the name or description is changing" required></label>
+        <p class="muted small">Changing as <strong>${who.name}</strong>, ${who.role}. A direct edit by a workspace admin, recorded with your reason and shown in Activity. Records written before keep the names in force then.</p>
+        <div class="roster-actions"><button class="btn btn-primary" type="submit">Save</button><a class="btn btn-ghost" href="#/people">Cancel</a></div>
+      </form>`
+    : html`<div class="card"><div class="version-head"><div>
+        ${kv([['Workspace', html`<strong>${ws.name}</strong>${ws.description ? html`<div class="muted small">${ws.description}</div>` : ''}`], ['Workflow', html`<strong>${wf.name}</strong>${wf.description ? html`<div class="muted small">${wf.description}</div>` : ''}`]])}
+      </div>${admin ? html`<a class="btn btn-sm" href="#/people?workspace=edit">Edit</a>` : ''}</div></div>`;
+  const log = history.length
+    ? html`<details class="amendment"><summary>${history.length} change${history.length === 1 ? '' : 's'} recorded</summary><ul class="plain-list">${history.map((h) => html`<li><strong>v${h.version}</strong>, ${fmtDate(h.date)}, ${personAt(h.authorAt, h.author).name}: ${h.before.workspace.name !== h.value.workspace.name ? html`workspace "${h.before.workspace.name}" → "${h.value.workspace.name}". ` : ''}${h.before.workflow.name !== h.value.workflow.name ? html`workflow "${h.before.workflow.name}" → "${h.value.workflow.name}". ` : ''}${h.before.workspace.description !== h.value.workspace.description || h.before.workflow.description !== h.value.workflow.description ? 'Description changed. ' : ''}<span class="muted">Reason: ${h.reason}</span></li>`)}</ul></details>`
+    : '';
+  return section('Workspace', html`${body}${log}`, { id: 'workspace', subtitle: admin ? 'Workspace admins can rename the workspace and its workflow; every change is recorded.' : 'Only a workspace admin can rename the workspace or workflow.' });
 }
 
 function flatten(roster) {

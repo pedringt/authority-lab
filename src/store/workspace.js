@@ -4,7 +4,8 @@
 // the way the seed is; every rights change after it is governed.
 
 import { initialState, clone } from './state.js';
-import { personKey, snapshotPerson } from './people.js';
+import { personKey, snapshotPerson, people, requireAdmin } from './people.js';
+import { workspaceOf, workflowOf } from './selectors.js';
 
 const slug = (text, fallback) => (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
 
@@ -91,4 +92,56 @@ export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = 
 export function foundingRiskGap(people = []) {
   const n = people.filter((p) => p && p.riskApprover && String(p.name || '').trim()).length;
   return n < 2 ? n : null;
+}
+
+// ---------------------------------------------------------------------------
+// Renaming the workspace and workflow (#60)
+// ---------------------------------------------------------------------------
+
+// A direct edit by a workspace admin with a required reason (Paige,
+// 2026-10-09): it changes nobody's rights or authority, so no sign-off. Every
+// change is kept in state.workspaceHistory with its author, reason, before and
+// after, and is surfaced in Activity. Records written before a rename keep the
+// names in force when they were written (see namesAtRecord).
+export function renameWorkspace(state, { workspace = {}, workflow = {}, by, reason } = {}) {
+  if (state.setupPending) throw new Error('Set up the workspace first.');
+  requireAdmin(state, by);
+  const why = String(reason || '').trim();
+  if (why.length < 10) throw new Error('A rename needs a reason (a sentence).');
+  const before = { workspace: { ...workspaceOf(state) }, workflow: { ...workflowOf(state) } };
+  const next = {
+    workspace: { ...before.workspace, name: String(workspace.name ?? before.workspace.name).trim(), description: String(workspace.description ?? before.workspace.description).trim() },
+    workflow: { ...before.workflow, name: String(workflow.name ?? before.workflow.name).trim(), description: String(workflow.description ?? before.workflow.description).trim() },
+  };
+  if (next.workspace.name.length < 2) throw new Error('Name the workspace.');
+  if (next.workflow.name.length < 2) throw new Error('Name the workflow.');
+  const same = (a, b) => a.name === b.name && a.description === b.description;
+  if (same(before.workspace, next.workspace) && same(before.workflow, next.workflow)) throw new Error('Nothing changed.');
+  const history = state.workspaceHistory || [];
+  const entry = {
+    version: history.length + 2,
+    date: state.today,
+    author: by,
+    authorAt: snapshotPerson(state, by),
+    reason: why,
+    // Decision records numbered up to here were written under the old names.
+    recordsBefore: state.decisionRecords.length,
+    before,
+    value: next,
+  };
+  const changed = [
+    before.workspace.name !== next.workspace.name ? `workspace "${before.workspace.name}" → "${next.workspace.name}"` : null,
+    before.workflow.name !== next.workflow.name ? `workflow "${before.workflow.name}" → "${next.workflow.name}"` : null,
+    before.workspace.description !== next.workspace.description ? 'workspace description' : null,
+    before.workflow.description !== next.workflow.description ? 'workflow description' : null,
+  ].filter(Boolean);
+  const event = { id: `ACT-${Date.now()}-n`, date: state.today, kind: 'workspace', surfaced: true, title: 'Workspace renamed', body: `${people(state)[by].name} changed the ${changed.join(', ')}. Reason: ${why} Records written before keep the names in force then.`, capabilityId: null, link: '#/people' };
+  return { ...state, workspace: next.workspace, workflow: next.workflow, workspaceHistory: [...history, entry], activity: [event, ...state.activity] };
+}
+
+// The workspace and workflow names in force when a decision record was
+// written: the "before" of the first rename made after it, else the current.
+export function namesAtRecord(state, record) {
+  const later = (state.workspaceHistory || []).find((h) => record.number <= h.recordsBefore);
+  return later ? later.before : { workspace: workspaceOf(state), workflow: workflowOf(state) };
 }

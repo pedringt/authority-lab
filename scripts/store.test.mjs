@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2328,4 +2328,48 @@ test('setup notes, without blocking, when fewer than two Risk approvers are list
   assert.equal(foundingRiskGap(FOUNDERS), 1);
   assert.equal(foundingRiskGap([...FOUNDERS, { name: 'Dev Patel', title: 'Risk Analyst', team: 'Risk', riskApprover: true }]), null);
   assert.doesNotThrow(() => setUpWorkspace(startEmpty(), SETUP), 'one Risk approver is allowed');
+});
+
+// ---------------------------------------------------------------------------
+// Renaming the workspace and workflow (#60)
+// ---------------------------------------------------------------------------
+
+const RENAME = { workspace: { name: 'Northstar Care' }, workflow: { name: 'Support Resolution' }, reason: 'The support org was renamed this quarter.' };
+
+test('a workspace admin renames the workspace and workflow directly, with a reason, recorded and surfaced', () => {
+  let s = initialState();
+  s = renameWorkspace(s, { ...RENAME, by: 'maya' });
+  assert.deepEqual([workspaceOf(s).name, workflowOf(s).name], ['Northstar Care', 'Support Resolution']);
+  assert.equal(workspaceOf(s).id, 'northstar-support', 'the id never changes');
+  assert.equal(workspaceOf(s).description, initialState().workspace.description, 'an unspecified description is kept');
+  const [h] = s.workspaceHistory;
+  assert.deepEqual([h.version, h.author, h.before.workspace.name, h.value.workspace.name], [2, 'maya', 'Northstar Support', 'Northstar Care']);
+  assert.equal(h.authorAt.name, 'Maya Chen');
+  assert.deepEqual([s.activity[0].kind, s.activity[0].surfaced], ['workspace', true]);
+  assert.match(s.activity[0].body, /Reason: The support org was renamed/);
+});
+
+test('only an active workspace admin renames, and only with a reason and an actual change', () => {
+  const s = initialState();
+  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /not a workspace admin/, 'a Risk approver is not enough');
+  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'maya', reason: 'rename' }), /needs a reason/);
+  assert.throws(() => renameWorkspace(s, { workspace: { name: 'Northstar Support' }, workflow: { name: 'Customer Support Resolution' }, reason: 'No real change here.', by: 'maya' }), /Nothing changed/);
+  assert.throws(() => renameWorkspace(s, { ...RENAME, workspace: { name: ' ' }, by: 'maya' }), /Name the workspace/);
+  assert.throws(() => renameWorkspace(startEmpty(), { ...RENAME, by: 'maya' }), /Set up the workspace first/);
+  let d = proposeRosterChange(s, { kind: 'deactivate', person: 'jonas', by: 'maya', reason: 'Jonas left the company.' });
+  d = approveRosterChange(d, openRosterProposal(d, 'jonas').id, { by: 'jonas' });
+  assert.throws(() => renameWorkspace(d, { ...RENAME, by: 'jonas' }), /deactivated/);
+});
+
+test('records keep the workspace and workflow names in force when they were written', () => {
+  let s = initialState();
+  const old = s.decisionRecords[0];
+  s = renameWorkspace(s, { ...RENAME, by: 'maya' });
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  const fresh = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.deepEqual([namesAtRecord(s, old).workspace.name, namesAtRecord(s, old).workflow.name], ['Northstar Support', 'Customer Support Resolution'], 'a seeded record keeps the old names');
+  assert.equal(namesAtRecord(s, fresh).workspace.name, 'Northstar Care', 'a record written after the rename has the new name');
+  s = renameWorkspace(s, { workspace: { name: 'Northstar Customer Care' }, reason: 'Second rename for the test.', by: 'jonas' });
+  assert.equal(namesAtRecord(s, old).workspace.name, 'Northstar Support', 'still the name from before the first rename');
+  assert.equal(namesAtRecord(s, fresh).workspace.name, 'Northstar Care', 'the name in force between the two renames');
 });

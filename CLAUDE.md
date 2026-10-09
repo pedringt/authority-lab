@@ -18,7 +18,7 @@ Read before working:
 ## Governance rules: never weaken these without Paige's explicit approval
 
 - Records are immutable. Every authority level change writes a decision record. Edits create new versions and never overwrite.
-- Records name the person who acted and keep their name, title, team and rights as they were at the time.
+- Records name the person who acted and keep their name, title, team and rights as they were at the time. They also keep the workspace and workflow names in force when written; a rename (a workspace admin's direct edit with a required reason) never rewrites them.
 - After performance results exist (a test run, pilot or measured evidence), changes to criteria, requirements, stakeholder membership, and the contract once a pilot has started go through a proposal and sign-off.
 - The proposer never approves. Low/Medium impact needs one approver. High impact or Financial exposure needs two distinct approvers, at least one holding the Risk approver right.
 - Risk approval is an explicit recorded right on a person. It is never inferred from a team name or a capability label.
