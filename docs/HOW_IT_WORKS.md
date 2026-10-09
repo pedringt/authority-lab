@@ -158,6 +158,10 @@ Expanding authority needs a pending proposal (the next level, proposed after a t
 
 The sections that follow describe each step.
 
+### Starting from an empty workspace
+
+**Start empty**, in the demo controls next to Reset demo, swaps the Northstar demo for a blank workspace. Until it is set up, every page shows **Set up the workspace**: name the workspace and its one workflow, and record the **founding roster**, the first people with their titles, teams and rights. The founding roster is the only time rights are set directly; it needs at least two workspace admins, because every later rights change is a proposal that a different admin approves. Risk approvers are optional at setup, and coverage warnings explain any gap once High-impact or Financial capabilities exist. The first admin listed sets the workspace up and is acting when it opens. From there the Overview, Tests and Evidence point to **Add the first capability**, and everything works exactly as in the demo. **Reset demo** brings Northstar back.
+
 ### Adding a capability
 
 **Capabilities → Add capability** walks one capability through the first three setup steps on one page: define it (name, one-line summary, owner), give it a risk profile (impact, reversibility, exposure, failure types to watch), and choose its starting authority. The starting authority is Level 0, Level 1, or "Not delegated, by design", which needs a written rationale. Nothing starts higher; authority above Level 1 is earned later.
@@ -288,7 +292,8 @@ When an action can't go through (a missing rationale, a rule that refuses it), t
 | People | Workspace admins add, edit and deactivate people, each change versioned with a reason; rights are shown, never inferred |
 | Coverage warnings | Flag a High/Financial capability short of two active Risk approvers and any open proposal that can no longer complete; never block; the People page forms show the impact of a change before it is proposed |
 | Demo · Acting as | A demo stand-in for sign-in; chooses who is authoring records from this screen, defaulting to the capability owner; only active people appear |
-| Reset demo | Restores the seeded state, removing any added capabilities |
+| Start empty | Swaps the demo for a blank workspace to set up from scratch: workspace, workflow and founding roster first |
+| Reset demo | Restores the seeded Northstar demo, removing any added capabilities or a workspace started empty |
 
 State is kept in your browser, so you can refresh without losing your place.
 

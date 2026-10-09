@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { workspaceOf, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store/index.js';
+import { workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store/index.js';
 import { html, setPeople, setToday, fmtDate } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
@@ -16,6 +16,7 @@ import { proposeView, proposalView } from './views/proposals.js';
 import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
+import { workspaceSetupView, noCapabilitiesView } from './views/workspace.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -56,7 +57,9 @@ function parseRoute() {
 // the capability the workspace is focused on.
 function capabilityFor(state, query) {
   const id = query.get('capability');
-  return id && getCapability(state, id) ? id : focusCapability(state).id;
+  if (id && getCapability(state, id)) return id;
+  const focus = focusCapability(state);
+  return focus ? focus.id : null;
 }
 
 function render() {
@@ -69,7 +72,9 @@ function render() {
   const [root, sub, action] = parts;
   let view;
   let title = 'Overview';
-  switch (root) {
+  const empty = !state.capabilities.length;
+  if (setupPending(state)) { view = workspaceSetupView(state, query, setupDraft); title = 'Set up the workspace'; }
+  else switch (root) {
     case 'capabilities':
       if (sub === 'new') { view = addCapabilityView(state, query); title = 'Add a capability'; }
       else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub, query); title = 'Authority decision'; }
@@ -84,15 +89,15 @@ function render() {
       else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
       break;
-    case 'tests': view = testsView(state, capabilityFor(state, query), query); title = 'Tests'; break;
-    case 'evidence': view = evidenceView(state, capabilityFor(state, query), query); title = 'Evidence'; break;
+    case 'tests': view = empty ? noCapabilitiesView(state, 'Testing ground') : testsView(state, capabilityFor(state, query), query); title = 'Tests'; break;
+    case 'evidence': view = empty ? noCapabilitiesView(state, 'Evidence') : evidenceView(state, capabilityFor(state, query), query); title = 'Evidence'; break;
     case 'decisions':
       if (sub) { view = decisionRecordView(state, sub); title = 'Decision record'; }
       else { view = decisionsListView(state); title = 'Decisions'; }
       break;
     case 'activity': view = activityView(state, query); title = 'Activity'; break;
     case 'people': view = peopleView(state, query); title = 'People'; break;
-    default: view = overviewView(state); title = 'Overview';
+    default: view = empty ? noCapabilitiesView(state, 'Where do we need to make a decision?') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
 
@@ -101,19 +106,24 @@ function render() {
     overview: state.alerts.length || pending,
     decisions: pending,
   };
-  nav.innerHTML = String(html`${NAV.map(([k, label]) => html`<a class="nav-link ${root === k || (!root && k === 'overview') ? 'is-active' : ''}" href="#/${k}" ${root === k ? 'aria-current="page"' : ''}>${label}${counts[k] ? html`<span class="nav-count ${state.alerts.length && k === 'overview' ? 'is-alert' : ''}">${counts[k]}</span>` : ''}</a>`)}`);
+  // Until the workspace is set up there is nothing to navigate to and nobody
+  // to act as.
+  if (setupPending(state)) { nav.innerHTML = ''; acting.innerHTML = ''; }
+  else nav.innerHTML = String(html`${NAV.map(([k, label]) => html`<a class="nav-link ${root === k || (!root && k === 'overview') ? 'is-active' : ''}" href="#/${k}" ${root === k ? 'aria-current="page"' : ''}>${label}${counts[k] ? html`<span class="nav-count ${state.alerts.length && k === 'overview' ? 'is-alert' : ''}">${counts[k]}</span>` : ''}</a>`)}`);
 
   // "Acting as" picker. Default is the owner of the capability in context.
   const contextCap = root === 'capabilities' && sub && sub !== 'new' ? sub : null;
   const current = actor(state, contextCap);
-  const defaultOwner = contextCap && getCapability(state, contextCap) ? getCapability(state, contextCap).owner : focusCapability(state).owner;
+  const focus = focusCapability(state);
+  const defaultOwner = contextCap && getCapability(state, contextCap) ? getCapability(state, contextCap).owner : focus ? focus.owner : null;
   const roster = people(state);
+  const defaultName = (roster[defaultOwner] || roster[current] || {}).name || 'Nobody yet';
   // A demo control: a real version would know who is signed in. Only active
   // people can be chosen.
-  acting.innerHTML = String(html`<label class="acting" title="Demo control. A real version would use sign-in; this picker stands in for it so the demo can show different people proposing, approving and authorizing.">
+  if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo control. A real version would use sign-in; this picker stands in for it so the demo can show different people proposing, approving and authorizing.">
     <span class="acting-label">Acting as</span>
     <select data-action="set-acting" aria-label="Demo: acting as">
-      <option value="" ${state.actingAs ? '' : 'selected'}>${(roster[defaultOwner] || roster[current]).name} (owner)</option>
+      <option value="" ${state.actingAs ? '' : 'selected'}>${defaultName}${defaultOwner ? ' (owner)' : ''}</option>
       ${Object.entries(activePeople(state)).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
     </select>
   </label>`);
@@ -131,6 +141,8 @@ function render() {
   lastRoute = location.hash;
 }
 let lastRoute = null;
+// What was typed on the workspace setup form, kept across a refused submit.
+let setupDraft = null;
 
 // Forms are uncontrolled; keep what the person typed across a re-render.
 function captureForms() {
@@ -149,7 +161,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -248,6 +260,13 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (action === 'row-remove') { btn.closest('tr').remove(); return; }
+  if (action === 'start-empty') {
+    store.dispatch('startEmpty');
+    stopSuite();
+    setupDraft = null;
+    location.hash = '#/overview';
+    render();
+  }
   if (action === 'reset') {
     store.dispatch('reset');
     stopSuite();
@@ -388,6 +407,20 @@ document.addEventListener('submit', (e) => {
       clearErrorOn(here(), 'error');
       render();
     });
+    return;
+  }
+  const wsForm = e.target.closest('[data-form="setup-workspace"]');
+  if (wsForm) {
+    e.preventDefault();
+    const val = (el, name) => (el.querySelector(`[name="${name}"]`) || {}).value || '';
+    const draft = {
+      workspace: { name: val(wsForm, 'ws-name'), description: val(wsForm, 'ws-description') },
+      workflow: { name: val(wsForm, 'wf-name'), description: val(wsForm, 'wf-description') },
+      people: [...wsForm.querySelectorAll('[data-rows="founders"] tr')].map((tr) => ({ name: val(tr, 'p-name'), title: val(tr, 'p-title'), team: val(tr, 'p-team'), workspaceAdmin: tr.querySelector('[name="p-admin"]').checked, riskApprover: tr.querySelector('[name="p-risk"]').checked })),
+    };
+    // Keep what was typed if setup is refused; drop it once it goes through.
+    setupDraft = draft;
+    dispatchOr('#/overview', () => { store.dispatch('setUpWorkspace', draft); setupDraft = null; location.hash = '#/overview'; render(); });
     return;
   }
   const critForm = e.target.closest('[data-form="save-criteria"]');

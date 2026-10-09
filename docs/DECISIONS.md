@@ -35,6 +35,13 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 - **Approvers are frozen when a proposal opens.** A proposal the eligible approvers could never satisfy is refused when proposed. Proposers can withdraw. Rejections and withdrawals need a reason.
 - **Expanding needs a pending proposal and moves one level at a time; pulling back doesn't need a proposal.** Restrict, Suspend and Redesign still need a named person, a rationale and a record.
 
+### Workspace setup
+
+- **"Start empty" sits beside Reset demo.** It swaps the seeded Northstar demo for a blank workspace; Reset demo brings Northstar back. One workspace at a time. Until setup is done, every route shows the setup screen, with no tabs and no acting-as picker. (Decided 2026-10-09, #58.)
+- **One workflow per workspace, for now.** Setup names the workspace and its workflow; every capability belongs to that workflow. (Decided 2026-10-09.)
+- **The founding roster is the one time rights are set directly.** Setup records the first people and their rights as roster version 1, the way the seed does, and needs at least two workspace admins, because every later rights change needs a different admin to approve it (one admin could never grant anyone a right). Risk approvers are optional; coverage warnings explain gaps. The first admin listed sets the workspace up and is acting when it opens. (Decided 2026-10-09.)
+- **Every screen works with no capabilities.** Overview, Tests and Evidence point to Add capability until the first one exists.
+
 ### People and roles
 
 - **The roster is versioned state.** People are deactivated, never deleted, because records refer to them. Deactivated people can't act, propose, approve, own a capability or be stakeholders.
@@ -85,6 +92,6 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 4. ~~UI readability pass~~ (done: #38–#44): two-row header, filter bar, collapsed test groups, sticky decision panel, People "Manage" menu, one date format, level tooltips, inline errors instead of pop-ups.
 5. ~~Header nav cleanup~~ (done: #47): underlined section tabs flush with the brand, an even gap, quieter count badges.
 6. ~~Monitoring and automatic restriction for every capability~~ (done: PRs #51, #52, #53, #55 for issues #48, #49, #50, #54): rules read from the contract, monitoring for every capability, breach and fallback to the level the contract names, incident alerts, and the post-incident review recorded in the app.
-7. **Empty-workspace path** (next): set up the workspace and workflow first.
+7. ~~Empty-workspace path~~ (done: #57 workspace and workflow in state, #58 start empty, setup and the founding roster).
 8. Smaller rule changes: lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
 9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning.

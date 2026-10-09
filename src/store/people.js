@@ -7,7 +7,9 @@ import { rosterChangeImpact } from './coverage.js';
 
 export function people(state) {
   const v = state.roster && state.roster.versions;
-  return v && v.length ? v[v.length - 1].value : seed.people;
+  if (v && v.length) return v[v.length - 1].value;
+  // An empty workspace has nobody until setup records the founding roster.
+  return state.setupPending ? {} : seed.people;
 }
 
 export function personRecord(state, key) {

@@ -45,6 +45,10 @@ The tests cover the state transitions: running the suite, authorizing each decis
 9. **Monitoring → Record the post-incident review**: Refund recommendation is High impact, so switch **Acting as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changed, and record it. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
 9. **Reset demo** (top right) restores the seeded state.
 
+## Starting empty
+
+**Start empty** (demo controls, top right) swaps the Northstar demo for a blank workspace. Setup comes first: name the workspace and its one workflow, and record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on). Then add the first capability. **Reset demo** brings Northstar back.
+
 ## Adding a capability
 
 **Capabilities → Add capability** defines a new capability (name, summary, owner), its risk profile, and its starting authority: Level 0, Level 1, or "Not delegated, by design" with a rationale. It writes the capability's first decision record and lands on its **Setup** checklist. Every tab is always visible; empty tabs say what is missing and link to the next setup step. The **Demo: acting as** picker in the top bar (default: the capability owner) stands in for sign-in and is the author on records; only active people appear. Reset demo removes added capabilities.

@@ -7,10 +7,12 @@ import { VERSIONED_KINDS, getCapability, capData } from './state.js';
 // The workspace and workflow from state. Saved state from before they moved
 // into state falls back to the seed.
 export function workspaceOf(state) {
+  if (state.setupPending) return { id: 'new', name: 'New workspace', description: '' };
   return state.workspace || seed.workspace;
 }
 
 export function workflowOf(state) {
+  if (state.setupPending) return { id: 'new', name: 'Workflow not set up', description: '' };
   return state.workflow || seed.workflow;
 }
 
@@ -139,7 +141,8 @@ export function focusCapability(state) {
   if (pending) return pending;
   const monitored = caps.find((c) => capData(state, c.id).monitoring);
   if (monitored) return monitored;
-  return caps.slice().sort((a, b) => ((lastEvaluated(state, a.id) || '') < (lastEvaluated(state, b.id) || '') ? 1 : -1))[0];
+  // An empty workspace has no capability to focus on.
+  return caps.slice().sort((a, b) => ((lastEvaluated(state, a.id) || '') < (lastEvaluated(state, b.id) || '') ? 1 : -1))[0] || null;
 }
 
 export function levelName(level) {
