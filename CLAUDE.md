@@ -37,4 +37,4 @@ When you change anything near these rules, write a test that tries to get around
 - **You may merge on your own** only housekeeping with no behaviour change, and only when CI is green, the test count is the same or higher, and no existing test changed except import paths.
 - **Leave open for Paige** anything visible to users, anything touching a governance rule, and anything you're unsure about.
 - Stop and ask when something needs a product decision. Don't decide it and carry on.
-- Production deploys from `main` (Vercel), so `main` must always be releasable.
+- Production deploys from `main` (Vercel), so `main` must always be releasable. **Only merges to `main` deploy.** `vercel.json` turns off deployments for every other branch (`git.deploymentEnabled`), because Paige's plan limits deploys. Batch work so `main` takes as few merges as practical, and check a branch locally instead of expecting a preview link.
