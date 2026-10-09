@@ -129,6 +129,54 @@ export function proposalReadiness(state, capabilityId, proposal) {
   return { now, proposed: { met: reqs.filter((r) => r.met).length, total: reqs.length, unmet: reqs.filter((r) => !r.met), requirements: reqs } };
 }
 
+// ---------------------------------------------------------------------------
+// Tightening-only amendments skip sign-off (roadmap item 8, Paige 2026-10-09)
+// ---------------------------------------------------------------------------
+
+// A threshold line split into its comparison, its number, and everything else
+// (the number replaced by #). Two lines compare only when everything but the
+// number is identical: same wording, same unit, same comparison.
+export function thresholdParts(text) {
+  const t = String(text || '');
+  const m = t.match(/(≥|>=|≤|<=|<|>|\bminimum\b|\bat least\b|\bmaximum\b|\bat most\b)(\s*\$?\s*)(\d+(?:\.\d+)?)/i);
+  if (!m) return null;
+  const atLeast = ['≥', '>=', '>', 'minimum', 'at least'].includes(m[1].toLowerCase());
+  const at = m.index + m[1].length + m[2].length;
+  return { atLeast, n: Number(m[3]), skeleton: t.slice(0, at) + '#' + t.slice(at + m[3].length) };
+}
+
+// Software decides what "tightening only" means: every changed criterion or
+// requirement is stricter (a higher "at least", a lower "at most", more
+// required cases) and nothing else about it changed; nothing is removed,
+// added, reworded, renamed or loosened. Anything else needs sign-off.
+export function tighteningOnly(base, next) {
+  const changes = [];
+  const kinds = [
+    ['criteria', 'target', (x) => x.name, ['name', 'note']],
+    ['requirements', 'text', (x) => x.text, []],
+  ];
+  for (const [kind, field, label, fixed] of kinds) {
+    const before = base[kind] || [];
+    const after = next[kind] || [];
+    for (const b of before) if (!after.some((a) => a.id === b.id)) return { ok: false, reason: `It removes "${label(b)}".`, changes };
+    for (const a of after) {
+      const b = before.find((x) => x.id === a.id);
+      if (!b) return { ok: false, reason: `It adds "${label(a)}", which software can't compare with anything.`, changes };
+      for (const f of fixed) if (String(a[f] || '') !== String(b[f] || '')) return { ok: false, reason: `It changes the ${f} of "${label(b)}".`, changes };
+      if (String(a[field] || '') === String(b[field] || '')) continue;
+      const p = thresholdParts(b[field]);
+      const q = thresholdParts(a[field]);
+      if (!p || !q) return { ok: false, reason: `"${label(b)}" has no threshold software can compare.`, changes };
+      if (p.skeleton !== q.skeleton) return { ok: false, reason: `"${label(b)}" changes more than its number (its wording, unit or comparison).`, changes };
+      const stricter = p.atLeast ? q.n > p.n : q.n < p.n;
+      if (!stricter) return { ok: false, reason: `"${label(b)}" is ${q.n === p.n ? 'not stricter' : 'loosened'}: ${b[field]} → ${a[field]}.`, changes };
+      changes.push({ kind, id: a.id, label: label(b), from: b[field], to: a[field] });
+    }
+  }
+  if (!changes.length) return { ok: false, reason: 'Nothing is tightened.', changes };
+  return { ok: true, reason: null, changes };
+}
+
 export function applyCriteriaDirect(state, capabilityId, value, by, reason) {
   return saveCriteria(state, capabilityId, { criteria: value.criteria, requirements: value.requirements, by, reason });
 }
@@ -154,6 +202,10 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     return amend(state, capabilityId, 'contract', { value: clean, author: by, reason: why });
   }
   if (openProposal(state, capabilityId, kind)) throw new Error('A proposal for this object is already awaiting sign-off. Approve or reject it first.');
+  if (kind === 'criteria') {
+    const check = tighteningOnly({ criteria: current(state, capabilityId, 'criteria'), requirements: current(state, capabilityId, 'requirements') }, clean);
+    if (check.ok) return applyTightening(state, capabilityId, clean, by, why, check.changes);
+  }
   const required = signoffRequirements(state, capabilityId, by);
   const eligible = namedStakeholders(state, capabilityId).filter((k) => k !== by);
   const feasible = signoffFeasibility(state, capabilityId, required, eligible, by);
@@ -187,6 +239,29 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     body: `${cap.name}: ${who.name} proposed ${proposal.id} after evidence. Needs ${requirementLabel(proposal.required)}, never the proposer. Reason: ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
+  });
+}
+
+// Apply a tightening-only change straight away: new versions of both objects,
+// authored by whoever is acting, marked as tightening only, with a surfaced
+// amendment event after evidence. No proposal, no approvers.
+function applyTightening(state, capabilityId, value, by, reason, changes) {
+  const cap = getCapability(state, capabilityId);
+  const requirements = proposalReadiness(state, capabilityId, { kind: 'criteria', value }).proposed.requirements;
+  const meta = { tighteningOnly: true, tightened: changes };
+  let s = amend(state, capabilityId, 'criteria', { value: value.criteria, author: by, reason, meta, silent: true });
+  s = amend(s, capabilityId, 'requirements', { value: requirements, author: by, reason, meta, silent: true });
+  const v = versionsInForce(s, capabilityId);
+  return logEvent(s, {
+    kind: 'amendment',
+    afterEvidence: true,
+    objectKind: 'criteria',
+    version: v.criteria,
+    tighteningOnly: true,
+    title: `Success criteria tightened to v${v.criteria}, evidence requirements to v${v.requirements} after evidence`,
+    body: `${cap.name}: ${people(state)[by].name} tightened ${changes.map((c) => `${c.label} (${c.from} → ${c.to})`).join('; ')}. Tightening only, so no sign-off: software checked that every change is stricter and nothing was removed, added, reworded or loosened. Reason: ${reason}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/versions?kind=criteria&version=${v.criteria}`,
   });
 }
 

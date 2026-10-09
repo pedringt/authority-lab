@@ -80,7 +80,8 @@ function reasonAndSubmit(state, cap, kind, gated, required, acting) {
     <p class="muted small">${gated
       ? `Proposing as ${acting.name}, ${acting.role}. The proposal is recorded now; the new version is written only after ${requirementLabel(required)} approve. ${acting.name} cannot approve their own proposal. Rejected proposals are kept in the record.`
       : `Saving as ${acting.name}, ${acting.role}, writes a new version of the ${KIND_TITLE[kind]} for ${cap.name}.`}</p>
-    <button class="btn btn-primary btn-block" type="submit">${gated ? 'Submit proposal for sign-off' : 'Save new version'}</button>
+    ${gated && kind === 'criteria' ? html`<p class="small tighten-hint"><strong>Tightening only?</strong> If every change only makes a threshold stricter (a higher "at least", a lower "at most", more required cases) and nothing is removed, added, renamed, reworded or loosened, software applies it straight away as a recorded amendment, with no sign-off. Anything else goes to sign-off.</p>` : ''}
+    <button class="btn btn-primary btn-block" type="submit">${gated ? (kind === 'criteria' ? 'Submit' : 'Submit proposal for sign-off') : 'Save new version'}</button>
   </div>`;
 }
 

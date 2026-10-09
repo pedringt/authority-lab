@@ -34,6 +34,8 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 - **Approver rule.** The proposer never approves. Low/Medium impact: one approver (the owner, or another named stakeholder if the owner proposed). High impact or Financial: two distinct approvers, at least one with the Risk approver right. The sign-off screen shows readiness under both the current and proposed versions.
 - **Approvers are frozen when a proposal opens.** A proposal the eligible approvers could never satisfy is refused when proposed. Proposers can withdraw. Rejections and withdrawals need a reason.
 - **Expanding needs a pending proposal and moves one level at a time; pulling back doesn't need a proposal.** Restrict, Suspend and Redesign still need a named person, a rationale and a record.
+- **No multi-level jumps.** Expanding stays one level at a time; each step needs its own evidence and authorization. (Decided 2026-10-09; considered and not built.)
+- **Tightening-only amendments skip sign-off.** After the lock, a change to criteria or requirements that software confirms is tightening only applies straight away as a recorded amendment (a new version authored by whoever is acting, marked "tightening only", surfaced in Activity). Software decides: every changed row's threshold is strictly stricter (a higher "at least", a lower "at most", more required cases) and only its number changed, with the same wording, unit and comparison; nothing is removed, added, renamed, re-noted or loosened. Equal values are not stricter. Any loosening, or anything software can't compare, sends the whole change to the normal proposal and sign-off. An open criteria proposal blocks the shortcut until it closes. (Decided 2026-10-09.)
 
 ### Workspace setup
 
@@ -97,5 +99,5 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 6. ~~Monitoring and automatic restriction for every capability~~ (done: PRs #51, #52, #53, #55 for issues #48, #49, #50, #54): rules read from the contract, monitoring for every capability, breach and fallback to the level the contract names, incident alerts, and the post-incident review recorded in the app.
 7. ~~Empty-workspace path~~ (done: #57 workspace and workflow in state, #58 start empty, setup and the founding roster).
    - Follow-up: rename the workspace and workflow as a recorded workspace-admin action (#60, done).
-8. **Smaller rule changes** (next): lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
+8. ~~Smaller rule changes~~ (done): tightening-only amendments skip sign-off; multi-level jumps decided against (one level at a time stays).
 9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning conversation before anyone writes issues.

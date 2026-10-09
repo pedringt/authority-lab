@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store/index.js';
+import { workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
 import { html, setPeople, setToday, fmtDate } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
@@ -375,7 +375,9 @@ document.addEventListener('submit', (e) => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('proposeAmendment', capId, kind, { value, by: actor(store.get(), capId), reason: proposeForm.reason.value });
       const after = capData(store.get(), capId).proposals;
-      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=${kind === 'contract' ? 'contract' : 'criteria'}`;
+      // A tightening-only change applies without a proposal; say so on arrival.
+      const tightened = kind === 'criteria' && after.length === before && (currentVersion(store.get(), capId, 'criteria') || {}).tighteningOnly;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=${kind === 'contract' ? 'contract' : 'criteria'}${tightened ? `&tightened=${currentVersion(store.get(), capId, 'criteria').version}` : ''}`;
     });
     return;
   }
