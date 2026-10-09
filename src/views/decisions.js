@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -42,7 +42,7 @@ export function decisionRecordView(state, id) {
     <div>
       <p class="eyebrow"><a href="#/decisions">Decisions</a> · ${auto ? 'Automatic restriction' : 'Human authorization'}</p>
       <h1>Authority change #${String(x.number).padStart(2, '0')}</h1>
-      <p class="lede"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${fmtDate(x.date)}</p>
+      <p class="lede"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${fmtDate(x.date)} · ${recordNames(state, x)}</p>
     </div>
   </div>
   ${auto ? notice('fail', 'This change was made by a software rule, not by a person.', 'The rule was authorized in advance in the contract. Humans authorize expanded authority; software may reduce it when a predefined condition is triggered.') : ''}
@@ -73,6 +73,15 @@ export function decisionRecordView(state, id) {
     ${amendedNote(state, x)}
     <p class="muted small record-foot">Record ${x.id}${x.sequence ? html`, record ${x.sequence} for ${cap.name}` : ''}, written ${fmtDate(x.date)}. Decision records are immutable; a later change creates a new record and leaves this one as it was. People are shown as they were when it was written.</p>
   </div>`;
+}
+
+// The workspace and workflow as named when the record was written (#60), with
+// today's names alongside if they have changed since.
+function recordNames(state, record) {
+  const then = namesAtRecord(state, record);
+  const label = `${then.workspace.name} · ${then.workflow.name}`;
+  const now = `${workspaceOf(state).name} · ${workflowOf(state).name}`;
+  return label === now ? label : html`${label} <span class="muted small">(as named then; now ${now})</span>`;
 }
 
 // Shown on a decision when the criteria or evidence requirements it relied on

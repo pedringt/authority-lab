@@ -42,6 +42,7 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 - **One workflow per workspace, for now.** Setup names the workspace and its workflow; every capability belongs to that workflow. (Decided 2026-10-09.)
 - **The founding roster is the one time rights are set directly.** Setup records the first people and their rights as roster version 1, the way the seed does, and needs at least two workspace admins, because every later rights change needs a different admin to approve it (one admin could never grant anyone a right). Risk approvers are optional; coverage warnings explain gaps. The setup form asks **who is setting this up**, choosing from the founding admins; that person is recorded as the author of roster version 1 and is acting when the workspace opens, so the record names who acted rather than whoever was listed first. When fewer than two Risk approvers are listed, the setup screen says, without blocking, that High-impact and Financial changes can't be signed off until the right is granted. (Decided 2026-10-09.)
 - **The footer says what is simulated.** The Northstar demo says "All data is seeded and fictional"; a workspace set up from scratch says "AI outputs are simulated; nothing calls a model."
+- **Renaming is a recorded admin edit.** A workspace admin renames the workspace or workflow, or changes a description, directly with a required reason; no sign-off, because it changes nobody's rights or authority. The control is the "Workspace" section at the top of the People page; every change keeps its author, reason, before and after, and is surfaced in Activity. Records written before a rename keep the names in force when they were written. (Decided 2026-10-09, #60.)
 - **Every screen works with no capabilities.** Overview, Tests and Evidence point to Add capability until the first one exists.
 
 ### People and roles
@@ -95,6 +96,6 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 5. ~~Header nav cleanup~~ (done: #47): underlined section tabs flush with the brand, an even gap, quieter count badges.
 6. ~~Monitoring and automatic restriction for every capability~~ (done: PRs #51, #52, #53, #55 for issues #48, #49, #50, #54): rules read from the contract, monitoring for every capability, breach and fallback to the level the contract names, incident alerts, and the post-incident review recorded in the app.
 7. ~~Empty-workspace path~~ (done: #57 workspace and workflow in state, #58 start empty, setup and the founding roster).
-   - Follow-up, not started: rename the workspace and workflow as a recorded workspace-admin action (#60).
+   - Follow-up: rename the workspace and workflow as a recorded workspace-admin action (#60, done).
 8. **Smaller rule changes** (next): lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
 9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning conversation before anyone writes issues.

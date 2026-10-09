@@ -433,6 +433,17 @@ document.addEventListener('submit', (e) => {
     });
     return;
   }
+  const renameForm = e.target.closest('[data-form="rename-workspace"]');
+  if (renameForm) {
+    e.preventDefault();
+    const f = new FormData(renameForm);
+    dispatchOr('#/people?workspace=edit', () => {
+      store.dispatch('renameWorkspace', { workspace: { name: f.get('ws-name'), description: f.get('ws-description') }, workflow: { name: f.get('wf-name'), description: f.get('wf-description') }, by: actor(store.get()), reason: f.get('reason') });
+      location.hash = '#/people';
+      render();
+    });
+    return;
+  }
   const wsForm = e.target.closest('[data-form="setup-workspace"]');
   if (wsForm) {
     e.preventDefault();

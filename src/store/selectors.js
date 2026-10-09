@@ -61,11 +61,11 @@ export function performanceResultsSeen(state, capabilityId) {
 // contract finalized, plus mitigations and stakeholder reviews. Setup-type
 // events (for example "criteria defined") sit in Full history. An amendment
 // is surfaced only when it was made after performance results were seen.
-export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision', 'proposal']);
+export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision', 'proposal', 'workspace']);
 
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
-  review: 'Review', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', 'scenarios-saved': 'Scenarios saved', proposal: 'Proposal', roster: 'Roster',
+  review: 'Review', workspace: 'Workspace', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', 'scenarios-saved': 'Scenarios saved', proposal: 'Proposal', roster: 'Roster',
   decision: 'Decision', test: 'Test run', amendment: 'Amendment',
 };
 
