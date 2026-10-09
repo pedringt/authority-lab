@@ -95,5 +95,6 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 5. ~~Header nav cleanup~~ (done: #47): underlined section tabs flush with the brand, an even gap, quieter count badges.
 6. ~~Monitoring and automatic restriction for every capability~~ (done: PRs #51, #52, #53, #55 for issues #48, #49, #50, #54): rules read from the contract, monitoring for every capability, breach and fallback to the level the contract names, incident alerts, and the post-incident review recorded in the app.
 7. ~~Empty-workspace path~~ (done: #57 workspace and workflow in state, #58 start empty, setup and the founding roster).
-8. Smaller rule changes: lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
-9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning.
+   - Follow-up, not started: rename the workspace and workflow as a recorded workspace-admin action (#60).
+8. **Smaller rule changes** (next): lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
+9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning conversation before anyone writes issues.
