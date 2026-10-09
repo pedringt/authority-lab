@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
-import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName } from '../store/index.js';
+import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -282,12 +282,40 @@ function rulesCard(state, cap) {
     { subtitle: `From the contract's automatic restriction conditions${version ? `, contract v${version}` : ''}. Software applies these; nobody has to notice a problem for them to fire.` });
 }
 
+// Post-incident review (#54): the form while a restriction or rule incident is
+// open, then the recorded reviews. The owner or a Risk approver records it
+// (a Risk approver for High/Financial); authority stays where the rule left it.
+function reviewCard(state, cap, d) {
+  const need = reviewNeeded(state, cap.id);
+  const done = (d.reviews || []).slice().reverse();
+  const recorded = done.map((rv) => html`<div class="card review-record"><p class="eyebrow">${rv.id} · Post-incident review · ${fmtDate(rv.date)}</p>
+    ${kv([['Reviewed by', html`${personAt(rv.byAt, rv.by).name}${rightsNote(rv.byAt)}`], ['Covers', [rv.restrictionRecordId ? html`<a href="#/decisions/${rv.restrictionRecordId}">${rv.restrictionRecordId}</a>` : null, ...rv.incidentIds].filter(Boolean).map((x, i) => html`${i ? ', ' : ''}${x}`)], ['What happened', rv.whatHappened], ['Cause', rv.cause], ['What changed', rv.changes], ['Authority', html`Stayed at ${authorityLabel(rv.authorityAt)}. Expanding again needs a proposal and a named authorization.`]])}
+  </div>`);
+  if (!need.any) return recorded.length ? html`${recorded}` : '';
+  const by = actor(state, cap.id);
+  const who = person(by);
+  const e = reviewEligibility(state, cap.id, by);
+  const covers = [need.restriction ? `the automatic restriction (${d.monitoring && d.monitoring.breachRecordId})` : null, need.incidents.length ? need.incidents.map((x) => x.incidentId).join(', ') : null].filter(Boolean).join(' and ');
+  return html`<form class="card review-form" data-form="record-review" data-capability="${cap.id}">
+    <p class="eyebrow">Record the post-incident review</p>
+    <p>Covers ${covers}. Recording it clears the review lock and the alert. ${need.restriction ? html`${cap.name} stays at ${authorityLabel(cap.authority)}; expanding again needs a proposal and a named authorization.` : 'Authority is unchanged.'}</p>
+    <label class="field field-stack"><span>What happened</span><textarea name="whatHappened" rows="2" required></textarea></label>
+    <label class="field field-stack"><span>Cause</span><textarea name="cause" rows="2" required></textarea></label>
+    <label class="field field-stack"><span>What changed as a result</span><textarea name="changes" rows="2" required></textarea></label>
+    <p class="muted small">Recording as <strong>${who.name}</strong>, ${who.role}. The owner or a Risk approver records the review${isHighOrFinancial(state, cap.id) ? '; for this High-impact or Financial capability, a Risk approver' : ''}, but not whoever authorized the expansion that was restricted.</p>
+    ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} Switch who is acting in the header.</p>`}
+    <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Record review</button>
+  </form>${recorded}`;
+}
+
 function monitoringTab(state, cap, d) {
   const m = d.monitoring;
   const st = monitoringStatus(state, cap.id);
   const applying = st.rules.filter((r) => r.active).length;
   const demo = breachRule(state, cap.id);
-  const head = m && m.breached
+  const head = m && m.breached && m.reviewId
+    ? notice('watch', 'Restricted by a contract rule, reviewed', `${cap.name} stays at ${authorityLabel(cap.authority)} after the contract rule was crossed: ${m.reading}. The review is recorded below; expanding again needs a proposal and a named authorization.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Restriction record' })
+    : m && m.breached
     ? notice('fail', 'Authority automatically restricted', `${cap.name} returned to ${authorityLabel(cap.authority)}. The contract rule was crossed: ${m.reading}. A human review is required before authority can expand again.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Restriction record' })
     : m && m.recordId
       ? notice('pass', `Expanded ${m.windowDays} days ago (simulated)`, `Authority change ${m.recordId} is in its monitoring period. The restriction rules below are enforced by software; nobody has to notice a problem for them to fire.`, { link: `#/decisions/${m.recordId}`, linkText: 'Decision record' })
@@ -314,5 +342,5 @@ function monitoringTab(state, cap, d) {
     ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
         <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
     : '';
-  return html`${head}${metrics}${rulesCard(state, cap)}${fired}${opened}${control}`;
+  return html`${head}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${fired}${opened}${control}`;
 }

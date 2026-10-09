@@ -14,6 +14,6 @@ export { SECTION_KEYS, SECTION_LABELS, startContractDraft, reviewSuggestion, add
 export { conditionsPreview, scopeText, nextAuthority, evidenceSnapshot, selectDecision, setCondition, setRationale, canAuthorize, authorize, proposeAuthority } from './decisions.js';
 export { startTestRun, advanceTestRun, criteriaSaved, criteriaLocked, canRunSuite, defaultsFor, CORE_CRITERIA, CORE_REQUIREMENTS, defaultDeviations, saveCriteria, simulateScenario, scenarioNudge, saveScenarios, addStarterScenarios } from './evidence.js';
 export { SETTINGS, pilotStarted, needsSignoff, stakeholderMembershipChanged, signoffRequirements, requirementLabel, namedStakeholders, isRiskStakeholder, riskStakeholders, openProposal, getProposal, evaluateRequirement, proposalReadiness, proposeAmendment, signoffFeasibility, roleLabel, approvalsComplete, approvalEligibility, approveProposal, withdrawProposal, rejectProposal, STANCES, saveStakeholders } from './proposals.js';
-export { simulateBreach, parseRestrictionLine, restrictionRules, ruleCrossed, monitoringStatus, breachRule, readingText } from './monitoring.js';
+export { simulateBreach, parseRestrictionLine, restrictionRules, ruleCrossed, monitoringStatus, breachRule, readingText, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion } from './monitoring.js';
 export { isHighOrFinancial, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact } from './coverage.js';
 export { STORAGE_KEY, createStore } from './persist.js';

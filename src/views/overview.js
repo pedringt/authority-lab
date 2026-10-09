@@ -16,7 +16,7 @@ export function overviewView(state) {
   const decided = Boolean(d.decision.recordId);
   const pending = decisionRequired(state, cap.id);
   const proposed = proposedAuthority(state, cap.id);
-  const breached = d.monitoring && d.monitoring.breached;
+  const breached = d.reviewRequired && d.monitoring && d.monitoring.breached;
 
   const header = html`<div class="page-head">
     <div>
@@ -71,7 +71,7 @@ export function overviewView(state) {
         <div class="hero-side">
           <p class="eyebrow">What happened</p>
           <p>The contract rule was crossed: ${d.monitoring.reading}.</p>
-          <a class="btn" href="#/decisions/${rec.id}">Open restriction record</a>
+          <a class="btn btn-primary" href="#/capabilities/${cap.id}?tab=monitoring">Record the review</a> <a class="btn" href="#/decisions/${rec.id}">Open restriction record</a>
         </div>
       </div>
     </div>`;

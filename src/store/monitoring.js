@@ -3,7 +3,8 @@
 
 import { getCapability, capData, updateCap } from './state.js';
 import { versionsInForce, authorityLabel, current, currentVersion, levelName } from './selectors.js';
-import { snapshotPerson } from './people.js';
+import { people, snapshotPerson, isActivePerson, isRiskApprover } from './people.js';
+import { isHighOrFinancial } from './coverage.js';
 
 // Restriction rules come from the contract's "Automatic restriction" lines
 // (the contract wins, decided 2026-10-08). A line names its threshold, its
@@ -187,4 +188,104 @@ export function simulateBreach(state, capabilityId) {
     },
   });
   return { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity, alerts: [alert, ...state.alerts] };
+}
+
+// ---------------------------------------------------------------------------
+// Post-incident review (#54)
+// ---------------------------------------------------------------------------
+
+// What a review would close: the review lock after an automatic restriction,
+// and any rule incident not yet reviewed.
+export function reviewNeeded(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  const incidents = (d.ruleIncidents || []).filter((x) => !x.reviewId);
+  return { restriction: Boolean(d.reviewRequired), incidents, any: Boolean(d.reviewRequired) || incidents.length > 0 };
+}
+
+// The human decision that set the authority an automatic restriction pulled
+// back: the latest record before the restriction, made by a person, whose new
+// level is the level the rule restricted from. null when there is no open
+// restriction, or no such record (seeded authority with no record).
+export function restrictedExpansion(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (!d.reviewRequired || !d.monitoring || !d.monitoring.breachRecordId) return null;
+  const restriction = state.decisionRecords.find((r) => r.id === d.monitoring.breachRecordId);
+  if (!restriction || !restriction.previous) return null;
+  const before = state.decisionRecords.filter((r) => r.capabilityId === capabilityId && r.number < restriction.number && r.authorizedBy !== 'system');
+  const rec = before[before.length - 1];
+  return rec && rec.next.level === restriction.previous.level ? rec : null;
+}
+
+// Who may record it: the owner or a Risk approver; for a High-impact or
+// Financial capability, only a Risk approver. Never the system; never someone
+// deactivated; and never the person who authorized the expansion that was
+// automatically restricted (Paige, 2026-10-09): someone else looks at it.
+export function reviewEligibility(state, capabilityId, personKey) {
+  const cap = getCapability(state, capabilityId);
+  const p = people(state)[personKey];
+  if (!p) return { ok: false, reason: 'Choose who is acting.' };
+  if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and cannot record a review.` };
+  const risk = isRiskApprover(state, personKey);
+  if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so a Risk approver records the review. ${p.name} does not hold the Risk approver right.` };
+  if (personKey !== cap.owner && !risk) return { ok: false, reason: `The owner (${people(state)[cap.owner].name}) or a Risk approver records the review.` };
+  const expansion = restrictedExpansion(state, capabilityId);
+  if (expansion && expansion.authorizedBy === personKey) return { ok: false, reason: `${p.name} authorized the expansion that was automatically restricted (${expansion.id}), so someone else records the review.` };
+  return { ok: true, reason: null };
+}
+
+// Record the review. It clears the review lock, the capability's alerts and
+// any open rule incident; authority stays where the rule left it, so expanding
+// again still needs a proposal and a named authorization. Not a decision
+// record: authority does not change.
+export function recordReview(state, capabilityId, { by, whatHappened, cause, changes } = {}) {
+  const need = reviewNeeded(state, capabilityId);
+  if (!need.any) throw new Error('There is nothing to review: no automatic restriction or open rule incident.');
+  const e = reviewEligibility(state, capabilityId, by);
+  if (!e.ok) throw new Error(e.reason);
+  const fields = { whatHappened: String(whatHappened || '').trim(), cause: String(cause || '').trim(), changes: String(changes || '').trim() };
+  if (fields.whatHappened.length < 10) throw new Error('Say what happened (a sentence).');
+  if (fields.cause.length < 10) throw new Error('Say what caused it (a sentence).');
+  if (fields.changes.length < 10) throw new Error('Say what changed as a result (a sentence).');
+  const d = capData(state, capabilityId);
+  const cap = getCapability(state, capabilityId);
+  const all = state.capabilities.flatMap((c) => capData(state, c.id).reviews || []);
+  const id = `RV-${String(all.length + 1).padStart(2, '0')}`;
+  const review = {
+    id,
+    date: state.today,
+    by,
+    byAt: snapshotPerson(state, by),
+    ...fields,
+    restrictionRecordId: need.restriction && d.monitoring ? d.monitoring.breachRecordId : null,
+    incidentIds: need.incidents.map((x) => x.incidentId),
+    authorityAt: { ...cap.authority },
+  };
+  const who = people(state)[by];
+  const s = updateCap(state, capabilityId, {
+    reviewRequired: false,
+    reviews: [...(d.reviews || []), review],
+    ruleIncidents: (d.ruleIncidents || []).map((x) => (x.reviewId ? x : { ...x, reviewId: id })),
+    monitoring: d.monitoring ? { ...d.monitoring, reviewId: need.restriction ? id : d.monitoring.reviewId } : d.monitoring,
+  });
+  const capabilities = need.restriction ? s.capabilities.map((c) => (c.id === cap.id && c.status === 'review-required' ? { ...c, status: 'restricted' } : c)) : s.capabilities;
+  const activity = [{
+    id: `ACT-${Date.now()}-r`,
+    date: state.today,
+    kind: 'review',
+    surfaced: true,
+    title: 'Post-incident review recorded',
+    body: `${who.name} reviewed ${[review.restrictionRecordId ? `the automatic restriction (${review.restrictionRecordId})` : null, review.incidentIds.length ? review.incidentIds.join(', ') : null].filter(Boolean).join(' and ')} on ${cap.name}. Cause: ${fields.cause} ${cap.name} stays at ${authorityLabel(cap.authority)}; expanding again needs a proposal and a named authorization.`,
+    capabilityId: cap.id,
+    link: `#/capabilities/${cap.id}?tab=monitoring`,
+  }, ...s.activity];
+  return { ...s, capabilities, activity, alerts: s.alerts.filter((a) => a.capabilityId !== cap.id) };
+}
+
+// The review that followed an automatic restriction record, if any.
+export function reviewForRecord(state, recordId) {
+  for (const c of state.capabilities) {
+    const r = (capData(state, c.id).reviews || []).find((x) => x.restrictionRecordId === recordId);
+    if (r) return r;
+  }
+  return null;
 }

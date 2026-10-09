@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -17,7 +17,7 @@ export function decisionsListView(state) {
   </div>
   ${pending.map((c) => notice('decision', `Decision required: ${c.name}`, `Proposed change from ${authorityLabel(c.authority)} to ${authorityLabel(proposedAuthority(state, c.id))}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} evidence requirements met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
   ${state.capabilities.flatMap((c) => capData(state, c.id).proposals.filter((p) => p.status === 'open').map((p) => notice('watch', `Amendment awaiting sign-off: ${c.name}`, `${p.id}, proposed by ${person(p.proposedBy).name}. Needs ${requirementLabel(p.required)}.`, { link: `#/capabilities/${c.id}/proposals/${p.id}`, linkText: 'Open' })))}
-  ${reviews.map((c) => notice('fail', `Review required before any expansion: ${c.name}`, 'Authority was restricted automatically. A post-incident review must be recorded before authority can expand again.', { link: `#/decisions/${capData(state, c.id).monitoring.breachRecordId}`, linkText: 'Restriction record' }))}
+  ${reviews.map((c) => notice('fail', `Review required before any expansion: ${c.name}`, 'Authority was restricted automatically. The owner or a Risk approver records a post-incident review on the Monitoring tab before authority can expand again.', { link: `#/capabilities/${c.id}?tab=monitoring`, linkText: 'Record the review' }))}
   <div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Capability</th><th>Date</th><th>Change</th><th>Decision</th><th>Authorized by</th></tr></thead>
     <tbody>${records.map((x) => html`<tr>
@@ -45,7 +45,8 @@ export function decisionRecordView(state, id) {
       <p class="lede"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${fmtDate(x.date)}</p>
     </div>
   </div>
-  ${auto ? notice('fail', 'This change was made by a software rule, not by a person.', 'The rule was authorized in advance as part of the expansion decision. Humans authorize expanded authority; software may reduce it when a predefined condition is triggered.') : ''}
+  ${auto ? notice('fail', 'This change was made by a software rule, not by a person.', 'The rule was authorized in advance in the contract. Humans authorize expanded authority; software may reduce it when a predefined condition is triggered.') : ''}
+  ${auto && reviewForRecord(state, x.id) ? (() => { const rv = reviewForRecord(state, x.id); return notice('pass', `Reviewed: ${rv.id}, ${fmtDate(rv.date)}, by ${personAt(rv.byAt, rv.by).name}`, `Cause: ${rv.cause} What changed: ${rv.changes} The review is a separate record; this restriction record is unchanged.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Review' }); })() : auto && capData(state, cap.id).reviewRequired ? notice('watch', 'Not yet reviewed', 'The owner or a Risk approver records the post-incident review on the Monitoring tab.', { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' }) : ''}
   <div class="card record">
     <div class="record-change">
       <div><span class="fact-label">Previous</span>${x.previous ? authorityBadge(x.previous) : html`<span class="muted">None (new capability)</span>`}</div>
@@ -96,7 +97,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     const rec = state.decisionRecords.find((x) => x.id === dec.recordId);
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/decisions">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was recorded as <a href="#/decisions/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a> on ${fmtDate(rec.date)}.</p></div></div>
       ${d.reviewRequired
-        ? notice('fail', 'Review required', 'Authority was restricted automatically after the decision. A post-incident review must be recorded before a new expansion can be authorized. Use Reset demo to replay the flow.', { link: `#/decisions/${d.monitoring.breachRecordId}`, linkText: 'Restriction record' })
+        ? notice('fail', 'Review required', 'Authority was restricted automatically after the decision. A post-incident review must be recorded before a new expansion can be authorized.', { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' })
         : notice('pass', 'Authority is set', `${cap.name} is at ${authorityLabel(cap.authority)}. A new decision would create a new record; this prototype replays the flow through Reset demo.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Monitoring' })}`;
   }
 

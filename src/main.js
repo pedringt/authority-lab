@@ -376,6 +376,18 @@ document.addEventListener('submit', (e) => {
     dispatchOr(route, () => { store.dispatch('rejectProposal', capId, pid, { by: actor(store.get(), capId), reason: rejectForm.reason.value }); location.hash = route; render(); });
     return;
   }
+  const reviewForm = e.target.closest('[data-form="record-review"]');
+  if (reviewForm) {
+    e.preventDefault();
+    const capId = reviewForm.dataset.capability;
+    const f = new FormData(reviewForm);
+    dispatchOr(here(), () => {
+      store.dispatch('recordReview', capId, { by: actor(store.get(), capId), whatHappened: f.get('whatHappened'), cause: f.get('cause'), changes: f.get('changes') });
+      clearErrorOn(here(), 'error');
+      render();
+    });
+    return;
+  }
   const critForm = e.target.closest('[data-form="save-criteria"]');
   if (critForm) {
     e.preventDefault();
