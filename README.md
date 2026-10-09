@@ -47,7 +47,7 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 ## Starting empty
 
-**Start empty** (demo controls, top right) swaps the Northstar demo for a blank workspace. Setup comes first: name the workspace and its one workflow, and record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on). Then add the first capability. **Reset demo** brings Northstar back.
+**Start empty** (demo controls, top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). Setup comes first: name the workspace and its one workflow, record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on), and say which founding admin is setting it up. Then add the first capability. **Reset demo** brings Northstar back.
 
 ## Adding a capability
 

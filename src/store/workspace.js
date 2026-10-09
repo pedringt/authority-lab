@@ -15,6 +15,8 @@ export function startEmpty() {
   return {
     ...base,
     setupPending: true,
+    // A workspace set up from scratch, not the seeded Northstar demo.
+    startedEmpty: true,
     workspace: null,
     workflow: null,
     roster: { versions: [] },
@@ -36,7 +38,9 @@ export function setupPending(state) {
 // approve it, so one admin could never grant anyone a right.
 export const MIN_FOUNDING_ADMINS = 2;
 
-export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = [] } = {}) {
+// `by` is the name of the founding workspace admin setting the workspace up:
+// the person who acted, recorded as the author of roster version 1.
+export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = [], by = '' } = {}) {
   if (!state.setupPending) throw new Error('This workspace is already set up.');
   const ws = { name: String(workspace.name || '').trim(), description: String(workspace.description || '').trim() };
   const wf = { name: String(workflow.name || '').trim(), description: String(workflow.description || '').trim() };
@@ -52,8 +56,11 @@ export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = 
   const admins = rows.filter((p) => p.workspaceAdmin);
   if (admins.length < MIN_FOUNDING_ADMINS) throw new Error(`The founding roster needs at least ${MIN_FOUNDING_ADMINS} workspace admins, because every later rights change needs a different admin to approve it.`);
 
+  const byKey = personKey(by);
+  if (!byKey) throw new Error('Choose who is setting this up.');
+  if (!admins.some((p) => personKey(p.name) === byKey)) throw new Error(`${String(by).trim()} is not one of the founding workspace admins. The person setting the workspace up must be one.`);
   const value = Object.fromEntries(rows.map((p, i) => [keys[i], { name: p.name, role: p.title, team: p.team, active: true, rights: { riskApprover: p.riskApprover, workspaceAdmin: p.workspaceAdmin } }]));
-  const founder = keys[rows.indexOf(admins[0])];
+  const founder = byKey;
   const rosterState = { roster: { versions: [{ value }] } };
   const version = { version: 1, date: state.today, author: founder, authorAt: snapshotPerson(rosterState, founder), reason: 'Founding roster, recorded at workspace setup.', afterEvidence: false, before: null, value: clone(value) };
   const riskNames = rows.filter((p) => p.riskApprover).map((p) => p.name);
@@ -63,7 +70,7 @@ export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = 
     kind: 'milestone',
     surfaced: true,
     title: 'Workspace set up',
-    body: `${ws.name}, workflow ${wf.name}. Founding roster of ${rows.length}: workspace admins ${admins.map((p) => p.name).join(', ')}; Risk approvers ${riskNames.length ? riskNames.join(', ') : 'none yet'}. From here, every rights change is a proposal approved by a different admin.`,
+    body: `Set up by ${value[founder].name}. ${ws.name}, workflow ${wf.name}. Founding roster of ${rows.length}: workspace admins ${admins.map((p) => p.name).join(', ')}; Risk approvers ${riskNames.length ? riskNames.join(', ') : 'none yet'}. From here, every rights change is a proposal approved by a different admin.`,
     capabilityId: null,
     link: '#/people',
   };
@@ -76,4 +83,12 @@ export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = 
     actingAs: founder,
     activity: [event, ...state.activity],
   };
+}
+
+// Fewer than two Risk approvers is allowed at setup (warnings never block), but
+// High-impact and Financial changes can't be signed off until the right is
+// granted through a governed proposal.
+export function foundingRiskGap(people = []) {
+  const n = people.filter((p) => p && p.riskApprover && String(p.name || '').trim()).length;
+  return n < 2 ? n : null;
 }

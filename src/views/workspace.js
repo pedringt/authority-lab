@@ -2,7 +2,7 @@
 // route until the workspace, its workflow and the founding roster are set,
 // and the empty state screens show before the first capability exists.
 import { html, raw, notice } from '../ui.js';
-import { MIN_FOUNDING_ADMINS, workspaceOf, workflowOf } from '../store/index.js';
+import { MIN_FOUNDING_ADMINS, foundingRiskGap, workspaceOf, workflowOf } from '../store/index.js';
 
 const BLANK = { name: '', title: '', team: '', workspaceAdmin: false, riskApprover: false };
 
@@ -17,10 +17,25 @@ function personRow(p) {
   </tr>`;
 }
 
+// Who can set the workspace up: the founding admins typed so far. main.js
+// rebuilds this list as the roster is edited.
+export function founderOptions(people, chosen) {
+  const admins = people.filter((p) => p.workspaceAdmin && String(p.name || '').trim());
+  if (!admins.length) return html`<option value="">Mark at least two workspace admins first</option>`;
+  return html`<option value="" ${chosen ? '' : raw('selected')}>Choose a founding admin</option>${admins.map((p) => html`<option value="${p.name.trim()}" ${p.name.trim() === chosen ? raw('selected') : ''}>${p.name.trim()}</option>`)}`;
+}
+
+// The non-blocking note when fewer than two Risk approvers are listed.
+export function riskGapNote(people) {
+  const n = foundingRiskGap(people);
+  return n === null ? '' : `${n === 0 ? 'No Risk approvers are' : 'Only one Risk approver is'} listed. Setup can go ahead, but High-impact and Financial changes can't be signed off until two Risk approvers exist, and from here a right is granted only through a proposal that a second workspace admin approves.`;
+}
+
 // `draft` holds what was typed when a submit failed, so nothing is lost.
 export function workspaceSetupView(state, query, draft = null) {
   const error = query.get('error');
-  const d = draft || { workspace: { name: '', description: '' }, workflow: { name: '', description: '' }, people: [BLANK, BLANK, BLANK] };
+  const d = draft || { workspace: { name: '', description: '' }, workflow: { name: '', description: '' }, people: [BLANK, BLANK, BLANK], by: '' };
+  const gap = riskGapNote(d.people);
   return html`<div class="page-head">
     <div>
       <p class="eyebrow">New workspace</p>
@@ -49,7 +64,12 @@ export function workspaceSetupView(state, query, draft = null) {
         <tbody data-rows="founders">${d.people.map(personRow)}</tbody>
       </table></div>
       <button class="btn btn-sm" type="button" data-action="row-add" data-kind="founders">Add a person</button>
-      <p class="muted small">The first workspace admin listed sets the workspace up and is acting when it opens.</p>
+      <p class="notice notice-watch risk-gap" data-risk-gap role="status" ${gap ? '' : raw('hidden')}>${gap}</p>
+    </div>
+    <div class="card">
+      <label class="field field-stack"><span>Who is setting this up?</span>
+        <select name="ws-by" data-founders required>${founderOptions(d.people, d.by)}</select></label>
+      <p class="muted small">One of the founding workspace admins. They are recorded as the author of the founding roster and are acting when the workspace opens.</p>
     </div>
     <button class="btn btn-primary" type="submit">Set up the workspace</button>
   </form>

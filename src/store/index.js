@@ -17,4 +17,4 @@ export { SETTINGS, pilotStarted, needsSignoff, stakeholderMembershipChanged, sig
 export { simulateBreach, parseRestrictionLine, restrictionRules, ruleCrossed, monitoringStatus, breachRule, readingText, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion } from './monitoring.js';
 export { isHighOrFinancial, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact } from './coverage.js';
 export { STORAGE_KEY, createStore } from './persist.js';
-export { startEmpty, setupPending, setUpWorkspace, MIN_FOUNDING_ADMINS } from './workspace.js';
+export { startEmpty, setupPending, setUpWorkspace, MIN_FOUNDING_ADMINS, foundingRiskGap } from './workspace.js';

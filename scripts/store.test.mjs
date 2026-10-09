@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2246,7 +2246,7 @@ const FOUNDERS = [
   { name: 'Ben Okoro', title: 'Ops Lead', team: 'Operations', workspaceAdmin: true },
   { name: 'Cara Ng', title: 'Risk Lead', team: 'Risk', riskApprover: true },
 ];
-const SETUP = { workspace: { name: 'Acme Help', description: 'Support for Acme.' }, workflow: { name: 'Ticket handling', description: 'From inbox to resolution.' }, people: FOUNDERS };
+const SETUP = { workspace: { name: 'Acme Help', description: 'Support for Acme.' }, workflow: { name: 'Ticket handling', description: 'From inbox to resolution.' }, people: FOUNDERS, by: 'Ben Okoro' };
 
 test('start empty: no capabilities, records, people or activity until setup', () => {
   const s = startEmpty();
@@ -2265,11 +2265,12 @@ test('workspace setup records the workspace, the one workflow and the founding r
   const v = rosterVersions(s);
   assert.equal(v.length, 1);
   assert.match(v[0].reason, /Founding roster/);
-  assert.equal(v[0].author, 'ana-ruiz', 'the first admin listed sets it up');
+  assert.equal(v[0].author, 'ben-okoro', 'the person who chose to set it up, not the first listed');
+  assert.equal(v[0].authorAt.name, 'Ben Okoro');
   assert.deepEqual(activeAdmins(s).sort(), ['ana-ruiz', 'ben-okoro']);
   assert.equal(isRiskApprover(s, 'cara-ng'), true);
   assert.equal(isRiskApprover(s, 'ana-ruiz'), false);
-  assert.equal(s.actingAs, 'ana-ruiz');
+  assert.equal(s.actingAs, 'ben-okoro');
   assert.equal(s.activity[0].title, 'Workspace set up');
   assert.throws(() => setUpWorkspace(s, SETUP), /already set up/, 'setup happens once');
 });
@@ -2311,4 +2312,20 @@ test('the store persists an empty workspace through setup', () => {
   assert.equal(createStore({ storage }).get().setupPending, true);
   store.dispatch('setUpWorkspace', SETUP);
   assert.equal(workspaceOf(createStore({ storage }).get()).name, 'Acme Help');
+});
+
+test('the person setting up the workspace is chosen, and must be a founding admin', () => {
+  const e = startEmpty();
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: '' }), /Choose who is setting this up/);
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Cara Ng' }), /not one of the founding workspace admins/, 'a founding Risk approver who is not an admin');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Maya Chen' }), /not one of the founding workspace admins/, 'someone not in the roster');
+  const s = setUpWorkspace(e, { ...SETUP, by: 'Ana Ruiz' });
+  assert.deepEqual([rosterVersions(s)[0].author, s.actingAs], ['ana-ruiz', 'ana-ruiz']);
+  assert.match(s.activity[0].body, /^Set up by Ana Ruiz\./);
+});
+
+test('setup notes, without blocking, when fewer than two Risk approvers are listed', () => {
+  assert.equal(foundingRiskGap(FOUNDERS), 1);
+  assert.equal(foundingRiskGap([...FOUNDERS, { name: 'Dev Patel', title: 'Risk Analyst', team: 'Risk', riskApprover: true }]), null);
+  assert.doesNotThrow(() => setUpWorkspace(startEmpty(), SETUP), 'one Risk approver is allowed');
 });

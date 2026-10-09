@@ -16,7 +16,7 @@ import { proposeView, proposalView } from './views/proposals.js';
 import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
-import { workspaceSetupView, noCapabilitiesView } from './views/workspace.js';
+import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -24,6 +24,7 @@ const nav = document.getElementById('nav');
 const acting = document.getElementById('acting');
 const demoDate = document.getElementById('demo-date');
 const brandWs = document.getElementById('brand-ws');
+const footData = document.getElementById('foot-data');
 
 const NAV = [
   ['overview', 'Overview'],
@@ -68,6 +69,7 @@ function render() {
   setToday(state.today);
   demoDate.textContent = fmtDate(state.today);
   brandWs.textContent = workspaceOf(state).name;
+  footData.textContent = state.startedEmpty ? 'AI outputs are simulated; nothing calls a model.' : 'All data is seeded and fictional.';
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;
   let view;
@@ -199,6 +201,26 @@ function here() {
   return query.toString() ? `${path}?${query}` : path;
 }
 
+// The inline confirm step for the two buttons that erase every record.
+let pendingErase = null;
+const demoButtons = document.getElementById('demo-buttons');
+const demoConfirm = document.getElementById('demo-confirm');
+function askToErase(kind) {
+  pendingErase = kind;
+  document.getElementById('demo-confirm-go').textContent = kind === 'start-empty' ? 'Erase and start empty' : 'Erase and reset demo';
+  demoButtons.hidden = true;
+  demoConfirm.hidden = false;
+  document.getElementById('demo-confirm-go').focus();
+}
+function closeEraseConfirm(restoreFocus = true) {
+  const kind = pendingErase;
+  pendingErase = null;
+  demoConfirm.hidden = true;
+  demoButtons.hidden = false;
+  if (restoreFocus && kind) demoButtons.querySelector(`[data-action="${kind}"]`).focus();
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pendingErase) closeEraseConfirm(); });
+
 // Row menus (details.menu) close on an outside click, on Escape, and after a choice.
 document.addEventListener('click', (e) => {
   for (const m of document.querySelectorAll('details.menu[open]')) if (!m.contains(e.target) || e.target.closest('.menu-list a')) m.open = false;
@@ -260,16 +282,15 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (action === 'row-remove') { btn.closest('tr').remove(); return; }
-  if (action === 'start-empty') {
-    store.dispatch('startEmpty');
+  // Start empty and Reset demo erase every record, so each asks first, inline.
+  if (action === 'start-empty' || action === 'reset') askToErase(action);
+  if (action === 'cancel-erase') closeEraseConfirm();
+  if (action === 'confirm-erase') {
+    const kind = pendingErase;
+    closeEraseConfirm(false);
+    store.dispatch(kind === 'start-empty' ? 'startEmpty' : 'reset');
     stopSuite();
     setupDraft = null;
-    location.hash = '#/overview';
-    render();
-  }
-  if (action === 'reset') {
-    store.dispatch('reset');
-    stopSuite();
     location.hash = '#/overview';
     render();
   }
@@ -414,6 +435,7 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const val = (el, name) => (el.querySelector(`[name="${name}"]`) || {}).value || '';
     const draft = {
+      by: val(wsForm, 'ws-by'),
       workspace: { name: val(wsForm, 'ws-name'), description: val(wsForm, 'ws-description') },
       workflow: { name: val(wsForm, 'wf-name'), description: val(wsForm, 'wf-description') },
       people: [...wsForm.querySelectorAll('[data-rows="founders"] tr')].map((tr) => ({ name: val(tr, 'p-name'), title: val(tr, 'p-title'), team: val(tr, 'p-team'), workspaceAdmin: tr.querySelector('[name="p-admin"]').checked, riskApprover: tr.querySelector('[name="p-risk"]').checked })),
@@ -468,6 +490,29 @@ document.addEventListener('submit', (e) => {
     location.hash = `#/capabilities/${added.id}/setup`;
   });
 });
+
+// The setup form's "Who is setting this up?" list and Risk approver note follow
+// the roster rows as they are edited.
+function readFounders(form) {
+  const val = (el, name) => (el.querySelector(`[name="${name}"]`) || {}).value || '';
+  return [...form.querySelectorAll('[data-rows="founders"] tr')].map((tr) => ({ name: val(tr, 'p-name'), workspaceAdmin: tr.querySelector('[name="p-admin"]').checked, riskApprover: tr.querySelector('[name="p-risk"]').checked }));
+}
+function refreshSetupForm(form) {
+  const people = readFounders(form);
+  const select = form.querySelector('[data-founders]');
+  const chosen = select.value;
+  select.innerHTML = String(founderOptions(people, chosen));
+  const note = form.querySelector('[data-risk-gap]');
+  const text = riskGapNote(people);
+  note.textContent = text;
+  note.hidden = !text;
+}
+for (const type of ['input', 'change', 'click']) {
+  document.addEventListener(type, (e) => {
+    const form = e.target.closest && e.target.closest('[data-form="setup-workspace"]');
+    if (form && !e.target.matches('[data-founders]')) queueMicrotask(() => refreshSetupForm(form));
+  });
+}
 
 document.addEventListener('input', (e) => {
   const nameEl = e.target.closest('[data-action="check-name"]');
