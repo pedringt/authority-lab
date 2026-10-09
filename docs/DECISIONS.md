@@ -6,6 +6,8 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 
 **AI interprets. Software enforces. Humans authorize.** The AI reads cases and recommends. Software applies the limits and can pull authority back automatically. Only a named person can give the AI more authority.
 
+**Positioning:** State governs what's true; Authority Lab governs what the AI may do.
+
 ## Decisions
 
 ### Records
@@ -37,6 +39,11 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 - **No multi-level jumps.** Expanding stays one level at a time; each step needs its own evidence and authorization. (Decided 2026-10-09; considered and not built.)
 - **Tightening-only amendments skip sign-off.** After the lock, a change to criteria or requirements that software confirms is tightening only applies straight away as a recorded amendment (a new version authored by whoever is acting, marked "tightening only", surfaced in Activity). Software decides: every changed row's threshold is strictly stricter (a higher "at least", a lower "at most", more required cases) and only its number changed, with the same wording, unit and comparison; nothing is removed, added, renamed, re-noted or loosened. Equal values are not stricter. Any loosening, or anything software can't compare, sends the whole change to the normal proposal and sign-off. An open criteria proposal blocks the shortcut until it closes. Adding a row, and switching "≥" to ">", both need sign-off. (Decided 2026-10-09.)
 - **Who may tighten without sign-off, and when.** Only the capability owner or a named stakeholder, and never while an expansion decision is pending: raising the bar then can block the decision (found in review: a workspace admin with no stake in Refund recommendation raised its case minimum from 200 to 20000 and dropped readiness from 5 of 6 to 4 of 6 with no sign-off). Anyone else's tightening, and any tightening while a decision is pending, goes to normal sign-off; the proposal says why the shortcut didn't apply. The decision workspace lists every change to the criteria and requirements since the decision opened, each row marked tightened, loosened or changed, and how it was approved. (Decided 2026-10-09.)
+
+### Agents and expansions (roadmap item 9)
+
+- **Agent tooling may have its own dependencies; the app may not.** A top-level `agent/` folder may have its own `package.json` and dependencies (MCP SDK, Anthropic SDK). The deployed app stays static, with no dependencies and no network or model calls. `agent/` imports the gate from `src/store/`, so there is one implementation. (Paige approved 2026-10-09.)
+- **Expansions need an expected impact and a rollout plan.** Authorizing an expansion requires (a) an expected-impact statement (2–4 outcomes with numbers) and (b) a rollout plan. Both are recorded on the decision record and immutable. Restrict, suspend and redesign don't need them. It's the same discipline as writing criteria before results: success is defined before it is seen. Being built in #72 and #74. (Paige approved 2026-10-09.)
 
 ### Workspace setup
 
@@ -101,4 +108,8 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 7. ~~Empty-workspace path~~ (done: #57 workspace and workflow in state, #58 start empty, setup and the founding roster).
    - Follow-up: rename the workspace and workflow as a recorded workspace-admin action (#60, done).
 8. ~~Smaller rule changes~~ (done): tightening-only amendments skip sign-off; multi-level jumps decided against (one level at a time stays).
-9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning conversation before anyone writes issues.
+9. **Learning-gap roadmap: from deciding authority to enforcing it, measuring it, rolling it out and explaining it** (replaces "real evidence integrations"; Paige approved 2026-10-09). Authority Lab stays the place for AI governance, and now also covers agents, tools and MCP, data-handling boundaries, rollout and adoption, measurement and business value, executive communication, and standards. Order: A1 → A6, then B, C, D. Every PR stays open for Paige.
+   - **Phase A, runtime enforcement** (label `enforcement`): A1 the gate, `checkAction` (#65) · A2 systems of record and the data boundary (#66) · A3 MCP server in `agent/` (#67) · A4 the "waiting for a person" queue (#68) · A5 gate decisions as instrumentation (#69) · A6 recorded agent runs replayed through the gate (#70; paid model calls only after Paige approves the call count and cost) · A7 live run mode, **not to be built** without Paige's decision, since it changes the no-network rule (#71).
+   - **Phase B, measurement and business value** (label `value`): B1 expected impact required to authorize an expansion (#72) · B2 expected vs actual, with a simple ROI (#73).
+   - **Phase C, rollout and adoption** (label `adoption`): C1 a rollout plan required on every expansion (#74) · C2 adoption signals as non-blocking warnings (#75).
+   - **Phase D, communication and landscape** (label `communication`): D1 a one-page decision brief for a leadership reader (#76) · D2 a standards map to NIST AI RMF, the EU AI Act and ISO/IEC 42001, as learning notes and not a compliance claim (#77).

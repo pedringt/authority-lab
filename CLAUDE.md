@@ -8,7 +8,7 @@ Read before working:
 
 ## Ground rules
 
-- Static app: plain HTML/CSS/JS, no build step, no dependencies, no network or model calls. Everything presented as AI output is seeded and deterministic: contract suggestions and scenarios carry a "Suggested by AI" badge, and the decision workspace's recommendation is labelled "System recommendation".
+- Static app: plain HTML/CSS/JS, no build step, no dependencies, no network or model calls. The one exception is the agent tooling: a top-level `agent/` folder may have its own `package.json` and dependencies (MCP SDK, Anthropic SDK), is never part of the deployed app, and imports the gate from `src/store/` (one implementation). Paid model calls from `agent/` need Paige's OK with the call count and estimated cost stated first. Everything presented as AI output is seeded and deterministic: contract suggestions and scenarios carry a "Suggested by AI" badge, and the decision workspace's recommendation is labelled "System recommendation".
 - Errors from an action are shown inline on the page (an `error=` route parameter rendered as a notice), never in an `alert()` pop-up. A test enforces this.
 - The store lives in `src/store/`; `src/store/index.js` is the only entry point. Views read state through selectors and never change it directly.
 - Every new store transition gets a test in `scripts/*.test.mjs`. Run `npm test` before every push. CI runs it on Node 22 and 24.
@@ -27,6 +27,7 @@ Read before working:
 - Granting a right: the approver is neither the proposer nor the recipient. Approvers are frozen when a proposal opens. Proposals that can't be satisfied are refused when proposed.
 - Expanding authority needs a pending proposal and goes one level at a time; each step needs its own evidence and authorization (no multi-level jumps). Pulling authority back is always possible, but still needs a named person, a rationale and a record.
 - After an automatic restriction or a rule incident, the post-incident review is recorded by the owner or a Risk approver (a Risk approver for High impact or Financial exposure), never by the system or someone deactivated, and **never by the person who authorized the expansion that was restricted**. A review clears the lock but never restores authority.
+- Authorizing an expansion requires an expected-impact statement (2–4 outcomes with numbers) and a rollout plan, both recorded on the decision record and immutable. Restrict, suspend and redesign don't need them. (Approved 2026-10-09; enforced once #72 and #74 are built.)
 - Warnings explain and link to the fix; they never block.
 
 When you change anything near these rules, write a test that tries to get around the rule and confirm it is refused.
