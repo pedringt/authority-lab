@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, restrictionRules, levelName } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -56,7 +56,7 @@ export function capabilityView(state, id, query) {
     case 'evidence': body = evidenceTab(state, cap, d); break;
     case 'stakeholders': body = stakeholdersTab(state, cap, d); break;
     case 'decisions': body = decisionsTab(state, cap); break;
-    case 'monitoring': body = monitoringTab(cap, d); break;
+    case 'monitoring': body = monitoringTab(state, cap, d); break;
     default: body = contractTab(state, cap, d);
   }
 
@@ -250,11 +250,28 @@ export function optionLabel(option) {
   return o ? o.name : option;
 }
 
-function monitoringTab(cap, d) {
+// The restriction rules, read from the contract's "Automatic restriction"
+// lines. Active while the capability is above the rule's fallback level.
+function rulesCard(state, cap) {
+  const rules = restrictionRules(state, cap.id);
+  const version = rules[0] && rules[0].contractVersion;
+  const status = (r) => r.kind === 'incident'
+    ? badge('watch', 'Opens an incident')
+    : r.active ? badge('decision', 'Applies at this level') : badge('neutral', `Applies above ${levelName(r.fallback)}`);
+  const effect = (r) => r.kind === 'incident'
+    ? 'Authority stays where it is.'
+    : `Returns ${cap.name} to ${levelName(r.fallback)}${r.defaulted ? ' (one level down; the line names no level)' : ''}.`;
+  return section('Restriction rules', rules.length
+    ? html`<div class="card"><ul class="rule-list">${rules.map((r) => html`<li><div class="rule-list-head"><span>${r.text}</span>${status(r)}</div><p class="muted small">${effect(r)}${r.threshold && r.window ? '' : ' The line has no number or window, so software cannot check it.'}</p></li>`)}</ul></div>`
+    : html`<p class="empty">The contract has no automatic restriction lines.</p>`,
+    { subtitle: `From the contract's automatic restriction conditions${version ? `, contract v${version}` : ''}. Software applies these; nobody has to notice a problem for them to fire.` });
+}
+
+function monitoringTab(state, cap, d) {
   const m = d.monitoring;
   if (!m) {
-    return html`${notice('neutral', 'Monitoring is not active.', `${cap.name} is at ${authorityLabel(cap.authority)}. A monitoring period starts when authority is expanded.${d.monitoringRule ? ' The automatic restriction rule below applies from that point.' : ' The rule will come from the contract\u2019s automatic restriction conditions.'}`)}
-      ${d.monitoringRule ? html`<div class="card"><p class="eyebrow">Automatic restriction rule</p><p>${d.monitoringRule.rule}</p></div>` : ''}`;
+    return html`${notice('neutral', 'Monitoring is not active.', `${cap.name} is at ${authorityLabel(cap.authority)}. A monitoring period starts when authority is expanded.`)}
+      ${rulesCard(state, cap)}`;
   }
   const pct = Math.round((m.severeErrorsInWindow / m.rollingWindow) * 1000) / 10;
   const over = pct > m.thresholdPct;
@@ -280,5 +297,6 @@ function monitoringTab(cap, d) {
           <p class="muted small">What happened when the rule fired: the metric crossed the threshold, the capability changed from autonomous to approval-required, a system event and a restriction record were created, the Overview shows an alert, and the Activity history records why.</p>`
         : html`<p class="muted small">Demo control. This injects severe errors into the rolling window to show what the rule does.</p>
           <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">Simulate threshold breach</button>`}
-    </div>`;
+    </div>
+    ${rulesCard(state, cap)}`;
 }

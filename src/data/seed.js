@@ -120,6 +120,7 @@ export const capabilities = [
         'Missing order evidence.',
       ],
       autoRestriction: [
+        'Severe error rate above 5% across the rolling 50 autonomous cases returns the capability to Draft until reviewed.',
         '2 high-severity policy violations within 7 days return the capability to Draft (human approval required) until reviewed.',
         'Error rate above 8% over 7 days returns the capability to Draft until reviewed.',
         'Unexplained refund-cost increase above 20% over 7 days returns the capability to Draft until reviewed.',
