@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -84,6 +84,19 @@ function recordNames(state, record) {
   return label === now ? label : html`${label} <span class="muted small">(as named then; now ${now})</span>`;
 }
 
+// The bar as it changed since this decision opened (roadmap item 8): every
+// newer version of the criteria or requirements, each changed row marked
+// stricter, looser or changed, with who did it and how it was approved.
+function barChangedNote(state, cap) {
+  const changes = barChangesSinceDecisionOpened(state, cap.id);
+  if (!changes.length) return '';
+  const word = { stricter: 'tightened', looser: 'loosened', changed: 'changed', added: 'added', removed: 'removed' };
+  return html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>The bar changed since this decision opened</strong>
+    <ul class="plain-list">${changes.map((c) => html`<li>${c.kind === 'criteria' ? 'Success criteria' : 'Evidence requirements'} v${c.version}, ${fmtDate(c.date)}, ${personAt(c.authorAt, c.author).name}${c.proposalId ? html` (signed off, <a href="#/capabilities/${cap.id}/proposals/${c.proposalId}">${c.proposalId}</a>)` : c.tighteningOnly ? ' (tightening only, no sign-off)' : ''}: ${c.rows.length ? c.rows.map((r, i) => html`${i ? '; ' : ''}${r.label} ${word[r.change]}${r.from && r.to ? ` (${r.from} → ${r.to})` : ''}`) : 'no row changed'}.</li>`)}</ul>
+    <p class="small">Readiness above is measured against the bar as it is now.</p></div>
+    <a class="notice-link" href="#/capabilities/${cap.id}/versions?kind=criteria">Versions</a></div>`;
+}
+
 // Shown on a decision when the criteria or evidence requirements it relied on
 // were amended after performance results had been seen.
 export function amendedNote(state, record) {
@@ -164,6 +177,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     <div class="decision-main">
       ${conditions ? section('Conditions', conditions, { subtitle: 'For Expand with limits: when the AI may act on its own.' }) : ''}
       ${section('Evidence summary', html`
+        ${barChangedNote(state, cap)}
         ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}
         ${criteriaRows.length ? html`<div class="card table-card"><table class="table"><thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th></tr></thead><tbody>${criteriaRows}</tbody></table></div>` : ''}
         ${requirementsList(state, cap.id)}`, { subtitle: r.total ? `${r.met} of ${r.total} evidence requirements met.${r.unmet.length ? ` Unresolved: ${r.unmet.map((u) => u.text.toLowerCase()).join('; ')}.` : ''}` : 'No evidence requirements defined.' })}

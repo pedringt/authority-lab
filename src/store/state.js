@@ -83,6 +83,8 @@ export function initialState() {
       risk: [firstVersion(c.risk, stamp)],
       stakeholders: [firstVersion(sd.stakeholders || [], stamp)],
     };
+    // A seeded pending decision opened on the seeded versions (version 1).
+    if (d.decision.proposed) d.decision = { ...d.decision, versionsAtOpen: Object.fromEntries(Object.keys(d.versions).map((k) => [k, 1])) };
     return [c.id, d];
   }));
   // The capability object holds identity and current authority/status only.

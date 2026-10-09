@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2372,4 +2372,123 @@ test('records keep the workspace and workflow names in force when they were writ
   s = renameWorkspace(s, { workspace: { name: 'Northstar Customer Care' }, reason: 'Second rename for the test.', by: 'jonas' });
   assert.equal(namesAtRecord(s, old).workspace.name, 'Northstar Support', 'still the name from before the first rename');
   assert.equal(namesAtRecord(s, fresh).workspace.name, 'Northstar Care', 'the name in force between the two renames');
+});
+
+// ---------------------------------------------------------------------------
+// Tightening-only amendments skip sign-off (roadmap item 8)
+// ---------------------------------------------------------------------------
+
+// The current criteria and requirements with some rows changed.
+function bar(s, { criteria = {}, requirements = {}, drop = [], add = null, rename = {}, note = {} } = {}) {
+  const c = current(s, RR, 'criteria').filter((x) => !drop.includes(x.id)).map((x) => ({ ...x, ...(criteria[x.id] ? { target: criteria[x.id] } : {}), ...(rename[x.id] ? { name: rename[x.id] } : {}), ...(note[x.id] ? { note: note[x.id] } : {}) }));
+  const r = current(s, RR, 'requirements').filter((x) => !drop.includes(x.id)).map((x) => (requirements[x.id] ? { ...x, text: requirements[x.id] } : x));
+  return { criteria: add ? [...c, add] : c, requirements: r };
+}
+const TIGHTEN = { criteria: { quality: '≥ 95% correct decisions', cost: 'AI operating cost < $0.15 per case' }, requirements: { 'min-cases': 'Minimum 250 pilot cases', severe: 'High-severity error rate < 1.5%' } };
+
+test('a tightening-only change applies straight away as a recorded amendment, surfaced, without sign-off', () => {
+  // The pending expansion is decided first: no decision is pending.
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.equal(decisionRequired(s, RR), false);
+  assert.equal(needsSignoff(s, RR, 'criteria'), true, 'locked: normally needs sign-off');
+  const before = versionsInForce(s, RR);
+  const proposals = capData(s, RR).proposals.length;
+  s = proposeAmendment(s, RR, 'criteria', { value: bar(s, TIGHTEN), by: 'priya', reason: REASON });
+  assert.equal(capData(s, RR).proposals.length, proposals, 'no proposal opened');
+  const after = versionsInForce(s, RR);
+  assert.deepEqual([after.criteria, after.requirements], [before.criteria + 1, before.requirements + 1]);
+  const v = currentVersion(s, RR, 'criteria');
+  assert.deepEqual([v.tighteningOnly, v.author, v.afterEvidence], [true, 'priya', true]);
+  assert.equal(v.tightened.length, 4);
+  assert.equal(current(s, RR, 'criteria').find((x) => x.id === 'quality').target, '≥ 95% correct decisions');
+  const e = s.activity[0];
+  assert.deepEqual([e.kind, e.afterEvidence, isSurfaced(e)], ['amendment', true, true]);
+  assert.match(e.body, /Tightening only, so no sign-off/);
+});
+
+test('tightening-only is decided by software; every way around it goes to sign-off', () => {
+  const s = initialState();
+  const opens = (value, why) => {
+    const n = capData(s, RR).proposals.length;
+    const r = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
+    assert.equal(capData(r, RR).proposals.length, n + 1, `${why}: a proposal opens`);
+    assert.deepEqual(versionsInForce(r, RR), versionsInForce(s, RR), `${why}: nothing applied`);
+    return tighteningOnly({ criteria: current(s, RR, 'criteria'), requirements: current(s, RR, 'requirements') }, value).reason;
+  };
+  // Mixed: tighten one, loosen another.
+  assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, requirements: { override: 'Override rate < 25%' } }), 'mixed'), /loosened/);
+  // Removing a row while tightening another.
+  assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, drop: ['adoption'] }), 'removal'), /removes "Agent adoption"/);
+  // Equal value, rewritten: not stricter.
+  assert.match(opens(bar(s, { criteria: { quality: '≥ 92.0% correct decisions' } }), 'equal'), /not stricter/);
+  // A renamed row, even with a stricter number.
+  assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, rename: { quality: 'Quality (sampled)' } }), 'rename'), /changes the name/);
+  // A changed unit.
+  assert.match(opens(bar(s, { criteria: { 'severe-errors': '< 1 high-impact errors' } }), 'unit'), /more than its number/);
+  // A changed comparison direction, and a changed comparison operator.
+  assert.match(opens(bar(s, { criteria: { quality: '≤ 95% correct decisions' } }), 'direction'), /more than its number/);
+  assert.match(opens(bar(s, { criteria: { 'severe-errors': '≤ 1% high-impact errors' } }), 'operator'), /more than its number/);
+  // An added row: software can't compare it with anything.
+  assert.match(opens(bar(s, { add: { id: 'latency', name: 'Latency', target: '≤ 5 minutes to first response', note: 'New.' } }), 'addition'), /adds "Latency"/);
+  // A changed note alongside a tightened number.
+  assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, note: { quality: 'Now measured differently.' } }), 'note'), /changes the note/);
+  // A row with no comparable threshold.
+  assert.match(opens(bar(s, { criteria: { speed: '60% faster average resolution' } }), 'no threshold'), /no threshold/);
+});
+
+test('an open criteria proposal blocks a tightening-only change until it closes', () => {
+  let s = proposeAmendment(initialState(), RR, 'criteria', { value: bar(initialState(), { requirements: { override: 'Override rate < 25%' } }), by: 'priya', reason: REASON });
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: bar(s, TIGHTEN), by: 'priya', reason: REASON }), /already awaiting sign-off/);
+});
+
+test('threshold parts compare only the number', () => {
+  assert.deepEqual(thresholdParts('Minimum 40 high-value refund cases'), { atLeast: true, n: 40, skeleton: 'Minimum # high-value refund cases' });
+  assert.deepEqual(thresholdParts('AI operating cost < $0.20 per case'), { atLeast: false, n: 0.2, skeleton: 'AI operating cost < $# per case' });
+  assert.equal(thresholdParts('No unresolved critical incidents'), null);
+});
+
+test('repro: a non-stakeholder raising the case minimum while a decision is pending goes to sign-off', () => {
+  let s = initialState();
+  assert.deepEqual([decisionRequired(s, RR), namedStakeholders(s, RR).includes('jonas')], [true, false]);
+  const before = readiness(s, RR);
+  const n = capData(s, RR).proposals.length;
+  s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { requirements: { 'min-cases': 'Minimum 20000 pilot cases' } }), by: 'jonas', reason: 'Raising the case minimum for safety.' });
+  assert.equal(capData(s, RR).proposals.length, n + 1, 'a proposal opens');
+  assert.deepEqual([readiness(s, RR).met, readiness(s, RR).total], [before.met, before.total], 'readiness unchanged: 5 of 6');
+  const p = capData(s, RR).proposals[n];
+  assert.match(p.shortcutDeclined, /Only the owner or a named stakeholder/);
+});
+
+test('a named stakeholder tightening with no decision pending applies directly', () => {
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.equal(getCapability(s, RR).owner === 'daniel', false);
+  assert.equal(namedStakeholders(s, RR).includes('daniel'), true);
+  const n = capData(s, RR).proposals.length;
+  s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { requirements: { 'min-cases': 'Minimum 250 pilot cases' } }), by: 'daniel', reason: 'More cases before the next review.' });
+  assert.equal(capData(s, RR).proposals.length, n, 'no proposal');
+  assert.equal(currentVersion(s, RR, 'requirements').tighteningOnly, true);
+  // Someone who is not a named stakeholder still goes to sign-off with no decision pending.
+  const t = proposeAmendment(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'jonas', reason: 'Raising quality for safety.' });
+  assert.equal(capData(t, RR).proposals.at(-1).proposedBy, 'jonas');
+});
+
+test('a stakeholder tightening while a decision is pending goes to sign-off, and the decision shows the change once applied', () => {
+  let s = initialState();
+  assert.equal(namedStakeholders(s, RR).includes('priya'), true);
+  const n = capData(s, RR).proposals.length;
+  s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'priya', reason: 'A stricter quality bar for this expansion.' });
+  const p = capData(s, RR).proposals[n];
+  assert.ok(p, 'a proposal opens');
+  assert.match(p.shortcutDeclined, /expansion decision is pending/);
+  assert.deepEqual(barChangesSinceDecisionOpened(s, RR), [], 'nothing applied yet');
+  for (const by of ['daniel', 'maya', 'sofia']) {
+    if (getProposal(s, RR, p.id).status !== 'open') break;
+    try { s = approveProposal(s, RR, p.id, { by }); } catch { /* not eligible or not needed */ }
+  }
+  assert.equal(getProposal(s, RR, p.id).status, 'approved');
+  const changes = barChangesSinceDecisionOpened(s, RR);
+  const c = changes.find((x) => x.kind === 'criteria');
+  assert.deepEqual(c.rows.map((r) => [r.label, r.change]), [['Quality', 'stricter']]);
+  assert.equal(c.tighteningOnly, false, 'it went through sign-off');
+  assert.equal(changes.some((x) => x.kind === 'requirements'), false, 'requirements v2 changed no row, so it is not listed');
 });

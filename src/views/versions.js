@@ -18,7 +18,7 @@ export function versionsView(state, capabilityId, query) {
     return html`<article class="card version ${v.version === highlight ? 'is-highlight' : ''}" id="v${v.version}">
       <div class="version-head">
         <div><span class="eyebrow">${KIND_LABELS[kind]} · version ${v.version}</span><h3>${v.version === 1 ? 'Initial version' : v.reason}</h3></div>
-        <div class="version-badges">${v.version === versions[0].version ? badge('pass', 'Current') : ''}${v.afterEvidence ? badge('watch', 'After evidence') : ''}</div>
+        <div class="version-badges">${v.version === versions[0].version ? badge('pass', 'Current') : ''}${v.afterEvidence ? badge('watch', 'After evidence') : ''}${v.tighteningOnly ? html` <span class="badge badge-pass" title="Software checked every change is stricter and nothing was removed, added, reworded or loosened.">Tightening only, no sign-off</span>` : ''}</div>
       </div>
       ${kv([
         ['Written', fmtDate(v.date)],

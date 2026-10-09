@@ -190,9 +190,11 @@ Three objects are governed once there is something to protect. Changes to them b
 
 | Object | Governed from | Direct edits still allowed |
 |---|---|---|
-| Success criteria and evidence requirements | The first performance results (a recorded test run, a pilot, or a measured evidence item) | None; before the lock every save is a new version |
+| Success criteria and evidence requirements | The first performance results (a recorded test run, a pilot, or a measured evidence item) | Tightening-only changes (applied directly and recorded, see below); before the lock every save is a new version |
 | Contract | The start of a pilot (a human-authorized move to Draft or above), while the `CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT` setting is on | Before a pilot starts |
 | Stakeholders | The first performance results, for adding or removing people and for team labels | Position, stance and reasoning updates, always |
+
+**Tightening only skips sign-off.** A change to locked criteria or requirements that only makes the bar stricter applies straight away, as a recorded amendment marked "tightening only" and shown in Activity. Software decides, not the proposer: every changed row must keep its exact wording, unit and comparison, and only its number may move, upward for an "at least" and downward for an "at most" (more required cases counts). Removing, adding, renaming or re-noting a row, an equal number, or any loosening anywhere sends the whole change to the normal proposal and sign-off. The shortcut is only for the capability owner or a named stakeholder, and never while an expansion decision is pending; otherwise a tightening goes to sign-off, and the proposal says why. The decision workspace lists every change to the bar since the decision opened.
 
 **Who must approve.** The proposer never approves. For Low and Medium impact, one approver: the owner, or any other named stakeholder if the owner proposed. For High impact or financial exposure, two different approvers, at least one from Risk; the last slot is refused to a non-Risk person while no Risk approval exists. Owners can still propose. "Named stakeholders" are the owner and the people on the capability's list; whether one of them counts as Risk is the recorded Risk approver right on the People page, never a team name or a label on the list. Use the "Demo: acting as" picker to propose and to approve as each person.
 

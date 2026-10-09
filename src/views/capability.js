@@ -68,6 +68,7 @@ export function capabilityView(state, id, query) {
     </div>
   </div>
   ${query.get('error') ? notice('fail', 'Could not complete that action', query.get('error')) : ''}
+  ${query.get('tightened') ? notice('pass', `Tightened without sign-off: criteria v${query.get('tightened')}`, 'Every change only made a threshold stricter and nothing was removed, added, reworded or loosened, so software applied it straight away. It is recorded as an amendment after evidence and shown in Activity.', { link: `#/capabilities/${cap.id}/versions?kind=criteria`, linkText: 'Versions' }) : ''}
   ${summary}
   ${coverageWarnings(state, id).map(warningNotice)}
   ${tabs}

@@ -69,6 +69,8 @@ Setup step 3 opens an editor pre-filled from the risk profile, each row labelled
 | Contract | a pilot start (setting on) | same |
 | Stakeholder membership and team labels | the first performance results | same; positions and reasoning stay direct |
 
+**Tightening only skips sign-off.** A criteria/requirements change where every changed threshold only gets stricter (higher "at least", lower "at most", more required cases) and nothing is removed, added, renamed, reworded or loosened applies directly as a recorded amendment, if the owner or a named stakeholder makes it and no expansion decision is pending. Anything else, or any loosening anywhere, goes to sign-off.
+
 The proposer never approves. Risk is the recorded Risk approver right, never a team. Eligible approvers are frozen when the proposal opens, infeasible proposals are refused with a reason, the proposer can withdraw, others can reject, and everything stays in the record.
 
 ## Amendments after evidence
