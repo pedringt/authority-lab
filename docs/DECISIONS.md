@@ -83,8 +83,8 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 2. ~~People and roles~~ (done).
 3. ~~Housekeeping: CI, error handling, store split~~ (done: #35, #36, #37).
 4. ~~UI readability pass~~ (done: #38–#44): two-row header, filter bar, collapsed test groups, sticky decision panel, People "Manage" menu, one date format, level tooltips, inline errors instead of pop-ups.
-5. ~~Header nav cleanup~~ (done: #47). The section tabs don't line up with the brand, and their spacing comes only from pill padding. Proposed: underline tabs flush with the brand, an even gap, the active tab underlined on the header's bottom border, quieter count badges. Nothing added.
-6. ~~Monitoring and automatic restriction for every capability~~ (done: #48 rules from the contract, #49 running them for every capability, #50 breach and fallback).
-7. Empty-workspace path: set up the workspace and workflow first.
+5. ~~Header nav cleanup~~ (done: #47): underlined section tabs flush with the brand, an even gap, quieter count badges.
+6. ~~Monitoring and automatic restriction for every capability~~ (done: PRs #51, #52, #53, #55 for issues #48, #49, #50, #54): rules read from the contract, monitoring for every capability, breach and fallback to the level the contract names, incident alerts, and the post-incident review recorded in the app.
+7. **Empty-workspace path** (next): set up the workspace and workflow first.
 8. Smaller rule changes: lighter sign-off for amendments that only tighten criteria; multi-level jumps and their decision rule.
 9. Real evidence integrations (test harness, ticketing, reviewer decisions, cost). These end the self-contained prototype and need their own planning.
