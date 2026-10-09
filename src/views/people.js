@@ -1,5 +1,5 @@
 import { html, raw, badge, notice, section, person, personAt, fmtDate, kv } from '../ui.js';
-import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings } from '../store/index.js';
+import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings, workspaceOf } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 // The people roster (#22). Workspace admins add, edit and deactivate; nobody
@@ -82,7 +82,7 @@ export function peopleView(state, query) {
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow">Northstar Support</p>
+      <p class="eyebrow">${workspaceOf(state).name}</p>
       <h1>People</h1>
       <p class="lede">Everyone who can act in this workspace. Rights are explicit and recorded: <strong>workspace admin</strong> changes the roster; <strong>Risk approver</strong> can sign off as Risk. Nobody is deleted; records keep referring to people after they are deactivated.</p>
     </div>

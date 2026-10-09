@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, fmtDate } from '../ui.js';
-import { testSummary, capData, getCapability, canRunSuite } from '../store/index.js';
+import { testSummary, capData, getCapability, canRunSuite, workspaceOf } from '../store/index.js';
 
 const FILTERS = [
   ['all', 'All results'],
@@ -45,7 +45,7 @@ export function testsView(state, capabilityId, query) {
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow">${seed.workspace.name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
+      <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/tests?capability=${id}`)}</h1>
       <p class="lede">The testing ground: ${t.total} seeded scenarios in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}), run against the capability's current contract. No real model call is made; results replay the recorded decisions so the demo is repeatable.</p>
     </div>

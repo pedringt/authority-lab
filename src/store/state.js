@@ -92,6 +92,10 @@ export function initialState() {
   return {
     version: 14,
     today: seed.TODAY,
+    // The workspace and its one workflow (roadmap item 7). Seeded here so an
+    // empty workspace can set its own.
+    workspace: clone(seed.workspace),
+    workflow: clone(seed.workflow),
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
     roster: { versions: [{ version: 1, date: seed.TODAY, author: null, authorAt: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },

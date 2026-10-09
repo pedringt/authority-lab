@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt, authorityText, evidenceDetail } from '../ui.js';
-import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings } from '../store/index.js';
+import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings, workspaceOf, workflowOf } from '../store/index.js';
 
 function firstSentences(text, n) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
@@ -20,7 +20,7 @@ export function overviewView(state) {
 
   const header = html`<div class="page-head">
     <div>
-      <p class="eyebrow">${seed.workspace.name} · ${seed.workflow.name}</p>
+      <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
       <h1>Where do we need to make a decision?</h1>
       <p class="lede">${pending
         ? 'One capability in this workflow is waiting on an authority decision. The evidence, the open gap and the disagreement are below.'
