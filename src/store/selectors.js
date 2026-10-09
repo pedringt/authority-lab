@@ -4,6 +4,16 @@
 import * as seed from '../data/seed.js';
 import { VERSIONED_KINDS, getCapability, capData } from './state.js';
 
+// The workspace and workflow from state. Saved state from before they moved
+// into state falls back to the seed.
+export function workspaceOf(state) {
+  return state.workspace || seed.workspace;
+}
+
+export function workflowOf(state) {
+  return state.workflow || seed.workflow;
+}
+
 export function currentVersion(state, capabilityId, kind) {
   const list = capData(state, capabilityId).versions[kind] || [];
   return list[list.length - 1] || null;

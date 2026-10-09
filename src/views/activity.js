@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, fmtDate, person } from '../ui.js';
-import { getCapability, activityEvents, versionFor, KIND_LABELS_ALL, KIND_LABELS } from '../store/index.js';
+import { getCapability, activityEvents, versionFor, KIND_LABELS_ALL, KIND_LABELS, workspaceOf, workflowOf } from '../store/index.js';
 import { diffValues, prettyPath } from '../diff.js';
 
 const KIND_TONE = {
@@ -59,7 +59,7 @@ export function activityView(state, query) {
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow">${seed.workspace.name} · ${seed.workflow.name}</p>
+      <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
       <h1>Activity</h1>
       <p class="lede">An audit-style history. Everything is recorded; the default view shows decisions, automatic restrictions, test runs, pilot milestones, failures, mitigations, stakeholder reviews and amendments made after performance results were seen. Full history shows the rest.</p>
     </div>

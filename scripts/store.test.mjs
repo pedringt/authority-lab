@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2217,4 +2217,22 @@ test('whoever authorized the restricted expansion cannot record its review', () 
   assert.equal(reviewEligibility(t, TC, 'priya').ok, false);
   // A rule incident restricted nothing, so the rule does not apply to it.
   assert.equal(reviewEligibility(simulateBreach(initialState(), 'account-closure'), 'account-closure', 'daniel').ok, true);
+});
+
+// ---------------------------------------------------------------------------
+// Workspace and workflow live in state (roadmap item 7)
+// ---------------------------------------------------------------------------
+
+test('the workspace and workflow are state, read through selectors', () => {
+  const s = initialState();
+  assert.equal(workspaceOf(s).name, 'Northstar Support');
+  assert.equal(workflowOf(s).name, 'Customer Support Resolution');
+  const renamed = { ...s, workspace: { ...s.workspace, name: 'Acme Help' } };
+  assert.equal(workspaceOf(renamed).name, 'Acme Help');
+  const { workspace, workflow, ...older } = s;
+  assert.equal(workspaceOf(older).name, 'Northstar Support', 'saved state from before falls back to the seed');
+  const dir = new URL('../src', import.meta.url).pathname;
+  const files = [...readdirSync(`${dir}/views`).map((f) => `${dir}/views/${f}`), `${dir}/main.js`, `${dir}/ui.js`];
+  const offenders = files.filter((f) => /seed\.(workspace|workflow)\b|Northstar Support/.test(readFileSync(f, 'utf8'))).map((f) => f.split('/').slice(-2).join('/'));
+  assert.deepEqual(offenders, [], 'views read the workspace from state');
 });

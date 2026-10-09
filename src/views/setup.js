@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, selectField, person, section, kv } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId, activePeople } from '../store/index.js';
+import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId, activePeople, workflowOf } from '../store/index.js';
 
 // Add a capability: define it, give it a risk profile, choose its starting
 // authority. One page, three sections, one submit. Nothing starts above Level 1.
@@ -10,7 +10,7 @@ export function addCapabilityView(state, query) {
   const owners = Object.entries(activePeople(state)).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${seed.workflow.name}</p>
+      <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${workflowOf(state).name}</p>
       <h1>Add a capability</h1>
       <p class="lede">One discrete thing the AI might be trusted to do in this workflow. It starts at Level 0 or Level 1; authority above that is earned through the contract, criteria, tests and a decision.</p>
     </div>

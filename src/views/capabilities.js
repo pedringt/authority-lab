@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, section, capStatusBadge, authorityBadge, levelScale, fmtDate, person, levelTip } from '../ui.js';
-import { authorityLabel, current, decisionRequired, lastEvaluated } from '../store/index.js';
+import { authorityLabel, current, decisionRequired, lastEvaluated, workspaceOf, workflowOf } from '../store/index.js';
 
 export function capabilitiesView(state) {
   const rows = state.capabilities.map((c) => html`<tr>
@@ -16,7 +16,7 @@ export function capabilitiesView(state) {
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow">${seed.workspace.name} · ${seed.workflow.name}</p>
+      <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
       <h1>Authority map</h1>
       <p class="lede">What the AI is allowed to do in this workflow, one capability at a time. Authority is earned per capability. Not every capability should reach Level 4; two here are intended to stay where they are.</p>
     </div>

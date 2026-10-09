@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -9,7 +9,7 @@ export function decisionsListView(state) {
   const reviews = state.capabilities.filter((c) => capData(state, c.id).reviewRequired);
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow">${seed.workspace.name} · ${seed.workflow.name}</p>
+      <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
       <h1>Decisions</h1>
       <p class="lede">Every authority change, who authorized it, and the evidence it rested on at the time. Records are not edited after they are written.</p>
     </div>

@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store/index.js';
+import { workspaceOf, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople } from './store/index.js';
 import { html, setPeople, setToday, fmtDate } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
@@ -22,6 +22,7 @@ const app = document.getElementById('app');
 const nav = document.getElementById('nav');
 const acting = document.getElementById('acting');
 const demoDate = document.getElementById('demo-date');
+const brandWs = document.getElementById('brand-ws');
 
 const NAV = [
   ['overview', 'Overview'],
@@ -63,6 +64,7 @@ function render() {
   setPeople(people(state));
   setToday(state.today);
   demoDate.textContent = fmtDate(state.today);
+  brandWs.textContent = workspaceOf(state).name;
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;
   let view;
