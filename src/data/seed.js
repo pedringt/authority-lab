@@ -756,6 +756,11 @@ export const breachSeed = {
 
 const matureCapabilities = {
   'ticket-classification': {
+    // Simulated readings for the contract's restriction rules (#49), keyed by
+    // the rule's line. Percentages for percentage rules, counts for count rules.
+    ruleReadings: {
+      'Misroute rate above 10% over 7 days returns the capability to Draft.': 3.8,
+    },
     criteria: [
       { id: 'quality', name: 'Quality', target: '≥ 85% correct queue and priority', current: '97.2%', status: 'pass', note: 'Routing agreement with the queue a person would have chosen, sampled weekly.', source: 'Default for Low impact' },
       { id: 'severe-errors', name: 'Severe error rate', target: '< 5% high-impact errors', current: '0.4%', status: 'pass', note: 'A severe error is a legal or safety ticket routed to a general queue.', source: 'Default for Low impact' },
@@ -783,6 +788,11 @@ const matureCapabilities = {
     ],
   },
   'response-drafting': {
+    // Simulated readings for the contract's restriction rules (#49), keyed by
+    // the rule's line. Percentages for percentage rules, counts for count rules.
+    ruleReadings: {
+      'Two confirmed hallucinated policy statements within 7 days returns the capability to Recommend.': 0,
+    },
     criteria: [
       { id: 'quality', name: 'Quality', target: '≥ 90% correct drafts', current: '88%', status: 'watch', note: 'A correct draft needs no factual edit before sending. Two drafts quoted an outdated return window.', source: 'Default for Medium impact' },
       { id: 'severe-errors', name: 'Severe error rate', target: '< 3% high-impact errors', current: '1.2%', status: 'pass', note: 'A severe error is a promise, a policy misquote or a wrong customer in the draft.', source: 'Default for Medium impact' },
@@ -812,6 +822,11 @@ const matureCapabilities = {
     ],
   },
   'refund-execution-high-value': {
+    // Simulated readings for the contract's restriction rules (#49), keyed by
+    // the rule's line. Percentages for percentage rules, counts for count rules.
+    ruleReadings: {
+      '1 execution outside the approved conditions in any 7-day window returns the capability to Observe.': 0,
+    },
     criteria: [
       { id: 'quality', name: 'Quality', target: '≥ 92% correct executions', current: '99.0%', status: 'pass', note: 'An execution is correct when the amount, order and destination match the approved recommendation.', source: 'Default for High impact' },
       { id: 'severe-errors', name: 'Severe error rate', target: '< 2% high-impact errors', current: '1.0%', status: 'pass', note: '1 duplicate execution in 96. One is enough to restrict: the failure is in the mechanism, not the judgment.', source: 'Default for High impact' },
@@ -843,6 +858,11 @@ const matureCapabilities = {
     ],
   },
   'account-closure': {
+    // Simulated readings for the contract's restriction rules (#49), keyed by
+    // the rule's line. Percentages for percentage rules, counts for count rules.
+    ruleReadings: {
+      '1 account change attempted by the AI in any 7-day window opens an incident; the capability stays at Observe.': 0,
+    },
     criteria: [
       { id: 'quality', name: 'Quality', target: '≥ 99% correct closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'Tightened from the High-impact default of 92%. A wrong closure removes a customer; even 99% would mean about one wrong closure a quarter at current volume.', source: 'Default for High impact' },
       { id: 'severe-errors', name: 'Severe error rate', target: '0 wrong closures', current: 'Not measured: the AI produces no output', status: 'pending', note: 'Tightened from the High-impact default of 2%. Every wrong closure is severe; there is no acceptable rate.', source: 'Default for High impact' },
@@ -871,6 +891,14 @@ const matureCapabilities = {
 export const capabilityData = {
   ...matureCapabilities,
   'refund-recommendation': {
+    // Simulated readings for the contract's restriction rules (#49), keyed by
+    // the rule's line. Percentages for percentage rules, counts for count rules.
+    ruleReadings: {
+      'Severe error rate above 5% across the rolling 50 autonomous cases returns the capability to Draft until reviewed.': (monitoringSeed.severeErrorsInWindow / monitoringSeed.rollingWindow) * 100,
+      '2 high-severity policy violations within 7 days return the capability to Draft (human approval required) until reviewed.': 0,
+      'Error rate above 8% over 7 days returns the capability to Draft until reviewed.': 5.9,
+      'Unexplained refund-cost increase above 20% over 7 days returns the capability to Draft until reviewed.': 6,
+    },
     criteria: successCriteria,
     requirements: evidenceRequirements,
     scenarios,

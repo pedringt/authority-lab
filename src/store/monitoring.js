@@ -49,6 +49,25 @@ export function restrictionRules(state, capabilityId) {
   });
 }
 
+// Whether a reading crosses the rule: "above X%" is crossed above X; a count
+// rule ("2 violations within 7 days") is crossed when the count reaches it.
+export function ruleCrossed(rule, value) {
+  if (value === null || value === undefined || !rule.threshold) return false;
+  return rule.threshold.type === 'pct' ? value > rule.threshold.value : value >= rule.threshold.value;
+}
+
+// Monitoring runs whenever at least one of the contract's rules applies at the
+// capability's current level (#49), at any level. Each rule carries its
+// latest reading, or null when nothing has been measured.
+export function monitoringStatus(state, capabilityId) {
+  const readings = capData(state, capabilityId).ruleReadings || {};
+  const rules = restrictionRules(state, capabilityId).map((r) => {
+    const value = r.text in readings ? readings[r.text] : null;
+    return { ...r, value, measured: value !== null, crossed: r.active && ruleCrossed(r, value) };
+  });
+  return { running: rules.some((r) => r.active), rules };
+}
+
 export function simulateBreach(state, capabilityId) {
   const d = capData(state, capabilityId);
   if (!d.monitoring || d.monitoring.breached) return state;
@@ -145,8 +164,10 @@ export function simulateBreach(state, capabilityId) {
     c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c
   );
 
+  const windowRule = restrictionRules(state, capabilityId).find((r) => r.window && r.window.cases === m.rollingWindow && r.threshold && r.threshold.type === 'pct');
   const s = updateCap(state, capabilityId, {
     evidence,
+    ruleReadings: windowRule ? { ...(d.ruleReadings || {}), [windowRule.text]: pct } : d.ruleReadings,
     reviewRequired: true,
     monitoring: {
       ...m,

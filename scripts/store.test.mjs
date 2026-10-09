@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2046,4 +2046,41 @@ test('a restriction line that names no level falls back one level', () => {
   s = amend(s, 'ticket-classification', 'contract', { value: { ...v, autoRestriction: ['Misroute rate above 10% over 7 days pulls authority back.'] }, author: 'maya', reason: 'Test: no level named.' });
   const [r] = restrictionRules(s, 'ticket-classification');
   assert.deepEqual([r.fallback, r.defaulted, r.active], [2, true, true]);
+});
+
+// ---------------------------------------------------------------------------
+// Monitoring runs the contract's rules for every capability (#49)
+// ---------------------------------------------------------------------------
+
+test('monitoring runs wherever a contract rule applies, at any level, with its readings', () => {
+  const s = initialState();
+  const run = (id) => monitoringStatus(s, id);
+  assert.equal(run('ticket-classification').running, true, 'Level 3');
+  assert.equal(run('response-drafting').running, true, 'Level 2: the contract says so');
+  assert.equal(run('refund-execution-high-value').running, true, 'Level 1');
+  assert.equal(run(RR).running, false, 'Refund recommendation is at Draft and every rule returns it to Draft');
+  const [tc] = run('ticket-classification').rules;
+  assert.deepEqual([tc.value, tc.crossed], [3.8, false]);
+  for (const c of s.capabilities) {
+    const lines = current(s, c.id, 'contract').autoRestriction;
+    for (const key of Object.keys(capData(s, c.id).ruleReadings)) assert.ok(lines.includes(key), `${c.id}: reading "${key}" matches a contract line`);
+  }
+});
+
+test('a percentage rule is crossed above its limit, a count rule when the count reaches it', () => {
+  const pct = { threshold: { type: 'pct', value: 10 } };
+  const count = { threshold: { type: 'count', value: 2 } };
+  assert.deepEqual([ruleCrossed(pct, 10), ruleCrossed(pct, 10.1)], [false, true]);
+  assert.deepEqual([ruleCrossed(count, 1), ruleCrossed(count, 2)], [false, true]);
+  assert.equal(ruleCrossed(pct, null), false, 'nothing measured is never a breach');
+});
+
+test('a capability added in the demo has rules but no measurements', () => {
+  let s = initialState();
+  s = addCapability(s, { name: 'Order lookup', summary: 'Finds an order from a ticket.', owner: 'maya', risk: LOW_RISK, startingLevel: 1, by: 'maya' });
+  const id = s.capabilities[s.capabilities.length - 1].id;
+  s = amend(s, id, 'contract', { value: { ...current(s, id, 'contract'), autoRestriction: ['Error rate above 10% over 7 days returns the capability to Draft.'] }, author: 'maya', reason: 'Test contract.' });
+  const st = monitoringStatus(s, id);
+  assert.equal(st.rules.length, 1);
+  assert.deepEqual([st.rules[0].measured, st.rules[0].value, st.running], [false, null, false], 'no readings; at Level 1 a "returns to Draft" rule waits');
 });
