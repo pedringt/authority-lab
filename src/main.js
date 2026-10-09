@@ -210,6 +210,8 @@ function askToErase(kind) {
   document.getElementById('demo-confirm-go').textContent = kind === 'start-empty' ? 'Erase and start empty' : 'Erase and reset demo';
   demoButtons.hidden = true;
   demoConfirm.hidden = false;
+  // The confirm takes the whole demo group, so the header stays one row.
+  demoConfirm.closest('.demo-controls').classList.add('is-confirming');
   document.getElementById('demo-confirm-go').focus();
 }
 function closeEraseConfirm(restoreFocus = true) {
@@ -217,6 +219,7 @@ function closeEraseConfirm(restoreFocus = true) {
   pendingErase = null;
   demoConfirm.hidden = true;
   demoButtons.hidden = false;
+  demoConfirm.closest('.demo-controls').classList.remove('is-confirming');
   if (restoreFocus && kind) demoButtons.querySelector(`[data-action="${kind}"]`).focus();
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pendingErase) closeEraseConfirm(); });

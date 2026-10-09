@@ -575,3 +575,5 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .demo-confirm-text { font-weight: 600; color: var(--fail); }
 .risk-gap { margin: 10px 0 0; }
 .risk-gap[hidden] { display: none; }
+.demo-controls.is-confirming > :not(.demo-confirm):not(.acting-demo) { display: none; }
+.demo-controls.is-confirming { border-color: var(--fail-bd); background: var(--fail-bg); }
