@@ -1,0 +1,152 @@
+// The gate (roadmap item 9, A1): decides whether an AI action may happen.
+// Pure and deterministic: the same state and action always give the same
+// verdict. One implementation; the agent tooling imports it from here.
+//
+// Verdicts: 'allow', 'needs-person' or 'block', each with the reason and the
+// rule applied. Facts (order value, fraud flag, chargeback, customer, policy
+// exception) come only from systems of record in state.systems, never from the
+// model's arguments; a claim that contradicts the record blocks. The current
+// authority level applies at once, including right after an automatic
+// restriction. Contract lines software can't check are listed as not enforced
+// rather than pretended.
+
+import { TOOL_SCOPE } from '../data/seed.js';
+import { getCapability } from './state.js';
+import { current, levelName } from './selectors.js';
+
+// The known tools. Which capabilities may use each one is seeded (TOOL_SCOPE).
+export const TOOLS = {
+  lookup_order: { kind: 'read', label: 'Look up an order', capabilities: TOOL_SCOPE.lookup_order },
+  issue_refund: { kind: 'act', label: 'Issue a refund', capabilities: TOOL_SCOPE.issue_refund },
+  escalate_to_human: { kind: 'escalate', label: 'Hand the case to a person', capabilities: TOOL_SCOPE.escalate_to_human },
+};
+
+// The facts the gate will compare a model's claims against.
+const FACTS = { orderValue: 'value', customerId: 'customerId', fraudFlag: 'fraudFlag', chargeback: 'chargeback', policyException: 'policyException' };
+
+// Systems of record (seeded in A2). Absent, the gate knows no orders.
+export function systemsOf(state) {
+  const s = state.systems || {};
+  return { orders: s.orders || {}, refunds: s.refunds || [] };
+}
+
+// ---------------------------------------------------------------------------
+// Structured terms read from the contract and the authorizing record
+// ---------------------------------------------------------------------------
+
+const money = (t) => { const m = t.match(/(?:over|above|more than|exceeds?)\s*\$\s?(\d+(?:\.\d+)?)/i); return m ? Number(m[1]) : null; };
+
+// A contract line software can check, as a predicate on the action's facts.
+// Lines it doesn't recognise return null and are listed as not enforced.
+function recognise(line) {
+  const t = line.toLowerCase();
+  const n = money(line);
+  if (/split/.test(t) && /refund/.test(t)) return { kind: 'split', test: (f) => f.priorOnOrder > 0 && f.cumulativeOrder > (f.splitLimit ?? Infinity), describe: 'splitting a refund across calls' };
+  if (/different payment method/.test(t)) return { kind: 'payment-method', test: (f) => Boolean(f.args.paymentMethod) && f.args.paymentMethod !== f.order.paymentMethod, describe: 'a refund to a different payment method' };
+  if (/fraud/.test(t)) return { kind: 'fraud', test: (f) => Boolean(f.order.fraudFlag), describe: 'a fraud flag on the account' };
+  if (/chargeback/.test(t)) return { kind: 'chargeback', test: (f) => Boolean(f.order.chargeback), describe: 'an active chargeback' };
+  if (/policy exception/.test(t)) return { kind: 'policy-exception', test: (f) => Boolean(f.order.policyException), describe: 'a policy exception' };
+  if (/confidence below\s*(\d+)/.test(t)) { const c = Number(t.match(/confidence below\s*(\d+)/)[1]); return { kind: 'confidence', test: (f) => !(Number(f.args.confidence) >= c), describe: `confidence below ${c}%` }; }
+  if (/missing order evidence/.test(t)) return { kind: 'no-order', test: (f) => !f.order.exists, describe: 'missing order evidence' };
+  if (n !== null && /refund|execution/.test(t)) return { kind: 'amount', limit: n, test: (f) => Math.max(f.cumulativeOrder, f.cumulativeCustomerDay) > n, describe: `refunds over $${n}, counted per order and per customer per day` };
+  return null;
+}
+
+// The record that granted the capability's current authority, if a person
+// authorized it: its conditions are the Level 3 limits.
+function grantingRecord(state, cap) {
+  const recs = state.decisionRecords.filter((r) => r.capabilityId === cap.id && r.authorizedBy !== 'system' && r.next && r.next.level === cap.authority.level);
+  return recs[recs.length - 1] || null;
+}
+
+// The limits as structured terms. Today these are the Expand-with-limits
+// conditions recorded on the authorizing decision.
+function limitTerms(conditions) {
+  if (!conditions) return [];
+  const out = [];
+  if (conditions.maxValue != null) out.push({ kind: 'max-value', limit: conditions.maxValue, text: `Value at most $${conditions.maxValue}, per order and per customer per day`, test: (f) => f.cumulativeOrder <= conditions.maxValue && f.cumulativeCustomerDay <= conditions.maxValue });
+  if (conditions.noFraudFlag) out.push({ kind: 'no-fraud', text: 'No fraud flag on the account', test: (f) => !f.order.fraudFlag });
+  if (conditions.policyClear) out.push({ kind: 'policy-clear', text: 'Policy eligibility is clear', test: (f) => !f.order.policyException });
+  if (conditions.minConfidence != null) out.push({ kind: 'min-confidence', text: `Confidence at least ${conditions.minConfidence}%`, test: (f) => Number(f.args.confidence) >= conditions.minConfidence });
+  if (conditions.noChargeback) out.push({ kind: 'no-chargeback', text: 'No active chargeback', test: (f) => !f.order.chargeback });
+  return out;
+}
+
+// Everything the gate enforces for a capability, and what it can't.
+export function enforcementTerms(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  const contract = current(state, capabilityId, 'contract');
+  const read = (section) => (contract[section] || []).map((text) => ({ section, text, rule: recognise(text) }));
+  const lines = [...read('mustNever'), ...read('mustAsk'), ...read('escalation')];
+  const rec = cap ? grantingRecord(state, cap) : null;
+  return {
+    mustNever: lines.filter((l) => l.section === 'mustNever' && l.rule),
+    mustAsk: lines.filter((l) => l.section === 'mustAsk' && l.rule),
+    escalation: lines.filter((l) => l.section === 'escalation' && l.rule),
+    limits: limitTerms(rec && rec.conditions),
+    limitsFrom: rec && rec.conditions ? rec.id : null,
+    unenforced: lines.filter((l) => !l.rule).map(({ section, text }) => ({ section, text })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The check
+// ---------------------------------------------------------------------------
+
+const verdict = (v, reason, rule, extra = {}) => ({ verdict: v, reason, rule, ...extra });
+
+// action: { tool, args: { orderId, amount, paymentMethod?, confidence?, customerId? }, claims?: { orderValue?, fraudFlag?, ... } }
+export function checkAction(state, capabilityId, action = {}) {
+  const tool = TOOLS[action.tool];
+  if (!tool) return verdict('block', `"${action.tool}" is not a known tool.`, { kind: 'unknown-tool', text: 'Only listed tools can be used.' });
+  const cap = getCapability(state, capabilityId);
+  if (!cap) return verdict('block', `Unknown capability "${capabilityId}".`, { kind: 'unknown-capability', text: 'Every action belongs to a capability.' });
+  if (tool.capabilities !== '*' && !tool.capabilities.includes(cap.id)) return verdict('block', `${tool.label} is not a tool of ${cap.name}.`, { kind: 'tool-scope', text: 'A capability can only use its own tools.' });
+  const level = cap.authority.level;
+  const at = { level };
+  if (level === 0) return verdict('block', `${cap.name} is at Level 0, ${levelName(0)}: the AI produces no operational output.`, { kind: 'level-0', text: 'Level 0 blocks everything.' }, at);
+  if (tool.kind === 'escalate') return verdict('allow', 'Handing a case to a person never needs permission.', { kind: 'escalate', text: 'Escalating to a person is always allowed above Level 0.' }, at);
+  if (tool.kind === 'read') return verdict('allow', `Reading is allowed at ${levelName(level)}; the data filter decides what the model sees.`, { kind: 'read', text: 'Reads are allowed above Level 0.' }, at);
+  if (level === 1) return verdict('block', `${cap.name} is at Level 1, ${levelName(1)}: it may recommend, not act.`, { kind: 'level-1', text: 'Level 1 blocks actions.' }, at);
+
+  // Facts come only from the systems of record.
+  const args = action.args || {};
+  const { orders, refunds } = systemsOf(state);
+  const rec = orders[args.orderId];
+  if (!rec) return verdict('block', `No order "${args.orderId}" in the system of record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
+  const order = { ...rec, exists: true };
+  for (const [claim, field] of Object.entries(FACTS)) {
+    const claimed = (action.claims || {})[claim] ?? (claim === 'customerId' ? args.customerId : undefined);
+    if (claimed !== undefined && claimed !== order[field]) {
+      return verdict('block', `The model's ${claim} (${JSON.stringify(claimed)}) contradicts the system of record (${JSON.stringify(order[field])}).`, { kind: 'fact-mismatch', text: 'A claim that contradicts the record blocks.' }, at);
+    }
+  }
+  const amount = Number(args.amount);
+  if (!(amount > 0)) return verdict('block', 'A refund needs a positive amount.', { kind: 'amount', text: 'A refund needs a positive amount.' }, at);
+  const priorOnOrder = refunds.filter((r) => r.orderId === args.orderId).reduce((t, r) => t + r.amount, 0);
+  const priorCustomerDay = refunds.filter((r) => r.customerId === order.customerId && r.date === state.today).reduce((t, r) => t + r.amount, 0);
+  if (priorOnOrder + amount > order.value) return verdict('block', `Refunds on ${args.orderId} would total $${priorOnOrder + amount}, more than the order's $${order.value}.`, { kind: 'over-order', text: 'Refunds never exceed the order value.' }, at);
+
+  const terms = enforcementTerms(state, capabilityId);
+  // The amount a "never split a refund" line protects: the contract's own
+  // must-never amount if it has one, else the recorded value limit.
+  const neverAmount = terms.mustNever.find((l) => l.rule.kind === 'amount');
+  const maxValue = terms.limits.find((l) => l.kind === 'max-value');
+  const splitLimit = neverAmount ? neverAmount.rule.limit : maxValue ? maxValue.limit : undefined;
+  const facts = { order, args, priorOnOrder, cumulativeOrder: priorOnOrder + amount, cumulativeCustomerDay: priorCustomerDay + amount, splitLimit };
+  const fired = (list) => list.find((l) => l.rule.test(facts));
+  const never = fired(terms.mustNever);
+  if (never) return verdict('block', `Must never: ${never.text} (${never.rule.describe}).`, { kind: 'must-never', text: never.text }, at);
+  if (level === 2) return verdict('needs-person', `${cap.name} is at Level 2, ${levelName(2)}: every action needs a person.`, { kind: 'level-2', text: 'Level 2: a person approves every action.' }, at);
+  const ask = fired(terms.mustAsk);
+  if (ask) return verdict('needs-person', `Must ask: ${ask.text} (${ask.rule.describe}).`, { kind: 'must-ask', text: ask.text }, at);
+  const esc = fired(terms.escalation);
+  if (esc) return verdict('needs-person', `Escalate: ${esc.text} (${esc.rule.describe}).`, { kind: 'escalation', text: esc.text }, at);
+  if (level === 3) {
+    if (!terms.limits.length) return verdict('needs-person', `${cap.name} is at Level 3 but no structured limits are recorded, so software can't confirm the action is within limits.`, { kind: 'no-limits', text: 'Level 3 acts only within recorded limits.' }, at);
+    const broken = terms.limits.find((l) => !l.test(facts));
+    if (broken) return verdict('needs-person', `Outside the limits set in ${terms.limitsFrom}: ${broken.text}.`, { kind: 'limit', text: broken.text }, at);
+    return verdict('allow', `Within every limit set in ${terms.limitsFrom}.`, { kind: 'within-limits', text: terms.limits.map((l) => l.text).join('; ') }, at);
+  }
+  return verdict('allow', `${levelName(level)}: no must-ask or must-never applies.`, { kind: 'level-4', text: 'Level 4 acts unless a must-ask or must-never applies.' }, at);
+}

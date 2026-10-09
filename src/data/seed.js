@@ -16,6 +16,14 @@ export const workflow = {
     'Tickets arrive from email, chat and the help center. AI capabilities assist or act at specific steps; each one holds its own authority.',
 };
 
+// Which capabilities may use each agent tool (roadmap item 9, A1). '*' means
+// any capability. The gate refuses a tool outside its capability.
+export const TOOL_SCOPE = {
+  lookup_order: ['refund-recommendation', 'refund-execution-high-value'],
+  issue_refund: ['refund-recommendation', 'refund-execution-high-value'],
+  escalate_to_human: '*',
+};
+
 export const AUTHORITY_LEVELS = [
   { level: 0, name: 'Observe', description: 'AI sees the input but produces no operational output.' },
   { level: 1, name: 'Recommend', description: 'AI produces a recommendation for a human.' },

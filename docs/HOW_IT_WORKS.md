@@ -309,6 +309,7 @@ The prototype is a static web app: plain HTML, CSS and JavaScript, no build step
 
 - `src/data/seed.js` holds all the fictional data: the workspace, capabilities, contracts, criteria, scenarios, pilot results, evidence, stakeholders, past decisions, activity and the monitoring rule.
 - `src/store/` (imported through `src/store/index.js`) holds the rules for how state changes: running tests, choosing and authorizing a decision, the automatic restriction, reset. These are plain functions with tests.
+- `src/store/gate.js` holds the gate, `checkAction`: whether an AI action may happen (allow, needs a person, block), by authority level, contract, recorded limits and the facts in systems of record. It has no screen yet; the agent tooling (roadmap item 9) will call it.
 - `src/views/` holds one module per screen. Screens read state and draw it; they never change it directly.
 - `styles/app.css` is the design. Colour always carries a state (pass, watch, fail, insufficient evidence, restricted, decision required) and is always paired with a word.
 
