@@ -22,6 +22,8 @@ Read before working:
 - After performance results exist (a test run, pilot or measured evidence), changes to criteria, requirements, stakeholder membership, and the contract once a pilot has started go through a proposal and sign-off.
 - The proposer never approves. Low/Medium impact needs one approver. High impact or Financial exposure needs two distinct approvers, at least one holding the Risk approver right.
 - Risk approval is an explicit recorded right on a person. It is never inferred from a team name or a capability label.
+- Rights are set directly only once: the founding roster at workspace setup (roster version 1), which needs at least two workspace admins and is authored by the founding admin who says they are setting it up. Every rights change after that is governed.
+- Start empty and Reset demo erase every record, so each asks for confirmation inline first.
 - Granting a right: the approver is neither the proposer nor the recipient. Approvers are frozen when a proposal opens. Proposals that can't be satisfied are refused when proposed.
 - Expanding authority needs a pending proposal and goes one level at a time. Pulling authority back is always possible, but still needs a named person, a rationale and a record.
 - After an automatic restriction or a rule incident, the post-incident review is recorded by the owner or a Risk approver (a Risk approver for High impact or Financial exposure), never by the system or someone deactivated, and **never by the person who authorized the expansion that was restricted**. A review clears the lock but never restores authority.

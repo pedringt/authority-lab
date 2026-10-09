@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2235,4 +2235,97 @@ test('the workspace and workflow are state, read through selectors', () => {
   const files = [...readdirSync(`${dir}/views`).map((f) => `${dir}/views/${f}`), `${dir}/main.js`, `${dir}/ui.js`];
   const offenders = files.filter((f) => /seed\.(workspace|workflow)\b|Northstar Support/.test(readFileSync(f, 'utf8'))).map((f) => f.split('/').slice(-2).join('/'));
   assert.deepEqual(offenders, [], 'views read the workspace from state');
+});
+
+// ---------------------------------------------------------------------------
+// Empty-workspace path (#58)
+// ---------------------------------------------------------------------------
+
+const FOUNDERS = [
+  { name: 'Ana Ruiz', title: 'Head of Support', team: 'Support', workspaceAdmin: true },
+  { name: 'Ben Okoro', title: 'Ops Lead', team: 'Operations', workspaceAdmin: true },
+  { name: 'Cara Ng', title: 'Risk Lead', team: 'Risk', riskApprover: true },
+];
+const SETUP = { workspace: { name: 'Acme Help', description: 'Support for Acme.' }, workflow: { name: 'Ticket handling', description: 'From inbox to resolution.' }, people: FOUNDERS, by: 'Ben Okoro' };
+
+test('start empty: no capabilities, records, people or activity until setup', () => {
+  const s = startEmpty();
+  assert.equal(setupPending(s), true);
+  assert.deepEqual([s.capabilities.length, s.decisionRecords.length, s.activity.length, s.alerts.length], [0, 0, 0, 0]);
+  assert.deepEqual(people(s), {}, 'not the Northstar people');
+  assert.equal(workspaceOf(s).name, 'New workspace');
+  assert.equal(focusCapability(s), null);
+  assert.equal(setupPending(reset()), false, 'Reset demo brings Northstar back');
+});
+
+test('workspace setup records the workspace, the one workflow and the founding roster as version 1', () => {
+  const s = setUpWorkspace(startEmpty(), SETUP);
+  assert.equal(setupPending(s), false);
+  assert.deepEqual([workspaceOf(s).name, workflowOf(s).name], ['Acme Help', 'Ticket handling']);
+  const v = rosterVersions(s);
+  assert.equal(v.length, 1);
+  assert.match(v[0].reason, /Founding roster/);
+  assert.equal(v[0].author, 'ben-okoro', 'the person who chose to set it up, not the first listed');
+  assert.equal(v[0].authorAt.name, 'Ben Okoro');
+  assert.deepEqual(activeAdmins(s).sort(), ['ana-ruiz', 'ben-okoro']);
+  assert.equal(isRiskApprover(s, 'cara-ng'), true);
+  assert.equal(isRiskApprover(s, 'ana-ruiz'), false);
+  assert.equal(s.actingAs, 'ben-okoro');
+  assert.equal(s.activity[0].title, 'Workspace set up');
+  assert.throws(() => setUpWorkspace(s, SETUP), /already set up/, 'setup happens once');
+});
+
+test('setup refuses an incomplete workspace and a founding roster with fewer than two admins', () => {
+  const e = startEmpty();
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, workspace: { name: '' } }), /Name the workspace/);
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, workflow: { name: '' } }), /Name the workflow/);
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]] }), /at least two people/);
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /at least 2 workspace admins/, 'a lone admin could never grant a right');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Ana Ruiz', title: 'Twin', team: 'X' }] }), /same name/);
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Dev', title: '', team: 'X' }] }), /name, a title and a team/);
+});
+
+test('after setup every rights change is governed: a different admin approves', () => {
+  let s = setUpWorkspace(startEmpty(), SETUP);
+  s = proposeRosterChange(s, { kind: 'rights', person: 'ben-okoro', right: 'riskApprover', grant: true, by: 'ana-ruiz', reason: 'Ben covers Risk sign-off.' });
+  const pr = openRosterProposal(s, 'ben-okoro');
+  assert.equal(isRiskApprover(s, 'ben-okoro'), false, 'nothing applied by proposing');
+  assert.throws(() => approveRosterChange(s, pr.id, { by: 'ana-ruiz' }), /proposed this/);
+  assert.throws(() => approveRosterChange(s, pr.id, { by: 'ben-okoro' }), /receiving this right/);
+  s = approveRosterChange(s, pr.id, { by: 'cara-ng' });
+  assert.equal(isRiskApprover(s, 'ben-okoro'), true, 'an existing Risk approver approves a Risk approver grant');
+});
+
+test('a capability can be added in a new workspace, and it starts with no records but its own', () => {
+  let s = setUpWorkspace(startEmpty(), SETUP);
+  s = addCapability(s, { name: 'Order lookup', summary: 'Finds an order.', owner: 'ana-ruiz', risk: LOW_RISK, startingLevel: 0, by: 'ana-ruiz' });
+  assert.equal(s.capabilities.length, 1);
+  assert.equal(s.decisionRecords.length, 1);
+  assert.equal(focusCapability(s).name, 'Order lookup');
+});
+
+test('the store persists an empty workspace through setup', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
+  const store = createStore({ storage });
+  store.dispatch('startEmpty');
+  assert.equal(createStore({ storage }).get().setupPending, true);
+  store.dispatch('setUpWorkspace', SETUP);
+  assert.equal(workspaceOf(createStore({ storage }).get()).name, 'Acme Help');
+});
+
+test('the person setting up the workspace is chosen, and must be a founding admin', () => {
+  const e = startEmpty();
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: '' }), /Choose who is setting this up/);
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Cara Ng' }), /not one of the founding workspace admins/, 'a founding Risk approver who is not an admin');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Maya Chen' }), /not one of the founding workspace admins/, 'someone not in the roster');
+  const s = setUpWorkspace(e, { ...SETUP, by: 'Ana Ruiz' });
+  assert.deepEqual([rosterVersions(s)[0].author, s.actingAs], ['ana-ruiz', 'ana-ruiz']);
+  assert.match(s.activity[0].body, /^Set up by Ana Ruiz\./);
+});
+
+test('setup notes, without blocking, when fewer than two Risk approvers are listed', () => {
+  assert.equal(foundingRiskGap(FOUNDERS), 1);
+  assert.equal(foundingRiskGap([...FOUNDERS, { name: 'Dev Patel', title: 'Risk Analyst', team: 'Risk', riskApprover: true }]), null);
+  assert.doesNotThrow(() => setUpWorkspace(startEmpty(), SETUP), 'one Risk approver is allowed');
 });

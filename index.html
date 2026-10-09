@@ -23,14 +23,22 @@
         <span class="demo-sep" aria-hidden="true"></span>
         <span class="demo-date" id="demo-date">Oct 7</span>
         <span class="demo-sep" aria-hidden="true"></span>
-        <button class="btn btn-ghost btn-sm" data-action="reset" title="Restore the seeded prototype state">Reset demo</button>
+        <span class="demo-buttons" id="demo-buttons">
+          <button class="btn btn-ghost btn-sm" data-action="start-empty" title="Swap the Northstar demo for a blank workspace to set up from scratch. Reset demo brings Northstar back.">Start empty</button>
+          <button class="btn btn-ghost btn-sm" data-action="reset" title="Restore the seeded Northstar demo">Reset demo</button>
+        </span>
+        <span class="demo-confirm" id="demo-confirm" role="group" aria-label="Confirm erasing all records" hidden>
+          <span class="demo-confirm-text">This erases all records in this workspace. Continue?</span>
+          <button class="btn btn-danger btn-sm" data-action="confirm-erase" id="demo-confirm-go">Erase</button>
+          <button class="btn btn-ghost btn-sm" data-action="cancel-erase">Cancel</button>
+        </span>
       </div>
     </div>
     <nav class="nav" id="nav" aria-label="Primary"></nav>
   </header>
   <main class="app" id="app" tabindex="-1"></main>
   <footer class="foot">
-    <p><strong>AI interprets. Software enforces. Humans authorize.</strong> A product prototype for deciding what an AI capability should be allowed to do, based on evidence. All data is seeded and fictional.</p>
+    <p><strong>AI interprets. Software enforces. Humans authorize.</strong> A product prototype for deciding what an AI capability should be allowed to do, based on evidence. <span id="foot-data">All data is seeded and fictional.</span></p>
   </footer>
   <script type="module" src="src/main.js"></script>
 </body>

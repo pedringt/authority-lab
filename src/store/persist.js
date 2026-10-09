@@ -8,6 +8,7 @@ import { selectDecision, setCondition, setRationale, authorize, proposeAuthority
 import { startTestRun, advanceTestRun, saveCriteria, saveScenarios, addStarterScenarios } from './evidence.js';
 import { proposeAmendment, approveProposal, withdrawProposal, rejectProposal, saveStakeholders } from './proposals.js';
 import { simulateBreach, recordReview } from './monitoring.js';
+import { startEmpty, setUpWorkspace } from './workspace.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
@@ -69,6 +70,8 @@ export const ACTIONS = {
   authorize,
   simulateBreach,
   recordReview,
+  startEmpty,
+  setUpWorkspace,
   reset,
 };
 

@@ -563,3 +563,15 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .review-form textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; }
 .review-form .btn { justify-self: start; }
 .review-record { margin-top: 12px; }
+
+/* Workspace setup (roadmap item 7) --------------------------------------- */
+.workspace-form { display: grid; gap: 12px; }
+.workspace-form .card + .card { margin-top: 0; }
+.workspace-form > .btn { justify-self: start; }
+.table-founders .cell-check { text-align: center; width: 1%; white-space: nowrap; }
+.table-founders th:nth-child(4), .table-founders th:nth-child(5) { white-space: nowrap; }
+.demo-buttons, .demo-confirm { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.demo-buttons[hidden], .demo-confirm[hidden] { display: none; }
+.demo-confirm-text { font-weight: 600; color: var(--fail); }
+.risk-gap { margin: 10px 0 0; }
+.risk-gap[hidden] { display: none; }
