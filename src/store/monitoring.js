@@ -202,20 +202,35 @@ export function reviewNeeded(state, capabilityId) {
   return { restriction: Boolean(d.reviewRequired), incidents, any: Boolean(d.reviewRequired) || incidents.length > 0 };
 }
 
+// The human decision that set the authority an automatic restriction pulled
+// back: the latest record before the restriction, made by a person, whose new
+// level is the level the rule restricted from. null when there is no open
+// restriction, or no such record (seeded authority with no record).
+export function restrictedExpansion(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (!d.reviewRequired || !d.monitoring || !d.monitoring.breachRecordId) return null;
+  const restriction = state.decisionRecords.find((r) => r.id === d.monitoring.breachRecordId);
+  if (!restriction || !restriction.previous) return null;
+  const before = state.decisionRecords.filter((r) => r.capabilityId === capabilityId && r.number < restriction.number && r.authorizedBy !== 'system');
+  const rec = before[before.length - 1];
+  return rec && rec.next.level === restriction.previous.level ? rec : null;
+}
+
 // Who may record it: the owner or a Risk approver; for a High-impact or
 // Financial capability, only a Risk approver. Never the system; never someone
-// deactivated.
+// deactivated; and never the person who authorized the expansion that was
+// automatically restricted (Paige, 2026-10-09): someone else looks at it.
 export function reviewEligibility(state, capabilityId, personKey) {
   const cap = getCapability(state, capabilityId);
   const p = people(state)[personKey];
   if (!p) return { ok: false, reason: 'Choose who is acting.' };
   if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and cannot record a review.` };
   const risk = isRiskApprover(state, personKey);
-  if (isHighOrFinancial(state, capabilityId)) {
-    return risk ? { ok: true, reason: null } : { ok: false, reason: `${cap.name} is High impact or Financial, so a Risk approver records the review. ${p.name} does not hold the Risk approver right.` };
-  }
-  if (personKey === cap.owner || risk) return { ok: true, reason: null };
-  return { ok: false, reason: `The owner (${people(state)[cap.owner].name}) or a Risk approver records the review.` };
+  if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so a Risk approver records the review. ${p.name} does not hold the Risk approver right.` };
+  if (personKey !== cap.owner && !risk) return { ok: false, reason: `The owner (${people(state)[cap.owner].name}) or a Risk approver records the review.` };
+  const expansion = restrictedExpansion(state, capabilityId);
+  if (expansion && expansion.authorizedBy === personKey) return { ok: false, reason: `${p.name} authorized the expansion that was automatically restricted (${expansion.id}), so someone else records the review.` };
+  return { ok: true, reason: null };
 }
 
 // Record the review. It clears the review lock, the capability's alerts and

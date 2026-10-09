@@ -302,7 +302,7 @@ function reviewCard(state, cap, d) {
     <label class="field field-stack"><span>What happened</span><textarea name="whatHappened" rows="2" required></textarea></label>
     <label class="field field-stack"><span>Cause</span><textarea name="cause" rows="2" required></textarea></label>
     <label class="field field-stack"><span>What changed as a result</span><textarea name="changes" rows="2" required></textarea></label>
-    <p class="muted small">Recording as <strong>${who.name}</strong>, ${who.role}. The owner or a Risk approver records the review${isHighOrFinancial(state, cap.id) ? '; for this High-impact or Financial capability, a Risk approver' : ''}.</p>
+    <p class="muted small">Recording as <strong>${who.name}</strong>, ${who.role}. The owner or a Risk approver records the review${isHighOrFinancial(state, cap.id) ? '; for this High-impact or Financial capability, a Risk approver' : ''}, but not whoever authorized the expansion that was restricted.</p>
     ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} Switch who is acting in the header.</p>`}
     <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Record review</button>
   </form>${recorded}`;

@@ -24,6 +24,7 @@ Read before working:
 - Risk approval is an explicit recorded right on a person. It is never inferred from a team name or a capability label.
 - Granting a right: the approver is neither the proposer nor the recipient. Approvers are frozen when a proposal opens. Proposals that can't be satisfied are refused when proposed.
 - Expanding authority needs a pending proposal and goes one level at a time. Pulling authority back is always possible, but still needs a named person, a rationale and a record.
+- After an automatic restriction or a rule incident, the post-incident review is recorded by the owner or a Risk approver (a Risk approver for High impact or Financial exposure), never by the system or someone deactivated, and **never by the person who authorized the expansion that was restricted**. A review clears the lock but never restores authority.
 - Warnings explain and link to the fix; they never block.
 
 When you change anything near these rules, write a test that tries to get around the rule and confirm it is refused.

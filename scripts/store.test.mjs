@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2146,8 +2146,7 @@ const FINDINGS = { whatHappened: 'Misroutes rose after the billing form changed.
 
 test('a review clears the lock and the alert but leaves authority reduced', () => {
   let s = simulateBreach(initialState(), TC);
-  const owner = getCapability(s, TC).owner;
-  s = recordReview(s, TC, { by: owner, ...FINDINGS });
+  s = recordReview(s, TC, { by: 'daniel', ...FINDINGS });
   const c = getCapability(s, TC);
   assert.deepEqual([c.authority.level, c.status, capData(s, TC).reviewRequired], [2, 'restricted', false]);
   assert.equal(s.alerts.filter((a) => a.capabilityId === TC).length, 0, 'alert cleared');
@@ -2159,7 +2158,7 @@ test('a review clears the lock and the alert but leaves authority reduced', () =
   // Expanding again still needs a proposal and a named authorization.
   assert.equal(canAuthorize(selectDecision(s, TC, 'expand'), TC).ok, false);
   assert.match(canAuthorize(selectDecision(s, TC, 'expand'), TC).reason, /proposed/);
-  assert.throws(() => recordReview(s, TC, { by: owner, ...FINDINGS }), /nothing to review/, 'one review per restriction');
+  assert.throws(() => recordReview(s, TC, { by: 'daniel', ...FINDINGS }), /nothing to review/, 'one review per restriction');
 });
 
 test('only the owner or a Risk approver records a review; High/Financial needs a Risk approver', () => {
@@ -2194,4 +2193,28 @@ test('a review closes an open rule incident and its alert; authority never moves
   assert.equal(s.alerts.length, 0);
   assert.ok(capData(s, 'account-closure').ruleIncidents.every((x) => x.reviewId));
   assert.equal(reviewNeeded(s, 'account-closure').any, false);
+});
+
+test('whoever authorized the restricted expansion cannot record its review', () => {
+  // A Low/Medium capability whose owner authorizes the expansion themselves.
+  let s = initialState();
+  s = amend(s, RR, 'risk', { value: { ...current(s, RR, 'risk'), impact: 'Medium', exposure: 'Customer-facing' }, author: 'maya', reason: 'Test: a Medium-impact capability.' });
+  assert.equal(isHighOrFinancial(s, RR), false);
+  const owner = getCapability(s, RR).owner;
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR, { by: owner });
+  const expansion = s.decisionRecords[s.decisionRecords.length - 1];
+  s = simulateBreach(s, RR);
+  assert.equal(restrictedExpansion(s, RR).id, expansion.id);
+  const refused = reviewEligibility(s, RR, owner);
+  assert.equal(refused.ok, false, 'the owner is otherwise eligible on a Medium capability');
+  assert.match(refused.reason, new RegExp(`authorized the expansion that was automatically restricted \\(${expansion.id}\\)`));
+  assert.throws(() => recordReview(s, RR, { by: owner, ...FINDINGS }), /authorized the expansion/);
+  assert.equal(reviewEligibility(s, RR, 'daniel').ok, true, 'another eligible person can');
+  s = recordReview(s, RR, { by: 'daniel', ...FINDINGS });
+  assert.equal(capData(s, RR).reviewRequired, false);
+  // The seeded expansion counts too: Priya authorized Ticket classification's Level 3 (AC-01).
+  const t = simulateBreach(initialState(), TC);
+  assert.equal(reviewEligibility(t, TC, 'priya').ok, false);
+  // A rule incident restricted nothing, so the rule does not apply to it.
+  assert.equal(reviewEligibility(simulateBreach(initialState(), 'account-closure'), 'account-closure', 'daniel').ok, true);
 });
