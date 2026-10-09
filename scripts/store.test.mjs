@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -198,11 +198,11 @@ test('threshold breach restricts automatically, creates alert, event, record, re
   // Earlier records are untouched.
   assert.equal(s.decisionRecords[3].id, 'AC-04');
   assert.deepEqual(s.decisionRecords[3].next, { level: 3, limited: true });
-  // Breach is idempotent and cannot run without monitoring.
+  // Breach is idempotent, and cannot run while no contract rule applies
+  // (Refund recommendation at Draft: its rules return it to Draft).
   assert.equal(simulateBreach(s, RR), s);
   const fresh = initialState();
   assert.equal(simulateBreach(fresh, RR), fresh);
-  assert.equal(simulateBreach(fresh, TC), fresh);
 });
 
 test('after a breach, expansion cannot be authorized until review', () => {
@@ -2083,4 +2083,57 @@ test('a capability added in the demo has rules but no measurements', () => {
   const st = monitoringStatus(s, id);
   assert.equal(st.rules.length, 1);
   assert.deepEqual([st.rules[0].measured, st.rules[0].value, st.running], [false, null, false], 'no readings; at Level 1 a "returns to Draft" rule waits');
+});
+
+// ---------------------------------------------------------------------------
+// Breach and fallback come from the contract (#50)
+// ---------------------------------------------------------------------------
+
+test('a breach returns the capability to the level its contract line names', () => {
+  const s = initialState();
+  const cases = [['ticket-classification', 2], ['response-drafting', 1], ['refund-execution-high-value', 0]];
+  for (const [id, level] of cases) {
+    const before = getCapability(s, id).authority.level;
+    const b = simulateBreach(s, id);
+    const c = getCapability(b, id);
+    assert.deepEqual([c.authority.level, c.status, capData(b, id).reviewRequired], [level, 'review-required', true], id);
+    const rec = b.decisionRecords[b.decisionRecords.length - 1];
+    assert.deepEqual([rec.authorizedBy, rec.option, rec.previous.level, rec.next.level], ['system', 'auto-restrict', before, level], id);
+    assert.ok(rec.rationale.includes(current(s, id, 'contract').autoRestriction[0]), `${id}: the record quotes the contract rule`);
+    assert.equal(b.alerts[0].capabilityId, id);
+    assert.ok(capData(b, id).evidence[0].source === 'Incident' && capData(b, id).evidence[0].status === 'fail');
+    assert.equal(simulateBreach(b, id), b, 'idempotent');
+    assert.equal(canAuthorize(selectDecision(b, id, 'expand'), id).ok, false, 'no expansion before review');
+  }
+});
+
+test('the Refund recommendation demo breach still returns it to Draft from its contract rule', () => {
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.ok(breachRule(s, RR), 'at Level 3 the rolling-window rule applies');
+  s = simulateBreach(s, RR);
+  const rec = s.decisionRecords[s.decisionRecords.length - 1];
+  assert.deepEqual([rec.previous, rec.next], [{ level: 3, limited: true }, { level: 2, limited: false }]);
+  assert.match(rec.rationale, /6% across the rolling 50-case window \(limit 5%\)/);
+  assert.match(rec.rationale, /AC-04/);
+  assert.equal(capData(s, RR).ruleReadings[current(s, RR, 'contract').autoRestriction[0]], 6);
+});
+
+test('an incident rule opens an incident and never changes authority', () => {
+  const s = initialState();
+  const b = simulateBreach(s, 'account-closure');
+  assert.deepEqual(getCapability(b, 'account-closure').authority, getCapability(s, 'account-closure').authority);
+  assert.equal(b.decisionRecords.length, s.decisionRecords.length, 'no decision record');
+  assert.equal(capData(b, 'account-closure').reviewRequired, false);
+  assert.equal(capData(b, 'account-closure').ruleIncidents.length, 1);
+  assert.equal(capData(b, 'account-closure').evidence[0].source, 'Incident');
+  assert.equal(b.alerts.length, 1, 'an incident raises an Overview alert');
+  assert.equal(b.alerts[0].capabilityId, 'account-closure');
+  assert.equal(simulateBreach(b, 'account-closure'), b, 'one incident per demo breach');
+});
+
+test('capabilities added in the demo have no simulated breach', () => {
+  let s = addCapability(initialState(), { name: 'Order lookup', summary: 'Finds an order.', owner: 'maya', risk: LOW_RISK, startingLevel: 1, by: 'maya' });
+  const id = s.capabilities[s.capabilities.length - 1].id;
+  assert.equal(breachRule(s, id), null);
+  assert.equal(simulateBreach(s, id), s);
 });

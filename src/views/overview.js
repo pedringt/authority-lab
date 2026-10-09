@@ -70,7 +70,7 @@ export function overviewView(state) {
         </div>
         <div class="hero-side">
           <p class="eyebrow">What happened</p>
-          <p>${d.monitoring.severeErrorsInWindow} severe errors in the rolling ${d.monitoring.rollingWindow}-case window, against a limit of ${d.monitoring.thresholdPct}%.</p>
+          <p>The contract rule was crossed: ${d.monitoring.reading}.</p>
           <a class="btn" href="#/decisions/${rec.id}">Open restriction record</a>
         </div>
       </div>

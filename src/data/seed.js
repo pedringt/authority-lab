@@ -735,6 +735,8 @@ export const monitoringSeed = {
 };
 
 export const breachSeed = {
+  // The contract rule this breach crosses (#50).
+  rule: 'Severe error rate above 5% across the rolling 50 autonomous cases returns the capability to Draft until reviewed.',
   severeErrorsInWindow: 3,
   // Three severe errors in the rolling 50-case window = 6%, above the 5% rule.
   errors: [
@@ -756,6 +758,16 @@ export const breachSeed = {
 
 const matureCapabilities = {
   'ticket-classification': {
+    // The demo breach (#50): the contract rule it crosses, the reading that
+    // crosses it, and what went wrong.
+    breach: {
+      rule: 'Misroute rate above 10% over 7 days returns the capability to Draft.',
+      value: 12.4,
+      errors: [
+        'Billing disputes were routed to General for two days after a form change.',
+        'Nine outage reports were set to Low priority because the word down appeared only in an attachment.',
+      ],
+    },
     // Simulated readings for the contract's restriction rules (#49), keyed by
     // the rule's line. Percentages for percentage rules, counts for count rules.
     ruleReadings: {
@@ -788,6 +800,16 @@ const matureCapabilities = {
     ],
   },
   'response-drafting': {
+    // The demo breach (#50): the contract rule it crosses, the reading that
+    // crosses it, and what went wrong.
+    breach: {
+      rule: 'Two confirmed hallucinated policy statements within 7 days returns the capability to Recommend.',
+      value: 2,
+      errors: [
+        'A draft told a customer refunds are available for 60 days; the policy says 30.',
+        'A draft promised free return shipping on a final-sale item.',
+      ],
+    },
     // Simulated readings for the contract's restriction rules (#49), keyed by
     // the rule's line. Percentages for percentage rules, counts for count rules.
     ruleReadings: {
@@ -822,6 +844,15 @@ const matureCapabilities = {
     ],
   },
   'refund-execution-high-value': {
+    // The demo breach (#50): the contract rule it crosses, the reading that
+    // crosses it, and what went wrong.
+    breach: {
+      rule: '1 execution outside the approved conditions in any 7-day window returns the capability to Observe.',
+      value: 1,
+      errors: [
+        'A $180 refund was executed while the order still had an open chargeback.',
+      ],
+    },
     // Simulated readings for the contract's restriction rules (#49), keyed by
     // the rule's line. Percentages for percentage rules, counts for count rules.
     ruleReadings: {
@@ -858,6 +889,15 @@ const matureCapabilities = {
     ],
   },
   'account-closure': {
+    // The demo breach (#50): the contract rule it crosses, the reading that
+    // crosses it, and what went wrong.
+    breach: {
+      rule: '1 account change attempted by the AI in any 7-day window opens an incident; the capability stays at Observe.',
+      value: 1,
+      errors: [
+        'The AI attempted to close an account from a ticket that only asked how closing works.',
+      ],
+    },
     // Simulated readings for the contract's restriction rules (#49), keyed by
     // the rule's line. Percentages for percentage rules, counts for count rules.
     ruleReadings: {
