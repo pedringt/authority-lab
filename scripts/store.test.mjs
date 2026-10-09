@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2387,7 +2387,9 @@ function bar(s, { criteria = {}, requirements = {}, drop = [], add = null, renam
 const TIGHTEN = { criteria: { quality: '≥ 95% correct decisions', cost: 'AI operating cost < $0.15 per case' }, requirements: { 'min-cases': 'Minimum 250 pilot cases', severe: 'High-severity error rate < 1.5%' } };
 
 test('a tightening-only change applies straight away as a recorded amendment, surfaced, without sign-off', () => {
-  let s = initialState();
+  // The pending expansion is decided first: no decision is pending.
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.equal(decisionRequired(s, RR), false);
   assert.equal(needsSignoff(s, RR, 'criteria'), true, 'locked: normally needs sign-off');
   const before = versionsInForce(s, RR);
   const proposals = capData(s, RR).proposals.length;
@@ -2443,4 +2445,50 @@ test('threshold parts compare only the number', () => {
   assert.deepEqual(thresholdParts('Minimum 40 high-value refund cases'), { atLeast: true, n: 40, skeleton: 'Minimum # high-value refund cases' });
   assert.deepEqual(thresholdParts('AI operating cost < $0.20 per case'), { atLeast: false, n: 0.2, skeleton: 'AI operating cost < $# per case' });
   assert.equal(thresholdParts('No unresolved critical incidents'), null);
+});
+
+test('repro: a non-stakeholder raising the case minimum while a decision is pending goes to sign-off', () => {
+  let s = initialState();
+  assert.deepEqual([decisionRequired(s, RR), namedStakeholders(s, RR).includes('jonas')], [true, false]);
+  const before = readiness(s, RR);
+  const n = capData(s, RR).proposals.length;
+  s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { requirements: { 'min-cases': 'Minimum 20000 pilot cases' } }), by: 'jonas', reason: 'Raising the case minimum for safety.' });
+  assert.equal(capData(s, RR).proposals.length, n + 1, 'a proposal opens');
+  assert.deepEqual([readiness(s, RR).met, readiness(s, RR).total], [before.met, before.total], 'readiness unchanged: 5 of 6');
+  const p = capData(s, RR).proposals[n];
+  assert.match(p.shortcutDeclined, /Only the owner or a named stakeholder/);
+});
+
+test('a named stakeholder tightening with no decision pending applies directly', () => {
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.equal(getCapability(s, RR).owner === 'daniel', false);
+  assert.equal(namedStakeholders(s, RR).includes('daniel'), true);
+  const n = capData(s, RR).proposals.length;
+  s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { requirements: { 'min-cases': 'Minimum 250 pilot cases' } }), by: 'daniel', reason: 'More cases before the next review.' });
+  assert.equal(capData(s, RR).proposals.length, n, 'no proposal');
+  assert.equal(currentVersion(s, RR, 'requirements').tighteningOnly, true);
+  // Someone who is not a named stakeholder still goes to sign-off with no decision pending.
+  const t = proposeAmendment(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'jonas', reason: 'Raising quality for safety.' });
+  assert.equal(capData(t, RR).proposals.at(-1).proposedBy, 'jonas');
+});
+
+test('a stakeholder tightening while a decision is pending goes to sign-off, and the decision shows the change once applied', () => {
+  let s = initialState();
+  assert.equal(namedStakeholders(s, RR).includes('priya'), true);
+  const n = capData(s, RR).proposals.length;
+  s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'priya', reason: 'A stricter quality bar for this expansion.' });
+  const p = capData(s, RR).proposals[n];
+  assert.ok(p, 'a proposal opens');
+  assert.match(p.shortcutDeclined, /expansion decision is pending/);
+  assert.deepEqual(barChangesSinceDecisionOpened(s, RR), [], 'nothing applied yet');
+  for (const by of ['daniel', 'maya', 'sofia']) {
+    if (getProposal(s, RR, p.id).status !== 'open') break;
+    try { s = approveProposal(s, RR, p.id, { by }); } catch { /* not eligible or not needed */ }
+  }
+  assert.equal(getProposal(s, RR, p.id).status, 'approved');
+  const changes = barChangesSinceDecisionOpened(s, RR);
+  const c = changes.find((x) => x.kind === 'criteria');
+  assert.deepEqual(c.rows.map((r) => [r.label, r.change]), [['Quality', 'stricter']]);
+  assert.equal(c.tighteningOnly, false, 'it went through sign-off');
+  assert.equal(changes.some((x) => x.kind === 'requirements'), false, 'requirements v2 changed no row, so it is not listed');
 });

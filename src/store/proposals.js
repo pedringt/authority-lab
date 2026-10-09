@@ -1,7 +1,7 @@
 // Amendments after evidence need sign-off (#7), and stakeholders (#8).
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
-import { current, versionList, versionsInForce, performanceResultsSeen, readiness } from './selectors.js';
+import { current, versionList, versionsInForce, performanceResultsSeen, readiness, decisionRequired } from './selectors.js';
 import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, requireActive } from './people.js';
 import { amend } from './capabilities.js';
 import { SECTION_KEYS, contractValueChecks } from './contract.js';
@@ -177,6 +177,48 @@ export function tighteningOnly(base, next) {
   return { ok: true, reason: null, changes };
 }
 
+// Who may use the tightening shortcut, and when (Paige, 2026-10-09): only the
+// capability owner or a named stakeholder, and never while an expansion
+// decision is pending, because raising the bar then can block the decision.
+// Otherwise a tightening-only change goes to normal sign-off like any other.
+export function tighteningShortcut(state, capabilityId, by) {
+  if (!namedStakeholders(state, capabilityId).includes(by)) {
+    const who = (people(state)[by] || { name: by }).name;
+    return { ok: false, reason: `Only the owner or a named stakeholder can tighten the bar without sign-off; ${who} is neither, so the change goes to sign-off.` };
+  }
+  if (decisionRequired(state, capabilityId)) return { ok: false, reason: 'An expansion decision is pending, so any change to the bar goes to sign-off until it is decided.' };
+  return { ok: true, reason: null };
+}
+
+// The bar (criteria and requirements) as it changed since the pending
+// decision opened: every newer version, with each changed row marked stricter,
+// looser or changed. Empty when no decision is pending or nothing changed.
+export function barChangesSinceDecisionOpened(state, capabilityId) {
+  const decision = capData(state, capabilityId).decision;
+  const proposed = decision.proposed && decision.versionsAtOpen ? decision : null;
+  if (!proposed) return [];
+  const out = [];
+  for (const [kind, field, label] of [['criteria', 'target', (x) => x.name], ['requirements', 'text', (x) => x.text]]) {
+    for (const v of versionList(state, capabilityId, kind).filter((x) => x.version > (proposed.versionsAtOpen[kind] || 0))) {
+      const before = v.before || [];
+      const rows = [];
+      for (const a of v.value) {
+        const b = before.find((x) => x.id === a.id);
+        if (!b) { rows.push({ label: label(a), change: 'added', to: a[field] }); continue; }
+        if (String(a[field]) === String(b[field])) continue;
+        const p = thresholdParts(b[field]);
+        const q = thresholdParts(a[field]);
+        const dir = p && q && p.skeleton === q.skeleton ? ((p.atLeast ? q.n > p.n : q.n < p.n) ? 'stricter' : 'looser') : 'changed';
+        rows.push({ label: label(b), change: dir, from: b[field], to: a[field] });
+      }
+      for (const b of before) if (!v.value.some((a) => a.id === b.id)) rows.push({ label: label(b), change: 'removed', from: b[field] });
+      // Both objects get a new version together; skip the one where no row changed.
+      if (rows.length) out.push({ kind, version: v.version, date: v.date, author: v.author, authorAt: v.authorAt, reason: v.reason, tighteningOnly: Boolean(v.tighteningOnly), proposalId: v.proposalId || null, rows });
+    }
+  }
+  return out;
+}
+
 export function applyCriteriaDirect(state, capabilityId, value, by, reason) {
   return saveCriteria(state, capabilityId, { criteria: value.criteria, requirements: value.requirements, by, reason });
 }
@@ -202,9 +244,17 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     return amend(state, capabilityId, 'contract', { value: clean, author: by, reason: why });
   }
   if (openProposal(state, capabilityId, kind)) throw new Error('A proposal for this object is already awaiting sign-off. Approve or reject it first.');
+  // A tightening-only change skips sign-off, but only for the owner or a named
+  // stakeholder and only while no expansion decision is pending. If it would
+  // have qualified otherwise, the proposal records why it didn't.
+  let shortcutDeclined = null;
   if (kind === 'criteria') {
     const check = tighteningOnly({ criteria: current(state, capabilityId, 'criteria'), requirements: current(state, capabilityId, 'requirements') }, clean);
-    if (check.ok) return applyTightening(state, capabilityId, clean, by, why, check.changes);
+    if (check.ok) {
+      const allowed = tighteningShortcut(state, capabilityId, by);
+      if (allowed.ok) return applyTightening(state, capabilityId, clean, by, why, check.changes);
+      shortcutDeclined = allowed.reason;
+    }
   }
   const required = signoffRequirements(state, capabilityId, by);
   const eligible = namedStakeholders(state, capabilityId).filter((k) => k !== by);
@@ -229,6 +279,7 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     status: 'open',
     rejection: null,
     applied: null,
+    shortcutDeclined,
   };
   const s = updateCap(state, capabilityId, { proposals: [...d.proposals, proposal] });
   const who = people(state)[by];
