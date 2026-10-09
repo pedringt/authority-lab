@@ -56,27 +56,29 @@ button { font: inherit; }
 .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 
 /* Shell ------------------------------------------------------------------ */
-/* Two rows: brand and the demo controls, then the section tabs. */
+/* Two rows: brand and the demo controls, then the section tabs. The tabs are
+   underlined, start flush with the brand, and sit on the header's bottom
+   border; the active tab's underline replaces that border. */
 .topbar {
-  padding: 10px 24px 8px;
+  padding: 10px 24px 0;
   background: var(--surface); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 20;
 }
-.topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 8px; }
+.topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 4px; }
 .brand { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .brand-name { font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
 .brand-sep { color: var(--border-strong); }
 .brand-ws { color: var(--muted); font-size: 14px; }
-.nav { display: flex; flex-wrap: wrap; gap: 2px; }
+.nav { display: flex; flex-wrap: wrap; gap: 0 24px; margin-bottom: -1px; }
 .nav-link {
-  color: var(--text-2); padding: 6px 10px; border-radius: 999px; font-weight: 500; font-size: 14px;
+  color: var(--muted); padding: 8px 0 9px; font-weight: 500; font-size: 14px;
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  border-bottom: 2px solid transparent;
 }
-.nav-link:hover { background: var(--neutral-bg); text-decoration: none; }
-.nav-link.is-active { background: var(--accent); color: #fff; }
-.nav-count { font-size: 11px; font-weight: 700; background: var(--decide); color: #fff; border-radius: 999px; min-width: 18px; height: 18px; display: inline-grid; place-items: center; padding: 0 5px; }
-.nav-link.is-active .nav-count { background: #fff; color: var(--accent); }
-.nav-count.is-alert { background: var(--fail); }
+.nav-link:hover { color: var(--text); text-decoration: none; border-bottom-color: var(--border-strong); }
+.nav-link.is-active { color: var(--text); border-bottom-color: var(--accent); }
+.nav-count { font-size: 11px; font-weight: 600; background: var(--decide-bg); color: var(--decide); border: 1px solid var(--decide-bd); border-radius: 999px; min-width: 18px; height: 18px; display: inline-grid; place-items: center; padding: 0 5px; }
+.nav-count.is-alert { background: var(--fail); border-color: var(--fail); color: #fff; }
 .demo-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 4px 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); font-size: 13px; }
 .demo-sep { width: 1px; height: 18px; background: var(--border-strong); }
 .demo-date { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -391,7 +393,7 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 }
 @media (max-width: 720px) {
   html { font-size: 14px; }
-  .topbar { padding: 10px 16px 8px; }
+  .topbar { padding: 10px 16px 0; }
   .demo-controls { border-radius: var(--radius); }
   .app, .foot { padding-left: 16px; padding-right: 16px; }
   .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
