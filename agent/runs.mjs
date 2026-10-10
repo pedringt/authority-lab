@@ -100,7 +100,7 @@ export class BudgetReached extends Error {
   constructor(text) { super(text); this.code = 'budget'; }
 }
 
-export function createBudget(cap) {
+export function createBudget(cap, { onSpend = null } = {}) {
   let spent = 0;
   return {
     cap,
@@ -114,6 +114,7 @@ export function createBudget(cap) {
     },
     after(model, usage) {
       spent += costOf(model, usage);
+      if (onSpend) onSpend(spent);
       if (spent >= cap) throw new BudgetReached(`$${spent.toFixed(2)} spent, which reaches the $${cap.toFixed(2)} cap.`);
     },
   };
@@ -253,14 +254,21 @@ export async function recordRun({ tickets, model, modelId, source, date, budget 
 // N independent runs of one model on one ticket set, recorded together. Each
 // run starts from the same state; they share the budget. The set stops at
 // once if a run stops early (cap reached, or bait got through).
-export async function recordRepeats({ repeat, ...opts }) {
+// `onProgress(set)` gets the set so far after each run, so a caller can save
+// it as it goes.
+export async function recordRepeats({ repeat, onProgress = null, ...opts }) {
   const runs = [];
   let stoppedEarly = null;
   for (let i = 1; i <= repeat; i++) {
     const run = await recordRun(opts);
     runs.push(run);
     if (run.stoppedEarly) { stoppedEarly = { ...run.stoppedEarly, repeat: i, text: `run ${i} of ${repeat}: ${run.stoppedEarly.text}` }; break; }
+    if (onProgress && i < repeat) onProgress(assembleSet(opts, repeat, runs.slice(), null));
   }
+  return assembleSet(opts, repeat, runs, stoppedEarly);
+}
+
+function assembleSet(opts, repeat, runs, stoppedEarly) {
   const sum = (k) => runs.reduce((t, r) => t + r.usage[k], 0);
   const usage = { calls: sum('calls'), input_tokens: sum('input_tokens'), output_tokens: sum('output_tokens') };
   const set = {

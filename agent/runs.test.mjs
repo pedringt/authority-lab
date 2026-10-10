@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { initialState, replayRun, replayRecording, gateEvents, runStartState, classifyTicket, runFlags, restrictionIn, ticketRates, rateText, runLabel } from '../src/store/index.js';
 import { loadTickets, recordRun, recordRepeats, validateRun, estimateCost, createBudget, observedCostPerTicket, LIMITS, RUN_FORMAT, RUNSET_FORMAT, RUNS_DIR, NOT_RECORDINGS } from './runs.mjs';
-import { readLedger, monthBudget, checkCap, appendLedger, MONTHLY_BUDGET } from './ledger.mjs';
+import { readLedger, monthBudget, checkCap, appendLedger, updateLedger, MONTHLY_BUDGET } from './ledger.mjs';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -217,16 +217,25 @@ test('the model-run workflow is gated: label-triggered, same-repo only, behind t
   assert.equal(wf.match(/secrets\.ANTHROPIC_API_KEY/g).length, 1, 'the key is exposed to one step only');
   assert.match(wf, /budget > 25/, 'a ceiling on any single request');
   assert.match(wf, /--ledger-also/, 'the monthly budget counts main\'s ledger');
-  assert.match(wf, /git rm -q agent\/runs\/request\.json/, 'one request, one run');
+  assert.match(wf, /git rm -q --ignore-unmatch agent\/runs\/request\.json/, 'one request, one run');
+  // A long batch must not be cut off before it commits (2026-10-10: a 30-minute
+  // job limit cancelled a batch and lost its recordings).
+  assert.ok(Number(wf.match(/^    timeout-minutes: (\d+)/m)[1]) >= 120, 'the job allows a long batch');
+  const stepLimit = Number(wf.match(/^        timeout-minutes: (\d+)/m)[1]);
+  assert.ok(stepLimit < Number(wf.match(/^    timeout-minutes: (\d+)/m)[1]) - 10, 'the model step times out before the job does');
+  assert.match(wf, /- name: Commit the recordings and the ledger\n\s+if: always\(\)/, 'the commit step runs even after a timeout, failure or cancel');
 });
 
 test('the standing budget: $25 a calendar month, counted from the ledger, and a cap that won\'t fit is refused', () => {
   assert.equal(MONTHLY_BUDGET, 25);
-  const rows = readLedger();
-  assert.ok(rows.length >= 2, 'the ledger lists the earlier runs');
+  assert.ok(readLedger().length >= 2, 'the real ledger lists the earlier runs');
+  // A sample ledger, so the test doesn't move as the real one grows.
+  const rows = [
+    { date: '2026-10-10', pr: '#86', cost: 0.25 }, { date: '2026-10-10', pr: '#86', cost: 0.12 },
+    { date: '2026-09-30', pr: '#80', cost: 9 },
+  ];
   const oct = monthBudget('2026-10-20', rows);
-  assert.equal(oct.month, '2026-10');
-  assert.ok(oct.spent > 0.37 && oct.spent < 0.38, `October so far: ${oct.spent}`);
+  assert.deepEqual([oct.month, oct.spent, oct.remaining], ['2026-10', 0.37, 24.63], 'only October counts');
   assert.equal(checkCap(24, '2026-10-20', rows).ok, true);
   assert.equal(checkCap(25, '2026-10-20', rows).ok, false, 'October has less than $25 left');
   assert.equal(checkCap(25, '2026-11-01', rows).ok, true, 'a new month starts fresh');
@@ -314,4 +323,38 @@ test('the estimate covers ticket sets and repeats, and uses what earlier runs ac
   assert.match(r.stdout, /standard × 5 on claude-haiku-5-5: 14 tickets, up to 420 calls/);
   assert.match(r.stdout, /stress × 5 on claude-haiku-5-5: 8 tickets, up to 240 calls/);
   assert.match(r.stdout, /Total: up to 660 calls/);
+});
+
+test('a run keeps its ledger row current while it runs, so a cancel never loses the spend', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ledger-'));
+  const file = join(dir, 'ledger.md');
+  writeFileSync(file, '| Date | PR | Models | Tickets | Repeats | Cap | Actual cost | Status |\n|---|---|---|---|---|---|---|---|\n| 2026-10-10 | #86 | x | standard | 1 | $1.00 | $0.5000 | finished |\n');
+  const base = { date: '2026-10-11', pr: '#87', models: 'claude-opus-5-5', tickets: 'standard', repeats: 5, cap: 15 };
+  appendLedger({ ...base, cost: 0, status: 'running (abc)' }, file);
+  const budget = createBudget(15, { onSpend: (spent) => updateLedger('running (abc)', { ...base, cost: spent, status: 'running (abc)' }, file) });
+  budget.after('claude-opus-5-5', { input_tokens: 10000, output_tokens: 1000 });
+  budget.after('claude-opus-5-5', { input_tokens: 10000, output_tokens: 1000 });
+  let rows = readLedger(file);
+  assert.equal(rows.length, 2, 'one row per run, updated in place');
+  assert.equal(rows[1].cost, 0.12);
+  assert.match(rows[1].status, /running/);
+  assert.equal(monthBudget('2026-10-20', rows).spent, 0.62, 'a running row counts against the month');
+  updateLedger('running (abc)', { ...base, cost: budget.spent, status: 'cancelled (SIGTERM) partway' }, file);
+  rows = readLedger(file);
+  assert.deepEqual([rows.length, rows[1].cost, rows[1].status], [2, 0.12, 'cancelled (SIGTERM) partway']);
+});
+
+test('a run set is saved after each run, so a cancel keeps the runs that finished', async () => {
+  const seen = [];
+  const set = await recordRepeats({ repeat: 3, tickets: tickets.slice(0, 2), model: mockModel(), modelId: 'mock', source: 'mock', date: '2026-10-07', onProgress: (partial) => seen.push(partial) });
+  assert.deepEqual(seen.map((p) => p.runs.length), [1, 2]);
+  assert.match(seen[0].label, /1 of 3 planned runs/);
+  assert.deepEqual(validateRun(seen[0]), []);
+  assert.equal(set.runs.length, 3);
+});
+
+test('the ledger records the cancelled first batch with its logged and estimated spend', () => {
+  const row = readLedger().find((r) => r.pr === '#87' && /cancelled/.test(r.status));
+  assert.ok(row, 'the cancelled batch is in the ledger');
+  assert.ok(row.cost >= 3.5899, 'at least what the log shows was spent');
 });

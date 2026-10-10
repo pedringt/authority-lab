@@ -38,8 +38,21 @@ export function checkCap(cap, date, rows = readLedger()) {
 }
 
 export function appendLedger(row, file = LEDGER) {
-  const line = `| ${row.date} | ${row.pr || '—'} | ${row.models} | ${row.tickets} | ${row.repeats} | $${row.cap.toFixed(2)} | $${row.cost.toFixed(4)} | ${row.status} |`;
+  const line = format(row);
   const text = readFileSync(file, 'utf8').replace(/\n*$/, '\n');
   writeFileSync(file, `${text}${line}\n`);
   return line;
+}
+
+const format = (row) => `| ${row.date} | ${row.pr || '—'} | ${row.models} | ${row.tickets} | ${row.repeats} | $${row.cap.toFixed(2)} | $${row.cost.toFixed(4)} | ${row.status} |`;
+
+// Replace the row whose status carries `marker` (a running row), so a run's
+// spend stays current while it runs.
+export function updateLedger(marker, row, file = LEDGER) {
+  const lines = readFileSync(file, 'utf8').split('\n');
+  const i = lines.findIndex((l) => l.startsWith('|') && l.includes(marker));
+  if (i < 0) return appendLedger(row, file);
+  lines[i] = format(row);
+  writeFileSync(file, lines.join('\n'));
+  return lines[i];
 }

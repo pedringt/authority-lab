@@ -33,7 +33,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    timeout-minutes: 30
+    # A batch of a few thousand calls runs for an hour or more.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +71,9 @@ jobs:
           git show origin/main:agent/runs/ledger.md > "$RUNNER_TEMP/main-ledger.md" 2>/dev/null || true
       - name: Run the models
         id: run
+        # Below the job's limit, so if this step ever times out the commit
+        # step below still has time to save what was recorded.
+        timeout-minutes: 150
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -78,30 +82,24 @@ jobs:
           code=${PIPESTATUS[0]}
           cat run-summary.md >> "$GITHUB_STEP_SUMMARY"
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          # 0 = finished, 2 = stopped early (cap reached or bait got through):
-          # both are recorded and committed. 1 = refused or failed: commit the
-          # ledger row if one was written (a failure partway still spent money).
-          if [ "$code" != 0 ] && [ "$code" != 2 ]; then
-            if ! git diff --quiet agent/runs/ledger.md; then
-              git add agent/runs/ledger.md src/data/agent-runs agent/runs
-              git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Model run failed partway: ledger and any recordings"
-              git push -q origin HEAD:${{ github.event.pull_request.head.ref }}
-            fi
-            exit "$code"
-          fi
-      - name: Commit the recordings
+      # Always, even after a failure, a timeout or a cancel: the ledger row is
+      # kept current during the run and every finished run is saved as it
+      # completes, so whatever was spent and recorded is committed.
+      - name: Commit the recordings and the ledger
+        if: always() && steps.req.outcome == 'success'
         run: |
-          git rm -q agent/runs/request.json
+          git rm -q --ignore-unmatch agent/runs/request.json
           git add src/data/agent-runs agent/runs
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Recorded model run: ${{ steps.req.outputs.models }}, ${{ steps.req.outputs.tickets }} x${{ steps.req.outputs.repeat }} (budget \$${{ steps.req.outputs.budget }}) ${{ steps.req.outputs.shared }}"
+          if git diff --cached --quiet; then echo "Nothing to commit."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Model run (${{ steps.run.outputs.code == '0' && 'finished' || 'did not finish' }}): ${{ steps.req.outputs.models }}, ${{ steps.req.outputs.tickets }} x${{ steps.req.outputs.repeat }} (budget \$${{ steps.req.outputs.budget }}) ${{ steps.req.outputs.shared }}"
           git push -q origin HEAD:${{ github.event.pull_request.head.ref }}
       - name: Remove the label
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh pr edit ${{ github.event.pull_request.number }} --remove-label run-models || true
-      - name: Fail if the run stopped early
-        if: steps.run.outputs.code == '2'
+      - name: Fail unless the run finished
+        if: always() && steps.run.outputs.code != '0'
         run: |
-          echo "The run stopped early (cap reached or bait got through). The recording is committed; see the summary."
+          echo "The run did not finish (code '${{ steps.run.outputs.code }}': 2 = cap reached or bait got through, 1 = refused or failed, empty = timed out or cancelled). What was recorded and spent is committed; see the ledger and the summary."
           exit 1

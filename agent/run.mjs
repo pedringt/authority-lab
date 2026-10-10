@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { loadTickets, estimateCost, recordRun, recordRepeats, validateRun, createBudget, observedCostPerTicket, PRICES, RUNS_DIR, TICKET_SETS } from './runs.mjs';
 import { mockModel } from './mock-model.mjs';
 import { summarize, writeIndex } from './summary.mjs';
-import { readLedger, checkCap, appendLedger } from './ledger.mjs';
+import { readLedger, checkCap, appendLedger, updateLedger } from './ledger.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -118,16 +118,33 @@ if (flag('live')) {
     console.error(`${set} × ${repeat} on ${m}: up to ${e.calls.max * repeat} calls; estimated about $${(e.dollars.expected * repeat).toFixed(2)}, at most $${(e.dollars.worst * repeat).toFixed(2)}.`);
   }
   console.error(`Hard cap for this invocation: $${cap.toFixed(2)}. ${room.text}`);
-  const budget = createBudget(cap);
+  // The ledger row is written now and kept current after every call, so a
+  // run that is cancelled or killed partway still shows what it spent.
+  const marker = `running (${process.pid}-${Date.now()})`;
+  const base = { date, pr: pr ? `#${pr}` : '—', models: models.join(', ') + (shared ? ' (shared session)' : ''), tickets: ticketSets.join(', '), repeats: repeat, cap };
+  appendLedger({ ...base, cost: 0, status: marker });
+  const budget = createBudget(cap, { onSpend: (spent) => updateLedger(marker, { ...base, cost: spent, status: marker }) });
   const recs = [];
   let status = 'finished';
+  let closed = false;
+  const close = (final) => {
+    if (closed) return;
+    closed = true;
+    updateLedger(marker, { ...base, cost: budget.spent, status: final.replace(/\|/g, '/') });
+    writeIndex();
+  };
+  // Cancelled or timed out on GitHub: close the row and keep what's saved.
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { console.error(`${sig}: closing the ledger row at $${budget.spent.toFixed(4)}.`); close(`cancelled (${sig}) partway`); process.exit(130); });
   try {
     outer: for (const set of ticketSets) {
       for (const m of models) {
         console.error(`Running ${m} on the ${set} tickets${repeat > 1 ? ` × ${repeat}` : ''}…`);
+        const file = fileFor(date, m, set, { shared, repeat });
         const opts = { tickets: ticketsBySet[set], model: liveModel({ model: m, apiKey }), modelId: m, source: 'recorded', date, budget, shared, ticketSet: set };
-        const rec = repeat > 1 ? await recordRepeats({ ...opts, repeat }) : await recordRun(opts);
-        write(rec, fileFor(date, m, set, { shared, repeat }));
+        // Each finished run of a set is saved at once, not only at the end.
+        const rec = repeat > 1 ? await recordRepeats({ ...opts, repeat, onProgress: (partial) => { write(partial, file); writeIndex(); } }) : await recordRun(opts);
+        write(rec, file);
+        writeIndex();
         recs.push(rec);
         console.error(`${m}, ${set}: ${rec.usage.calls} calls, $${rec.cost.toFixed(4)}. Spent so far $${budget.spent.toFixed(4)}.`);
         if (rec.stoppedEarly) { status = `stopped early: ${rec.stoppedEarly.reason}`; console.error(`STOPPED: ${rec.stoppedEarly.text}`); break outer; }
@@ -137,8 +154,7 @@ if (flag('live')) {
     status = `failed: ${err.message.split('\n')[0].slice(0, 80)}`;
     console.error(`FAILED: ${err.message}`);
   } finally {
-    // Every invocation is in the ledger, with what it actually spent.
-    appendLedger({ date, pr: pr ? `#${pr}` : '—', models: models.join(', ') + (shared ? ' (shared session)' : ''), tickets: ticketSets.join(', '), repeats: repeat, cap, cost: budget.spent, status: status.replace(/\|/g, '/') });
+    close(status);
   }
   if (recs.length) {
     writeIndex();
