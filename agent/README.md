@@ -88,3 +88,10 @@ A live run costs money and needs Paige's OK on the models, call count and cap fi
 ```bash
 node run.mjs --live --models claude-opus-5-5,claude-haiku-5-5 --budget 11.50
 ```
+
+### Running on GitHub (the usual way)
+
+1. Commit `runs/request.json` to the PR: `{ "models": ["claude-haiku-5-5"], "budget": 0.5, "shared": true }`.
+2. Add the label `run-models` to the PR.
+3. Paige approves the waiting `model-runs` deployment on GitHub. Only then can the job read the API key.
+4. The job runs the tests, then the models, and commits the recordings and `runs/summary-<date>.md` to the PR branch. It also deletes the request.

@@ -196,3 +196,15 @@ test('a shared-session run carries state across tickets, so the automatic restri
   // The same tickets run independently never restrict.
   assert.equal(restrictionIn(await dryRun()), null);
 });
+
+test('the model-run workflow is gated: label-triggered, same-repo only, behind the model-runs environment, key only in the run step', () => {
+  const wf = readFileSync(new URL('../.github/workflows/model-run.yml', import.meta.url), 'utf8');
+  assert.match(wf, /on:\s*\n\s*pull_request:\s*\n\s*types: \[labeled\]/);
+  assert.doesNotMatch(wf, /workflow_dispatch|push:|schedule:|pull_request_target/);
+  assert.match(wf, /github\.event\.label\.name == 'run-models'/);
+  assert.match(wf, /head\.repo\.full_name == github\.repository/);
+  assert.match(wf, /environment: model-runs/);
+  assert.equal(wf.match(/secrets\.ANTHROPIC_API_KEY/g).length, 1, 'the key is exposed to one step only');
+  assert.match(wf, /budget > 15/, 'a ceiling on any single request');
+  assert.match(wf, /git rm -q agent\/runs\/request\.json/, 'one request, one run');
+});

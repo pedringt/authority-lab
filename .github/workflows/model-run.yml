@@ -1,0 +1,89 @@
+# Paid model runs (A6), on GitHub instead of anyone's laptop.
+#
+# How a run happens:
+#   1. A PR commits agent/runs/request.json: which models, the budget (a hard
+#      cap in dollars) and whether the tickets share one session.
+#   2. Someone adds the label "run-models" to the PR.
+#   3. The job waits in the "model-runs" environment until Paige approves it.
+#      The API key is a secret of that environment, so nothing can read it
+#      before her approval.
+#   4. It runs the tests, then the models, commits the recordings and the
+#      summary back to the PR branch, deletes request.json (one request, one
+#      run) and removes the label.
+
+name: model-run
+
+on:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: model-runs
+  cancel-in-progress: false
+
+jobs:
+  run:
+    # Only for the "run-models" label, and only for branches in this repo
+    # (a fork's PR never gets the secret).
+    if: github.event.label.name == 'run-models' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: model-runs
+    permissions:
+      contents: write
+      pull-requests: write
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read the request
+        id: req
+        run: |
+          test -f agent/runs/request.json || { echo "No agent/runs/request.json on this branch: nothing to run."; exit 1; }
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("agent/runs/request.json", "utf8"));
+            const models = (r.models || []).join(",");
+            const budget = Number(r.budget);
+            // A ceiling on any single request, so a typo like 1150 never runs.
+            if (!models || !(budget > 0) || budget > 15) { console.error("request.json needs models and a budget between 0 and 15 dollars."); process.exit(1); }
+            const out = [`models=${models}`, `budget=${budget}`, `shared=${r.shared ? "--shared" : ""}`].join("\n");
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, out + "\n");
+            console.log(out);
+          '
+      - name: Tests first (no model calls)
+        run: |
+          npm test
+          npm ci --prefix agent
+          npm test --prefix agent
+      - name: Run the models
+        id: run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          node agent/run.mjs --live --models "${{ steps.req.outputs.models }}" --budget "${{ steps.req.outputs.budget }}" ${{ steps.req.outputs.shared }} | tee run-summary.md
+          code=${PIPESTATUS[0]}
+          cat run-summary.md >> "$GITHUB_STEP_SUMMARY"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 0 = finished, 2 = stopped early (cap reached or bait got through):
+          # both are recorded and committed. Anything else failed before recording.
+          if [ "$code" != 0 ] && [ "$code" != 2 ]; then exit "$code"; fi
+      - name: Commit the recordings
+        run: |
+          git rm -q agent/runs/request.json
+          git add src/data/agent-runs agent/runs
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Recorded model run: ${{ steps.req.outputs.models }} (budget \$${{ steps.req.outputs.budget }}) ${{ steps.req.outputs.shared }}"
+          git push -q origin HEAD:${{ github.event.pull_request.head.ref }}
+      - name: Remove the label
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit ${{ github.event.pull_request.number }} --remove-label run-models || true
+      - name: Fail if the run stopped early
+        if: steps.run.outputs.code == '2'
+        run: |
+          echo "The run stopped early (cap reached or bait got through). The recording is committed; see the summary."
+          exit 1
