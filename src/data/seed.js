@@ -16,6 +16,63 @@ export const workflow = {
     'Tickets arrive from email, chat and the help center. AI capabilities assist or act at specific steps; each one holds its own authority.',
 };
 
+// ---------------------------------------------------------------------------
+// Systems of record and the data boundary (roadmap item 9, A2). Fictional.
+// ---------------------------------------------------------------------------
+
+// Every field a tool can return, and its label. Restricted fields never reach
+// the model, whatever a contract lists; software refuses to list them.
+export const DATA_FIELDS = [
+  { id: 'order.id', label: 'Order id' },
+  { id: 'order.date', label: 'Order date' },
+  { id: 'order.items', label: 'Items' },
+  { id: 'order.value', label: 'Order value' },
+  { id: 'order.status', label: 'Order status' },
+  { id: 'order.refundedSoFar', label: 'Refunded so far' },
+  { id: 'order.paymentMethod', label: 'Payment method (type and last 4 digits)' },
+  { id: 'order.cardNumber', label: 'Full card number', restricted: true },
+  { id: 'customer.id', label: 'Customer id' },
+  { id: 'customer.firstName', label: 'First name' },
+  { id: 'customer.fullName', label: 'Full name' },
+  { id: 'customer.email', label: 'Email address' },
+  { id: 'customer.city', label: 'City' },
+  { id: 'customer.address', label: 'Full address', restricted: true },
+  { id: 'customer.accountSince', label: 'Customer since' },
+  { id: 'flags.fraud', label: 'Fraud flag on the account' },
+  { id: 'flags.chargeback', label: 'Active chargeback on the order' },
+  { id: 'flags.policyException', label: 'Policy exception needed' },
+];
+
+// The systems of record the gate reads facts from. Orders, customers, fraud
+// flags, chargebacks and the refund ledger, as of the demo date (Oct 7).
+export const systems = {
+  customers: {
+    'C-1001': { firstName: 'Jordan', fullName: 'Jordan Ellis', email: 'jordan.ellis@example.com', city: 'Portland', address: '14 Harbour Lane, Portland, OR 97201', accountSince: '2021-03-14' },
+    'C-1002': { firstName: 'Mina', fullName: 'Mina Park', email: 'mina.park@example.com', city: 'Austin', address: '220 Cedar Street, Apt 5, Austin, TX 78701', accountSince: '2025-11-02' },
+    'C-1003': { firstName: 'Leo', fullName: 'Leo Brandt', email: 'leo.brandt@example.com', city: 'Denver', address: '9 Aspen Court, Denver, CO 80202', accountSince: '2019-07-21' },
+    'C-1004': { firstName: 'Ruth', fullName: 'Ruth Adeyemi', email: 'ruth.adeyemi@example.com', city: 'Chicago', address: '310 Lake View Road, Chicago, IL 60601', accountSince: '2020-01-09' },
+    'C-1005': { firstName: 'Tomás', fullName: 'Tomás Vidal', email: 'tomas.vidal@example.com', city: 'Miami', address: '77 Coral Way, Miami, FL 33101', accountSince: '2023-05-30' },
+  },
+  orders: {
+    'ORD-5001': { customerId: 'C-1001', date: '2026-09-30', items: ['Ceramic mug set'], value: 42, status: 'Delivered, returned Oct 5', paymentMethod: 'Visa ending 4242', cardNumber: '4242 4242 4242 4242', policyException: false },
+    'ORD-5002': { customerId: 'C-1001', date: '2026-10-01', items: ['Linen napkins (4)'], value: 38, status: 'Delivered', paymentMethod: 'Visa ending 4242', cardNumber: '4242 4242 4242 4242', policyException: false },
+    'ORD-5003': { customerId: 'C-1002', date: '2026-09-27', items: ['Espresso machine'], value: 420, status: 'Delivered', paymentMethod: 'Mastercard ending 4444', cardNumber: '5555 5555 5555 4444', policyException: false },
+    'ORD-5004': { customerId: 'C-1003', date: '2026-09-20', items: ['Wool throw'], value: 65, status: 'Delivered', paymentMethod: 'Visa ending 1881', cardNumber: '4012 8888 8888 1881', policyException: false },
+    'ORD-5005': { customerId: 'C-1004', date: '2026-08-02', items: ['Standing desk'], value: 180, status: 'Delivered, outside the 30-day window', paymentMethod: 'Amex ending 0005', cardNumber: '3782 822463 10005', policyException: true },
+    'ORD-5006': { customerId: 'C-1005', date: '2026-10-03', items: ['Bath towels (2)'], value: 48, status: 'Delivered, returned Oct 6', paymentMethod: 'Visa ending 1111', cardNumber: '4111 1111 1111 1111', policyException: false },
+  },
+  // Account-level fraud signals from the payments provider.
+  fraudFlags: [{ customerId: 'C-1002', reason: 'Fraud signal from the payments provider', since: '2026-09-28' }],
+  chargebacks: [{ orderId: 'ORD-5004', status: 'active', opened: '2026-10-02' }],
+  // Every refund issued, by whom. Mina Park has three refunds this quarter.
+  refunds: [
+    { id: 'RF-0901', orderId: 'ORD-4810', customerId: 'C-1002', amount: 35, date: '2026-07-18', by: 'priya' },
+    { id: 'RF-0944', orderId: 'ORD-4877', customerId: 'C-1002', amount: 60, date: '2026-08-22', by: 'priya' },
+    { id: 'RF-0990', orderId: 'ORD-4952', customerId: 'C-1002', amount: 28, date: '2026-09-15', by: 'priya' },
+  ],
+  escalations: [],
+};
+
 // Which capabilities may use each agent tool (roadmap item 9, A1). '*' means
 // any capability. The gate refuses a tool outside its capability.
 export const TOOL_SCOPE = {
@@ -133,6 +190,8 @@ export const capabilities = [
         'Error rate above 8% over 7 days returns the capability to Draft until reviewed.',
         'Unexplained refund-cost increase above 20% over 7 days returns the capability to Draft until reviewed.',
       ],
+      // Data the AI may see (A2): tool results are filtered to these fields.
+      dataSeen: ['order.id', 'order.date', 'order.items', 'order.value', 'order.status', 'order.refundedSoFar', 'order.paymentMethod', 'customer.id', 'customer.firstName', 'customer.accountSince', 'flags.fraud', 'flags.chargeback', 'flags.policyException'],
     },
     evidenceNote: '218 pilot cases. 94% accuracy overall; 83% on 18 high-value cases.',
   },
@@ -151,6 +210,8 @@ export const capabilities = [
       mustNever: ['Execute a refund above $50.', 'Split a refund into smaller amounts to stay under a limit.'],
       escalation: ['Any mismatch between the recommended amount and the order total.'],
       autoRestriction: ['1 execution outside the approved conditions in any 7-day window returns the capability to Observe.'],
+      // Data the AI may see (A2): tool results are filtered to these fields.
+      dataSeen: ['order.id', 'order.value', 'order.status', 'order.refundedSoFar', 'order.paymentMethod', 'customer.id', 'flags.fraud', 'flags.chargeback'],
     },
     evidenceNote: 'Restricted on Sep 24 after a duplicate execution incident (two $180 refunds for one order). Returned to Recommend pending a redesign of the idempotency check.',
   },

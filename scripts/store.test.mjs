@@ -19,10 +19,11 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
+import { capabilityView } from '../src/views/capability.js';
 import { proposalView } from '../src/views/proposals.js';
 import { versionsView } from '../src/views/versions.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
@@ -2677,4 +2678,129 @@ test('gate: capability-wide daily caps hold even when every customer is under th
   const rec = s.decisionRecords.at(-1);
   assert.deepEqual([rec.conditions.maxDailyTotal, rec.conditions.maxDailyCount], [100, 3]);
   assert.deepEqual([seed.defaultConditions.maxDailyTotal, seed.defaultConditions.maxDailyCount], [500, 20]);
+});
+
+// ---------------------------------------------------------------------------
+// Systems of record and the data boundary (roadmap item 9, A2 #66)
+// ---------------------------------------------------------------------------
+
+// Every value the model must never see: restricted fields, and fields the
+// refund contracts withhold.
+const WITHHELD = (s) => Object.values(s.systems.customers).flatMap((c) => [c.fullName, c.email, c.city, c.address]).concat(Object.values(s.systems.orders).map((o) => o.cardNumber));
+const RX = 'refund-execution-high-value';
+
+test('A2: the gate reads facts from the seeded systems of record', () => {
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.equal(Object.keys(s.systems.orders).length, 6);
+  assert.equal(checkAction(s, RR, refund('ORD-5001', 40)).verdict, 'allow');
+  assert.deepEqual([checkAction(s, RR, refund('ORD-5003', 20)).verdict, checkAction(s, RR, refund('ORD-5003', 20)).rule.kind], ['block', 'must-never'], "Mina Park's fraud flag comes from the fraud list");
+  assert.equal(checkAction(s, RR, refund('ORD-5004', 20)).rule.kind, 'must-ask', 'the active chargeback comes from the chargeback list');
+  assert.equal(checkAction(s, RR, refund('ORD-5005', 20)).rule.kind, 'must-ask', 'policy exception');
+  assert.equal(checkAction(startEmpty(), RR, refund('ORD-5001', 10)).rule.kind, 'unknown-capability', 'a new workspace has neither the capability nor the orders');
+});
+
+test('A2: lookup_order returns only the fields the contract lets the AI see', () => {
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const { result } = callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } });
+  assert.deepEqual([result.verdict, result.executed, result.found], ['allow', true, true]);
+  assert.deepEqual(result.data.order, { id: 'ORD-5003', date: '2026-09-27', items: ['Espresso machine'], value: 420, status: 'Delivered', refundedSoFar: 0, paymentMethod: 'Mastercard ending 4444' });
+  assert.deepEqual(result.data.customer, { id: 'C-1002', firstName: 'Mina', accountSince: '2025-11-02' });
+  assert.deepEqual(result.data.flags, { fraud: true, chargeback: false, policyException: false });
+  const rx = callTool(s, RX, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } }).result;
+  assert.deepEqual(Object.keys(rx.data.customer), ['id'], 'Refund execution sees less');
+  assert.equal(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-0000' } }).result.found, false);
+});
+
+test('A2: withheld fields never appear in any tool result', () => {
+  const states = [initialState(), authorize(selectDecision(initialState(), RR, 'expand-limits'), RR)];
+  for (const s of states) {
+    const secrets = WITHHELD(s);
+    for (const cap of [RR, RX]) {
+      for (const orderId of Object.keys(s.systems.orders)) {
+        const calls = [
+          { tool: 'lookup_order', args: { orderId } },
+          refund(orderId, 10),
+          { ...refund(orderId, 10), claims: { fraudFlag: false, chargeback: false, orderValue: 1 } },
+          refund(orderId, 10, { paymentMethod: 'gift-card' }),
+          { tool: 'escalate_to_human', args: { orderId, reason: 'Checking.' } },
+          { tool: 'delete_account', args: { orderId } },
+        ];
+        for (const call of calls) {
+          const json = JSON.stringify(callTool(s, cap, call).result);
+          for (const secret of secrets) assert.equal(json.includes(secret), false, `${cap} ${call.tool} ${orderId} leaked "${secret}"`);
+        }
+      }
+    }
+  }
+});
+
+test('A2: a refusal tells the model the rule, not the record', () => {
+  // A contract that lets the AI see only the order id.
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  s = amend(s, RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id'] }, author: 'maya', reason: 'Test: only the order id.' });
+  assert.deepEqual(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } }).result.data, { order: { id: 'ORD-5003' } });
+  const lie = callTool(s, RR, { ...refund('ORD-5003', 20), claims: { fraudFlag: false } });
+  assert.deepEqual(Object.keys(lie.result).sort(), ['executed', 'message', 'rule', 'tool', 'verdict']);
+  assert.match(lie.check.reason, /true/, 'the full reason is kept for the record');
+  assert.equal(JSON.stringify(lie.result).includes('true'), false, 'but the model is not told the fraud flag');
+});
+
+test('A2: issue_refund executes only when the gate allows, and writes the ledger', () => {
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const n = s.systems.refunds.length;
+  const first = callTool(s, RR, refund('ORD-5001', 30));
+  assert.deepEqual([first.result.verdict, first.result.executed], ['allow', true]);
+  s = first.state;
+  assert.equal(s.systems.refunds.length, n + 1);
+  assert.deepEqual(s.systems.refunds.at(-1), { id: first.result.refundId, orderId: 'ORD-5001', customerId: 'C-1001', amount: 30, date: '2026-10-07', by: 'ai', capabilityId: RR });
+  // A second refund to the same customer today: $30 + $25 > $50.
+  const second = callTool(s, RR, refund('ORD-5002', 25));
+  assert.deepEqual([second.result.verdict, second.result.executed], ['needs-person', false]);
+  assert.equal(second.state, s, 'nothing changes when the gate does not allow');
+  // At Level 2 nothing executes on its own.
+  const l2 = callTool(initialState(), RR, refund('ORD-5001', 10));
+  assert.deepEqual([l2.result.verdict, l2.result.executed], ['needs-person', false]);
+});
+
+test('A2: escalate_to_human records the hand-off', () => {
+  const s = initialState();
+  const { state, result } = callTool(s, RR, { tool: 'escalate_to_human', args: { orderId: 'ORD-5003', reason: 'Fraud signal on the account.' } });
+  assert.equal(result.executed, true);
+  assert.deepEqual(state.systems.escalations.at(-1), { id: result.escalationId, capabilityId: RR, orderId: 'ORD-5003', reason: 'Fraud signal on the account.', date: '2026-10-07', owner: getCapability(s, RR).owner });
+});
+
+test('A2: the data section is versioned with the contract and checked by software', () => {
+  let s = initialState();
+  const v1 = current(s, RR, 'contract').dataSeen;
+  s = amend(s, RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: [...v1, 'customer.email'] }, author: 'maya', reason: 'Test: show email.' });
+  assert.deepEqual(versionList(s, RR, 'contract')[0].value.dataSeen, v1, 'v1 is unchanged');
+  assert.ok(current(s, RR, 'contract').dataSeen.includes('customer.email'));
+  const checks = (dataSeen) => contractValueChecks(s, RR, { ...current(s, RR, 'contract'), dataSeen }).filter((c) => c.section === 'dataSeen').map((c) => c.text);
+  assert.deepEqual(checks(['order.id']), []);
+  assert.match(checks(['order.cardNumber']).join(), /restricted/);
+  assert.match(checks(['customer.address']).join(), /restricted/);
+  assert.match(checks(['order.secretSauce']).join(), /not a field/);
+  // A proposed contract amendment carries the data section through.
+  const after = proposeAmendment(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id', 'order.value'] }, by: 'maya', reason: 'Narrowing what the AI sees.' });
+  const p = capData(after, RR).proposals.at(-1);
+  assert.deepEqual(p.value.dataSeen, ['order.id', 'order.value']);
+  // Restricted fields never pass the filter, even if a contract lists one.
+  let leaky = amend(initialState(), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.cardNumber', 'customer.address', 'order.id'] }, author: 'maya', reason: 'Test: restricted.' });
+  leaky = authorize(selectDecision(leaky, RR, 'expand-limits'), RR);
+  assert.deepEqual(callTool(leaky, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).result.data, { order: { id: 'ORD-5001' } });
+});
+
+test('A2: a contract with no data section shows the AI nothing from the records', () => {
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const { dataSeen: _drop, ...rest } = current(s, RR, 'contract');
+  s = amend(s, RR, 'contract', { value: rest, author: 'maya', reason: 'Test: no data section.' });
+  assert.deepEqual(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).result.data, {});
+});
+
+test('A2: the contract tab shows the data boundary', () => {
+  const s = initialState();
+  const html = String(capabilityView(s, RR, new URLSearchParams('tab=contract')));
+  assert.match(html, /Data the AI may see/);
+  assert.match(html, /Full card number <span class="muted small">\(restricted\)/);
+  assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=contract'))), /no data section/);
 });

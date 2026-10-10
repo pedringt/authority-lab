@@ -369,7 +369,7 @@ document.addEventListener('submit', (e) => {
     const capId = parseRoute().parts[1];
     const kind = proposeForm.dataset.form === 'propose-contract' ? 'contract' : 'criteria';
     const value = kind === 'contract'
-      ? Object.fromEntries([...proposeForm.querySelectorAll('textarea')].map((t) => [t.name, t.value.split('\n')]))
+      ? { ...Object.fromEntries([...proposeForm.querySelectorAll('textarea')].map((t) => [t.name, t.value.split('\n')])), dataSeen: [...proposeForm.querySelectorAll('[name="dataSeen"]:checked')].map((el) => el.value) }
       : readCriteriaRows(proposeForm);
     dispatchOr(`#/capabilities/${capId}/amend/${kind}`, () => {
       const before = capData(store.get(), capId).proposals.length;

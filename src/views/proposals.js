@@ -1,4 +1,5 @@
 import * as seed from '../data/seed.js';
+import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, kv, warningNotice } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store/index.js';
 import { diffTable } from './activity.js';
@@ -46,6 +47,7 @@ export function proposeView(state, capabilityId, kind, query) {
     ${currentChecks.filter((x) => x.level === 'block').length ? notice('watch', 'The current contract would not pass these checks as it stands', currentChecks.filter((x) => x.level === 'block').map((x) => x.text).join(' ')) : ''}
     <form class="setup-form" data-form="propose-contract" novalidate>
       ${SECTION_KEYS.map((k) => html`<div class="card"><label class="field field-stack"><span>${SECTION_LABELS[k]} <span class="muted small">one line per row</span></span><textarea name="${k}" rows="${Math.max(3, c[k].length + 1)}">${c[k].join('\\n')}</textarea></label></div>`)}
+      ${dataSeenFieldset(c)}
       ${reasonAndSubmit(state, cap, kind, gated, required, acting)}
     </form>`;
   }
@@ -71,6 +73,15 @@ export function proposeView(state, capabilityId, kind, query) {
   </form>
   <template id="row-criteria">${row({ id: '', name: '', target: '', note: '', source: 'Written by hand' }, 0)}</template>
   <template id="row-requirements">${rrow({ id: '', text: '', source: 'Written by hand' }, 0)}</template>`;
+}
+
+// The contract's structured data section (A2): which fields tool results may
+// show the AI. Restricted fields are shown but can't be chosen.
+function dataSeenFieldset(c) {
+  const seen = new Set(c.dataSeen || []);
+  return html`<div class="card"><fieldset class="data-seen"><legend>Data the AI may see <span class="muted small">tool results are filtered to these fields before the model sees them</span></legend>
+    <div class="check-grid">${DATA_FIELDS.map((f) => html`<label class="check"><input type="checkbox" name="dataSeen" value="${f.id}" ${seen.has(f.id) ? raw('checked') : ''} ${f.restricted ? raw('disabled') : ''}><span>${f.label}${f.restricted ? html` <span class="muted small">(restricted: never shown)</span>` : ''}</span></label>`)}</div>
+  </fieldset></div>`;
 }
 
 function reasonAndSubmit(state, cap, kind, gated, required, acting) {

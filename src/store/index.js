@@ -19,3 +19,4 @@ export { isHighOrFinancial, riskCoverage, coverageWarning, proposalSatisfiable, 
 export { STORAGE_KEY, createStore } from './persist.js';
 export { startEmpty, setupPending, setUpWorkspace, MIN_FOUNDING_ADMINS, foundingRiskGap, renameWorkspace, namesAtRecord } from './workspace.js';
 export { TOOLS, systemsOf, enforcementTerms, checkAction } from './gate.js';
+export { dataSeen, filterForModel, callTool } from './tools.js';

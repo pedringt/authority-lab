@@ -29,10 +29,15 @@ export const own = (obj, key) => (obj != null && typeof key === 'string' && Obje
 // The facts the gate will compare a model's claims against.
 const FACTS = { orderValue: 'value', customerId: 'customerId', fraudFlag: 'fraudFlag', chargeback: 'chargeback', policyException: 'policyException' };
 
-// Systems of record (seeded in A2). Absent, the gate knows no orders.
+// Systems of record (A2). Each order's facts include the account's fraud flag
+// and any active chargeback, taken from their own lists; an order that states
+// them directly (test fixtures) keeps its own. Absent, the gate knows no orders.
 export function systemsOf(state) {
   const s = state.systems || {};
-  return { orders: s.orders || {}, refunds: s.refunds || [] };
+  const fraud = new Set((s.fraudFlags || []).map((f) => f.customerId));
+  const disputed = new Set((s.chargebacks || []).filter((c) => c.status === 'active').map((c) => c.orderId));
+  const orders = Object.fromEntries(Object.entries(s.orders || {}).map(([id, o]) => [id, { ...o, fraudFlag: o.fraudFlag ?? fraud.has(o.customerId), chargeback: o.chargeback ?? disputed.has(id) }]));
+  return { orders, customers: s.customers || {}, refunds: s.refunds || [], escalations: s.escalations || [] };
 }
 
 // ---------------------------------------------------------------------------
