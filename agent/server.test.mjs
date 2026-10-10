@@ -149,3 +149,17 @@ test('the model can ask, but never approve: a needs-person refund waits, and the
   }
   assert.equal(conn.state.actionQueue.at(-1).status, 'waiting');
 });
+
+test('through the MCP server, gate events are logged and three forbidden attempts restrict the capability', async () => {
+  const { rejectAction } = await import('../src/store/index.js');
+  const start = authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+  const conn = await connect(start);
+  for (let i = 0; i < 3; i++) {
+    const r = await conn.call('issue_refund', { orderId: 'ORD-5003', amount: 10 + i, confidence: 95 });
+    assert.equal(r.result.verdict, 'block');
+  }
+  assert.equal(conn.state.gateLog.filter((e) => e.source === 'session' && e.rule.kind === 'must-never').length, 3);
+  assert.equal(conn.state.capabilities.find((c) => c.id === RR).authority.level, 2, 'restricted by the gate-measured rule');
+  const next = await conn.call('issue_refund', { orderId: 'ORD-5001', amount: 10, confidence: 95 });
+  assert.deepEqual([next.result.verdict, next.result.rule], ['needs-person', 'level-2']);
+});

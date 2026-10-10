@@ -5,6 +5,7 @@ import { getCapability, capData, updateCap } from './state.js';
 import { versionsInForce, authorityLabel, current, currentVersion, levelName } from './selectors.js';
 import { people, snapshotPerson, isActivePerson, isRiskApprover } from './people.js';
 import { isHighOrFinancial } from './coverage.js';
+import { gateMetricOf, gateReading } from './gatelog.js';
 
 // Restriction rules come from the contract's "Automatic restriction" lines
 // (the contract wins, decided 2026-10-08). A line names its threshold, its
@@ -63,8 +64,10 @@ export function ruleCrossed(rule, value) {
 export function monitoringStatus(state, capabilityId) {
   const readings = capData(state, capabilityId).ruleReadings || {};
   const rules = restrictionRules(state, capabilityId).map((r) => {
-    const value = r.text in readings ? readings[r.text] : null;
-    return { ...r, value, measured: value !== null, crossed: r.active && ruleCrossed(r, value) };
+    // Rules the gate log can measure read it (A5); others read their readings.
+    const fromGate = gateMetricOf(r) ? gateReading(state, capabilityId, r) : null;
+    const value = fromGate !== null ? fromGate : Object.hasOwn(readings, r.text) ? readings[r.text] : null;
+    return { ...r, value, measured: value !== null, crossed: r.active && ruleCrossed(r, value), fromGate: fromGate !== null };
   });
   return { running: rules.some((r) => r.active), rules };
 }
@@ -105,12 +108,21 @@ export function simulateBreach(state, capabilityId) {
   const rule = breachRule(state, capabilityId);
   if (!rule) return state;
   const d = capData(state, capabilityId);
-  const cap = getCapability(state, capabilityId);
   const m = d.monitoring;
   const breach = d.breach;
   // The rolling-window rule counts severe errors in the live window.
   const windowed = m && rule.window && rule.window.cases === m.rollingWindow && breach.severeErrorsInWindow;
   const value = windowed ? Math.round((breach.severeErrorsInWindow / m.rollingWindow) * 1000) / 10 : breach.value;
+  return applyBreach(state, capabilityId, rule, { value, errors: breach.errors, severeErrorsInWindow: windowed ? breach.severeErrorsInWindow : null });
+}
+
+// Cross a contract rule with a reading: the shared breach flow, used by the
+// seeded demo breach and by rules measured from the gate log (A5).
+export function applyBreach(state, capabilityId, rule, { value, errors, severeErrorsInWindow = null }) {
+  const d = capData(state, capabilityId);
+  const cap = getCapability(state, capabilityId);
+  const m = d.monitoring;
+  const windowed = severeErrorsInWindow != null && m;
   const reading = readingText(rule, value);
   const contractV = rule.contractVersion ? `contract v${rule.contractVersion}` : 'the contract';
   const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
@@ -119,10 +131,10 @@ export function simulateBreach(state, capabilityId) {
   const ruleReadings = { ...(d.ruleReadings || {}), [rule.text]: value };
 
   if (rule.kind === 'incident') {
-    const evidence = [{ id: evidenceId, source: 'Incident', metric: `${incidentId}: contract rule triggered`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `${breach.errors.join(' ')} The contract rule "${rule.text}" opened this incident. Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
-    const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'Incident opened by a contract rule', body: `${cap.name}: ${breach.errors.join(' ')} Authority unchanged.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
-    const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `Incident opened by a contract rule: ${cap.name}`, body: `${incidentId}: ${breach.errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` };
-    const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: breach.errors }] });
+    const evidence = [{ id: evidenceId, source: 'Incident', metric: `${incidentId}: contract rule triggered`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `${errors.join(' ')} The contract rule "${rule.text}" opened this incident. Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
+    const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'Incident opened by a contract rule', body: `${cap.name}: ${errors.join(' ')} Authority unchanged.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
+    const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `Incident opened by a contract rule: ${cap.name}`, body: `${incidentId}: ${errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` };
+    const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: errors }] });
     return { ...s, activity, alerts: [alert, ...state.alerts] };
   }
 
@@ -147,7 +159,7 @@ export function simulateBreach(state, capabilityId) {
     scope: FALLBACK_SCOPE[next.level],
     rationale: `Automatic restriction. The contract rule "${rule.text}" was crossed: ${reading}. The rule was agreed in ${contractV}${m && m.recordId ? ` and in force since authority change ${m.recordId}` : ''}. No human authorized this change; the rule was authorized in advance.`,
     evidenceSnapshot: [
-      ...(windowed ? [`${breach.severeErrorsInWindow} severe errors in the last ${m.rollingWindow} autonomous cases (${value}%)`, `${m.autonomousActions + 7} autonomous actions since expansion`] : [`Reading: ${reading}`]),
+      ...(windowed ? [`${severeErrorsInWindow} severe errors in the last ${m.rollingWindow} autonomous cases (${value}%)`, `${m.autonomousActions + 7} autonomous actions since expansion`] : [`Reading: ${reading}`]),
       `Rule: ${rule.text}`,
     ],
     openCondition: 'Human review required before authority can expand again.',
@@ -164,11 +176,11 @@ export function simulateBreach(state, capabilityId) {
   };
   const activity = [
     { id: `ACT-${Date.now()}-b`, date: state.today, kind: 'restriction', surfaced: true, title: 'Authority automatically restricted', body: `The contract rule was crossed: ${reading}. ${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)} by rule. Review item opened.`, capabilityId: cap.id, link: `#/decisions/${id}` },
-    { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'Monitoring threshold breached', body: `${cap.name}: ${reading}. ${breach.errors.length} error${breach.errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` },
+    { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'Monitoring threshold breached', body: `${cap.name}: ${reading}. ${errors.length} error${errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` },
     ...state.activity,
   ];
   const evidence = [
-    { id: evidenceId, source: 'Incident', metric: `${incidentId}: monitoring threshold breached`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${breach.errors.join(' ')} Authority was returned to ${levelName(next.level)} automatically.`, link: `#/decisions/${id}` },
+    { id: evidenceId, source: 'Incident', metric: `${incidentId}: monitoring threshold breached`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} Authority was returned to ${levelName(next.level)} automatically.`, link: `#/decisions/${id}` },
     ...d.evidence,
   ];
   const capabilities = state.capabilities.map((c) => (c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c));
@@ -181,10 +193,10 @@ export function simulateBreach(state, capabilityId) {
       breached: true,
       rule: rule.text,
       reading,
-      errors: breach.errors,
+      errors: errors,
       breachedAt: state.today,
       breachRecordId: id,
-      ...(windowed ? { severeErrorsInWindow: breach.severeErrorsInWindow, autonomousActions: m.autonomousActions + 7, incidents: (m.incidents || 0) + 1 } : {}),
+      ...(windowed ? { severeErrorsInWindow: severeErrorsInWindow, autonomousActions: m.autonomousActions + 7, incidents: (m.incidents || 0) + 1 } : {}),
     },
   });
   return { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity, alerts: [alert, ...state.alerts] };

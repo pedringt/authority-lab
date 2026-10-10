@@ -586,3 +586,4 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .data-seen legend { font-weight: 600; margin-bottom: 8px; }
 .waiting-item + .waiting-item { margin-top: 12px; }
 .decide-form { margin-top: 10px; }
+.text-fail { color: var(--fail); font-weight: 600; }

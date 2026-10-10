@@ -105,6 +105,8 @@ export function initialState() {
     systems: clone(seed.systems),
     // "Waiting for a person" (A4): actions the gate sent to a person.
     actionQueue: [],
+    // Every gate check and every decision on a waiting action (A5).
+    gateLog: [],
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
     roster: { versions: [{ version: 1, date: seed.TODAY, author: null, authorAt: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },
@@ -121,7 +123,7 @@ export function initialState() {
     alerts: [],
   };
   // Seeded requests go through the real gate, so the queue holds exactly what it would.
-  return seed.waitingRequests.reduce((st, r) => callTool(st, r.capabilityId, r.call).state, base);
+  return seed.waitingRequests.reduce((st, r) => callTool(st, r.capabilityId, r.call, { source: 'seeded' }).state, base);
 }
 
 

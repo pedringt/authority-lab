@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, section, fmtDate, evidenceDetail } from '../ui.js';
-import { capData, getCapability, current, workspaceOf } from '../store/index.js';
+import { capData, getCapability, current, workspaceOf, gateEvidence } from '../store/index.js';
 import { requirementsList, proposedChangeLabel } from './capability.js';
 import { capabilityHeading, filterBar } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';
@@ -15,11 +15,13 @@ export function evidenceView(state, capabilityId, query) {
   const segment = query.get('segment') || 'all';
   const risk = query.get('risk') || 'all';
 
-  const sources = [...new Set(d.evidence.map((e) => e.source))];
-  const segments = [...new Set(d.evidence.map((e) => e.segment))];
+  // Stored evidence plus what the gate log derives (A5), each labelled.
+  const all = [...d.evidence, ...gateEvidence(state, capabilityId)];
+  const sources = [...new Set(all.map((e) => e.source))];
+  const segments = [...new Set(all.map((e) => e.segment))];
   const risks = ['High', 'Medium', 'Low'];
 
-  let items = d.evidence.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+  let items = all.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
   if (source !== 'all') items = items.filter((e) => e.source === source);
   if (status !== 'all') items = items.filter((e) => e.status === status);
   if (segment !== 'all') items = items.filter((e) => e.segment === segment);
@@ -30,7 +32,7 @@ export function evidenceView(state, capabilityId, query) {
     return `#/evidence?${q.toString()}`;
   };
 
-  const counts = Object.fromEntries(STATUSES.map(([k]) => [k, d.evidence.filter((e) => e.status === k).length]));
+  const counts = Object.fromEntries(STATUSES.map(([k]) => [k, all.filter((e) => e.status === k).length]));
 
   const filters = filterBar({
     selects: [
@@ -42,13 +44,13 @@ export function evidenceView(state, capabilityId, query) {
     clearHref: `#/evidence?capability=${cap.id}`,
     active: [source, status, segment, risk].some((v) => v !== 'all'),
     showing: items.length,
-    total: d.evidence.length,
+    total: all.length,
     noun: 'items',
   });
 
   const cards = items.map((e) => html`<article class="card evidence-item evidence-${e.status}">
     <div class="evidence-head">
-      <div><span class="eyebrow">${e.source} · ${e.id}</span><h3>${e.metric}</h3></div>
+      <div><span class="eyebrow">${e.source} · ${e.id}</span><h3>${e.metric}</h3>${e.derived ? html`<span class="badge badge-neutral" title="Computed from the gate log, not stored as evidence">Derived · ${e.origin}</span>` : ''}</div>
       ${badge(e.status)}
     </div>
     <p class="evidence-value">${e.value}</p>
@@ -63,8 +65,8 @@ export function evidenceView(state, capabilityId, query) {
       <p class="lede">Everything the authority decision rests on, from automated tests, the pilot, human review, operations, cost, incidents, user feedback and stakeholder assessment. Each item links back to where it came from.</p>
     </div>
   </div>
-  ${d.evidence.length ? filters : ''}
-  ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${d.evidence.length ? 'No evidence matches these filters.' : `No evidence has been recorded for ${cap.name}.`}</p>`}
+  ${all.length ? filters : ''}
+  ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${all.length ? 'No evidence matches these filters.' : `No evidence has been recorded for ${cap.name}.`}</p>`}
   ${d.evidence.length ? '' : evidenceSourcesCard()}
   ${current(state, cap.id, 'requirements').length ? section(`Evidence requirements for ${proposedChangeLabel(cap, state)}`, requirementsList(state, cap.id), { subtitle: 'What has to be true before the proposed change can be authorized.' }) : ''}`;
 }
