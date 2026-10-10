@@ -36,8 +36,11 @@ export function systemsOf(state) {
   const s = state.systems || {};
   const fraud = new Set((s.fraudFlags || []).map((f) => f.customerId));
   const disputed = new Set((s.chargebacks || []).filter((c) => c.status === 'active').map((c) => c.orderId));
-  const orders = Object.fromEntries(Object.entries(s.orders || {}).map(([id, o]) => [id, { ...o, fraudFlag: o.fraudFlag ?? fraud.has(o.customerId), chargeback: o.chargeback ?? disputed.has(id) }]));
-  return { orders, customers: s.customers || {}, refunds: s.refunds || [], escalations: s.escalations || [] };
+  // Null-prototype maps: no built-in name ("constructor", "__proto__") can be
+  // mistaken for a record, whoever looks it up.
+  const orders = Object.assign(Object.create(null), Object.fromEntries(Object.entries(s.orders || {}).map(([id, o]) => [id, { ...o, fraudFlag: o.fraudFlag ?? fraud.has(o.customerId), chargeback: o.chargeback ?? disputed.has(id) }])));
+  const customers = Object.assign(Object.create(null), s.customers || {});
+  return { orders, customers, refunds: s.refunds || [], escalations: s.escalations || [] };
 }
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 import { DATA_FIELDS } from '../data/seed.js';
 import { getCapability } from './state.js';
 import { current } from './selectors.js';
-import { checkAction, systemsOf } from './gate.js';
+import { checkAction, systemsOf, own } from './gate.js';
 
 const RESTRICTED = new Set(DATA_FIELDS.filter((f) => f.restricted).map((f) => f.id));
 
@@ -21,9 +21,9 @@ export function dataSeen(state, capabilityId) {
 // Everything the systems of record hold about an order, before filtering.
 function fullView(state, orderId) {
   const { orders, customers, refunds } = systemsOf(state);
-  const o = orders[orderId];
+  const o = own(orders, orderId);
   if (!o) return null;
-  const c = customers[o.customerId] || {};
+  const c = own(customers, o.customerId) || {};
   return {
     order: { id: orderId, date: o.date, items: o.items, value: o.value, status: o.status, refundedSoFar: refunds.filter((r) => r.orderId === orderId).reduce((t, r) => t + r.amount, 0), paymentMethod: o.paymentMethod, cardNumber: o.cardNumber },
     customer: { id: o.customerId, firstName: c.firstName, fullName: c.fullName, email: c.email, city: c.city, address: c.address, accountSince: c.accountSince },
@@ -36,7 +36,7 @@ export function filterForModel(view, allowed) {
   const out = {};
   for (const id of allowed) {
     const [group, field] = id.split('.');
-    if (!view[group] || !(field in view[group])) continue;
+    if (!own(view, group) || !Object.hasOwn(view[group], field)) continue;
     out[group] = out[group] || {};
     out[group][field] = view[group][field];
   }
@@ -63,7 +63,7 @@ export function callTool(state, capabilityId, call = {}) {
 
   const sys = state.systems || {};
   if (call.tool === 'issue_refund') {
-    const order = systemsOf(state).orders[args.orderId];
+    const order = own(systemsOf(state).orders, args.orderId);
     const ledger = sys.refunds || [];
     const entry = { id: `RF-${String(ledger.length + 1).padStart(4, '0')}`, orderId: args.orderId, customerId: order.customerId, amount: Number(args.amount), date: state.today, by: 'ai', capabilityId };
     return { state: { ...state, systems: { ...sys, refunds: [...ledger, entry] } }, result: { ...result, executed: true, refundId: entry.id, amount: entry.amount }, check };
@@ -72,7 +72,9 @@ export function callTool(state, capabilityId, call = {}) {
   if (call.tool === 'escalate_to_human') {
     const list = sys.escalations || [];
     const cap = getCapability(state, capabilityId);
-    const entry = { id: `ESC-${String(list.length + 1).padStart(3, '0')}`, capabilityId, orderId: args.orderId || null, reason: String(args.reason || '').trim() || 'No reason given.', date: state.today, owner: cap.owner };
+    // Only a real order is linked; any other id the model gives is not recorded as one.
+    const orderId = own(systemsOf(state).orders, args.orderId) ? args.orderId : null;
+    const entry = { id: `ESC-${String(list.length + 1).padStart(3, '0')}`, capabilityId, orderId, reason: String(args.reason || '').trim() || 'No reason given.', date: state.today, owner: cap.owner };
     return { state: { ...state, systems: { ...sys, escalations: [...list, entry] } }, result: { ...result, executed: true, escalationId: entry.id }, check };
   }
   return { state, result, check };

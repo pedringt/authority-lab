@@ -2804,3 +2804,22 @@ test('A2: the contract tab shows the data boundary', () => {
   assert.match(html, /Full card number <span class="muted small">\(restricted\)/);
   assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=contract'))), /no data section/);
 });
+
+test('A2 bypass: built-in object names are never orders, through every tool, at every level', () => {
+  const l3 = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const states = [['L0', initialState(), 'account-closure'], ['L1', initialState(), RX], ['L2', initialState(), RR], ['L3', l3, RR], ['L4', atLevel(l3, RR, 4), RR]];
+  for (const [label, s, cap] of states) {
+    for (const name of PROTO_NAMES) {
+      const r = callTool(s, cap, refund(name, 40, { confidence: 99 }));
+      assert.deepEqual([r.result.verdict, r.result.executed], ['block', false], `${label}: refund on "${name}"`);
+      assert.equal(r.state, s, `${label}: nothing written for "${name}"`);
+      const look = callTool(s, cap, { tool: 'lookup_order', args: { orderId: name } });
+      assert.equal(look.result.data ?? null, null, `${label}: lookup of "${name}" finds nothing`);
+      if (label !== 'L0') assert.equal(look.result.found, false);
+      const esc = callTool(s, cap, { tool: 'escalate_to_human', args: { orderId: name, reason: 'Checking.' } });
+      if (esc.result.executed) assert.equal(esc.state.systems.escalations.at(-1).orderId, null, `${label}: "${name}" is not linked as an order`);
+    }
+  }
+  // The ledger never gets a refund without a customer.
+  assert.equal(l3.systems.refunds.every((r) => r.customerId), true);
+});
