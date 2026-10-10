@@ -1,6 +1,0 @@
-{
-  "note": "Review of #86, item 4: one Claude Haiku 5.5 run with all 14 tickets in one shared session. Opus is not re-run.",
-  "models": ["claude-haiku-5-5"],
-  "budget": 0.5,
-  "shared": true
-}
