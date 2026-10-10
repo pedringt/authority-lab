@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -16,6 +16,7 @@ const TABS = [
   ['stakeholders', 'Stakeholders'],
   ['decisions', 'Decision history'],
   ['monitoring', 'Monitoring'],
+  ['waiting', 'Waiting for a person'],
 ];
 
 export function capabilityView(state, id, query) {
@@ -48,7 +49,7 @@ export function capabilityView(state, id, query) {
   </div>`;
 
   const tabs = html`<nav class="tabs" aria-label="Capability sections">${TABS
-    .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}</a>`)}</nav>`;
+    .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}${k === 'waiting' && waitingActions(state, cap.id).length ? html` <span class="nav-count">${waitingActions(state, cap.id).length}</span>` : ''}</a>`)}</nav>`;
 
   let body;
   switch (tab) {
@@ -58,6 +59,7 @@ export function capabilityView(state, id, query) {
     case 'stakeholders': body = stakeholdersTab(state, cap, d); break;
     case 'decisions': body = decisionsTab(state, cap); break;
     case 'monitoring': body = monitoringTab(state, cap, d); break;
+    case 'waiting': body = waitingTab(state, cap, query); break;
     default: body = contractTab(state, cap, d);
   }
 
@@ -109,6 +111,48 @@ function contractTab(state, cap, d) {
     </div>
     ${dataBoundaryCard(c)}
     ${riskBlock}`;
+}
+
+// "Waiting for a person" (A4): actions the gate sent to a person. A named,
+// active stakeholder approves or rejects with a reason; approval re-runs the
+// gate and executes only if nothing new appeared since it was queued.
+function waitingTab(state, cap, query) {
+  const all = (state.actionQueue || []).filter((x) => x.capabilityId === cap.id);
+  const waiting = all.filter((x) => x.status === 'waiting');
+  const decided = all.filter((x) => x.status !== 'waiting').reverse();
+  const by = actor(state, cap.id);
+  const who = person(by);
+  const approvers = queueApprovers(state, cap.id).map((k) => person(k).name);
+  const error = query.get('error');
+  const statusBadge = { executed: badge('pass', 'Approved and executed'), rejected: badge('neutral', 'Rejected'), refused: badge('fail', 'Approved, refused at execution') };
+  const card = (x) => {
+    const e = queueEligibility(state, x.id, by);
+    return html`<article class="card waiting-item" id="${x.id}">
+      <div class="version-head"><div><span class="eyebrow">${x.id} · requested by the AI · ${fmtDate(x.date)} · at Level ${x.levelAtRequest}</span><h3>${describeAction(x)}</h3></div>${x.status === 'waiting' ? badge('decision', 'Waiting') : statusBadge[x.status]}</div>
+      <p class="fact-label">Needs a person because</p>
+      <ul class="plain-list">${x.findings.map((f) => html`<li>${f.rule.text}</li>`)}</ul>
+      ${x.status === 'waiting'
+        ? e.ok
+          ? html`<form class="line-add decide-form" data-form="decide-action" data-id="${x.id}">
+              <input type="text" name="reason" maxlength="240" placeholder="Reason (required)" aria-label="Reason">
+              <button class="btn btn-sm btn-primary" type="submit" name="decision" value="approve">Approve as ${who.name}</button>
+              <button class="btn btn-sm btn-danger" type="submit" name="decision" value="reject">Reject</button>
+            </form>
+            <p class="muted small">Approving re-runs the gate at that moment. If anything changed since it was queued (the capability was restricted, a cap was crossed, the order is now blocked), it won't execute and the reason is recorded.</p>`
+          : html`<p class="muted small">${e.reason} Switch who is acting in the header.</p>`
+        : html`${kv([['Decided by', html`${x.decision.byAt ? x.decision.byAt.name : x.decision.by}, ${fmtDate(x.decision.date)}`], ['Reason', x.decision.reason], ...(x.decision.refusal ? [['Not executed', x.decision.refusal]] : []), ...(x.decision.refundId ? [['Refund', x.decision.refundId]] : [])])}`}
+    </article>`;
+  };
+  return html`
+    ${error ? notice('fail', 'Could not record that decision', error) : ''}
+    <p class="muted">When the gate says an action needs a person, it waits here instead of running. ${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve.</p>
+    ${section(`Waiting (${waiting.length})`, waiting.length ? html`${waiting.map(card)}` : html`<p class="empty">Nothing is waiting for a person.</p>`)}
+    ${decided.length ? section('Decided', html`${decided.map(card)}`) : ''}`;
+}
+
+function describeAction(x) {
+  const a = x.call.args || {};
+  return x.call.tool === 'issue_refund' ? `Refund $${a.amount} on ${a.orderId}` : `${x.call.tool}${a.orderId ? ` on ${a.orderId}` : ''}`;
 }
 
 // The contract's data boundary (A2): what tool results may show the AI.

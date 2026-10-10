@@ -9,6 +9,7 @@ import { startTestRun, advanceTestRun, saveCriteria, saveScenarios, addStarterSc
 import { proposeAmendment, approveProposal, withdrawProposal, rejectProposal, saveStakeholders } from './proposals.js';
 import { simulateBreach, recordReview } from './monitoring.js';
 import { startEmpty, setUpWorkspace, renameWorkspace } from './workspace.js';
+import { approveAction, rejectAction } from './queue.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
@@ -73,6 +74,8 @@ export const ACTIONS = {
   startEmpty,
   setUpWorkspace,
   renameWorkspace,
+  approveAction,
+  rejectAction,
   reset,
 };
 

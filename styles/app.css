@@ -584,3 +584,5 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .data-columns { margin-top: 0; }
 .data-seen { border: 0; padding: 0; margin: 0; }
 .data-seen legend { font-weight: 600; margin-bottom: 8px; }
+.waiting-item + .waiting-item { margin-top: 12px; }
+.decide-form { margin-top: 10px; }

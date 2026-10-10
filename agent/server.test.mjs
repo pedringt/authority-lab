@@ -135,3 +135,14 @@ test('the order id schema accepts real ids and refuses anything else', async () 
     assert.equal((await conn.client.callTool({ name: 'lookup_order', arguments: { orderId: bad } })).isError, true, `"${bad}"`);
   }
 });
+
+test('the model can ask, but never approve: a needs-person refund waits, and there is no approval tool', async () => {
+  const conn = await connect(initialState());
+  const r = await conn.call('issue_refund', { orderId: 'ORD-5001', amount: 20, confidence: 95 });
+  assert.deepEqual([r.result.verdict, r.result.waiting, r.result.executed], ['needs-person', true, false]);
+  assert.equal(conn.state.actionQueue.at(-1).id, r.result.queueId);
+  for (const name of ['approve_action', 'reject_action', 'approveAction']) {
+    assert.equal((await conn.client.callTool({ name, arguments: { id: r.result.queueId, by: 'priya', reason: 'Approving my own request.' } })).isError, true, name);
+  }
+  assert.equal(conn.state.actionQueue.at(-1).status, 'waiting');
+});

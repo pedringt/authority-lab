@@ -163,15 +163,19 @@ export function checkAction(state, capabilityId, action = {}) {
   const fired = (list) => list.find((l) => l.rule.test(facts));
   const never = fired(terms.mustNever);
   if (never) return verdict('block', `Must never: ${never.text} (${never.rule.describe}).`, { kind: 'must-never', text: never.text }, at);
-  if (level === 2) return verdict('needs-person', `${cap.name} is at Level 2, ${levelName(2)}: every action needs a person.`, { kind: 'level-2', text: 'Level 2: a person approves every action.' }, at);
-  const ask = fired(terms.mustAsk);
-  if (ask) return verdict('needs-person', `Must ask: ${ask.text} (${ask.rule.describe}).`, { kind: 'must-ask', text: ask.text }, at);
-  const esc = fired(terms.escalation);
-  if (esc) return verdict('needs-person', `Escalate: ${esc.text} (${esc.rule.describe}).`, { kind: 'escalation', text: esc.text }, at);
+  // Every reason the action needs a person, in order. The verdict leads with
+  // the first; `findings` keeps them all, so an approval can tell later
+  // whether anything new appeared (A4).
+  const needs = [];
+  if (level === 2) needs.push(verdict('needs-person', `${cap.name} is at Level 2, ${levelName(2)}: every action needs a person.`, { kind: 'level-2', text: 'Level 2: a person approves every action.' }, at));
+  for (const ask of terms.mustAsk.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Must ask: ${ask.text} (${ask.rule.describe}).`, { kind: 'must-ask', text: ask.text }, at));
+  for (const esc of terms.escalation.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Escalate: ${esc.text} (${esc.rule.describe}).`, { kind: 'escalation', text: esc.text }, at));
   if (level === 3) {
-    if (!terms.limits.length) return verdict('needs-person', `${cap.name} is at Level 3 but no structured limits are recorded, so software can't confirm the action is within limits.`, { kind: 'no-limits', text: 'Level 3 acts only within recorded limits.' }, at);
-    const broken = terms.limits.find((l) => !l.test(facts));
-    if (broken) return verdict('needs-person', `Outside the limits set in ${terms.limitsFrom}: ${broken.text}.`, { kind: 'limit', text: broken.text }, at);
+    if (!terms.limits.length) needs.push(verdict('needs-person', `${cap.name} is at Level 3 but no structured limits are recorded, so software can't confirm the action is within limits.`, { kind: 'no-limits', text: 'Level 3 acts only within recorded limits.' }, at));
+    for (const broken of terms.limits.filter((l) => !l.test(facts))) needs.push(verdict('needs-person', `Outside the limits set in ${terms.limitsFrom}: ${broken.text}.`, { kind: 'limit', text: broken.text }, at));
+  }
+  if (needs.length) return { ...needs[0], findings: needs.map((n) => ({ reason: n.reason, rule: n.rule })) };
+  if (level === 3) {
     // The reason names only what software verified, never the model's own report.
     const verified = terms.limits.filter((l) => !l.modelReported);
     return verdict('allow', `Within every verified limit set in ${terms.limitsFrom}.`, { kind: 'within-limits', text: verified.map((l) => l.text).join('; ') }, at);

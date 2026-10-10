@@ -73,6 +73,13 @@ export const systems = {
   escalations: [],
 };
 
+// Refund requests the AI made on Refund recommendation at Level 2 (every
+// action needs a person), waiting in the queue when the demo opens (A4).
+export const waitingRequests = [
+  { capabilityId: 'refund-recommendation', call: { tool: 'issue_refund', args: { orderId: 'ORD-5006', amount: 48, confidence: 93 } } },
+  { capabilityId: 'refund-recommendation', call: { tool: 'issue_refund', args: { orderId: 'ORD-5005', amount: 180, confidence: 81 } } },
+];
+
 // Which capabilities may use each agent tool (roadmap item 9, A1). '*' means
 // any capability. The gate refuses a tool outside its capability.
 export const TOOL_SCOPE = {

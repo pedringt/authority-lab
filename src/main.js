@@ -435,6 +435,18 @@ document.addEventListener('submit', (e) => {
     });
     return;
   }
+  // Approve or reject a waiting action (A4). The approver is whoever is acting.
+  const decideForm = e.target.closest('[data-form="decide-action"]');
+  if (decideForm) {
+    e.preventDefault();
+    const id = decideForm.dataset.id;
+    const reason = new FormData(decideForm).get('reason');
+    const decision = e.submitter && e.submitter.value === 'reject' ? 'rejectAction' : 'approveAction';
+    const item = (store.get().actionQueue || []).find((x) => x.id === id);
+    const route = `#/capabilities/${item ? item.capabilityId : ''}?tab=waiting`;
+    dispatchOr(route, () => { store.dispatch(decision, id, { by: actor(store.get(), item && item.capabilityId), reason }); clearErrorOn(route, 'error'); render(); });
+    return;
+  }
   const renameForm = e.target.closest('[data-form="rename-workspace"]');
   if (renameForm) {
     e.preventDefault();
