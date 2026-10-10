@@ -64,6 +64,8 @@ export function seededCapabilityData(id) {
       option: null,
       conditions: s.defaultConditions ? clone(s.defaultConditions) : base.decision.conditions,
       rationale: s.defaultRationale || '',
+      // Expected impact for an expansion (B1), prefilled for the seeded decision.
+      outcomes: s.defaultOutcomes ? clone(s.defaultOutcomes) : [],
       recordId: null,
       // The pending authority change, if a decision is open.
       proposed: s.pendingDecision ? clone(s.pendingDecision) : null,

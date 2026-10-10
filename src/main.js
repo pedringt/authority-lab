@@ -157,8 +157,17 @@ function render() {
   // Keep sections the person opened open across re-renders of the same page
   // (a test run re-renders on every step).
   const opened = lastRoute === location.hash ? [...app.querySelectorAll('details[id][open]')].map((el) => el.id) : [];
+  // A field being typed into (expected impact, rationale) keeps its focus and
+  // caret across the re-render its own debounced dispatch causes.
+  const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale'].includes(document.activeElement.dataset.action)
+    ? { action: document.activeElement.dataset.action, index: document.activeElement.dataset.index || '', field: document.activeElement.dataset.field || '', start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd }
+    : null;
   app.innerHTML = String(view);
   restoreForms(saved);
+  if (focused && lastRoute === location.hash) {
+    const el = [...app.querySelectorAll(`[data-action="${focused.action}"]`)].find((x) => (x.dataset.index || '') === focused.index && (x.dataset.field || '') === focused.field);
+    if (el) { el.focus(); try { el.setSelectionRange(focused.start, focused.end); } catch { /* not a text field */ } }
+  }
   for (const id of opened) { const el = document.getElementById(id); if (el) el.open = true; }
   if (lastRoute === location.hash) window.scrollTo(0, y); else window.scrollTo(0, 0);
   lastRoute = location.hash;
@@ -572,6 +581,15 @@ document.addEventListener('input', (e) => {
     warn.hidden = !text;
     return;
   }
+  const out = e.target.closest('[data-action="set-outcome"]');
+  if (out) {
+    // Expected impact (B1): one row field at a time, debounced like the rationale.
+    const { capability, index, field } = out.dataset;
+    const value = out.value;
+    clearTimeout(outcomeTimers[`${index}-${field}`]);
+    outcomeTimers[`${index}-${field}`] = setTimeout(() => store.dispatch('setOutcome', capability, Number(index), field, value), 300);
+    return;
+  }
   const el = e.target.closest('[data-action="set-rationale"]');
   if (!el) return;
   // Update state without a full re-render so the caret stays put.
@@ -581,6 +599,7 @@ document.addEventListener('input', (e) => {
   rationaleTimer = setTimeout(() => store.dispatch('setRationale', capId, value), 300);
 });
 let rationaleTimer = null;
+const outcomeTimers = {};
 
 // Simulated suite execution: one scenario every ~110 ms.
 let suiteTimer = null;
