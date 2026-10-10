@@ -28,6 +28,9 @@ export function startEmpty() {
     decisionRecords: [],
     activity: [],
     alerts: [],
+    // A new workspace has nothing waiting and no gate history.
+    actionQueue: [],
+    gateLog: [],
     // A new workspace has no systems of record connected yet.
     systems: { customers: {}, orders: {}, fraudFlags: [], chargebacks: [], refunds: [], escalations: [] },
   };

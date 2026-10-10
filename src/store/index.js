@@ -21,3 +21,5 @@ export { startEmpty, setupPending, setUpWorkspace, MIN_FOUNDING_ADMINS, founding
 export { TOOLS, systemsOf, enforcementTerms, checkAction } from './gate.js';
 export { dataSeen, filterForModel, callTool } from './tools.js';
 export { QUEUE_LIMIT, queueApprovers, waitingActions, queuedAction, queueEligibility, recheckQueued, approveAction, rejectAction } from './queue.js';
+export { GATE_SOURCES, logGate, gateEvents, categoryOf, gateSummary, gateEvidence, gateMetricOf, gateReading, enforceGateRules } from './gatelog.js';
+export { applyBreach } from './monitoring.js';

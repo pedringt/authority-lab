@@ -8,6 +8,7 @@ import { getCapability } from './state.js';
 import { current } from './selectors.js';
 import { checkAction, systemsOf, own } from './gate.js';
 import { enqueue } from './queue.js';
+import { logGate, enforceGateRules } from './gatelog.js';
 
 const RESTRICTED = new Set(DATA_FIELDS.filter((f) => f.restricted).map((f) => f.id));
 
@@ -61,7 +62,17 @@ export function executeRefund(state, capabilityId, args, by, extra = {}) {
 // Run one tool call. Returns the next state (unchanged unless the call
 // executed) and the result the model sees. `check` is the gate's full
 // verdict, kept for the record (A5 logs it).
-export function callTool(state, capabilityId, call = {}) {
+export function callTool(state, capabilityId, call = {}, opts = {}) {
+  const out = runCall(state, capabilityId, call);
+  // Every call is logged (A5), then any restriction rule the gate log
+  // measures is checked, so a crossed rule restricts at once.
+  const r = out.result;
+  const outcome = r.executed ? 'executed' : r.waiting ? 'waiting' : r.verdict === 'block' ? 'blocked' : 'not-executed';
+  const logged = logGate(out.state, { capabilityId, actor: 'ai', tool: call.tool, orderId: (call.args || {}).orderId || null, verdict: r.verdict, rule: out.check.rule, outcome, queueId: r.queueId || null, source: opts.source || 'session' });
+  return { ...out, state: enforceGateRules(logged, capabilityId) };
+}
+
+function runCall(state, capabilityId, call = {}) {
   const check = checkAction(state, capabilityId, call);
   const result = { tool: call.tool, ...told(check), executed: false };
   // An action that needs a person waits in the queue for one (A4).

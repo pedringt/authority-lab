@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -111,6 +111,26 @@ function contractTab(state, cap, d) {
     </div>
     ${dataBoundaryCard(c)}
     ${riskBlock}`;
+}
+
+// Gate activity (A5): what the gate decided for this capability, rolled up,
+// with the latest events and where they came from.
+function gateActivityCard(state, cap) {
+  const g = gateSummary(state, cap.id);
+  if (!g.events) return section('Gate activity', html`<p class="empty">No gate events yet. Every action the AI asks for, and every decision on a waiting action, will show here.</p>`);
+  const pct = (v) => (v == null ? '—' : `${v}%`);
+  const recent = gateEvents(state, cap.id).slice(-10).reverse();
+  const who = (e) => (e.actor === 'ai' ? 'AI' : person(e.actor).name);
+  const verdictBadge = { allow: badge('pass', 'Allowed'), 'needs-person': badge('decision', 'Needs a person'), block: badge('fail', 'Blocked'), approved: badge('pass', 'Approved'), rejected: badge('neutral', 'Rejected') };
+  return section('Gate activity', html`<div class="metric-grid metric-grid-4">
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Allowed automatically</span></div><div class="metric-value">${g.counts.allowed}</div><div class="metric-note">${pct(g.rates.automation)} of actions</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Sent to a person</span></div><div class="metric-value">${g.counts.escalated}</div><div class="metric-note">${g.counts.approved} approved, ${g.counts.overridden} rejected</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Blocked</span>${g.mustNeverAttempts ? badge('fail', `${g.mustNeverAttempts} must-never`) : ''}</div><div class="metric-value">${g.counts.blocked}</div><div class="metric-note">${pct(g.rates.block)} of actions</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Refused at execution</span></div><div class="metric-value">${g.counts.refused}</div><div class="metric-note">approved, then re-checked</div></div>
+    </div>
+    <div class="card table-card"><table class="table"><thead><tr><th>Event</th><th>Who</th><th>What</th><th>Verdict</th><th>Rule</th><th>Source</th></tr></thead>
+      <tbody>${recent.map((e) => html`<tr><td class="muted small">${e.id} · ${fmtDate(e.date)}</td><td>${who(e)}</td><td>${e.tool}${e.orderId ? ` ${e.orderId}` : ''}${e.queueId ? html` <span class="muted small">(${e.queueId})</span>` : ''}</td><td>${verdictBadge[e.verdict] || e.verdict}</td><td class="small">${e.rule ? e.rule.text : ''}</td><td class="muted small">${GATE_SOURCES[e.source] || e.source}</td></tr>`)}</tbody>
+    </table></div>`, { subtitle: `${g.events} events, from: ${g.sources.map((x) => GATE_SOURCES[x] || x).join(', ')}. Every check the gate makes is logged; these counts feed the Evidence page and the restriction rules the gate can measure.` });
 }
 
 // "Waiting for a person" (A4): actions the gate sent to a person. A named,
@@ -335,7 +355,7 @@ function rulesCard(state, cap) {
     const fill = Math.min(100, (r.value / r.threshold.value) * 80);
     return html`<div class="rule-reading ${r.crossed ? 'is-crossed' : ''}" role="img" aria-label="Reading ${r.value}${unit(r)}${windowText(r)}, ${limit}">
       <div class="rule-reading-bar"><span style="width:${fill}%"></span><i></i></div>
-      <span class="small">Reading <strong>${r.value}${unit(r)}</strong>${windowText(r)} · ${limit} <span class="muted">(simulated)</span></span>
+      <span class="small">Reading <strong>${r.value}${unit(r)}</strong>${windowText(r)} · ${limit} <span class="muted">(${r.fromGate ? 'measured from the gate log' : 'simulated'})</span></span>
     </div>`;
   };
   return section('Restriction rules', rules.length
@@ -404,5 +424,5 @@ function monitoringTab(state, cap, d) {
     ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
         <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
     : '';
-  return html`${head}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${fired}${opened}${control}`;
+  return html`${head}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
 }

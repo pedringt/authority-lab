@@ -19,11 +19,12 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
 import { capabilityView } from '../src/views/capability.js';
+import { evidenceView } from '../src/views/evidence.js';
 import { proposalView } from '../src/views/proposals.js';
 import { versionsView } from '../src/views/versions.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
@@ -2028,7 +2029,7 @@ test('restriction lines parse into threshold, window and fallback level', () => 
 test('a rule is active only while the capability is above its fallback level; the contract decides the level', () => {
   const s = initialState();
   const rr = restrictionRules(s, RR);
-  assert.equal(rr.length, 4, 'every contract line is a rule');
+  assert.equal(rr.length, 5, 'every contract line is a rule (the fifth, measured from the gate log, was added in A5)');
   assert.ok(rr.every((r) => r.fallback === 2 && !r.active), 'Refund recommendation is at Draft: its "returns to Draft" rules wait');
   assert.match(rr[0].text, /rolling 50/, 'the demo rule is in the contract');
   const up = { ...s, capabilities: s.capabilities.map((c) => (c.id === RR ? { ...c, authority: { level: 3, limited: true } } : c)) };
@@ -2813,7 +2814,10 @@ test('A2 bypass: built-in object names are never orders, through every tool, at 
     for (const name of PROTO_NAMES) {
       const r = callTool(s, cap, refund(name, 40, { confidence: 99 }));
       assert.deepEqual([r.result.verdict, r.result.executed], ['block', false], `${label}: refund on "${name}"`);
-      assert.equal(r.state, s, `${label}: nothing written for "${name}"`);
+      const { gateLog: _log, ...after } = r.state;
+      const { gateLog: _before, ...was } = s;
+      assert.deepEqual(after, was, `${label}: nothing written for "${name}" except the gate log (A5)`);
+      assert.equal(r.state.gateLog.at(-1).verdict, 'block');
       const look = callTool(s, cap, { tool: 'lookup_order', args: { orderId: name } });
       assert.equal(look.result.data ?? null, null, `${label}: lookup of "${name}" finds nothing`);
       if (label !== 'L0') assert.equal(look.result.found, false);
@@ -3018,4 +3022,103 @@ test('A4: when the AI asks again after a refused approval, the new item follows 
   const again = callTool(s, RR, refund('ORD-5005', 60));
   assert.deepEqual([again.result.waiting, again.result.follows], [true, first.result.queueId]);
   assert.equal(queuedAction(again.state, again.result.queueId).follows, first.result.queueId);
+});
+
+// ---------------------------------------------------------------------------
+// Gate decisions as instrumentation (roadmap item 9, A5 #69)
+// ---------------------------------------------------------------------------
+
+const NEVER_RULE = '3 attempts at a must-never action within 7 days return the capability to Draft until reviewed.';
+const expandedRR = () => authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+
+test('A5: every gate check and every decision on a waiting action is logged, with where it came from', () => {
+  let s = initialState();
+  assert.deepEqual(s.gateLog.map((e) => [e.source, e.verdict, e.outcome]), [['seeded', 'needs-person', 'waiting'], ['seeded', 'needs-person', 'waiting']], 'the seeded requests are labelled seeded');
+  s = callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).state;
+  s = callTool(s, RR, refund('ORD-5003', 10)).state;
+  s = callTool(s, RR, { tool: 'escalate_to_human', args: { orderId: 'ORD-5004', reason: 'Chargeback.' } }).state;
+  s = approveAction(s, 'WA-001', { by: 'priya', reason: WHY });
+  const tail = s.gateLog.slice(-4).map((e) => [e.actor, e.tool, e.orderId, e.verdict, e.rule && e.rule.kind, e.outcome, e.source, e.date]);
+  assert.deepEqual(tail, [
+    ['ai', 'lookup_order', 'ORD-5001', 'allow', 'read', 'executed', 'session', '2026-10-07'],
+    ['ai', 'issue_refund', 'ORD-5003', 'block', 'must-never', 'blocked', 'session', '2026-10-07'],
+    ['ai', 'escalate_to_human', 'ORD-5004', 'allow', 'escalate', 'executed', 'session', '2026-10-07'],
+    ['priya', 'issue_refund', 'ORD-5006', 'approved', 'level-2', 'executed', 'session', '2026-10-07'],
+  ]);
+  assert.deepEqual(new Set(s.gateLog.map((e) => e.id)).size, s.gateLog.length, 'unique ids');
+});
+
+test('A5: the log rolls up into counts, rates and derived evidence, labelled by source', () => {
+  let s = expandedRR();
+  s = callTool(s, RR, refund('ORD-5001', 30)).state;                 // allowed
+  s = callTool(s, RR, refund('ORD-5004', 20)).state;                 // needs a person (chargeback): waits
+  s = callTool(s, RR, refund('ORD-5003', 10)).state;                 // blocked (must never)
+  s = rejectAction(s, s.actionQueue.at(-1).id, { by: 'priya', reason: 'Chargeback first.' }); // overridden
+  const g = gateSummary(s, RR);
+  // Escalated includes the two seeded requests; overridden includes the seeded WA-002 rejected in setup.
+  assert.deepEqual([g.counts.allowed, g.counts.escalated, g.counts.blocked, g.counts.overridden], [1, 3, 1, 2]);
+  assert.equal(g.rates.automation, 20);
+  const ev = gateEvidence(s, RR);
+  assert.deepEqual(ev.map((e) => e.metric), ['Actions allowed automatically', 'Actions sent to a person', 'Actions blocked']);
+  assert.ok(ev.every((e) => e.derived && /Seeded demo data/.test(e.origin) && /This session/.test(e.origin)), 'origin says seeded and session');
+  // Derived evidence is never stored: it doesn't count as performance results.
+  assert.equal(capData(s, RR).evidence.some((e) => e.source === 'Gate log'), false);
+  assert.equal(gateEvidence(startEmpty(), RR).length, 0);
+});
+
+test('A5: a run of gate events changes the reading of a gate-measured rule', () => {
+  let s = expandedRR();
+  const reading = (st) => monitoringStatus(st, RR).rules.find((r) => r.text === NEVER_RULE);
+  assert.deepEqual([reading(s).active, reading(s).value, reading(s).crossed], [true, 0, false]);
+  s = callTool(s, RR, refund('ORD-5003', 10)).state;
+  assert.equal(reading(s).value, 1);
+  s = callTool(s, RR, refund('ORD-5001', 10, { paymentMethod: 'gift-card' })).state;
+  assert.equal(reading(s).value, 2);
+  assert.equal(getCapability(s, RR).authority.level, 3, 'still under the limit');
+});
+
+test('A5: crossing a gate-measured rule restricts the capability through the existing breach flow', () => {
+  let s = expandedRR();
+  const records = s.decisionRecords.length;
+  for (let i = 0; i < 3; i++) s = callTool(s, RR, refund('ORD-5003', 10 + i)).state; // retries count, each one
+  const cap = getCapability(s, RR);
+  assert.deepEqual([cap.authority.level, cap.status, capData(s, RR).reviewRequired], [2, 'review-required', true]);
+  const rec = s.decisionRecords.at(-1);
+  assert.equal(s.decisionRecords.length, records + 1);
+  assert.deepEqual([rec.authorizedBy, rec.option, rec.previous.level, rec.next.level], ['system', 'auto-restrict', 3, 2]);
+  assert.match(rec.rationale, /3 attempts at a must-never action/);
+  assert.match(rec.rationale, /3 in 7 days \(limit 3\)/);
+  assert.match(capData(s, RR).monitoring.errors.join(' '), /GL-\d{4}: the AI tried issue_refund on ORD-5003/);
+  assert.equal(s.alerts[0].capabilityId, RR);
+  // The new level applies at once, and a fourth attempt doesn't restrict twice.
+  assert.equal(checkAction(s, RR, refund('ORD-5001', 10)).rule.kind, 'level-2');
+  const again = callTool(s, RR, refund('ORD-5003', 10)).state;
+  assert.equal(again.decisionRecords.length, s.decisionRecords.length);
+});
+
+test('A5: at Level 2 the rule waits; attempts outside its 7-day window do not count', () => {
+  let s = initialState();
+  for (let i = 0; i < 4; i++) s = callTool(s, RR, refund('ORD-5003', 10 + i)).state;
+  assert.equal(getCapability(s, RR).authority.level, 2, 'the rule returns to Draft, so it waits at Draft');
+  let old = expandedRR();
+  old = { ...old, gateLog: [1, 2, 3].map((n) => ({ id: `GL-OLD${n}`, date: '2026-09-20', capabilityId: RR, actor: 'ai', tool: 'issue_refund', orderId: 'ORD-5003', verdict: 'block', rule: { kind: 'must-never', text: 'Override a fraud restriction.' }, outcome: 'blocked', source: 'seeded' })) };
+  assert.equal(monitoringStatus(old, RR).rules.find((r) => r.text === NEVER_RULE).value, 0);
+  assert.equal(getCapability(callTool(old, RR, refund('ORD-5003', 10)).state, RR).authority.level, 3, 'one attempt in the window');
+});
+
+test('A5: start empty clears the waiting queue and the gate log', () => {
+  const e = startEmpty();
+  assert.deepEqual([e.actionQueue.length, e.gateLog.length], [0, 0]);
+});
+
+test('A5: the Monitoring tab shows gate activity and the Evidence page shows derived, labelled gate evidence', () => {
+  let s = expandedRR();
+  s = callTool(s, RR, refund('ORD-5003', 10)).state;
+  const mon = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  assert.match(mon, /Gate activity/);
+  assert.match(mon, /1 must-never/);
+  assert.match(mon, /measured from the gate log/);
+  const ev = String(evidenceView(s, RR, new URLSearchParams()));
+  assert.match(ev, /Actions blocked/);
+  assert.match(ev, /Derived · Seeded demo data, This session/);
 });

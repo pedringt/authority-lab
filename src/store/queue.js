@@ -9,6 +9,7 @@ import { current } from './selectors.js';
 import { people, isActivePerson, snapshotPerson } from './people.js';
 import { checkAction, own } from './gate.js';
 import { executeRefund } from './tools.js';
+import { logGate } from './gatelog.js';
 
 const items = (state) => state.actionQueue || [];
 const orderOf = (call) => (call.args || {}).orderId || null;
@@ -119,7 +120,9 @@ export function recheckQueued(state, item) {
 function decide(state, id, by, status, reason, extra = {}) {
   const item = queuedAction(state, id);
   const decided = { ...item, status, decision: { by, byAt: snapshotPerson(state, by), reason, date: state.today, ...extra } };
-  return drainCheck({ ...state, actionQueue: items(state).map((x) => (x.id === id ? decided : x)) }, item.capabilityId);
+  const s = drainCheck({ ...state, actionQueue: items(state).map((x) => (x.id === id ? decided : x)) }, item.capabilityId);
+  // A person's decision is logged with the gate's events (A5).
+  return logGate(s, { capabilityId: item.capabilityId, actor: by, tool: item.call.tool, orderId: (item.call.args || {}).orderId || null, verdict: status === 'rejected' ? 'rejected' : 'approved', rule: item.rule, outcome: status, queueId: item.id });
 }
 
 export function approveAction(state, id, { by, reason } = {}) {

@@ -196,6 +196,8 @@ export const capabilities = [
         '2 high-severity policy violations within 7 days return the capability to Draft (human approval required) until reviewed.',
         'Error rate above 8% over 7 days returns the capability to Draft until reviewed.',
         'Unexplained refund-cost increase above 20% over 7 days returns the capability to Draft until reviewed.',
+        // Measured from the gate log (A5): the AI trying what it must never do.
+        '3 attempts at a must-never action within 7 days return the capability to Draft until reviewed.',
       ],
       // Data the AI may see (A2): tool results are filtered to these fields.
       dataSeen: ['order.id', 'order.date', 'order.items', 'order.value', 'order.status', 'order.refundedSoFar', 'order.paymentMethod', 'customer.id', 'customer.firstName', 'customer.accountSince', 'flags.fraud', 'flags.chargeback', 'flags.policyException'],
