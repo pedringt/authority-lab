@@ -20,4 +20,4 @@ export { STORAGE_KEY, createStore } from './persist.js';
 export { startEmpty, setupPending, setUpWorkspace, MIN_FOUNDING_ADMINS, foundingRiskGap, renameWorkspace, namesAtRecord } from './workspace.js';
 export { TOOLS, systemsOf, enforcementTerms, checkAction } from './gate.js';
 export { dataSeen, filterForModel, callTool } from './tools.js';
-export { queueApprovers, waitingActions, queuedAction, queueEligibility, recheckQueued, approveAction, rejectAction } from './queue.js';
+export { QUEUE_LIMIT, queueApprovers, waitingActions, queuedAction, queueEligibility, recheckQueued, approveAction, rejectAction } from './queue.js';

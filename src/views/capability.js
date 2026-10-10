@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -128,7 +128,7 @@ function waitingTab(state, cap, query) {
   const card = (x) => {
     const e = queueEligibility(state, x.id, by);
     return html`<article class="card waiting-item" id="${x.id}">
-      <div class="version-head"><div><span class="eyebrow">${x.id} · requested by the AI · ${fmtDate(x.date)} · at Level ${x.levelAtRequest}</span><h3>${describeAction(x)}</h3></div>${x.status === 'waiting' ? badge('decision', 'Waiting') : statusBadge[x.status]}</div>
+      <div class="version-head"><div><span class="eyebrow">${x.id} · requested by the AI · ${fmtDate(x.date)} · at Level ${x.levelAtRequest}${x.follows ? html` · follows <a href="#${x.follows}">${x.follows}</a>` : ''}</span><h3>${describeAction(x)}</h3></div>${x.status === 'waiting' ? badge('decision', 'Waiting') : statusBadge[x.status]}</div>
       <p class="fact-label">Needs a person because</p>
       <ul class="plain-list">${x.findings.map((f) => html`<li>${f.rule.text}</li>`)}</ul>
       ${x.status === 'waiting'
@@ -145,7 +145,7 @@ function waitingTab(state, cap, query) {
   };
   return html`
     ${error ? notice('fail', 'Could not record that decision', error) : ''}
-    <p class="muted">When the gate says an action needs a person, it waits here instead of running. ${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve.</p>
+    <p class="muted">When the gate says an action needs a person, it waits here instead of running. ${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve. At most one action waits per order, and at most ${QUEUE_LIMIT} per capability; past that, new requests are blocked and an incident is opened.</p>
     ${section(`Waiting (${waiting.length})`, waiting.length ? html`${waiting.map(card)}` : html`<p class="empty">Nothing is waiting for a person.</p>`)}
     ${decided.length ? section('Decided', html`${decided.map(card)}`) : ''}`;
 }

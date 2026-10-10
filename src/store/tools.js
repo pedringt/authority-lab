@@ -66,8 +66,10 @@ export function callTool(state, capabilityId, call = {}) {
   const result = { tool: call.tool, ...told(check), executed: false };
   // An action that needs a person waits in the queue for one (A4).
   if (check.verdict === 'needs-person') {
-    const { state: next, item, duplicate } = enqueue(state, capabilityId, call, check);
-    return { state: next, result: { ...result, waiting: true, queueId: item.id, alreadyWaiting: duplicate }, check };
+    const { state: next, item, refused } = enqueue(state, capabilityId, call, check);
+    // The queue refused it (already one waiting for this order, or full): blocked.
+    if (refused) return { state: next, result: { tool: call.tool, verdict: 'block', rule: refused.kind, message: refused.text, executed: false, ...(refused.waitingId ? { waitingId: refused.waitingId } : {}) }, check: { ...check, verdict: 'block', reason: refused.text, rule: { kind: refused.kind, text: refused.text } } };
+    return { state: next, result: { ...result, waiting: true, queueId: item.id, ...(item.follows ? { follows: item.follows } : {}) }, check };
   }
   if (check.verdict !== 'allow') return { state, result, check };
   const args = call.args || {};

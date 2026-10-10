@@ -11,7 +11,11 @@ import { checkAction, own } from './gate.js';
 import { executeRefund } from './tools.js';
 
 const items = (state) => state.actionQueue || [];
-const sameCall = (a, b) => JSON.stringify([a.tool, a.args || {}, a.claims || {}]) === JSON.stringify([b.tool, b.args || {}, b.claims || {}]);
+const orderOf = (call) => (call.args || {}).orderId || null;
+const sameTarget = (a, b) => a.tool === b.tool && orderOf(a) === orderOf(b);
+
+// At most this many actions wait for a person per capability (review, 2026-10-10).
+export const QUEUE_LIMIT = 10;
 
 // Who may decide: the capability owner and the people on its stakeholder list,
 // active ones only. Unlike sign-off, an empty list never widens to everyone.
@@ -30,12 +34,17 @@ export function queuedAction(state, id) {
   return items(state).find((x) => x.id === id) || null;
 }
 
-// Put a needs-person call in the queue. The same call already waiting for the
-// same capability isn't queued twice (a retrying model can't flood the queue).
+// Put a needs-person call in the queue, or refuse it. A model can't flood the
+// queue: at most one action waits per order per tool (any amount, any
+// claims), and at most QUEUE_LIMIT wait per capability. A full queue opens an
+// incident, once until it drains, so a person notices.
 export function enqueue(state, capabilityId, call, check) {
-  const existing = waitingActions(state, capabilityId).find((x) => sameCall(x.call, call));
-  if (existing) return { state, item: existing, duplicate: true };
+  const existing = items(state).find((x) => x.status === 'waiting' && sameTarget(x.call, call));
+  if (existing) return { state, refused: { kind: 'already-waiting', text: `Already waiting for a person: ${existing.id}.`, waitingId: existing.id } };
+  if (waitingActions(state, capabilityId).length >= QUEUE_LIMIT) return { state: openQueueFullIncident(state, capabilityId), refused: { kind: 'queue-full', text: `Queue full: ${QUEUE_LIMIT} actions are already waiting for a person on this capability.` } };
   const cap = getCapability(state, capabilityId);
+  // When the AI asks again after a refused approval, link it to the refused item.
+  const refusedBefore = items(state).filter((x) => x.status === 'refused' && x.capabilityId === capabilityId && sameTarget(x.call, call)).at(-1);
   const item = {
     id: `WA-${String(items(state).length + 1).padStart(3, '0')}`,
     capabilityId,
@@ -50,8 +59,31 @@ export function enqueue(state, capabilityId, call, check) {
     levelAtRequest: cap.authority.level,
     status: 'waiting',
     decision: null,
+    follows: refusedBefore ? refusedBefore.id : null,
   };
-  return { state: { ...state, actionQueue: [...items(state), item] }, item, duplicate: false };
+  return { state: { ...state, actionQueue: [...items(state), item] }, item };
+}
+
+// A full queue is an incident: an alert on the Overview, an incident evidence
+// item and an activity event, once until the queue drains below the limit.
+function openQueueFullIncident(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (d.queueFull) return state;
+  const cap = getCapability(state, capabilityId);
+  const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
+  const incidentId = `INC-${String(incidentNumber).padStart(2, '0')}`;
+  const evidence = [{ id: `EV-${String(d.evidence.length + 1).padStart(2, '0')}`, source: 'Incident', metric: `${incidentId}: waiting queue full`, value: `${QUEUE_LIMIT} actions waiting`, status: 'fail', risk: 'Medium', segment: 'All', date: state.today, detail: `${QUEUE_LIMIT} actions on ${cap.name} are waiting for a person, so new ones are blocked until some are decided. A model asking faster than people decide is worth a look.`, link: `#/capabilities/${cap.id}?tab=waiting` }, ...d.evidence];
+  const s = { ...state, capabilityData: { ...state.capabilityData, [capabilityId]: { ...d, evidence, queueFull: { since: state.today, incidentId } } } };
+  const alert = { id: `ALERT-${Date.now()}-q`, date: state.today, severity: 'medium', capabilityId, title: `Waiting queue full: ${cap.name}`, body: `${QUEUE_LIMIT} actions are waiting for a person; new ones are blocked until some are decided (${incidentId}).`, link: `#/capabilities/${cap.id}?tab=waiting` };
+  return logEvent({ ...s, alerts: [alert, ...state.alerts] }, { kind: 'failure', surfaced: true, title: `Waiting queue full: ${cap.name}`, body: `${QUEUE_LIMIT} actions are waiting for a person, so new needs-person actions are blocked. ${incidentId} opened.`, capabilityId, link: `#/capabilities/${cap.id}?tab=waiting` });
+}
+
+// Once the queue is below the limit again, the full-queue incident closes and
+// its alert clears.
+function drainCheck(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (!d.queueFull || waitingActions(state, capabilityId).length >= QUEUE_LIMIT) return state;
+  return { ...state, capabilityData: { ...state.capabilityData, [capabilityId]: { ...d, queueFull: null } }, alerts: state.alerts.filter((a) => !(a.capabilityId === capabilityId && a.title.startsWith('Waiting queue full'))) };
 }
 
 // Can this person decide this item? Not the AI, not the system, not anyone
@@ -87,7 +119,7 @@ export function recheckQueued(state, item) {
 function decide(state, id, by, status, reason, extra = {}) {
   const item = queuedAction(state, id);
   const decided = { ...item, status, decision: { by, byAt: snapshotPerson(state, by), reason, date: state.today, ...extra } };
-  return { ...state, actionQueue: items(state).map((x) => (x.id === id ? decided : x)) };
+  return drainCheck({ ...state, actionQueue: items(state).map((x) => (x.id === id ? decided : x)) }, item.capabilityId);
 }
 
 export function approveAction(state, id, { by, reason } = {}) {
