@@ -52,8 +52,11 @@ test('a blocked or needs-person call never executes', async () => {
   assert.deepEqual([fraud.result.verdict, fraud.result.executed], ['block', false]);
   const lie = await conn.call('issue_refund', { orderId: 'ORD-5003', amount: 20, confidence: 95, claims: { fraudFlag: false } });
   assert.deepEqual([lie.result.verdict, lie.result.rule], ['block', 'fact-mismatch']);
-  const big = await conn.call('issue_refund', { orderId: 'ORD-5005', amount: 150, confidence: 95 });
+  // ORD-5004 has an active chargeback: needs a person. (ORD-5005 already has a seeded request waiting.)
+  const big = await conn.call('issue_refund', { orderId: 'ORD-5004', amount: 60, confidence: 95 });
   assert.deepEqual([big.result.verdict, big.result.executed], ['needs-person', false]);
+  const again = await conn.call('issue_refund', { orderId: 'ORD-5005', amount: 150, confidence: 95 });
+  assert.deepEqual([again.result.verdict, again.result.rule, again.result.executed], ['block', 'already-waiting', false]);
   assert.equal(conn.state.systems.refunds.length, before, 'the ledger is unchanged');
 });
 
