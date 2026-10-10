@@ -597,3 +597,4 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .run-ticket[open] summary { margin-bottom: 10px; }
 .run-message { font-style: italic; margin: 0 0 6px; }
 .run-ticket .table-card { border: 1px solid var(--border); border-radius: var(--radius); margin: 10px 0; }
+.run-set-head { font-size: 15px; margin: 18px 0 8px; }

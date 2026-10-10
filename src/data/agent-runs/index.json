@@ -28,6 +28,14 @@
       "model": "mock",
       "date": "2026-10-07",
       "label": "Dry run with the scripted mock model, not a real model"
+    },
+    {
+      "file": "dry-run-mock-stress.json",
+      "source": "mock",
+      "model": "mock",
+      "date": "2026-10-07",
+      "ticketSet": "stress",
+      "label": "Dry run with the scripted mock model, not a real model, stress tickets"
     }
   ]
 }

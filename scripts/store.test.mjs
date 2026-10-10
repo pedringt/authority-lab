@@ -3185,12 +3185,15 @@ test('A6: every committed recording replays through today\'s gate with no change
   const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
   assert.ok(index.runs.some((r) => r.source === 'recorded'), 'real recordings are in the index');
   for (const entry of index.runs) {
-    const run = JSON.parse(readFileSync(new URL(entry.file, dir), 'utf8'));
-    const r = replayRun(run);
-    assert.equal(r.changed, 0, `${entry.file}: every verdict matches`);
-    const events = r.tickets.flatMap((t) => gateEvents(t.state, run.start.capabilityId).filter((e) => e.source !== 'seeded'));
-    assert.ok(events.length, `${entry.file}: replay logged events`);
-    assert.ok(events.every((e) => e.source === run.source), `${entry.file}: events are labelled "${run.source}"`);
+    const rec = JSON.parse(readFileSync(new URL(entry.file, dir), 'utf8'));
+    // A run set replays run by run.
+    for (const [i, run] of (Array.isArray(rec.runs) ? rec.runs : [rec]).entries()) {
+      const r = replayRun(run);
+      assert.equal(r.changed, 0, `${entry.file} run ${i + 1}: every verdict matches`);
+      const events = r.tickets.flatMap((t) => gateEvents(t.state, run.start.capabilityId).filter((e) => e.source !== 'seeded'));
+      assert.ok(events.length, `${entry.file}: replay logged events`);
+      assert.ok(events.every((e) => e.source === run.source), `${entry.file}: events are labelled "${run.source}"`);
+    }
   }
 });
 
@@ -3208,4 +3211,19 @@ test('A6: in T03 the per-customer daily limit is the only reason the second refu
   assert.ok(c.findings.length >= 1 && c.findings.every((f) => f.rule.kind === 'limit'), JSON.stringify(c.findings.map((f) => f.rule.kind)));
   // Without the first refund, the same request is allowed.
   assert.equal(checkAction(s0, RR, toolCall('issue_refund', refunds[1].input)).verdict, 'allow');
+});
+
+test('A6: a run set shows rates in the Agent runs view, with a picker for each run', async () => {
+  const one = JSON.parse(readFileSync(new URL('../src/data/agent-runs/dry-run-mock.json', import.meta.url), 'utf8'));
+  const set = { format: 'authority-lab-runset/1', source: 'recorded', model: 'claude-test', date: '2026-10-11', ticketSet: 'standard', repeat: 2, start: one.start, usage: { calls: 2 * one.usage.calls, input_tokens: 0, output_tokens: 0 }, cost: 0, stoppedEarly: null, runs: [{ ...one, source: 'recorded', model: 'claude-test', date: '2026-10-11' }, { ...one, source: 'recorded', model: 'claude-test', date: '2026-10-11' }], file: 'set.json' };
+  const stress = { ...JSON.parse(readFileSync(new URL('../src/data/agent-runs/dry-run-mock-stress.json', import.meta.url), 'utf8')), file: 'dry-run-mock-stress.json' };
+  const out = String(agentRunsView(initialState(), new URLSearchParams('run=set.json&rep=2'), { status: 'ready', runs: [set, { ...one, file: 'dry-run-mock.json' }, stress] }));
+  assert.match(out, /Recorded from 2 independent runs on 2026-10-11, claude-test/);
+  assert.match(out, /Tried the bait in 2 of 2 runs; the gate stopped all 2/);
+  assert.match(out, /Gate 2\/2/);
+  assert.match(out, /Run 2/);
+  assert.match(out, /claude-test · run 2/);
+  assert.match(out, /Stress tickets/, 'the stress set gets its own table');
+  assert.match(out, /dry run only/);
+  assert.match(out, /S04/);
 });

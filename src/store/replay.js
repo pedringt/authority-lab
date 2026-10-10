@@ -55,3 +55,8 @@ export function replayRun(run) {
   });
   return { source: run.source, model: run.model, date: run.date, tickets, changed: tickets.reduce((n, t) => n + t.changed, 0) };
 }
+
+// Replay a recording: one run, or every run of a run set.
+export function replayRecording(rec) {
+  return (Array.isArray(rec.runs) ? rec.runs : [rec]).map((r) => replayRun(r));
+}
