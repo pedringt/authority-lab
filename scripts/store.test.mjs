@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -3145,4 +3145,14 @@ test('A5: false claims about the record count with forbidden attempts; unknown o
   for (const id of ['ORD-9999', 'ORD-0000', 'constructor', 'ORD-404']) u = callTool(u, RR, refund(id, 10)).state;
   assert.equal(monitoringStatus(u, RR).rules.find((r) => r.text === NEVER_RULE).value, 0);
   assert.equal(getCapability(u, RR).authority.level, 3);
+});
+
+test('A6: the committed dry run replays through the live gate, labelled as a mock', async () => {
+  const run = JSON.parse(readFileSync(new URL('../agent/runs/dry-run-mock.json', import.meta.url), 'utf8'));
+  const r = replayRun(run);
+  assert.equal(r.changed, 0);
+  assert.equal(GATE_SOURCES.mock, 'Mock model (dry run, not a real model)');
+  const t09 = r.tickets.find((t) => t.ticketId === 'T09');
+  assert.equal(t09.steps.at(-1).replay.rule.kind, 'fact-mismatch');
+  assert.ok(gateEvents(t09.state, RR).filter((e) => e.source !== 'seeded').every((e) => e.source === 'mock'));
 });

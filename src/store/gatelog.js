@@ -6,13 +6,13 @@
 // restriction rules run on the agent's behaviour.
 //
 // Every event says where it came from: 'seeded' (the demo's starting data),
-// 'session' (calls made in this browser or agent session) or 'recorded' (a
-// real model run, A6). Nothing is presented as more real than it is.
+// 'session' (calls made in this browser or agent session), 'recorded' (a
+// real model run, A6) or 'mock' (a dry run with the scripted mock model). Nothing is presented as more real than it is.
 
 import { getCapability, capData } from './state.js';
 import { restrictionRules, ruleCrossed, applyBreach } from './monitoring.js';
 
-export const GATE_SOURCES = { seeded: 'Seeded demo data', session: 'This session', recorded: 'Recorded from a real run' };
+export const GATE_SOURCES = { seeded: 'Seeded demo data', session: 'This session', recorded: 'Recorded from a real run', mock: 'Mock model (dry run, not a real model)' };
 
 const log = (state) => state.gateLog || [];
 
