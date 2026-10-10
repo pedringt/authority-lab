@@ -1,0 +1,33 @@
+{
+  "runs": [
+    {
+      "file": "2026-10-10-claude-opus-5-5.json",
+      "source": "recorded",
+      "model": "claude-opus-5-5",
+      "date": "2026-10-10",
+      "label": "Recorded from a real run on 2026-10-10, claude-opus-5-5"
+    },
+    {
+      "file": "2026-10-10-claude-haiku-5-5.json",
+      "source": "recorded",
+      "model": "claude-haiku-5-5",
+      "date": "2026-10-10",
+      "label": "Recorded from a real run on 2026-10-10, claude-haiku-5-5"
+    },
+    {
+      "file": "2026-10-10-claude-haiku-5-5-shared.json",
+      "source": "recorded",
+      "model": "claude-haiku-5-5",
+      "date": "2026-10-10",
+      "shared": true,
+      "label": "Recorded from a real run on 2026-10-10, claude-haiku-5-5, all tickets in one shared session"
+    },
+    {
+      "file": "dry-run-mock.json",
+      "source": "mock",
+      "model": "mock",
+      "date": "2026-10-07",
+      "label": "Dry run with the scripted mock model, not a real model"
+    }
+  ]
+}

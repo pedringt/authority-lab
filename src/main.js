@@ -17,6 +17,7 @@ import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
 import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
+import { agentRunsView } from './views/agentruns.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -33,6 +34,7 @@ const NAV = [
   ['evidence', 'Evidence'],
   ['decisions', 'Decisions'],
   ['activity', 'Activity'],
+  ['agent-runs', 'Agent runs'],
   ['people', 'People'],
 ];
 
@@ -45,6 +47,20 @@ function safeStorage() {
   } catch {
     return null;
   }
+}
+
+// Recorded agent runs (A6) are fixed files, fetched once on the first visit.
+let agentRuns = null;
+function loadAgentRuns() {
+  if (agentRuns) return;
+  agentRuns = { status: 'loading', runs: [] };
+  const base = 'src/data/agent-runs/';
+  fetch(`${base}index.json`, { cache: 'no-cache' })
+    .then((r) => { if (!r.ok) throw new Error(`index.json: ${r.status}`); return r.json(); })
+    .then((index) => Promise.all(index.runs.map((e) => fetch(`${base}${e.file}`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`${e.file}: ${r.status}`); return r.json(); }).then((run) => ({ ...run, file: e.file })))))
+    .then((runs) => { agentRuns = { status: 'ready', runs }; })
+    .catch((err) => { agentRuns = { status: 'error', runs: [], error: err.message }; })
+    .then(() => { if (parseRoute().parts[0] === 'agent-runs') render(); });
 }
 
 function parseRoute() {
@@ -99,6 +115,7 @@ function render() {
       break;
     case 'activity': view = activityView(state, query); title = 'Activity'; break;
     case 'people': view = peopleView(state, query); title = 'People'; break;
+    case 'agent-runs': loadAgentRuns(); view = agentRunsView(state, query, agentRuns); title = 'Agent runs'; break;
     default: view = empty ? noCapabilitiesView(state, 'Where do we need to make a decision?') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;

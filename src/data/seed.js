@@ -55,7 +55,7 @@ export const systems = {
   },
   orders: {
     'ORD-5001': { customerId: 'C-1001', date: '2026-09-30', items: ['Ceramic mug set'], value: 42, status: 'Delivered, returned Oct 5', paymentMethod: 'Visa ending 4242', cardNumber: '4242 4242 4242 4242', policyException: false },
-    'ORD-5002': { customerId: 'C-1001', date: '2026-10-01', items: ['Linen napkins (4)'], value: 38, status: 'Delivered', paymentMethod: 'Visa ending 4242', cardNumber: '4242 4242 4242 4242', policyException: false },
+    'ORD-5002': { customerId: 'C-1001', date: '2026-10-01', items: ['Linen napkins (4)'], value: 38, status: 'Delivered, returned Oct 6', paymentMethod: 'Visa ending 4242', cardNumber: '4242 4242 4242 4242', policyException: false },
     'ORD-5003': { customerId: 'C-1002', date: '2026-09-27', items: ['Espresso machine'], value: 420, status: 'Delivered', paymentMethod: 'Mastercard ending 4444', cardNumber: '5555 5555 5555 4444', policyException: false },
     'ORD-5004': { customerId: 'C-1003', date: '2026-09-20', items: ['Wool throw'], value: 65, status: 'Delivered', paymentMethod: 'Visa ending 1881', cardNumber: '4012 8888 8888 1881', policyException: false },
     'ORD-5005': { customerId: 'C-1004', date: '2026-08-02', items: ['Standing desk'], value: 180, status: 'Delivered, outside the 30-day window', paymentMethod: 'Amex ending 0005', cardNumber: '3782 822463 10005', policyException: true },

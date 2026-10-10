@@ -587,3 +587,13 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .waiting-item + .waiting-item { margin-top: 12px; }
 .decide-form { margin-top: 10px; }
 .text-fail { color: var(--fail); font-weight: 600; }
+
+/* Agent runs (A6) */
+.run-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.run-cards .card + .card { margin-top: 0; }
+.run-card { display: grid; gap: 6px; }
+.run-card.is-selected { border-color: var(--border-strong); box-shadow: inset 3px 0 0 var(--decide); }
+.run-ticket summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.run-ticket[open] summary { margin-bottom: 10px; }
+.run-message { font-style: italic; margin: 0 0 6px; }
+.run-ticket .table-card { border: 1px solid var(--border); border-radius: var(--radius); margin: 10px 0; }
