@@ -3028,7 +3028,7 @@ test('A4: when the AI asks again after a refused approval, the new item follows 
 // Gate decisions as instrumentation (roadmap item 9, A5 #69)
 // ---------------------------------------------------------------------------
 
-const NEVER_RULE = '3 attempts at a must-never action within 7 days return the capability to Draft until reviewed.';
+const NEVER_RULE = '3 forbidden attempts or false claims within 7 days return the capability to Draft until reviewed.';
 const expandedRR = () => authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
 
 test('A5: every gate check and every decision on a waiting action is logged, with where it came from', () => {
@@ -3086,7 +3086,7 @@ test('A5: crossing a gate-measured rule restricts the capability through the exi
   const rec = s.decisionRecords.at(-1);
   assert.equal(s.decisionRecords.length, records + 1);
   assert.deepEqual([rec.authorizedBy, rec.option, rec.previous.level, rec.next.level], ['system', 'auto-restrict', 3, 2]);
-  assert.match(rec.rationale, /3 attempts at a must-never action/);
+  assert.match(rec.rationale, /3 forbidden attempts or false claims/);
   assert.match(rec.rationale, /3 in 7 days \(limit 3\)/);
   assert.match(capData(s, RR).monitoring.errors.join(' '), /GL-\d{4}: the AI tried issue_refund on ORD-5003/);
   assert.equal(s.alerts[0].capabilityId, RR);
@@ -3116,9 +3116,33 @@ test('A5: the Monitoring tab shows gate activity and the Evidence page shows der
   s = callTool(s, RR, refund('ORD-5003', 10)).state;
   const mon = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
   assert.match(mon, /Gate activity/);
-  assert.match(mon, /1 must-never/);
+  assert.match(mon, /1 must-never attempt\b/);
+  assert.match(mon, /0 false claims/);
   assert.match(mon, /measured from the gate log/);
   const ev = String(evidenceView(s, RR, new URLSearchParams()));
   assert.match(ev, /Actions blocked/);
   assert.match(ev, /Derived · Seeded demo data, This session/);
+});
+
+test('A5: false claims about the record count with forbidden attempts; unknown orders never count', () => {
+  // Repro: claims that contradict the system of record were blocked but never restricted.
+  let s = expandedRR();
+  const lie = { ...refund('ORD-5001', 10), claims: { fraudFlag: true } };
+  for (let i = 0; i < 2; i++) s = callTool(s, RR, lie).state;
+  assert.equal(monitoringStatus(s, RR).rules.find((r) => r.text === NEVER_RULE).value, 2);
+  assert.equal(getCapability(s, RR).authority.level, 3);
+  s = callTool(s, RR, lie).state;
+  assert.equal(getCapability(s, RR).authority.level, 2, 'the third false claim restricts');
+  assert.match(capData(s, RR).monitoring.errors.join(' '), /contradicts the system of record/);
+  assert.equal(gateSummary(s, RR).falseClaims, 3);
+  // Mixed: one forbidden attempt, two false claims.
+  let m = callTool(expandedRR(), RR, refund('ORD-5003', 10)).state;
+  m = callTool(m, RR, lie).state;
+  m = callTool(m, RR, lie).state;
+  assert.equal(getCapability(m, RR).authority.level, 2);
+  // Unknown order ids are blocked but never counted.
+  let u = expandedRR();
+  for (const id of ['ORD-9999', 'ORD-0000', 'constructor', 'ORD-404']) u = callTool(u, RR, refund(id, 10)).state;
+  assert.equal(monitoringStatus(u, RR).rules.find((r) => r.text === NEVER_RULE).value, 0);
+  assert.equal(getCapability(u, RR).authority.level, 3);
 });

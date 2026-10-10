@@ -150,7 +150,7 @@ test('the model can ask, but never approve: a needs-person refund waits, and the
   assert.equal(conn.state.actionQueue.at(-1).status, 'waiting');
 });
 
-test('through the MCP server, gate events are logged and three must-never attempts restrict the capability', async () => {
+test('through the MCP server, gate events are logged and three forbidden attempts restrict the capability', async () => {
   const { rejectAction } = await import('../src/store/index.js');
   const start = authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
   const conn = await connect(start);

@@ -63,6 +63,8 @@ export function gateSummary(state, capabilityId) {
     counts,
     rates: { automation: rate(counts.allowed), escalation: rate(counts.escalated), block: rate(counts.blocked), override: counts.escalated ? Math.round((counts.overridden / counts.escalated) * 1000) / 10 : null },
     mustNeverAttempts: events.filter((e) => e.actor === 'ai' && e.rule && e.rule.kind === 'must-never').length,
+    // Claims the model made that contradict the system of record.
+    falseClaims: events.filter((e) => e.actor === 'ai' && e.rule && e.rule.kind === 'fact-mismatch').length,
     sources,
   };
 }
@@ -79,26 +81,33 @@ export function gateEvidence(state, capabilityId) {
   return [
     { ...base, id: 'GATE-1', metric: 'Actions allowed automatically', value: `${g.counts.allowed} of ${g.actions} (${pct(g.rates.automation)})`, status: 'pass', detail: `Actions the gate allowed without a person. From the gate log: ${origin}.` },
     { ...base, id: 'GATE-2', metric: 'Actions sent to a person', value: `${g.counts.escalated} of ${g.actions} (${pct(g.rates.escalation)})`, status: 'watch', detail: `Needs-person verdicts and hand-offs to a person. ${g.counts.approved} approved, ${g.counts.overridden} rejected (overridden), ${g.counts.refused} refused at execution. From the gate log: ${origin}.` },
-    { ...base, id: 'GATE-3', metric: 'Actions blocked', value: `${g.counts.blocked} of ${g.actions} (${pct(g.rates.block)})`, status: g.mustNeverAttempts ? 'fail' : g.counts.blocked ? 'watch' : 'pass', detail: `Actions the gate refused, ${g.mustNeverAttempts} of them must-never attempts. From the gate log: ${origin}.` },
+    { ...base, id: 'GATE-3', metric: 'Actions blocked', value: `${g.counts.blocked} of ${g.actions} (${pct(g.rates.block)})`, status: g.mustNeverAttempts || g.falseClaims ? 'fail' : g.counts.blocked ? 'watch' : 'pass', detail: `Actions the gate refused: ${g.mustNeverAttempts} must-never attempts and ${g.falseClaims} false claims about the record among them. From the gate log: ${origin}.` },
   ];
 }
 
 // A restriction rule the gate log can measure, recognised from its contract
-// line. Today: attempts at a must-never action within a window of days.
+// line, and which gate verdicts it counts: forbidden (must-never) attempts,
+// and false claims (a claim that contradicts the system of record). An
+// unknown order id is neither, so it never counts.
 export function gateMetricOf(rule) {
   const t = rule.text.toLowerCase();
-  if (/must[- ]never/.test(t) && /attempt/.test(t)) return 'must-never-attempts';
-  return null;
+  const kinds = [];
+  if ((/must[- ]never/.test(t) || /forbidden/.test(t)) && /attempt/.test(t)) kinds.push('must-never');
+  if (/false claim/.test(t)) kinds.push('fact-mismatch');
+  return kinds.length ? { metric: 'violations', kinds } : null;
 }
 
-// The reading for a gate-measured rule: the AI's must-never attempts in the
-// rule's window (days back from today, inclusive). Seeded events count only
+const counts = (metric, e) => e.actor === 'ai' && e.rule && metric.kinds.includes(e.rule.kind);
+
+// The reading for a gate-measured rule: the AI's events of the counted kinds
+// in the rule's window (days back from today, inclusive). Seeded events count only
 // if they're in the window, like any other.
 export function gateReading(state, capabilityId, rule) {
-  if (gateMetricOf(rule) !== 'must-never-attempts') return null;
+  const metric = gateMetricOf(rule);
+  if (!metric) return null;
   const days = (rule.window && rule.window.days) || 7;
   const today = Date.parse(state.today);
-  return gateEvents(state, capabilityId).filter((e) => e.actor === 'ai' && e.rule && e.rule.kind === 'must-never' && (today - Date.parse(e.date)) / 86400000 < days).length;
+  return gateEvents(state, capabilityId).filter((e) => counts(metric, e) && (today - Date.parse(e.date)) / 86400000 < days).length;
 }
 
 // After each gate event: if a gate-measured rule now applies and is crossed,
@@ -110,8 +119,11 @@ export function enforceGateRules(state, capabilityId) {
     if (!rule.active || rule.kind !== 'restrict') continue;
     const value = gateReading(state, capabilityId, rule);
     if (value === null || !ruleCrossed(rule, value)) continue;
-    const attempts = gateEvents(state, capabilityId).filter((e) => e.actor === 'ai' && e.rule && e.rule.kind === 'must-never').slice(-value);
-    const errors = attempts.map((e) => `${e.id}: the AI tried ${e.tool}${e.orderId ? ` on ${e.orderId}` : ''} and the gate blocked it (${e.rule.text}).`);
+    const metric = gateMetricOf(rule);
+    const attempts = gateEvents(state, capabilityId).filter((e) => counts(metric, e)).slice(-value);
+    const errors = attempts.map((e) => e.rule.kind === 'fact-mismatch'
+      ? `${e.id}: the AI made a claim about ${e.orderId || 'the order'} that contradicts the system of record; the gate blocked ${e.tool}.`
+      : `${e.id}: the AI tried ${e.tool}${e.orderId ? ` on ${e.orderId}` : ''} and the gate blocked it (${e.rule.text}).`);
     return applyBreach(state, capabilityId, rule, { value, errors });
   }
   return state;
