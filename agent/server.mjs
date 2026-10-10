@@ -2,11 +2,14 @@
 // Run the Authority Lab MCP server over stdio, for Claude Code or Claude
 // Desktop. See README.md.
 //
-//   node agent/server.mjs --capability refund-recommendation [--expand] [--fresh]
+//   node agent/server.mjs --capability refund-recommendation [--expand] [--ticket TK-2001] [--fresh]
 //
 // --capability  the capability the agent acts for (default refund-recommendation)
 // --expand      start from the demo story's authorized expansion (Expand with
 //               limits), if a decision is pending for the capability
+// --ticket      bind the session to a ticket in the system of record (the
+//               seed has TK-2001 to TK-2005, one per demo customer). Without
+//               one, the sender can't be checked, so every refund needs a person.
 // --fresh       discard the saved session and start again from the seed
 //
 // The session's state (refund ledger, escalations) is kept in
@@ -25,6 +28,7 @@ const flag = (name) => argv.includes(`--${name}`);
 const option = (name, fallback) => { const i = argv.indexOf(`--${name}`); return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback; };
 
 const capabilityId = option('capability', 'refund-recommendation');
+const ticketId = option('ticket', null);
 const here = dirname(fileURLToPath(import.meta.url));
 const file = join(here, '.state', `${capabilityId}.json`);
 if (flag('fresh') && existsSync(file)) rmSync(file);
@@ -45,6 +49,7 @@ save(state);
 
 const server = createAgentServer({
   capabilityId,
+  ticketId,
   loadState: () => state,
   saveState: save,
   onCheck: ({ tool, check }) => process.stderr.write(`[gate] ${tool}: ${check.verdict} (${check.rule.kind}) ${check.reason}\n`),

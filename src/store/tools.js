@@ -49,6 +49,13 @@ export function filterForModel(view, allowed) {
 // gate's full reason, which can quote record values the model may not see.
 const told = (check) => ({ verdict: check.verdict, rule: check.rule.kind, message: check.rule.text });
 
+// File a support ticket in the system of record (A6): who sent it. The
+// harness does this before binding an agent session to the ticket.
+export function fileTicket(state, { id, sender, subject = '' }) {
+  const sys = state.systems || {};
+  return { ...state, systems: { ...sys, tickets: { ...(sys.tickets || {}), [id]: { sender: { ...sender }, subject } } } };
+}
+
 // Write a refund to the ledger. Only ever called after the gate allowed it,
 // or after a person approved it and the gate's re-check passed (A4).
 export function executeRefund(state, capabilityId, args, by, extra = {}) {
@@ -68,7 +75,7 @@ export function callTool(state, capabilityId, call = {}, opts = {}) {
   // measures is checked, so a crossed rule restricts at once.
   const r = out.result;
   const outcome = r.executed ? 'executed' : r.waiting ? 'waiting' : r.verdict === 'block' ? 'blocked' : 'not-executed';
-  const logged = logGate(out.state, { capabilityId, actor: 'ai', tool: call.tool, orderId: (call.args || {}).orderId || null, verdict: r.verdict, rule: out.check.rule, outcome, queueId: r.queueId || null, source: opts.source || 'session' });
+  const logged = logGate(out.state, { capabilityId, actor: 'ai', tool: call.tool, orderId: (call.args || {}).orderId || null, ticketId: call.ticketId ?? null, verdict: r.verdict, rule: out.check.rule, outcome, queueId: r.queueId || null, source: opts.source || 'session' });
   return { ...out, state: enforceGateRules(logged, capabilityId) };
 }
 

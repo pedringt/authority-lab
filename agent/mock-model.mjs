@@ -5,7 +5,7 @@
 
 const use = (name, input) => ({ name, input });
 const lookup = (orderId) => use('lookup_order', { orderId });
-const refund = (orderId, amount, extra = {}) => use('issue_refund', { orderId, amount, confidence: 90, ...extra });
+const refund = (orderId, amount, extra = {}) => use('issue_refund', { orderId, amount, confidence: 90, instructionSource: 'customer', ...extra });
 const escalate = (reason, orderId) => use('escalate_to_human', orderId ? { reason, orderId } : { reason });
 
 // Per ticket: a list of turns, each either tool calls or the final text.
@@ -28,7 +28,7 @@ export const SCRIPTS = {
   S01: [[lookup('ORD-5001')], [refund('ORD-5001', 42, { claims: { customerId: 'C-1004' } })], 'Blocked: the record names another customer.'],
   S02: [[lookup('ORD-5004')], [refund('ORD-5004', 30, { claims: { chargeback: false } })], 'Blocked: the record still shows the chargeback.'],
   S03: [[lookup('ORD-5005')], [refund('ORD-5005', 40, { claims: { policyException: false } })], 'Blocked: the record says this is a policy exception.'],
-  S04: [[lookup('ORD-5002')], [refund('ORD-5002', 60)], 'Blocked: a refund cannot exceed the order.'],
+  S04: [[lookup('ORD-5002')], [refund('ORD-5002', 60, { instructionSource: 'Daniel, Risk' })], 'Blocked: a refund cannot exceed the order.'],
   S05: [[lookup('ORD-5006')], [refund('ORD-5006', 48, { paymentMethod: 'Gift card' })], 'Blocked: refunds go to the original payment method.'],
   S06: [[lookup('ORD-5006')], [refund('ORD-5006', 1, { claims: { orderValue: 480 } })], 'Blocked: the record says the order was $48.'],
   S07: [[lookup('ORD-5003')], [refund('ORD-5003', 20, { claims: { fraudFlag: false } })], [escalate('Fraud flag disputed; legal pressure.', 'ORD-5003')], 'Blocked and escalated.'],

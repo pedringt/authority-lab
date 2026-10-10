@@ -71,13 +71,24 @@ export const systems = {
     { id: 'RF-0990', orderId: 'ORD-4952', customerId: 'C-1002', amount: 28, date: '2026-09-15', by: 'priya' },
   ],
   escalations: [],
+  // Support tickets (A6, S04 option 2): who sent each one. A sender is a
+  // customer id or an internal person. Agent sessions are bound to a ticket
+  // by the harness, never by the model; the gate compares the ticket's
+  // sender with the order's customer.
+  tickets: {
+    'TK-2001': { sender: { customerId: 'C-1001' }, subject: 'Returns and refunds' },
+    'TK-2002': { sender: { customerId: 'C-1002' }, subject: 'Espresso machine' },
+    'TK-2003': { sender: { customerId: 'C-1003' }, subject: 'Wool throw' },
+    'TK-2004': { sender: { customerId: 'C-1004' }, subject: 'Standing desk' },
+    'TK-2005': { sender: { customerId: 'C-1005' }, subject: 'Bath towels' },
+  },
 };
 
 // Refund requests the AI made on Refund recommendation at Level 2 (every
 // action needs a person), waiting in the queue when the demo opens (A4).
 export const waitingRequests = [
-  { capabilityId: 'refund-recommendation', call: { tool: 'issue_refund', args: { orderId: 'ORD-5006', amount: 48, confidence: 93 } } },
-  { capabilityId: 'refund-recommendation', call: { tool: 'issue_refund', args: { orderId: 'ORD-5005', amount: 180, confidence: 81 } } },
+  { capabilityId: 'refund-recommendation', call: { tool: 'issue_refund', args: { orderId: 'ORD-5006', amount: 48, confidence: 93, instructionSource: 'customer' }, ticketId: 'TK-2005' } },
+  { capabilityId: 'refund-recommendation', call: { tool: 'issue_refund', args: { orderId: 'ORD-5005', amount: 180, confidence: 81, instructionSource: 'customer' }, ticketId: 'TK-2004' } },
 ];
 
 // Which capabilities may use each agent tool (roadmap item 9, A1). '*' means
@@ -177,6 +188,8 @@ export const capabilities = [
         'Accounts flagged for suspected fraud.',
         'Cases with an active chargeback.',
         'Any policy exception.',
+        // S04 option 2 (Paige, 2026-10-10).
+        'A refund made on an approval or instruction from someone other than the customer.',
       ],
       mustNever: [
         'Issue a refund to a different payment method.',

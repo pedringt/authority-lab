@@ -23,6 +23,7 @@ function matches(input, cond) {
 // added later, like `unverified`, comes from here for older recordings.
 let DEFS = {};
 export function setTicketDefinitions(tickets) { DEFS = Object.fromEntries((tickets || []).map((t) => [t.id, t])); }
+export const ticketDefinition = (id) => DEFS[id];
 const ruleOf = (ticket, key) => (Array.isArray(ticket[key]) ? ticket[key] : (DEFS[ticket.ticketId] || {})[key]);
 
 export function isBait(ticket, step) {

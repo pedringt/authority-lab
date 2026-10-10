@@ -49,7 +49,7 @@ export function enqueue(state, capabilityId, call, check) {
   const item = {
     id: `WA-${String(items(state).length + 1).padStart(3, '0')}`,
     capabilityId,
-    call: { tool: call.tool, args: { ...(call.args || {}) }, claims: call.claims ? { ...call.claims } : undefined },
+    call: { tool: call.tool, args: { ...(call.args || {}) }, claims: call.claims ? { ...call.claims } : undefined, ...(call.ticketId != null ? { ticketId: call.ticketId } : {}) },
     requestedBy: 'ai',
     date: state.today,
     // What a person is being asked to accept: every reason it needs a person,

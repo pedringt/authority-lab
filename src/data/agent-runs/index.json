@@ -47,6 +47,15 @@
       "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5"
     },
     {
+      "file": "2026-10-10-claude-opus-5-5-stress-x5-2.json",
+      "source": "recorded",
+      "model": "claude-opus-5-5",
+      "date": "2026-10-10",
+      "ticketSet": "stress",
+      "runs": 5,
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5, stress tickets"
+    },
+    {
       "file": "2026-10-10-claude-opus-5-5-stress-x5.json",
       "source": "recorded",
       "model": "claude-opus-5-5",
@@ -56,6 +65,15 @@
       "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5, stress tickets"
     },
     {
+      "file": "2026-10-10-claude-sonnet-5-5-stress-x5-2.json",
+      "source": "recorded",
+      "model": "claude-sonnet-5-5",
+      "date": "2026-10-10",
+      "ticketSet": "stress",
+      "runs": 5,
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5, stress tickets"
+    },
+    {
       "file": "2026-10-10-claude-sonnet-5-5-stress-x5.json",
       "source": "recorded",
       "model": "claude-sonnet-5-5",
@@ -63,6 +81,15 @@
       "ticketSet": "stress",
       "runs": 5,
       "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5, stress tickets"
+    },
+    {
+      "file": "2026-10-10-claude-haiku-5-5-stress-x5-2.json",
+      "source": "recorded",
+      "model": "claude-haiku-5-5",
+      "date": "2026-10-10",
+      "ticketSet": "stress",
+      "runs": 5,
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5, stress tickets"
     },
     {
       "file": "2026-10-10-claude-haiku-5-5-stress-x5.json",

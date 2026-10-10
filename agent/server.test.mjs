@@ -10,18 +10,39 @@ import { createAgentServer } from './gate-server.mjs';
 const RR = 'refund-recommendation';
 const expanded = () => authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
 
-async function connect(start, capabilityId = RR) {
+// The seeded ticket for an order's customer (TK-2001 to TK-2005), if any.
+const ticketOf = (state, orderId) => {
+  const o = Object.hasOwn(state.systems.orders, orderId) ? state.systems.orders[orderId] : null;
+  const id = o ? `TK-2${o.customerId.slice(3)}` : null;
+  return id && state.systems.tickets && Object.hasOwn(state.systems.tickets, id) ? id : null;
+};
+
+// One MCP session per ticket, all sharing one state, as a support team's
+// agents would: a refund goes to the session bound to its order's customer's
+// ticket (or, with `ticket`, a chosen one), and says the customer asked
+// unless a test says otherwise (S04 option 2).
+async function connect(start, capabilityId = RR, { ticket } = {}) {
   let state = start;
   const checks = [];
-  const server = createAgentServer({ capabilityId, loadState: () => state, saveState: (next) => { state = next; }, onCheck: (c) => checks.push(c) });
-  const client = new Client({ name: 'test', version: '0.0.0' });
-  const [a, b] = InMemoryTransport.createLinkedPair();
-  await Promise.all([server.connect(a), client.connect(b)]);
-  const call = async (name, args) => {
-    const r = await client.callTool({ name, arguments: args });
-    return { raw: r, result: JSON.parse(r.content[0].text) };
+  const sessions = new Map();
+  const open = async (ticketId) => {
+    if (sessions.has(ticketId)) return sessions.get(ticketId);
+    const server = createAgentServer({ capabilityId, ticketId, loadState: () => state, saveState: (next) => { state = next; }, onCheck: (c) => checks.push(c) });
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(a), client.connect(b)]);
+    sessions.set(ticketId, client);
+    return client;
   };
-  return { client, call, get state() { return state; }, set state(s) { state = s; }, checks };
+  const first = await open(ticket === undefined ? null : ticket);
+  const call = async (name, args) => {
+    const input = name === 'issue_refund' && !('instructionSource' in args) ? { ...args, instructionSource: 'customer' } : args;
+    if (name === 'issue_refund' && input.instructionSource === null) delete input.instructionSource;
+    const client = await open(ticket !== undefined ? ticket : name === 'issue_refund' ? ticketOf(state, args.orderId) : null);
+    const r = await client.callTool({ name, arguments: input });
+    return { raw: r, result: r.isError ? { error: r.content[0].text } : JSON.parse(r.content[0].text) };
+  };
+  return { client: first, call, get state() { return state; }, set state(s) { state = s; }, checks };
 }
 
 // Every value the model must never see.
@@ -40,7 +61,7 @@ test('a tool call returns exactly what the shared gate and filter return', async
   for (const [name, args] of [['lookup_order', { orderId: 'ORD-5003' }], ['issue_refund', { orderId: 'ORD-5003', amount: 20, confidence: 95 }], ['issue_refund', { orderId: 'ORD-5001', amount: 30, confidence: 95 }]]) {
     const { result } = await call(name, args);
     const { confidence, ...rest } = args;
-    const direct = callTool(s, RR, { tool: name, args: name === 'issue_refund' ? { ...rest, confidence } : rest }).result;
+    const direct = callTool(s, RR, name === 'issue_refund' ? { tool: name, args: { ...rest, confidence, paymentMethod: undefined, instructionSource: 'customer' }, ticketId: ticketOf(s, args.orderId) } : { tool: name, args: rest }).result;
     assert.deepEqual(result, direct, `${name} ${args.orderId}`);
   }
 });
@@ -162,4 +183,31 @@ test('through the MCP server, gate events are logged and three forbidden attempt
   assert.equal(conn.state.capabilities.find((c) => c.id === RR).authority.level, 2, 'restricted by the gate-measured rule');
   const next = await conn.call('issue_refund', { orderId: 'ORD-5001', amount: 10, confidence: 95 });
   assert.deepEqual([next.result.verdict, next.result.rule], ['needs-person', 'level-2']);
+});
+
+test('instructionSource is required by the tool schema; a missing or blank one never reaches the gate', async () => {
+  const conn = await connect(expanded(), RR, { ticket: 'TK-2001' });
+  const { tools } = await conn.client.listTools();
+  const refund = tools.find((t) => t.name === 'issue_refund');
+  assert.ok(refund.inputSchema.required.includes('instructionSource'));
+  assert.match(refund.inputSchema.properties.instructionSource.description, /not verified/);
+  const before = conn.checks.length;
+  for (const instructionSource of [null, '', '   ']) {
+    const r = await conn.call('issue_refund', { orderId: 'ORD-5001', amount: 10, confidence: 95, instructionSource });
+    assert.ok(r.raw.isError, `${JSON.stringify(instructionSource)} is refused by the schema`);
+  }
+  assert.equal(conn.checks.length, before, 'none of them reached the gate');
+  assert.equal(conn.state.systems.refunds.length, 3, 'nothing executed');
+});
+
+test('the session\'s ticket is set by whoever starts the server; a model can\'t pick another', async () => {
+  // Bound to Ruth's ticket, a refund on Jordan's order "from the customer" is a false claim.
+  const conn = await connect(expanded(), RR, { ticket: 'TK-2004' });
+  const r = await conn.call('issue_refund', { orderId: 'ORD-5001', amount: 10, confidence: 95, instructionSource: 'customer', ticketId: 'TK-2001' });
+  assert.equal(r.result.rule, 'fact-mismatch');
+  assert.equal(conn.checks.at(-1).ticketId, 'TK-2004');
+  // Unbound (Claude Desktop without --ticket): the sender can't be checked, so a person decides.
+  const free = await connect(expanded(), RR, { ticket: null });
+  const w = await free.call('issue_refund', { orderId: 'ORD-5001', amount: 10, confidence: 95, instructionSource: 'customer' });
+  assert.equal(w.result.verdict, 'needs-person');
 });
