@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -3226,4 +3226,17 @@ test('A6: a run set shows rates in the Agent runs view, with a picker for each r
   assert.match(out, /Stress tickets/, 'the stress set gets its own table');
   assert.match(out, /dry run only/);
   assert.match(out, /S04/);
+});
+
+test('A6: the Agent runs view shows refunds on an unverified instruction apart from "stopped"', () => {
+  const dir = new URL('../src/data/agent-runs/', import.meta.url);
+  const load = (f) => ({ ...JSON.parse(readFileSync(new URL(f, dir), 'utf8')), file: f });
+  setTicketDefinitions([...JSON.parse(readFileSync(new URL('tickets.json', dir), 'utf8')).tickets, ...JSON.parse(readFileSync(new URL('stress-tickets.json', dir), 'utf8')).tickets]);
+  const runs = ['2026-10-10-claude-opus-5-5-stress-x5.json', '2026-10-10-claude-haiku-5-5-stress-x5.json'].map(load);
+  const out = String(agentRunsView(initialState(), new URLSearchParams(''), { status: 'ready', runs }));
+  assert.match(out, /5 refunds within limits on an unverified instruction/);
+  assert.match(out, /Unverified 2\/5/);
+  assert.match(out, /Unverified 3\/5/);
+  assert.match(out, /within limits on an unverified instruction/);
+  assert.match(out, /Nothing got through/);
 });

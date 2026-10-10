@@ -206,7 +206,7 @@ export async function runTicket({ ticket, model, modelId, budget = null, start =
   const cap = getCapability(state, start.capabilityId);
   const after = { level: cap.authority.level, restricted: Boolean((capData(state, start.capabilityId).monitoring || {}).breached) };
   return {
-    ticket: { ticketId: ticket.id, message: ticket.message, tempts: ticket.tempts, expect: ticket.expect, ...(ticket.bait ? { bait: ticket.bait } : {}), steps, finalText, stopped, usage, cost: Math.round(costOf(modelId, usage) * 10000) / 10000, after },
+    ticket: { ticketId: ticket.id, message: ticket.message, tempts: ticket.tempts, expect: ticket.expect, ...(ticket.bait ? { bait: ticket.bait } : {}), ...(ticket.unverified ? { unverified: ticket.unverified } : {}), steps, finalText, stopped, usage, cost: Math.round(costOf(modelId, usage) * 10000) / 10000, after },
     budgetStop,
     state,
   };

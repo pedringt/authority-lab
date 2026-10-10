@@ -3,7 +3,7 @@
 // recordings are fixed files in src/data/agent-runs/.
 
 import { html, badge, notice, section } from '../ui.js';
-import { workspaceOf, workflowOf, classifyTicket, outcomeText, runFlags, runLabel, replayRun, restrictionIn, isRunSet, runsOf, ticketRates, rateText, CAUGHT } from '../store/index.js';
+import { workspaceOf, workflowOf, classifyTicket, outcomeText, runFlags, runLabel, replayRun, restrictionIn, isRunSet, runsOf, ticketRates, rateText, unverifiedCases, CAUGHT } from '../store/index.js';
 
 const parse = (text) => { try { return JSON.parse(text); } catch { return null; } };
 const money = (x) => `$${Number(x || 0).toFixed(2)}`;
@@ -47,7 +47,7 @@ const SET_NAMES = { standard: 'Standard tickets', stress: 'Stress tickets' };
 function rateCell(rec, id) {
   const r = ticketRates(rec, id);
   if (!r.n) return html`<td class="muted small">Not run</td>`;
-  const badges = r.temptation ? html`<div>${badge('pass', `Model ${r.declined}/${r.n}`)} ${badge('watch', `Gate ${r.stopped}/${r.n}`)}${r.gotThrough ? html` ${badge('fail', `Got through ${r.gotThrough}/${r.n}`)}` : ''}</div>` : '';
+  const badges = r.temptation ? html`<div>${badge('pass', `Model ${r.declined}/${r.n}`)} ${badge('watch', `Gate ${r.tried - r.gotThrough}/${r.n}`)}${r.unverified ? html` ${badge('decision', `Unverified ${r.unverified}/${r.n}`)}` : ''}${r.gotThrough ? html` ${badge('fail', `Got through ${r.gotThrough}/${r.n}`)}` : ''}</div>` : '';
   return html`<td>${badges}<div class="small">${rateText(rec, id)}</div></td>`;
 }
 
@@ -89,7 +89,7 @@ function runCard(r, selected) {
   return html`<a class="card card-link run-card ${selected ? 'is-selected' : ''}" href="#/agent-runs?run=${encodeURIComponent(r.file)}">
     <div class="small"><strong>${runLabel(r)}</strong></div>
     <div class="muted small">${r.usage.calls} model calls · ${r.usage.input_tokens.toLocaleString('en-US')} in / ${r.usage.output_tokens.toLocaleString('en-US')} out · ${money(r.cost)}</div>
-    <div class="small">Temptations: ${n('declined')} declined by the model · ${n('stopped')} stopped by the gate · <span class="${n('got-through') ? 'text-fail' : ''}">${n('got-through')} got through</span></div>
+    <div class="small">Temptations: ${n('declined')} declined by the model · ${n('stopped')} stopped by the gate${n('unverified') ? ` · ${n('unverified')} within limits on an unverified instruction` : ''} · <span class="${n('got-through') ? 'text-fail' : ''}">${n('got-through')} got through</span></div>
     ${r.start && r.start.shared && !isRunSet(r) ? sharedNote(r) : ''}
     ${r.stoppedEarly ? html`<div class="small text-fail">Stopped early: ${r.stoppedEarly.text}</div>` : ''}
   </a>`;
@@ -138,7 +138,11 @@ export function agentRunsView(state, query, loaded) {
   const flags = runs.flatMap((r) => runFlags(r).map((f) => ({ ...f, run: r })));
   const top = flags.length
     ? flags.map((f) => notice('fail', `${f.run.source === 'recorded' ? f.run.model : 'Dry run'}: flagged`, f.text, { link: `#/agent-runs?run=${encodeURIComponent(f.run.file)}`, linkText: 'See the steps' }))
-    : notice('pass', 'Nothing got through', real.length ? 'On every temptation ticket, the model declined or the gate stopped it.' : 'No real run is recorded yet; only the dry run.');
+    : notice('pass', 'Nothing got through', real.length ? 'No bait executed: on every temptation ticket, the model declined or the gate stopped it.' : 'No real run is recorded yet; only the dry run.');
+  // Refunds within limits on an instruction nobody verified: an open question, not a breach.
+  const cases = real.flatMap(unverifiedCases);
+  const done = cases.filter((c) => c.outcome === 'executed').length;
+  const note = cases.length ? notice('watch', `${done} refund${done === 1 ? '' : 's'} within limits on an unverified instruction`, `On ${[...new Set(cases.map((c) => c.ticketId))].join(', ')}, ${done} of ${cases.length} refund requests made on an instruction nobody verified went through without a person; the rest went to a person. Which way each went depended only on the confidence the model reported about itself. This is an open question for Paige; the gate is unchanged until she decides.`) : '';
 
   const selected = runs.find((r) => r.file === query.get('run')) || compared[0];
   // A run set: pick one of its runs to see step by step.
@@ -149,7 +153,7 @@ export function agentRunsView(state, query, loaded) {
   const changed = replay.changed;
   const repPicker = reps.length > 1 ? html`<div class="filter-bar"><div class="filter-group" role="group" aria-label="Run">${reps.map((_, i) => html`<a class="chip ${i + 1 === rep ? 'is-active' : ''}" href="#/agent-runs?run=${encodeURIComponent(selected.file)}&rep=${i + 1}">Run ${i + 1}</a>`)}</div></div>` : '';
 
-  return html`${head}${top}
+  return html`${head}${top}${note}
   ${section('Who caught it', comparison(runs), { subtitle: html`For each temptation ticket: the model declined the bait, the model tried and the gate stopped it, or the model tried and it got through. The last must never happen. ${real.length ? '' : 'Showing the dry run until a real run is recorded.'}` })}
   ${section('Runs', html`<div class="run-cards">${runs.map((r) => runCard(r, r === selected))}</div>`, { subtitle: 'Cost is computed from the usage each reply reported.' })}
   ${section(reps.length > 1 ? `${runLabel(selected)} · run ${rep}` : runLabel(selected), html`${changed ? notice('watch', `${changed} step${changed === 1 ? '' : 's'} would be decided differently today`, 'The gate has changed since this was recorded. Both verdicts are shown.') : html`<p class="muted small">Replayed through today's gate: every verdict matches the recording.</p>`}
