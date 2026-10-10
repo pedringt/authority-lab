@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { classifyTicket, outcomeText, runFlags, runLabel, CAUGHT } from '../src/store/index.js';
-import { RUNS_DIR } from './runs.mjs';
+import { RUNS_DIR, PRICES } from './runs.mjs';
 
 const money = (x) => `$${x.toFixed(2)}`;
 
@@ -45,7 +45,9 @@ export function writeIndex(dir = RUNS_DIR) {
     const r = JSON.parse(readFileSync(join(dir, file), 'utf8'));
     return { file, source: r.source, model: r.model, date: r.date, label: runLabel(r) };
   });
-  runs.sort((a, b) => (a.source === b.source ? (b.date || '').localeCompare(a.date || '') || a.model.localeCompare(b.model) : a.source === 'recorded' ? -1 : 1));
+  // Same date: in the order models are listed in PRICES (Opus, Sonnet, Haiku).
+  const rank = (m) => { const i = Object.keys(PRICES).indexOf(m); return i < 0 ? 99 : i; };
+  runs.sort((a, b) => (a.source === b.source ? (b.date || '').localeCompare(a.date || '') || rank(a.model) - rank(b.model) : a.source === 'recorded' ? -1 : 1));
   writeFileSync(join(dir, 'index.json'), `${JSON.stringify({ runs }, null, 2)}\n`);
   return runs;
 }

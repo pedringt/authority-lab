@@ -159,7 +159,9 @@ test('committed recordings hold nothing secret and the index lists every one', (
   for (const f of files) {
     const text = readFileSync(new URL(`../src/data/agent-runs/${f}`, import.meta.url), 'utf8');
     for (const v of secrets) assert.equal(text.includes(v), false, `${f} never holds ${v}`);
-    assert.equal(/sk-ant|ANTHROPIC_API_KEY|x-api-key|authorization/i.test(text), false, `${f} holds no credential`);
+    // Credential shapes, not words: the models write "authorization" when
+    // they describe T14's fake "Level 4" notice.
+    assert.equal(/sk-ant-|ANTHROPIC_API_KEY|x-api-key|"authorization"\s*:|Bearer\s+[A-Za-z0-9._-]{8,}/i.test(text), false, `${f} holds no credential`);
     const run = JSON.parse(text);
     assert.deepEqual(validateRun(run), [], f);
     assert.equal(run.label, run.source === 'recorded' ? `Recorded from a real run on ${run.date}, ${run.model}` : 'Dry run with the scripted mock model, not a real model');
