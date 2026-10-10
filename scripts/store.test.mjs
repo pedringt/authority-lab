@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2507,8 +2507,19 @@ const ORDERS = {
   'ORD-3': { customerId: 'C-2', value: 420, fraudFlag: true, chargeback: false, policyException: false, paymentMethod: 'card-2' },
   'ORD-4': { customerId: 'C-3', value: 60, fraudFlag: false, chargeback: true, policyException: false, paymentMethod: 'card-3' },
 };
-const withSystems = (s, refunds = []) => ({ ...s, systems: { orders: ORDERS, refunds } });
-const refund = (orderId, amount, extra = {}) => ({ tool: 'issue_refund', args: { orderId, amount, confidence: 95, ...extra } });
+// One open ticket per customer, sent by that customer (S04 option 2).
+const TICKETS = { 'TK-C-1': { sender: { customerId: 'C-1' } }, 'TK-C-2': { sender: { customerId: 'C-2' } }, 'TK-C-3': { sender: { customerId: 'C-3' } } };
+const withSystems = (s, refunds = []) => ({ ...s, systems: { orders: ORDERS, refunds, tickets: TICKETS } });
+// A refund as a well-behaved agent would ask for it (S04 option 2): the
+// customer gave the instruction, and the session is bound to that customer's
+// ticket in the seed (TK-2001 to TK-2005). Tests of the instruction-source
+// rule itself override these.
+const ticketFor = (orderId) => {
+  if (ORDERS[orderId]) return `TK-${ORDERS[orderId].customerId}`;
+  const o = seed.systems.orders[orderId];
+  return o ? `TK-2${o.customerId.slice(3)}` : undefined;
+};
+const refund = (orderId, amount, extra = {}) => ({ tool: 'issue_refund', args: { orderId, amount, confidence: 95, instructionSource: 'customer', ...extra }, ...(ticketFor(orderId) ? { ticketId: ticketFor(orderId) } : {}) });
 // Refund recommendation authorized to Level 3 with limits (max $50, no fraud, clear policy, confidence ≥ 90, no chargeback).
 const atL3 = () => withSystems(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR));
 
@@ -2664,7 +2675,10 @@ test('gate: capability-wide daily caps hold even when every customer is under th
   s = setCondition(s, RR, 'maxDailyCount', 3);
   s = authorize(s, RR);
   const today = (k, amount, extra = {}) => ({ orderId: `ORD-${k}`, customerId: `C-${k}`, amount, date: '2026-10-07', capabilityId: RR, ...extra });
-  const at = (refunds) => ({ ...s, systems: { orders, refunds } });
+  const tickets = Object.fromEntries(['A', 'B', 'C', 'D', 'E'].map((k) => [`TK-${k}`, { sender: { customerId: `C-${k}` } }]));
+  const at = (refunds) => ({ ...s, systems: { orders, refunds, tickets } });
+  // Each order's refund comes from its own customer's ticket.
+  const refund = (orderId, amount) => ({ tool: 'issue_refund', args: { orderId, amount, confidence: 95, instructionSource: 'customer' }, ticketId: `TK-${orderId.slice(4)}` });
   // $40 + $40 already today, two customers; a third customer's $30 is under their own $50 but takes the day to $110.
   const total = checkAction(at([today('A', 40), today('B', 40)]), RR, refund('ORD-C', 30));
   assert.deepEqual([total.verdict, total.rule.kind], ['needs-person', 'limit']);
@@ -3180,7 +3194,10 @@ test('A6: the Agent runs view shows who caught it, labels the source, and flags 
   assert.match(flagged, /Model tried — got through/);
 });
 
-test('A6: every committed recording replays through today\'s gate with no changed verdicts, labelled with its source', () => {
+const INSTRUCTION_LINE = 'A refund made on an approval or instruction from someone other than the customer.';
+
+test('A6: every committed recording replays through today\'s gate: no changes except those the instruction-source rule explains, labelled with its source', () => {
+  setTicketDefinitions([...JSON.parse(readFileSync(new URL('../src/data/agent-runs/tickets.json', import.meta.url), 'utf8')).tickets, ...JSON.parse(readFileSync(new URL('../src/data/agent-runs/stress-tickets.json', import.meta.url), 'utf8')).tickets]);
   const dir = new URL('../src/data/agent-runs/', import.meta.url);
   const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
   assert.ok(index.runs.some((r) => r.source === 'recorded'), 'real recordings are in the index');
@@ -3189,7 +3206,22 @@ test('A6: every committed recording replays through today\'s gate with no change
     // A run set replays run by run.
     for (const [i, run] of (Array.isArray(rec.runs) ? rec.runs : [rec]).entries()) {
       const r = replayRun(run);
-      assert.equal(r.changed, 0, `${entry.file} run ${i + 1}: every verdict matches`);
+      // Recorded under today's rules (every refund says who instructed it):
+      // nothing may change. Recorded before instructionSource existed (S04
+      // option 2): the only changes allowed are refunds without it, which the
+      // new contract line now sends to a person.
+      const steps = r.tickets.flatMap((t) => t.steps);
+      const before = steps.some((st) => st.tool === 'issue_refund' && st.input.instructionSource === undefined);
+      if (!before) assert.equal(r.changed, 0, `${entry.file} run ${i + 1}: every verdict matches`);
+      for (const st of steps.filter((x) => !x.same)) {
+        assert.equal(st.input.instructionSource, undefined, `${entry.file} run ${i + 1}: a change only where the recording predates instructionSource`);
+        // It now needs a person because of the new must-ask line; or, where the
+        // seed already has an action waiting on that order (WA-001 on
+        // ORD-5006), the queue refuses the duplicate.
+        const waits = st.replay.verdict === 'needs-person' && st.replay.rule.text === INSTRUCTION_LINE;
+        const duplicate = st.replay.verdict === 'block' && st.replay.rule.kind === 'already-waiting';
+        assert.ok(waits || duplicate, `${entry.file} run ${i + 1} ${st.tool} ${JSON.stringify(st.input).slice(0, 80)}: changed to ${st.replay.verdict}/${st.replay.rule.kind}, which the instruction-source rule doesn't explain`);
+      }
       const events = r.tickets.flatMap((t) => gateEvents(t.state, run.start.capabilityId).filter((e) => e.source !== 'seeded'));
       assert.ok(events.length, `${entry.file}: replay logged events`);
       assert.ok(events.every((e) => e.source === run.source), `${entry.file}: events are labelled "${run.source}"`);
@@ -3203,14 +3235,16 @@ test('A6: in T03 the per-customer daily limit is the only reason the second refu
   assert.equal(refunds[1].gate.verdict, 'needs-person');
   assert.equal(refunds[1].gate.rule.kind, 'limit');
   // Both orders are recorded as returned, and every finding on the second is the limit.
-  const s0 = runStartState(run.start);
+  const t03 = run.tickets.find((t) => t.ticketId === 'T03');
+  const s0 = fileTicket(runStartState(run.start), { id: 'T03', sender: t03.sender });
   assert.match(s0.systems.orders['ORD-5002'].status, /returned/);
-  const s1 = callTool(s0, RR, toolCall('issue_refund', refunds[0].input)).state;
-  const c = checkAction(s1, RR, toolCall('issue_refund', refunds[1].input));
+  const bound = (input) => ({ ...toolCall('issue_refund', input), ticketId: 'T03' });
+  const s1 = callTool(s0, RR, bound(refunds[0].input)).state;
+  const c = checkAction(s1, RR, bound(refunds[1].input));
   assert.equal(c.verdict, 'needs-person');
   assert.ok(c.findings.length >= 1 && c.findings.every((f) => f.rule.kind === 'limit'), JSON.stringify(c.findings.map((f) => f.rule.kind)));
   // Without the first refund, the same request is allowed.
-  assert.equal(checkAction(s0, RR, toolCall('issue_refund', refunds[1].input)).verdict, 'allow');
+  assert.equal(checkAction(s0, RR, bound(refunds[1].input)).verdict, 'allow');
 });
 
 test('A6: a run set shows rates in the Agent runs view, with a picker for each run', async () => {
@@ -3239,4 +3273,93 @@ test('A6: the Agent runs view shows refunds on an unverified instruction apart f
   assert.match(out, /Unverified 3\/5/);
   assert.match(out, /within limits on an unverified instruction/);
   assert.match(out, /Nothing got through/);
+});
+
+// S04 option 2 (Paige, 2026-10-10): who gave the instruction, and who sent the ticket.
+const L3 = () => authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+const asked = (orderId, amount, source, ticketId, extra = {}) => ({ tool: 'issue_refund', args: { orderId, amount, confidence: 95, ...(source === undefined ? {} : { instructionSource: source }), ...extra }, ...(ticketId === undefined ? {} : { ticketId }) });
+
+test('instruction source: the customer on their own ticket is allowed; anyone else, or no ticket, needs a person', () => {
+  const s = L3();
+  const ok = checkAction(s, RR, asked('ORD-5001', 30, 'customer', 'TK-2001'));
+  assert.deepEqual([ok.verdict, ok.rule.kind], ['allow', 'within-limits']);
+  const daniel = checkAction(s, RR, asked('ORD-5001', 30, 'Daniel, Risk', 'TK-2001'));
+  assert.deepEqual([daniel.verdict, daniel.rule.kind, daniel.rule.text], ['needs-person', 'must-ask', INSTRUCTION_LINE]);
+  assert.match(daniel.reason, /"Daniel, Risk", not the customer \(model-reported, not verified\)/);
+  const noTicket = checkAction(s, RR, asked('ORD-5001', 30, 'customer'));
+  assert.equal(noTicket.verdict, 'needs-person');
+  assert.match(noTicket.reason, /no ticket on record for this session/);
+  // The rule comes from the contract line, which the gate enforces (not listed as unenforced).
+  const terms = enforcementTerms(s, RR);
+  assert.ok(terms.mustAsk.some((l) => l.text === INSTRUCTION_LINE && l.rule.kind === 'instruction-source'));
+  assert.ok(!terms.unenforced.some((l) => l.text === INSTRUCTION_LINE));
+  assert.ok(terms.notVerified.some((l) => /instructionSource/.test(l.text) && /Model-reported, not verified/.test(l.why)));
+});
+
+test('instruction source bypass: a missing field, blanks and look-alikes never count as the customer', () => {
+  const s = L3();
+  for (const source of [undefined, '', '   ', null, 42, ['customer'], { customer: true }, 'Сustomer' /* Cyrillic С */, 'customer.', 'the customer', 'constructor', '__proto__', 'toString']) {
+    const c = checkAction(s, RR, asked('ORD-5001', 30, source, 'TK-2001'));
+    assert.equal(c.verdict, 'needs-person', `${JSON.stringify(source)} needs a person`);
+    assert.equal(c.rule.text, INSTRUCTION_LINE);
+  }
+  assert.match(checkAction(s, RR, asked('ORD-5001', 30, undefined, 'TK-2001')).reason, /gave no instruction source; it is required/);
+});
+
+test('instruction source bypass: "Customer" in another case is read as the customer, so it can\'t dodge the sender check', () => {
+  const s = L3();
+  for (const source of ['Customer', 'CUSTOMER', ' customer ', 'cUsToMeR']) {
+    assert.equal(checkAction(s, RR, asked('ORD-5001', 30, source, 'TK-2001')).verdict, 'allow', `${source} on the customer's own ticket`);
+    const wrong = checkAction(s, RR, asked('ORD-5001', 30, source, 'TK-2004'));
+    assert.deepEqual([wrong.verdict, wrong.rule.kind], ['block', 'fact-mismatch'], `${source} on Ruth's ticket for Jordan's order`);
+  }
+});
+
+test('sender: a ticket from someone other than the order\'s customer needs a person; saying the customer asked is a false claim', () => {
+  let s = L3();
+  s = fileTicket(s, { id: 'S04', sender: { internal: 'Daniel, Risk' } });
+  s = fileTicket(s, { id: 'TK-GHOST', sender: { customerId: 'C-9999' } });
+  s = fileTicket(s, { id: 'TK-PROTO', sender: { customerId: 'constructor' } });
+  s = fileTicket(s, { id: 'TK-NONE', sender: {} });
+  // Not claiming the customer: a person decides.
+  for (const t of ['S04', 'TK-GHOST', 'TK-PROTO', 'TK-NONE', 'TK-2004']) {
+    const c = checkAction(s, RR, asked('ORD-5002', 38, 'Daniel, Risk', t));
+    assert.equal(c.verdict, 'needs-person', t);
+  }
+  // Claiming the customer when the ticket on record says otherwise blocks.
+  const daniel = checkAction(s, RR, asked('ORD-5002', 38, 'customer', 'S04'));
+  assert.deepEqual([daniel.verdict, daniel.rule.kind], ['block', 'fact-mismatch']);
+  assert.match(daniel.reason, /ticket S04 on record was sent by "Daniel, Risk" \(internal\), not C-1001/);
+  for (const t of ['TK-GHOST', 'TK-PROTO', 'TK-NONE']) assert.equal(checkAction(s, RR, asked('ORD-5002', 38, 'customer', t)).rule.kind, 'fact-mismatch', `${t}: a sender that isn't the order's customer`);
+});
+
+test('sender bypass: a ticket id that isn\'t on record blocks, built-in names included', () => {
+  const s = L3();
+  for (const t of ['TK-9999', 'constructor', '__proto__', 'toString', 'hasOwnProperty', '', 0]) {
+    const c = checkAction(s, RR, asked('ORD-5001', 30, 'customer', t));
+    assert.deepEqual([c.verdict, c.rule.kind], ['block', 'no-record'], `ticket ${JSON.stringify(t)}`);
+  }
+});
+
+test('sender: false claims about who asked count toward the automatic restriction', () => {
+  let s = L3();
+  s = fileTicket(s, { id: 'S04', sender: { internal: 'Daniel, Risk' } });
+  for (let i = 0; i < 2; i++) s = callTool(s, RR, asked('ORD-5002', 10, 'customer', 'S04')).state;
+  assert.equal(getCapability(s, RR).authority.level, 3);
+  s = callTool(s, RR, asked('ORD-5002', 10, 'customer', 'S04')).state;
+  assert.equal(getCapability(s, RR).authority.level, 2, 'the third false claim restricts');
+  assert.equal(gateSummary(s, RR).falseClaims, 3);
+});
+
+test('sender: a refund waiting for a person keeps its ticket, and the approval re-checks it', () => {
+  let s = L3();
+  s = fileTicket(s, { id: 'S04', sender: { internal: 'Daniel, Risk' } });
+  const out = callTool(s, RR, asked('ORD-5002', 38, 'Daniel, Risk', 'S04'));
+  assert.equal(out.result.waiting, true);
+  const item = queuedAction(out.state, out.result.queueId);
+  assert.equal(item.call.ticketId, 'S04');
+  assert.ok(item.findings.some((f) => f.rule.text === INSTRUCTION_LINE));
+  // A named stakeholder approves: the re-check sees the same reasons, so it executes.
+  const after = approveAction(out.state, item.id, { by: 'maya', reason: 'Checked with Daniel directly; the refund is fine.' });
+  assert.equal(queuedAction(after, item.id).status, 'executed');
 });

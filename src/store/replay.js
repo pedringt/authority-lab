@@ -7,7 +7,8 @@
 
 import { initialState } from './state.js';
 import { selectDecision, authorize } from './decisions.js';
-import { callTool } from './tools.js';
+import { callTool, fileTicket } from './tools.js';
+import { ticketDefinition } from './agentruns.js';
 
 // The starting state a recording names: the seed, optionally after the
 // capability's pending decision is authorized with the given option.
@@ -22,8 +23,8 @@ export function runStartState(start) {
 // apart from the arguments.
 export function toolCall(tool, input = {}) {
   if (tool === 'issue_refund') {
-    const { orderId, amount, confidence, paymentMethod, claims } = input;
-    return { tool, args: { orderId, amount, confidence, paymentMethod }, claims };
+    const { orderId, amount, confidence, paymentMethod, instructionSource, claims } = input;
+    return { tool, args: { orderId, amount, confidence, paymentMethod, instructionSource }, claims };
   }
   if (tool === 'escalate_to_human') return { tool, args: { reason: input.reason, orderId: input.orderId } };
   return { tool, args: { orderId: input.orderId } };
@@ -35,9 +36,14 @@ export function toolCall(tool, input = {}) {
 export function replayTicket(run, ticket, from = null) {
   const source = run.source === 'recorded' ? 'recorded' : 'mock';
   let state = from || runStartState(run.start);
+  // The ticket's sender: from the recording, or (for recordings made before
+  // senders existed) today's ticket definition. Filed, then bound to every call.
+  const sender = ticket.sender || (ticketDefinition(ticket.ticketId) || {}).sender;
+  if (sender) state = fileTicket(state, { id: ticket.ticketId, sender });
+  const ticketId = sender ? ticket.ticketId : undefined;
   const steps = ticket.steps.map((step) => {
     if (step.refusedBySchema) return { ...step, replay: null, same: true };
-    const out = callTool(state, run.start.capabilityId, toolCall(step.tool, step.input), { source });
+    const out = callTool(state, run.start.capabilityId, { ...toolCall(step.tool, step.input), ...(ticketId ? { ticketId } : {}) }, { source });
     state = out.state;
     const replay = { verdict: out.check.verdict, rule: { kind: out.check.rule.kind, text: out.check.rule.text }, reason: out.check.reason };
     const same = Boolean(step.gate) && step.gate.verdict === replay.verdict && step.gate.rule.kind === replay.rule.kind;

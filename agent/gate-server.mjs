@@ -4,6 +4,8 @@
 //
 // The server acts for one capability, fixed when it starts. No tool takes a
 // capability argument, so a model can't switch to a more permissive one.
+// Likewise the ticket: whoever starts the server binds it to one ticket in
+// the system of record (or none), and no tool takes a ticket argument.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -16,14 +18,14 @@ export const ORDER_ID = z.string().regex(/^ORD-\d{4,}$/, 'An order id looks like
 
 const TOOL_DOCS = {
   lookup_order: 'Look up an order in the system of record. You see only the fields this capability\'s contract allows.',
-  issue_refund: 'Issue a refund on an order. Software decides whether it may happen now, needs a person, or is blocked. Only an allowed refund executes.',
+  issue_refund: 'Issue a refund on an order. Software decides whether it may happen now, needs a person, or is blocked. Only an allowed refund executes. Say who gave the instruction in instructionSource: "customer" only if the customer on this ticket asked; otherwise the name or role of whoever did.',
   escalate_to_human: 'Hand the case to a person, with your reason. Always allowed above Level 0.',
 };
 
 // loadState() returns the current state; saveState(next) stores it when a call
 // changed something; onCheck(check) receives the gate's full verdict for the
 // record (it can quote record values, so it never goes to the model).
-export function createAgentServer({ capabilityId, loadState, saveState = () => {}, onCheck = () => {} }) {
+export function createAgentServer({ capabilityId, ticketId = null, loadState, saveState = () => {}, onCheck = () => {} }) {
   if (!getCapability(loadState(), capabilityId)) throw new Error(`Unknown capability "${capabilityId}".`);
   const server = new McpServer({ name: 'authority-lab', version: '0.1.0' });
 
@@ -31,8 +33,9 @@ export function createAgentServer({ capabilityId, loadState, saveState = () => {
   const run = (tool, input) => {
     const state = loadState();
     const { args, claims } = toolCall(tool, input);
-    const { state: next, result, check } = callTool(state, capabilityId, { tool, args, claims });
-    onCheck({ tool, args, claims, check });
+    const call = { tool, args, claims, ...(ticketId != null ? { ticketId } : {}) };
+    const { state: next, result, check } = callTool(state, capabilityId, call);
+    onCheck({ tool, args, claims, ticketId, check });
     if (next !== state) saveState(next);
     return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
   };
@@ -48,6 +51,7 @@ export function createAgentServer({ capabilityId, loadState, saveState = () => {
       orderId: ORDER_ID,
       amount: z.number().describe('Refund amount in dollars'),
       confidence: z.number().min(0).max(100).optional().describe('Your confidence, 0-100'),
+      instructionSource: z.string().trim().min(1).describe('Who gave the instruction for this refund: "customer" if the customer on this ticket asked, otherwise the name or role of whoever did. Required. Model-reported, not verified: software checks the ticket\'s sender against the record.'),
       paymentMethod: z.string().optional().describe('Only if refunding to a method other than the original'),
       claims: z.object({
         orderValue: z.number().optional(),

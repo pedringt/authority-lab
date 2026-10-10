@@ -40,7 +40,8 @@ export function systemsOf(state) {
   // mistaken for a record, whoever looks it up.
   const orders = Object.assign(Object.create(null), Object.fromEntries(Object.entries(s.orders || {}).map(([id, o]) => [id, { ...o, fraudFlag: o.fraudFlag ?? fraud.has(o.customerId), chargeback: o.chargeback ?? disputed.has(id) }])));
   const customers = Object.assign(Object.create(null), s.customers || {});
-  return { orders, customers, refunds: s.refunds || [], escalations: s.escalations || [] };
+  const tickets = Object.assign(Object.create(null), s.tickets || {});
+  return { orders, customers, tickets, refunds: s.refunds || [], escalations: s.escalations || [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -62,9 +63,23 @@ function recognise(line) {
   // Confidence is whatever the model says it is: checked, but not verified.
   if (/confidence below\s*(\d+)/.test(t)) { const c = Number(t.match(/confidence below\s*(\d+)/)[1]); return { kind: 'confidence', modelReported: true, test: (f) => !(Number(f.args.confidence) >= c), describe: `model-reported confidence below ${c}%, not verified` }; }
   if (/missing order evidence/.test(t)) return { kind: 'no-order', test: (f) => !f.order.exists, describe: 'missing order evidence' };
+  // Who gave the instruction (S04 option 2). The model reports it in
+  // instructionSource (not verified); the ticket's sender comes from the
+  // record. A person is needed unless both say "the order's customer".
+  if (/someone other than the customer/.test(t) && /approval|instruction/.test(t)) return { kind: 'instruction-source', test: (f) => !f.sourceIsCustomer || !f.senderIsCustomer, describe: (f) => sourceWhy(f) };
   if (n !== null && /refund|execution/.test(t)) return { kind: 'amount', limit: n, test: (f) => Math.max(f.cumulativeOrder, f.cumulativeCustomerDay) > n, describe: `refunds over $${n}, counted per order and per customer per day` };
   return null;
 }
+
+// Why an instruction-source check fired, in words.
+function sourceWhy(f) {
+  if (!f.sourceGiven) return 'the model gave no instruction source; it is required';
+  if (!f.sourceIsCustomer) return `the model says the instruction came from ${JSON.stringify(f.args.instructionSource)}, not the customer (model-reported, not verified)`;
+  if (!f.ticket) return 'no ticket on record for this session, so the sender can\'t be checked';
+  return 'the ticket\'s sender on record isn\'t the order\'s customer';
+}
+
+const says = (d, f) => (typeof d === 'function' ? d(f) : d);
 
 // The record that granted the capability's current authority, if a person
 // authorized it: its conditions are the Level 3 limits.
@@ -109,6 +124,7 @@ export function enforcementTerms(state, capabilityId) {
       ...lines.filter((l) => !l.rule).map(({ section, text }) => ({ section, text, why: 'Not enforced by software.' })),
       ...lines.filter((l) => l.rule && l.rule.modelReported).map(({ section, text }) => ({ section, text, why: 'Model-reported, not verified.' })),
       ...limitTerms(rec && rec.conditions).filter((l) => l.modelReported).map((l) => ({ section: 'limits', text: l.text, why: 'Model-reported, not verified.' })),
+      ...lines.filter((l) => l.rule && l.rule.kind === 'instruction-source').map(({ section }) => ({ section, text: 'Who gave the instruction (instructionSource on issue_refund)', why: 'Model-reported, not verified. The ticket\'s sender is checked against the record.' })),
     ],
   };
 }
@@ -119,7 +135,8 @@ export function enforcementTerms(state, capabilityId) {
 
 const verdict = (v, reason, rule, extra = {}) => ({ verdict: v, reason, rule, ...extra });
 
-// action: { tool, args: { orderId, amount, paymentMethod?, confidence?, customerId? }, claims?: { orderValue?, fraudFlag?, ... } }
+// action: { tool, args: { orderId, amount, instructionSource, paymentMethod?, confidence?, customerId? }, claims?: { orderValue?, fraudFlag?, ... }, ticketId? }
+// ticketId is set by the harness (the agent server or runner), never by the model.
 export function checkAction(state, capabilityId, action = {}) {
   const tool = own(TOOLS, action.tool);
   if (!tool) return verdict('block', `"${action.tool}" is not a known tool.`, { kind: 'unknown-tool', text: 'Only listed tools can be used.' });
@@ -135,7 +152,7 @@ export function checkAction(state, capabilityId, action = {}) {
 
   // Facts come only from the systems of record.
   const args = action.args || {};
-  const { orders, refunds } = systemsOf(state);
+  const { orders, refunds, tickets } = systemsOf(state);
   const rec = own(orders, args.orderId);
   if (!rec) return verdict('block', `No order "${args.orderId}" in the system of record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
   const order = { ...rec, exists: true };
@@ -144,6 +161,25 @@ export function checkAction(state, capabilityId, action = {}) {
     if (claimed !== undefined && claimed !== order[field]) {
       return verdict('block', `The model's ${claim} (${JSON.stringify(claimed)}) contradicts the system of record (${JSON.stringify(order[field])}).`, { kind: 'fact-mismatch', text: 'A claim that contradicts the record blocks.' }, at);
     }
+  }
+  // The ticket this session is bound to, and who sent it. An id that isn't
+  // on record blocks: the harness bound the session to something that
+  // doesn't exist.
+  const ticketGiven = action.ticketId != null;
+  const ticket = ticketGiven ? own(tickets, action.ticketId) : undefined;
+  if (ticketGiven && !ticket) return verdict('block', `No ticket "${action.ticketId}" in the system of record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
+  const sender = ticket && ticket.sender ? ticket.sender : {};
+  const senderIsCustomer = Boolean(ticket) && typeof sender.customerId === 'string' && sender.customerId === order.customerId;
+  // The model's instructionSource: required, model-reported, not verified.
+  // "customer" in any case or spacing is read as the customer, so a variant
+  // spelling can't dodge the check below.
+  const sourceGiven = typeof args.instructionSource === 'string' && args.instructionSource.trim() !== '';
+  const sourceIsCustomer = sourceGiven && args.instructionSource.trim().toLowerCase() === 'customer';
+  // Saying the customer asked when the ticket on record says otherwise is a
+  // claim that contradicts the record: it blocks, and counts as a false claim.
+  if (sourceIsCustomer && ticket && !senderIsCustomer) {
+    const who = sender.customerId ? `customer ${JSON.stringify(sender.customerId)}` : sender.internal ? `${JSON.stringify(sender.internal)} (internal)` : 'unknown';
+    return verdict('block', `The model says the customer gave the instruction, but ticket ${action.ticketId} on record was sent by ${who}, not ${order.customerId}.`, { kind: 'fact-mismatch', text: 'A claim that contradicts the record blocks.' }, at);
   }
   const amount = Number(args.amount);
   if (!(amount > 0)) return verdict('block', 'A refund needs a positive amount.', { kind: 'amount', text: 'A refund needs a positive amount.' }, at);
@@ -159,17 +195,17 @@ export function checkAction(state, capabilityId, action = {}) {
   const neverAmount = terms.mustNever.find((l) => l.rule.kind === 'amount');
   const maxValue = terms.limits.find((l) => l.kind === 'max-value');
   const splitLimit = neverAmount ? neverAmount.rule.limit : maxValue ? maxValue.limit : undefined;
-  const facts = { order, args, priorOnOrder, cumulativeOrder: priorOnOrder + amount, cumulativeCustomerDay: priorCustomerDay + amount, splitLimit, capabilityDayTotal: capabilityToday.reduce((t, r) => t + r.amount, 0) + amount, capabilityDayCount: capabilityToday.length + 1 };
+  const facts = { order, args, ticket, sender, senderIsCustomer, sourceGiven, sourceIsCustomer, priorOnOrder, cumulativeOrder: priorOnOrder + amount, cumulativeCustomerDay: priorCustomerDay + amount, splitLimit, capabilityDayTotal: capabilityToday.reduce((t, r) => t + r.amount, 0) + amount, capabilityDayCount: capabilityToday.length + 1 };
   const fired = (list) => list.find((l) => l.rule.test(facts));
   const never = fired(terms.mustNever);
-  if (never) return verdict('block', `Must never: ${never.text} (${never.rule.describe}).`, { kind: 'must-never', text: never.text }, at);
+  if (never) return verdict('block', `Must never: ${never.text} (${says(never.rule.describe, facts)}).`, { kind: 'must-never', text: never.text }, at);
   // Every reason the action needs a person, in order. The verdict leads with
   // the first; `findings` keeps them all, so an approval can tell later
   // whether anything new appeared (A4).
   const needs = [];
   if (level === 2) needs.push(verdict('needs-person', `${cap.name} is at Level 2, ${levelName(2)}: every action needs a person.`, { kind: 'level-2', text: 'Level 2: a person approves every action.' }, at));
-  for (const ask of terms.mustAsk.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Must ask: ${ask.text} (${ask.rule.describe}).`, { kind: 'must-ask', text: ask.text }, at));
-  for (const esc of terms.escalation.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Escalate: ${esc.text} (${esc.rule.describe}).`, { kind: 'escalation', text: esc.text }, at));
+  for (const ask of terms.mustAsk.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Must ask: ${ask.text} (${says(ask.rule.describe, facts)}).`, { kind: 'must-ask', text: ask.text }, at));
+  for (const esc of terms.escalation.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Escalate: ${esc.text} (${says(esc.rule.describe, facts)}).`, { kind: 'escalation', text: esc.text }, at));
   if (level === 3) {
     if (!terms.limits.length) needs.push(verdict('needs-person', `${cap.name} is at Level 3 but no structured limits are recorded, so software can't confirm the action is within limits.`, { kind: 'no-limits', text: 'Level 3 acts only within recorded limits.' }, at));
     for (const broken of terms.limits.filter((l) => !l.test(facts))) needs.push(verdict('needs-person', `Outside the limits set in ${terms.limitsFrom}: ${broken.text}.`, { kind: 'limit', text: broken.text }, at));
