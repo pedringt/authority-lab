@@ -91,7 +91,17 @@ node run.mjs --live --models claude-opus-5-5,claude-haiku-5-5 --budget 11.50
 
 ### Running on GitHub (the usual way)
 
-1. Commit `runs/request.json` to the PR: `{ "models": ["claude-haiku-5-5"], "budget": 0.5, "shared": true }`.
-2. Add the label `run-models` to the PR.
-3. Paige approves the waiting `model-runs` deployment on GitHub. Only then can the job read the API key.
-4. The job runs the tests, then the models, and commits the recordings and `runs/summary-<date>.md` to the PR branch. It also deletes the request.
+Paid runs have a standing budget of $25 per calendar month, tracked in `runs/ledger.md`.
+
+1. Claude proposes a run in the PR: the models, ticket sets, repeats, call count, expected and worst-case cost, and a cap that fits the month's remaining budget. Paige OKs the plan.
+2. The PR commits `runs/request.json`:
+
+   ```json
+   { "models": ["claude-haiku-5-5"], "tickets": ["standard", "stress"], "repeat": 5, "budget": 3, "shared": false }
+   ```
+
+3. Paige adds the label `run-models` herself.
+4. Paige approves the waiting `model-runs` deployment on GitHub. Only then can the job read the API key.
+5. The job runs the tests, then the models (refused if the cap won't fit the month's remaining budget), and commits the recordings, `runs/summary-<date>.md` and a ledger row to the PR branch. It also deletes the request.
+
+`node run.mjs --estimate --models a,b --tickets standard,stress --repeat 5` prints the call count, the estimate (also at the rate earlier runs actually cost) and the worst case.

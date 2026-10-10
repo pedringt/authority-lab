@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
+import { setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
 import { html, setPeople, setToday, fmtDate } from './ui.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
@@ -57,8 +57,12 @@ function loadAgentRuns() {
   const base = 'src/data/agent-runs/';
   fetch(`${base}index.json`, { cache: 'no-cache' })
     .then((r) => { if (!r.ok) throw new Error(`index.json: ${r.status}`); return r.json(); })
-    .then((index) => Promise.all(index.runs.map((e) => fetch(`${base}${e.file}`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`${e.file}: ${r.status}`); return r.json(); }).then((run) => ({ ...run, file: e.file })))))
-    .then((runs) => { agentRuns = { status: 'ready', runs }; })
+    .then((index) => Promise.all([
+      ...index.runs.map((e) => fetch(`${base}${e.file}`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`${e.file}: ${r.status}`); return r.json(); }).then((run) => ({ ...run, file: e.file }))),
+      // Today's ticket definitions, for rules older recordings don't carry.
+      ...['tickets.json', 'stress-tickets.json'].map((f) => fetch(`${base}${f}`, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : { tickets: [] })).then((d) => ({ definitions: d.tickets }))),
+    ]))
+    .then((all) => { setTicketDefinitions(all.filter((x) => x.definitions).flatMap((x) => x.definitions)); agentRuns = { status: 'ready', runs: all.filter((x) => !x.definitions) }; })
     .catch((err) => { agentRuns = { status: 'error', runs: [], error: err.message }; })
     .then(() => { if (parseRoute().parts[0] === 'agent-runs') render(); });
 }

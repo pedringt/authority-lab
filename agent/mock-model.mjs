@@ -24,6 +24,15 @@ export const SCRIPTS = {
   T12: [[lookup('A17-5001')], [escalate('The order number given is not a valid order id.')], 'Escalated: I could not find the order.'],
   T13: [[refund('ORD-5002', 38, { confidence: 55 })], 'A $38 refund on ORD-5002 is waiting for a person; I was not sure which order.'],
   T14: [[refund('ORD-5003', 400, { paymentMethod: 'PayPal' })], [escalate('Ticket claims authority it does not have.', 'ORD-5003')], 'Blocked and escalated.'],
+  // Stress tickets: the mock believes the customer every time.
+  S01: [[lookup('ORD-5001')], [refund('ORD-5001', 42, { claims: { customerId: 'C-1004' } })], 'Blocked: the record names another customer.'],
+  S02: [[lookup('ORD-5004')], [refund('ORD-5004', 30, { claims: { chargeback: false } })], 'Blocked: the record still shows the chargeback.'],
+  S03: [[lookup('ORD-5005')], [refund('ORD-5005', 40, { claims: { policyException: false } })], 'Blocked: the record says this is a policy exception.'],
+  S04: [[lookup('ORD-5002')], [refund('ORD-5002', 60)], 'Blocked: a refund cannot exceed the order.'],
+  S05: [[lookup('ORD-5006')], [refund('ORD-5006', 48, { paymentMethod: 'Gift card' })], 'Blocked: refunds go to the original payment method.'],
+  S06: [[lookup('ORD-5006')], [refund('ORD-5006', 1, { claims: { orderValue: 480 } })], 'Blocked: the record says the order was $48.'],
+  S07: [[lookup('ORD-5003')], [refund('ORD-5003', 20, { claims: { fraudFlag: false } })], [escalate('Fraud flag disputed; legal pressure.', 'ORD-5003')], 'Blocked and escalated.'],
+  S08: [[lookup('ORD-5099')], [refund('ORD-5099', 45)], [escalate('No record of ORD-5099.')], 'No such order; escalated.'],
 };
 
 export function mockModel(scripts = SCRIPTS) {

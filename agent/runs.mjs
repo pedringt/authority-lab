@@ -20,6 +20,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const RUNS_DIR = join(here, '..', 'src', 'data', 'agent-runs');
 
 export const RUN_FORMAT = 'authority-lab-run/1';
+// Several independent runs of one model on one ticket set, recorded together.
+export const RUNSET_FORMAT = 'authority-lab-runset/1';
+
+// The ticket sets: the standard 14, and the stress set built to provoke false
+// claims and pressure.
+export const TICKET_SETS = { standard: 'tickets.json', stress: 'stress-tickets.json' };
+// Files in RUNS_DIR that are not recordings.
+export const NOT_RECORDINGS = ['index.json', ...Object.values(TICKET_SETS)];
 
 // Every run starts each ticket from the same place: Refund recommendation at
 // Level 3, after the demo story's Expand with limits.
@@ -37,7 +45,8 @@ export const SYSTEM_PROMPT = [
   'When you are done, reply with one or two sentences saying what you did.',
 ].join(' ');
 
-export function loadTickets(file = join(RUNS_DIR, 'tickets.json')) {
+export function loadTickets(set = 'standard') {
+  const file = TICKET_SETS[set] ? join(RUNS_DIR, TICKET_SETS[set]) : set;
   return JSON.parse(readFileSync(file, 'utf8')).tickets;
 }
 
@@ -91,7 +100,7 @@ export class BudgetReached extends Error {
   constructor(text) { super(text); this.code = 'budget'; }
 }
 
-export function createBudget(cap) {
+export function createBudget(cap, { onSpend = null } = {}) {
   let spent = 0;
   return {
     cap,
@@ -105,6 +114,7 @@ export function createBudget(cap) {
     },
     after(model, usage) {
       spent += costOf(model, usage);
+      if (onSpend) onSpend(spent);
       if (spent >= cap) throw new BudgetReached(`$${spent.toFixed(2)} spent, which reaches the $${cap.toFixed(2)} cap.`);
     },
   };
@@ -196,7 +206,7 @@ export async function runTicket({ ticket, model, modelId, budget = null, start =
   const cap = getCapability(state, start.capabilityId);
   const after = { level: cap.authority.level, restricted: Boolean((capData(state, start.capabilityId).monitoring || {}).breached) };
   return {
-    ticket: { ticketId: ticket.id, message: ticket.message, tempts: ticket.tempts, expect: ticket.expect, ...(ticket.bait ? { bait: ticket.bait } : {}), steps, finalText, stopped, usage, cost: Math.round(costOf(modelId, usage) * 10000) / 10000, after },
+    ticket: { ticketId: ticket.id, message: ticket.message, tempts: ticket.tempts, expect: ticket.expect, ...(ticket.bait ? { bait: ticket.bait } : {}), ...(ticket.unverified ? { unverified: ticket.unverified } : {}), steps, finalText, stopped, usage, cost: Math.round(costOf(modelId, usage) * 10000) / 10000, after },
     budgetStop,
     state,
   };
@@ -209,7 +219,7 @@ export async function runTicket({ ticket, model, modelId, budget = null, start =
 // Otherwise each ticket starts fresh. The run stops at once if the
 // budget is reached, or if the model takes a ticket's bait and it gets
 // through (which must never happen); either is recorded in `stoppedEarly`.
-export async function recordRun({ tickets, model, modelId, source, date, budget = null, start: startIn = START, limits = LIMITS, shared = false }) {
+export async function recordRun({ tickets, model, modelId, source, date, budget = null, start: startIn = START, limits = LIMITS, shared = false, ticketSet = 'standard' }) {
   if (!['mock', 'recorded'].includes(source)) throw new Error(`source must be "mock" or "recorded", not "${source}".`);
   const start = shared ? { ...startIn, shared: true } : startIn;
   const results = [];
@@ -229,6 +239,7 @@ export async function recordRun({ tickets, model, modelId, source, date, budget 
     source,
     model: modelId,
     date,
+    ...(ticketSet !== 'standard' ? { ticketSet } : {}),
     start,
     limits,
     systemPrompt: SYSTEM_PROMPT,
@@ -240,9 +251,52 @@ export async function recordRun({ tickets, model, modelId, source, date, budget 
   return { ...run, label: runLabel(run) };
 }
 
+// N independent runs of one model on one ticket set, recorded together. Each
+// run starts from the same state; they share the budget. The set stops at
+// once if a run stops early (cap reached, or bait got through).
+// `onProgress(set)` gets the set so far after each run, so a caller can save
+// it as it goes.
+export async function recordRepeats({ repeat, onProgress = null, ...opts }) {
+  const runs = [];
+  let stoppedEarly = null;
+  for (let i = 1; i <= repeat; i++) {
+    const run = await recordRun(opts);
+    runs.push(run);
+    if (run.stoppedEarly) { stoppedEarly = { ...run.stoppedEarly, repeat: i, text: `run ${i} of ${repeat}: ${run.stoppedEarly.text}` }; break; }
+    if (onProgress && i < repeat) onProgress(assembleSet(opts, repeat, runs.slice(), null));
+  }
+  return assembleSet(opts, repeat, runs, stoppedEarly);
+}
+
+function assembleSet(opts, repeat, runs, stoppedEarly) {
+  const sum = (k) => runs.reduce((t, r) => t + r.usage[k], 0);
+  const usage = { calls: sum('calls'), input_tokens: sum('input_tokens'), output_tokens: sum('output_tokens') };
+  const set = {
+    format: RUNSET_FORMAT,
+    source: opts.source,
+    model: opts.modelId,
+    date: opts.date,
+    ticketSet: opts.ticketSet || 'standard',
+    repeat,
+    start: runs[0].start,
+    usage,
+    cost: Math.round(costOf(opts.modelId, usage) * 10000) / 10000,
+    stoppedEarly,
+    runs,
+  };
+  return { ...set, label: runLabel(set) };
+}
+
 // A light structural check on a recording, used by tests and before a
-// recording is written.
+// recording is written. A run set is checked run by run.
 export function validateRun(run) {
+  if (run && run.format === RUNSET_FORMAT) {
+    const errors = [];
+    if (!Array.isArray(run.runs) || !run.runs.length) errors.push('a run set needs its runs');
+    if (!['mock', 'recorded'].includes(run.source)) errors.push('source must be mock or recorded');
+    for (const [i, r] of (run.runs || []).entries()) for (const e of validateRun(r)) errors.push(`run ${i + 1}: ${e}`);
+    return errors;
+  }
   const errors = [];
   if (!run || run.format !== RUN_FORMAT) errors.push(`format must be ${RUN_FORMAT}`);
   if (!['mock', 'recorded'].includes(run && run.source)) errors.push('source must be mock or recorded');
@@ -256,4 +310,28 @@ export function validateRun(run) {
     }
   }
   return errors;
+}
+
+// What a model actually cost per ticket in earlier real runs (all recordings
+// in the index). With none for a model, it is scaled from another model with
+// the same tokenizer by the price ratio, and says so.
+export function observedCostPerTicket(model, dir = RUNS_DIR) {
+  const indexFile = join(dir, 'index.json');
+  let entries = [];
+  try { entries = JSON.parse(readFileSync(indexFile, 'utf8')).runs.filter((e) => e.source === 'recorded'); } catch { return null; }
+  const recs = entries.map((e) => JSON.parse(readFileSync(join(dir, e.file), 'utf8')));
+  const of = (m) => {
+    const runs = recs.filter((r) => r.model === m).flatMap((r) => (Array.isArray(r.runs) ? r.runs : [r]));
+    const tickets = runs.reduce((t, r) => t + r.tickets.length, 0);
+    const cost = runs.reduce((t, r) => t + r.cost, 0);
+    return tickets ? { perTicket: cost / tickets, basis: `${runs.length} earlier run${runs.length === 1 ? '' : 's'} of ${m}` } : null;
+  };
+  const own = of(model);
+  if (own) return own;
+  // Opus 5.5 and Sonnet 5.5 share a tokenizer, so token counts carry over.
+  const sibling = { 'claude-sonnet-5-5': 'claude-opus-5-5', 'claude-opus-5-5': 'claude-sonnet-5-5' }[model];
+  const s = sibling && of(sibling);
+  if (!s) return null;
+  const ratio = PRICES[model].output / PRICES[sibling].output;
+  return { perTicket: s.perTicket * ratio, basis: `scaled from ${s.basis} by the price ratio` };
 }

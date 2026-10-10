@@ -1,15 +1,25 @@
 # Paid model runs (A6), on GitHub instead of anyone's laptop.
 #
 # How a run happens:
-#   1. A PR commits agent/runs/request.json: which models, the budget (a hard
-#      cap in dollars) and whether the tickets share one session.
-#   2. Someone adds the label "run-models" to the PR.
-#   3. The job waits in the "model-runs" environment until Paige approves it.
-#      The API key is a secret of that environment, so nothing can read it
-#      before her approval.
-#   4. It runs the tests, then the models, commits the recordings and the
-#      summary back to the PR branch, deletes request.json (one request, one
-#      run) and removes the label.
+#   1. A PR commits agent/runs/request.json: which models, which ticket sets,
+#      how many repeats, the budget (a hard cap in dollars) and whether the
+#      tickets share one session. Claude may propose it; Paige OKs the plan.
+#   2. Paige adds the label "run-models" to the PR herself.
+#   3. The "plan" job (no environment, no secrets) checks the request and
+#      writes the plan to the run's summary: the exact commit, the request,
+#      whether the cap fits the month's $25 standing budget, and the files
+#      changed under agent/, src/store/ and .github/ compared with main.
+#   4. The "run" job waits in the "model-runs" environment until Paige
+#      approves it, having seen the plan. The API key is a secret of that
+#      environment, so nothing can read it before her approval. It checks out
+#      exactly the planned commit.
+#   5. It runs the tests, then the models, commits the recordings, the
+#      summary and the ledger row back to the PR branch, deletes request.json
+#      (one request, one run) and removes the label.
+#
+# No ${{ }} expression is expanded inside a run: script. Every value a script
+# uses comes in through env: and is quoted, so nothing in a request, a branch
+# name or a step output can become shell code.
 
 name: model-run
 
@@ -22,68 +32,136 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  run:
+  plan:
     # Only for the "run-models" label, and only for branches in this repo
     # (a fork's PR never gets the secret).
+    if: github.event.label.name == 'run-models' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      models: ${{ steps.req.outputs.models }}
+      tickets: ${{ steps.req.outputs.tickets }}
+      repeat: ${{ steps.req.outputs.repeat }}
+      budget: ${{ steps.req.outputs.budget }}
+      shared: ${{ steps.req.outputs.shared }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The commit to run
+        id: sha
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      - name: Files changed compared with main
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch -q origin "$BASE_REF"
+          git diff --name-only "origin/$BASE_REF...$HEAD_SHA" -- agent src/store .github > "$RUNNER_TEMP/changed.txt"
+          git show "origin/$BASE_REF:agent/runs/ledger.md" > "$RUNNER_TEMP/main-ledger.md" 2>/dev/null || true
+      - name: Check the request and write the plan
+        id: req
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node agent/plan-request.mjs --sha "$HEAD_SHA" --changed "$RUNNER_TEMP/changed.txt" --ledger-also "$RUNNER_TEMP/main-ledger.md" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+
+  run:
+    needs: plan
     if: github.event.label.name == 'run-models' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: model-runs
     permissions:
       contents: write
       pull-requests: write
-    timeout-minutes: 30
+    # A batch of a few thousand calls runs for an hour or more.
+    timeout-minutes: 180
+    env:
+      SHA: ${{ needs.plan.outputs.sha }}
+      MODELS: ${{ needs.plan.outputs.models }}
+      TICKETS: ${{ needs.plan.outputs.tickets }}
+      REPEAT: ${{ needs.plan.outputs.repeat }}
+      BUDGET: ${{ needs.plan.outputs.budget }}
+      SHARED: ${{ needs.plan.outputs.shared }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ needs.plan.outputs.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read the request
-        id: req
-        run: |
-          test -f agent/runs/request.json || { echo "No agent/runs/request.json on this branch: nothing to run."; exit 1; }
-          node -e '
-            const r = JSON.parse(require("fs").readFileSync("agent/runs/request.json", "utf8"));
-            const models = (r.models || []).join(",");
-            const budget = Number(r.budget);
-            // A ceiling on any single request, so a typo like 1150 never runs.
-            if (!models || !(budget > 0) || budget > 15) { console.error("request.json needs models and a budget between 0 and 15 dollars."); process.exit(1); }
-            const out = [`models=${models}`, `budget=${budget}`, `shared=${r.shared ? "--shared" : ""}`].join("\n");
-            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, out + "\n");
-            console.log(out);
-          '
       - name: Tests first (no model calls)
         run: |
           npm test
           npm ci --prefix agent
           npm test --prefix agent
+      - name: Main's ledger (runs on other branches count too)
+        run: |
+          git fetch -q origin "$BASE_REF"
+          git show "origin/$BASE_REF:agent/runs/ledger.md" > "$RUNNER_TEMP/main-ledger.md" 2>/dev/null || true
       - name: Run the models
         id: run
+        # Below the job's limit, so if this step ever times out the commit
+        # step below still has time to save what was recorded.
+        timeout-minutes: 150
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set +e
-          node agent/run.mjs --live --models "${{ steps.req.outputs.models }}" --budget "${{ steps.req.outputs.budget }}" ${{ steps.req.outputs.shared }} | tee run-summary.md
-          code=${PIPESTATUS[0]}
+          shared_flag=()
+          if [ "$SHARED" = "true" ]; then shared_flag=(--shared); fi
+          node agent/run.mjs --live --models "$MODELS" --tickets "$TICKETS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" "${shared_flag[@]}" | tee run-summary.md
+          code="${PIPESTATUS[0]}"
           cat run-summary.md >> "$GITHUB_STEP_SUMMARY"
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          # 0 = finished, 2 = stopped early (cap reached or bait got through):
-          # both are recorded and committed. Anything else failed before recording.
-          if [ "$code" != 0 ] && [ "$code" != 2 ]; then exit "$code"; fi
-      - name: Commit the recordings
+      # Always, even after a failure, a timeout or a cancel: the ledger row is
+      # kept current during the run and every finished run is saved as it
+      # completes, so whatever was spent and recorded is committed.
+      - name: Commit the recordings and the ledger
+        if: always()
+        env:
+          CODE: ${{ steps.run.outputs.code }}
         run: |
-          git rm -q agent/runs/request.json
+          git rm -q --ignore-unmatch agent/runs/request.json
           git add src/data/agent-runs agent/runs
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Recorded model run: ${{ steps.req.outputs.models }} (budget \$${{ steps.req.outputs.budget }}) ${{ steps.req.outputs.shared }}"
-          git push -q origin HEAD:${{ github.event.pull_request.head.ref }}
+          if git diff --cached --quiet; then echo "Nothing to commit."; exit 0; fi
+          if [ "$CODE" = "0" ]; then outcome="finished"; else outcome="did not finish"; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Model run ($outcome): $MODELS, $TICKETS x$REPEAT (budget \$$BUDGET), shared: $SHARED"
+          git push -q origin "HEAD:refs/heads/$BRANCH"
+      # A second copy, in case the push fails (for example if the branch
+      # moved after the plan): the recordings and ledger as an artifact.
+      - name: Keep the recordings as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-run-recordings
+          path: |
+            src/data/agent-runs/
+            agent/runs/
+          retention-days: 90
+          if-no-files-found: ignore
       - name: Remove the label
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr edit ${{ github.event.pull_request.number }} --remove-label run-models || true
-      - name: Fail if the run stopped early
-        if: steps.run.outputs.code == '2'
+        run: gh pr edit "$PR_NUMBER" --remove-label run-models || true
+      - name: Fail unless the run finished
+        if: always() && steps.run.outputs.code != '0'
+        env:
+          CODE: ${{ steps.run.outputs.code }}
         run: |
-          echo "The run stopped early (cap reached or bait got through). The recording is committed; see the summary."
+          echo "The run did not finish (code '$CODE': 2 = cap reached or bait got through, 1 = refused or failed, empty = timed out or cancelled). What was recorded and spent is committed; see the ledger and the summary."
           exit 1
