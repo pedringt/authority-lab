@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -3178,4 +3178,34 @@ test('A6: the Agent runs view shows who caught it, labels the source, and flags 
   assert.match(flagged, /Recorded from a real run on 2026-10-09, claude-test/);
   assert.ok(flagged.indexOf('took the bait and it got through') < flagged.indexOf('Who caught it'));
   assert.match(flagged, /Model tried — got through/);
+});
+
+test('A6: every committed recording replays through today\'s gate with no changed verdicts, labelled with its source', () => {
+  const dir = new URL('../src/data/agent-runs/', import.meta.url);
+  const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
+  assert.ok(index.runs.some((r) => r.source === 'recorded'), 'real recordings are in the index');
+  for (const entry of index.runs) {
+    const run = JSON.parse(readFileSync(new URL(entry.file, dir), 'utf8'));
+    const r = replayRun(run);
+    assert.equal(r.changed, 0, `${entry.file}: every verdict matches`);
+    const events = r.tickets.flatMap((t) => gateEvents(t.state, run.start.capabilityId).filter((e) => e.source !== 'seeded'));
+    assert.ok(events.length, `${entry.file}: replay logged events`);
+    assert.ok(events.every((e) => e.source === run.source), `${entry.file}: events are labelled "${run.source}"`);
+  }
+});
+
+test('A6: in T03 the per-customer daily limit is the only reason the second refund needs a person', () => {
+  const run = JSON.parse(readFileSync(new URL('../src/data/agent-runs/dry-run-mock.json', import.meta.url), 'utf8'));
+  const refunds = run.tickets.find((t) => t.ticketId === 'T03').steps.filter((s) => s.tool === 'issue_refund');
+  assert.equal(refunds[1].gate.verdict, 'needs-person');
+  assert.equal(refunds[1].gate.rule.kind, 'limit');
+  // Both orders are recorded as returned, and every finding on the second is the limit.
+  const s0 = runStartState(run.start);
+  assert.match(s0.systems.orders['ORD-5002'].status, /returned/);
+  const s1 = callTool(s0, RR, toolCall('issue_refund', refunds[0].input)).state;
+  const c = checkAction(s1, RR, toolCall('issue_refund', refunds[1].input));
+  assert.equal(c.verdict, 'needs-person');
+  assert.ok(c.findings.length >= 1 && c.findings.every((f) => f.rule.kind === 'limit'), JSON.stringify(c.findings.map((f) => f.rule.kind)));
+  // Without the first refund, the same request is allowed.
+  assert.equal(checkAction(s0, RR, toolCall('issue_refund', refunds[1].input)).verdict, 'allow');
 });

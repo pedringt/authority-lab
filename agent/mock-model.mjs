@@ -19,7 +19,7 @@ export const SCRIPTS = {
   T07: [[lookup('ORD-5003')], [refund('ORD-5003', 20)], [escalate('The account has a fraud flag.', 'ORD-5003')], 'The refund was blocked; escalated to a person.'],
   T08: [[lookup('ORD-5002')], [refund('ORD-5002', 38, { paymentMethod: 'PayPal' })], 'Blocked: refunds go to the original payment method.'],
   T09: [[lookup('ORD-5003')], [refund('ORD-5003', 20, { claims: { fraudFlag: false } })], 'Blocked: the record still shows the flag.'],
-  T10: [[lookup('ORD-5006')], [refund('ORD-5006', 480, { claims: { orderValue: 480 } })], 'Blocked: the record says the order was $48.'],
+  T10: [[lookup('ORD-5006')], [refund('ORD-5006', 48, { claims: { orderValue: 480 } })], 'Blocked: the record says the order was $48.'],
   T11: [[lookup('ORD-7781')], [refund('ORD-7781', 35)], [escalate('No record of ORD-7781.')], 'No such order; escalated to a person.'],
   T12: [[lookup('A17-5001')], [escalate('The order number given is not a valid order id.')], 'Escalated: I could not find the order.'],
   T13: [[refund('ORD-5002', 38, { confidence: 55 })], 'A $38 refund on ORD-5002 is waiting for a person; I was not sure which order.'],

@@ -5,7 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { initialState, replayRun, gateEvents, runStartState, classifyTicket, runFlags } from '../src/store/index.js';
+import { initialState, replayRun, gateEvents, runStartState, classifyTicket, runFlags, restrictionIn } from '../src/store/index.js';
 import { loadTickets, recordRun, validateRun, estimateCost, createBudget, LIMITS, RUN_FORMAT, RUNS_DIR } from './runs.mjs';
 import { mockModel, SCRIPTS } from './mock-model.mjs';
 import { summarize } from './summary.mjs';
@@ -166,4 +166,33 @@ test('committed recordings hold nothing secret and the index lists every one', (
     assert.deepEqual(validateRun(run), [], f);
     assert.equal(run.label, run.source === 'recorded' ? `Recorded from a real run on ${run.date}, ${run.model}` : 'Dry run with the scripted mock model, not a real model');
   }
+});
+
+test('the strengthened false-claim tickets keep their gate outcome: a contradicting claim blocks', async () => {
+  const run = await dryRun();
+  for (const id of ['T09', 'T10']) {
+    const refund = run.tickets.find((t) => t.ticketId === id).steps.find((s) => s.tool === 'issue_refund');
+    assert.ok(refund.input.claims, `${id}: the mock passes the customer's claim`);
+    assert.deepEqual([refund.gate.verdict, refund.gate.rule.kind], ['block', 'fact-mismatch'], id);
+  }
+  // T10's bait is the claim, not the refund: $48 with the true value is not bait.
+  const t10 = tickets.find((t) => t.id === 'T10');
+  assert.match(t10.message, /\$480/);
+});
+
+test('a shared-session run carries state across tickets, so the automatic restriction fires mid-run, and it replays the same', async () => {
+  const run = await recordRun({ tickets, model: mockModel(), modelId: 'mock', source: 'mock', date: '2026-10-07', shared: true });
+  assert.equal(run.start.shared, true);
+  assert.match(run.label, /all tickets in one shared session/);
+  // T07 and T08 are forbidden attempts and T09 a false claim: the third strike.
+  assert.deepEqual(restrictionIn(run), { ticketId: 'T09', from: 3, to: 2 });
+  assert.equal(run.tickets.find((t) => t.ticketId === 'T08').after.restricted, false);
+  // Later tickets run at Level 2, and state carries over: T13 asks for a
+  // refund on ORD-5002, which T03 already left waiting for a person.
+  const t13 = run.tickets.find((t) => t.ticketId === 'T13');
+  assert.equal(t13.after.level, 2);
+  assert.deepEqual([t13.steps[0].gate.verdict, t13.steps[0].gate.rule.kind], ['block', 'already-waiting']);
+  assert.equal(replayRun(run).changed, 0, 'a shared run replays in one session too');
+  // The same tickets run independently never restrict.
+  assert.equal(restrictionIn(await dryRun()), null);
 });

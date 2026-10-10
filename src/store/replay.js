@@ -29,11 +29,12 @@ export function toolCall(tool, input = {}) {
   return { tool, args: { orderId: input.orderId } };
 }
 
-// Replay one ticket from a fresh start state. Steps the input schema refused
-// never reached the gate, so they are reported but not replayed.
-export function replayTicket(run, ticket) {
+// Replay one ticket, from a fresh start state or (in a shared-session run)
+// from the previous ticket's state. Steps the input schema refused never
+// reached the gate, so they are reported but not replayed.
+export function replayTicket(run, ticket, from = null) {
   const source = run.source === 'recorded' ? 'recorded' : 'mock';
-  let state = runStartState(run.start);
+  let state = from || runStartState(run.start);
   const steps = ticket.steps.map((step) => {
     if (step.refusedBySchema) return { ...step, replay: null, same: true };
     const out = callTool(state, run.start.capabilityId, toolCall(step.tool, step.input), { source });
@@ -46,6 +47,11 @@ export function replayTicket(run, ticket) {
 }
 
 export function replayRun(run) {
-  const tickets = run.tickets.map((t) => replayTicket(run, t));
+  let carried = null;
+  const tickets = run.tickets.map((t) => {
+    const r = replayTicket(run, t, run.start.shared ? carried : null);
+    carried = r.state;
+    return r;
+  });
   return { source: run.source, model: run.model, date: run.date, tickets, changed: tickets.reduce((n, t) => n + t.changed, 0) };
 }

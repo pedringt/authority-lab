@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createAgentServer } from './gate-server.mjs';
-import { runStartState, classifyTicket, runLabel } from '../src/store/index.js';
+import { runStartState, classifyTicket, runLabel, getCapability, capData } from '../src/store/index.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -122,8 +122,10 @@ async function toolsFor(client) {
 
 // Run one ticket. `model.respond({ system, messages, tools, ticket, maxTokens })`
 // returns a Messages-API-shaped reply: { content, stop_reason, usage }.
-export async function runTicket({ ticket, model, modelId, budget = null, start = START, limits = LIMITS }) {
-  let state = runStartState(start);
+// `initial` is the state to start from: a fresh start state by default, or
+// the previous ticket's final state in a shared session.
+export async function runTicket({ ticket, model, modelId, budget = null, start = START, limits = LIMITS, initial = null }) {
+  let state = initial || runStartState(start);
   const checks = [];
   const server = createAgentServer({ capabilityId: start.capabilityId, loadState: () => state, saveState: (next) => { state = next; }, onCheck: (c) => checks.push(c) });
   const client = new Client({ name: 'authority-lab-runner', version: '0.1.0' });
@@ -189,22 +191,33 @@ export async function runTicket({ ticket, model, modelId, budget = null, start =
     }
   }
   await client.close();
+  // The capability's authority after the ticket, so an automatic restriction
+  // shows on the ticket where it fired.
+  const cap = getCapability(state, start.capabilityId);
+  const after = { level: cap.authority.level, restricted: Boolean((capData(state, start.capabilityId).monitoring || {}).breached) };
   return {
-    ticket: { ticketId: ticket.id, message: ticket.message, tempts: ticket.tempts, expect: ticket.expect, ...(ticket.bait ? { bait: ticket.bait } : {}), steps, finalText, stopped, usage, cost: Math.round(costOf(modelId, usage) * 10000) / 10000 },
+    ticket: { ticketId: ticket.id, message: ticket.message, tempts: ticket.tempts, expect: ticket.expect, ...(ticket.bait ? { bait: ticket.bait } : {}), steps, finalText, stopped, usage, cost: Math.round(costOf(modelId, usage) * 10000) / 10000, after },
     budgetStop,
+    state,
   };
 }
 
 // Run every ticket and assemble the recording. `source` is 'mock' for a dry
-// run and 'recorded' only for a real model run. The run stops at once if the
+// run and 'recorded' only for a real model run. With `shared`, every ticket
+// runs in one session: refunds, the queue and the gate log carry over, so
+// cumulative rules (like the automatic restriction) can fire mid-run.
+// Otherwise each ticket starts fresh. The run stops at once if the
 // budget is reached, or if the model takes a ticket's bait and it gets
 // through (which must never happen); either is recorded in `stoppedEarly`.
-export async function recordRun({ tickets, model, modelId, source, date, budget = null, start = START, limits = LIMITS }) {
+export async function recordRun({ tickets, model, modelId, source, date, budget = null, start: startIn = START, limits = LIMITS, shared = false }) {
   if (!['mock', 'recorded'].includes(source)) throw new Error(`source must be "mock" or "recorded", not "${source}".`);
+  const start = shared ? { ...startIn, shared: true } : startIn;
   const results = [];
   let stoppedEarly = null;
+  let carried = null;
   for (const ticket of tickets) {
-    const { ticket: result, budgetStop } = await runTicket({ ticket, model, modelId, budget, start, limits });
+    const { ticket: result, budgetStop, state } = await runTicket({ ticket, model, modelId, budget, start, limits, initial: shared ? carried : null });
+    carried = state;
     results.push(result);
     if (budgetStop) { stoppedEarly = { reason: 'budget', ticketId: ticket.id, text: `the spending cap was reached on ${ticket.id}: ${budgetStop}` }; break; }
     if (classifyTicket(result).caught === 'got-through') { stoppedEarly = { reason: 'got-through', ticketId: ticket.id, text: `on ${ticket.id} the model took the bait and it got through, so the run stopped there.` }; break; }

@@ -4,12 +4,16 @@
 //   node agent/run.mjs --estimate [--model claude-opus-5-5]
 //   node agent/run.mjs --dry-run
 //   node agent/run.mjs --live --models claude-opus-5-5,claude-haiku-5-5 --budget 11.50
+//   node agent/run.mjs --live --models claude-haiku-5-5 --budget 0.50 --shared
+//   node agent/run.mjs --summary
 //
 // --live calls a real model and costs money. It needs ANTHROPIC_API_KEY set
 // in the shell (.env is never read) and --budget, a hard cap in dollars shared
 // by every model in the invocation. It runs each model once over the fixture
 // tickets, stops at once if the cap is reached or if any bait gets through,
 // writes the recordings to src/data/agent-runs/, and prints the summary.
+// --shared runs every ticket in one session, so cumulative rules carry over.
+// --summary rebuilds the summary from every real recording in the index.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -28,6 +32,18 @@ function write(run, file) {
   const errors = validateRun(run);
   if (errors.length) throw new Error(`Not writing an invalid recording:\n${errors.join('\n')}`);
   writeFileSync(join(RUNS_DIR, file), `${JSON.stringify(run, null, 2)}\n`);
+}
+
+if (flag('summary')) {
+  const { readFileSync } = await import('node:fs');
+  const index = JSON.parse(readFileSync(join(RUNS_DIR, 'index.json'), 'utf8'));
+  const runs = index.runs.filter((e) => e.source === 'recorded').map((e) => JSON.parse(readFileSync(join(RUNS_DIR, e.file), 'utf8')));
+  const text = summarize(runs, tickets);
+  const date = runs.map((r) => r.date).sort().at(-1);
+  mkdirSync(join(here, 'runs'), { recursive: true });
+  writeFileSync(join(here, 'runs', `summary-${date}.md`), `${text}\n`);
+  console.log(text);
+  process.exit(0);
 }
 
 if (flag('estimate')) {
@@ -65,8 +81,9 @@ if (flag('live')) {
   const runs = [];
   for (const m of models) {
     console.error(`Running ${m} on ${tickets.length} tickets…`);
-    const run = await recordRun({ tickets, model: liveModel({ model: m, apiKey }), modelId: m, source: 'recorded', date, budget });
-    write(run, `${date}-${m}.json`);
+    const shared = flag('shared');
+    const run = await recordRun({ tickets, model: liveModel({ model: m, apiKey }), modelId: m, source: 'recorded', date, budget, shared });
+    write(run, `${date}-${m}${shared ? '-shared' : ''}.json`);
     runs.push(run);
     console.error(`${m}: ${run.usage.calls} calls, $${run.cost.toFixed(4)}. Spent so far $${budget.spent.toFixed(4)}.`);
     if (run.stoppedEarly) { console.error(`STOPPED: ${run.stoppedEarly.text}`); break; }

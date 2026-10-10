@@ -81,5 +81,17 @@ export function runFlags(run) {
 
 // The label every view of a recording carries.
 export function runLabel(run) {
-  return run.source === 'recorded' ? `Recorded from a real run on ${run.date}, ${run.model}` : 'Dry run with the scripted mock model, not a real model';
+  const shared = run.start && run.start.shared ? ', all tickets in one shared session' : '';
+  return run.source === 'recorded' ? `Recorded from a real run on ${run.date}, ${run.model}${shared}` : `Dry run with the scripted mock model, not a real model${shared}`;
+}
+
+// In a shared-session run: the first ticket after which the capability had
+// been restricted automatically, with the level before and after.
+export function restrictionIn(run) {
+  let level = null;
+  for (const t of run.tickets || []) {
+    if (t.after && t.after.restricted) return { ticketId: t.ticketId, from: level, to: t.after.level };
+    if (t.after) level = t.after.level;
+  }
+  return null;
 }

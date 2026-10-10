@@ -3,7 +3,7 @@
 // recordings are fixed files in src/data/agent-runs/.
 
 import { html, badge, notice, section } from '../ui.js';
-import { workspaceOf, workflowOf, classifyTicket, outcomeText, runFlags, runLabel, replayRun, CAUGHT } from '../store/index.js';
+import { workspaceOf, workflowOf, classifyTicket, outcomeText, runFlags, runLabel, replayRun, restrictionIn, CAUGHT } from '../store/index.js';
 
 const parse = (text) => { try { return JSON.parse(text); } catch { return null; } };
 const money = (x) => `$${Number(x || 0).toFixed(2)}`;
@@ -44,7 +44,7 @@ function comparison(runs) {
   for (const r of runs.slice(1)) for (const t of r.tickets) if (!ids.includes(t.ticketId)) ids.push(t.ticketId);
   const byId = (r, id) => r.tickets.find((t) => t.ticketId === id);
   return html`<div class="card table-card"><table class="table">
-    <thead><tr><th>Ticket</th><th>Tempts</th>${runs.map((r) => html`<th>${r.model}<div class="muted small">${r.source === 'recorded' ? r.date : 'dry run'}</div></th>`)}</tr></thead>
+    <thead><tr><th>Ticket</th><th>Tempts</th>${runs.map((r) => html`<th>${r.model}<div class="muted small">${r.source === 'recorded' ? r.date : 'dry run'}${r.start && r.start.shared ? ' · one shared session' : ''}</div></th>`)}</tr></thead>
     <tbody>${ids.map((id) => {
       const first = runs.map((r) => byId(r, id)).find(Boolean);
       return html`<tr><td><strong>${id}</strong></td><td class="small">${first.tempts}</td>${runs.map((r) => {
@@ -64,15 +64,24 @@ function runCard(r, selected) {
     <div class="small"><strong>${runLabel(r)}</strong></div>
     <div class="muted small">${r.usage.calls} model calls · ${r.usage.input_tokens.toLocaleString('en-US')} in / ${r.usage.output_tokens.toLocaleString('en-US')} out · ${money(r.cost)}</div>
     <div class="small">Temptations: ${n('declined')} declined by the model · ${n('stopped')} stopped by the gate · <span class="${n('got-through') ? 'text-fail' : ''}">${n('got-through')} got through</span></div>
+    ${r.start && r.start.shared ? sharedNote(r) : ''}
     ${r.stoppedEarly ? html`<div class="small text-fail">Stopped early: ${r.stoppedEarly.text}</div>` : ''}
   </a>`;
+}
+
+// A shared-session run: did the automatic restriction fire, and where.
+function sharedNote(r) {
+  const fired = restrictionIn(r);
+  return fired
+    ? html`<div class="small">${badge('restricted', 'Restricted')} Automatic restriction fired on ${fired.ticketId}: Level ${fired.from ?? 3} → Level ${fired.to}. Later tickets ran under the lower level.</div>`
+    : html`<div class="small">All tickets in one session. Automatic restriction did not fire.</div>`;
 }
 
 function ticketDetail(run, replayed, t) {
   const c = classifyTicket(t);
   const steps = replayed.steps;
   return html`<details class="card run-ticket" id="ticket-${t.ticketId}">
-    <summary><strong>${t.ticketId}</strong> · ${t.tempts} ${c.caught ? caughtCell(c) : ''} <span class="muted small">${outcomeText(c)}</span></summary>
+    <summary><strong>${t.ticketId}</strong> · ${t.tempts} ${c.caught ? caughtCell(c) : ''} <span class="muted small">${outcomeText(c)}</span>${run.start && run.start.shared && t.after ? html` <span class="muted small">· Level ${t.after.level} after</span>${t.after.restricted ? html` ${badge('restricted', 'Restricted')}` : ''}` : ''}</summary>
     <p class="run-message">“${t.message || ''}”</p>
     <p class="muted small">Designed to tempt: ${t.tempts}. If it takes the bait: ${t.expect}</p>
     ${steps.length ? html`<div class="table-card"><table class="table">

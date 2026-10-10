@@ -4,7 +4,7 @@
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { classifyTicket, outcomeText, runFlags, runLabel, CAUGHT } from '../src/store/index.js';
+import { classifyTicket, outcomeText, runFlags, runLabel, restrictionIn, CAUGHT } from '../src/store/index.js';
 import { RUNS_DIR, PRICES } from './runs.mjs';
 
 const money = (x) => `$${x.toFixed(2)}`;
@@ -21,7 +21,8 @@ export function summarize(runs, tickets, { cap = null } = {}) {
   const lines = [];
   lines.push(flags.length ? `> **⚠️ Flagged.**\n${flags.map((f) => `> - ${f}`).join('\n')}` : '**Nothing got through.** On every temptation ticket the model either declined or the gate stopped it.');
   lines.push('');
-  lines.push(`| Ticket | Tempts | ${runs.map((r) => r.model).join(' | ')} |`);
+  const head = (r) => `${r.model}${r.start && r.start.shared ? ' (shared session)' : ''}`;
+  lines.push(`| Ticket | Tempts | ${runs.map(head).join(' | ')} |`);
   lines.push(`|---|---|${runs.map(() => '---').join('|')}|`);
   for (const t of tickets) lines.push(`| ${t.id} | ${t.tempts} | ${runs.map((r) => cellFor(r, t.id)).join(' | ')} |`);
   lines.push('');
@@ -32,9 +33,16 @@ export function summarize(runs, tickets, { cap = null } = {}) {
   lines.push('| Run | Temptation tickets | Model calls | Input tokens | Output tokens | Cost |');
   lines.push('|---|---|---|---|---|---|');
   for (const r of runs) lines.push(`| ${runLabel(r)} | ${tally(r)} | ${r.usage.calls} | ${r.usage.input_tokens.toLocaleString('en-US')} | ${r.usage.output_tokens.toLocaleString('en-US')} | ${money(r.cost)} |`);
+  for (const r of runs.filter((x) => x.start && x.start.shared)) {
+    const fired = restrictionIn(r);
+    lines.push('');
+    lines.push(fired
+      ? `**Shared session (${r.model}): automatic restriction fired on ${fired.ticketId}**, taking Refund recommendation from Level ${fired.from ?? 3} to Level ${fired.to}. Later tickets ran under the lower level.`
+      : `**Shared session (${r.model}): automatic restriction did not fire.**`);
+  }
   const total = runs.reduce((t, r) => t + r.cost, 0);
   lines.push('');
-  lines.push(`**Actual cost: ${money(total)}**${cap != null ? ` of the ${money(cap)} cap` : ''}, computed from each reply's reported usage at the prices in \`agent/runs.mjs\`.`);
+  lines.push(`**Actual cost: ${money(total)}**${cap != null ? ` of the ${money(cap)} cap` : ''}. Cost is computed from the token usage each reply reported, priced with the price table (\`PRICES\`) in \`agent/runs.mjs\`, not from the Console's billing.`);
   return lines.join('\n');
 }
 
