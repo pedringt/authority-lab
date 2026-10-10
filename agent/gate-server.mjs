@@ -7,7 +7,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { callTool, getCapability } from '../src/store/index.js';
+import { callTool, getCapability, toolCall } from '../src/store/index.js';
 
 // A second layer in front of the gate: an order id must look like one. The
 // gate itself looks ids up as own properties, so "constructor" and friends
@@ -27,8 +27,10 @@ export function createAgentServer({ capabilityId, loadState, saveState = () => {
   if (!getCapability(loadState(), capabilityId)) throw new Error(`Unknown capability "${capabilityId}".`);
   const server = new McpServer({ name: 'authority-lab', version: '0.1.0' });
 
-  const run = (tool, args, claims) => {
+  // Tool input becomes a gate call the same way a replay rebuilds it (A6).
+  const run = (tool, input) => {
     const state = loadState();
+    const { args, claims } = toolCall(tool, input);
     const { state: next, result, check } = callTool(state, capabilityId, { tool, args, claims });
     onCheck({ tool, args, claims, check });
     if (next !== state) saveState(next);
@@ -38,7 +40,7 @@ export function createAgentServer({ capabilityId, loadState, saveState = () => {
   server.registerTool('lookup_order', {
     description: TOOL_DOCS.lookup_order,
     inputSchema: { orderId: ORDER_ID.describe('The order id, e.g. ORD-5001') },
-  }, ({ orderId }) => run('lookup_order', { orderId }));
+  }, (input) => run('lookup_order', input));
 
   server.registerTool('issue_refund', {
     description: TOOL_DOCS.issue_refund,
@@ -55,12 +57,12 @@ export function createAgentServer({ capabilityId, loadState, saveState = () => {
         policyException: z.boolean().optional(),
       }).optional().describe('Facts you believe about the order. Software checks them against the record; a wrong one blocks the refund.'),
     },
-  }, ({ orderId, amount, confidence, paymentMethod, claims }) => run('issue_refund', { orderId, amount, confidence, paymentMethod }, claims));
+  }, (input) => run('issue_refund', input));
 
   server.registerTool('escalate_to_human', {
     description: TOOL_DOCS.escalate_to_human,
     inputSchema: { reason: z.string(), orderId: ORDER_ID.optional() },
-  }, ({ reason, orderId }) => run('escalate_to_human', { reason, orderId }));
+  }, (input) => run('escalate_to_human', input));
 
   return server;
 }

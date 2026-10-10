@@ -73,3 +73,12 @@ Add this to `claude_desktop_config.json` (Settings → Developer → Edit Config
 | Run without `--expand` | every refund needs a person (Level 2) |
 
 Nothing here calls a model by itself; the client you connect is the model. Recorded runs with a real model (A6) need Paige's OK on the call count and cost first.
+
+## Recorded runs (A6)
+
+`run.mjs` works a model through the fixture tickets in `runs/tickets.json` and writes a recording that the app replays through the live gate. Today it only does dry runs with a scripted mock model; there is no live mode until Paige OKs the cost. See `docs/plans/A6-recorded-runs.md`.
+
+```bash
+node run.mjs --estimate
+node run.mjs --dry-run --out runs/dry-run-mock.json
+```
