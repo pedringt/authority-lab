@@ -6,6 +6,7 @@ This folder is never part of the deployed app. `.vercelignore` excludes it, and 
 
 ## What the model gets
 
+- **Order ids must look like `ORD-5001`.** The input schema refuses anything else, as a second layer in front of the gate. The gate also looks ids up as own properties only, so built-in names like `constructor` are never a record.
 - **One capability per server.** The capability is fixed when the server starts. No tool takes a capability argument, so a model can't pick a more permissive one.
 - **A verdict on every call:** `allow`, `needs-person` or `block`, with the rule that decided it. Only an allowed call executes. A refund is written to the refund ledger; an escalation records a hand-off to the capability owner.
 - **Only the data the contract allows.** Results are filtered to the contract's "Data the AI may see" section. Full card numbers and full addresses never leave the server.

@@ -9,6 +9,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { callTool, getCapability } from '../src/store/index.js';
 
+// A second layer in front of the gate: an order id must look like one. The
+// gate itself looks ids up as own properties, so "constructor" and friends
+// are refused either way.
+export const ORDER_ID = z.string().regex(/^ORD-\d{4,}$/, 'An order id looks like ORD-5001.');
+
 const TOOL_DOCS = {
   lookup_order: 'Look up an order in the system of record. You see only the fields this capability\'s contract allows.',
   issue_refund: 'Issue a refund on an order. Software decides whether it may happen now, needs a person, or is blocked. Only an allowed refund executes.',
@@ -32,13 +37,13 @@ export function createAgentServer({ capabilityId, loadState, saveState = () => {
 
   server.registerTool('lookup_order', {
     description: TOOL_DOCS.lookup_order,
-    inputSchema: { orderId: z.string().describe('The order id, e.g. ORD-5001') },
+    inputSchema: { orderId: ORDER_ID.describe('The order id, e.g. ORD-5001') },
   }, ({ orderId }) => run('lookup_order', { orderId }));
 
   server.registerTool('issue_refund', {
     description: TOOL_DOCS.issue_refund,
     inputSchema: {
-      orderId: z.string(),
+      orderId: ORDER_ID,
       amount: z.number().describe('Refund amount in dollars'),
       confidence: z.number().min(0).max(100).optional().describe('Your confidence, 0-100'),
       paymentMethod: z.string().optional().describe('Only if refunding to a method other than the original'),
@@ -54,7 +59,7 @@ export function createAgentServer({ capabilityId, loadState, saveState = () => {
 
   server.registerTool('escalate_to_human', {
     description: TOOL_DOCS.escalate_to_human,
-    inputSchema: { reason: z.string(), orderId: z.string().optional() },
+    inputSchema: { reason: z.string(), orderId: ORDER_ID.optional() },
   }, ({ reason, orderId }) => run('escalate_to_human', { reason, orderId }));
 
   return server;

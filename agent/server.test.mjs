@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { initialState, authorize, selectDecision, simulateBreach, callTool } from '../src/store/index.js';
+import { initialState, authorize, selectDecision, simulateBreach, callTool, checkAction } from '../src/store/index.js';
 import { createAgentServer } from './gate-server.mjs';
 
 const RR = 'refund-recommendation';
@@ -109,4 +109,29 @@ test('the full gate verdict is recorded for the operator, never sent to the mode
   const { raw } = await conn.call('issue_refund', { orderId: 'ORD-5003', amount: 20, confidence: 95, claims: { fraudFlag: false } });
   assert.match(conn.checks.at(-1).check.reason, /contradicts the system of record \(true\)/);
   assert.equal(JSON.stringify(raw).includes('contradicts the system of record'), false);
+});
+
+test('built-in object names are refused through the MCP server, at every level', async () => {
+  const atLevel = (s, id, level) => ({ ...s, capabilities: s.capabilities.map((c) => (c.id === id ? { ...c, authority: { level, limited: level === 3 } } : c)) });
+  const states = [['L0', initialState(), 'account-closure'], ['L1', initialState(), 'refund-execution-high-value'], ['L2', initialState(), RR], ['L3', expanded(), RR], ['L4', atLevel(expanded(), RR, 4), RR]];
+  for (const [label, start, cap] of states) {
+    const conn = await connect(start, cap);
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      for (const [tool, args] of [['issue_refund', { orderId: name, amount: 40, confidence: 99 }], ['lookup_order', { orderId: name }], ['escalate_to_human', { orderId: name, reason: 'Checking.' }]]) {
+        const r = await conn.client.callTool({ name: tool, arguments: args });
+        assert.equal(r.isError, true, `${label} ${tool} "${name}": the schema refuses it`);
+        assert.equal(conn.state, start, `${label} ${tool} "${name}": nothing changes`);
+      }
+      // Second layer: if a malformed id ever reached the gate, it would still be refused.
+      assert.equal(checkAction(start, cap, { tool: 'issue_refund', args: { orderId: name, amount: 40, confidence: 99 } }).verdict, 'block');
+    }
+  }
+});
+
+test('the order id schema accepts real ids and refuses anything else', async () => {
+  const conn = await connect(expanded());
+  assert.equal((await conn.client.callTool({ name: 'lookup_order', arguments: { orderId: 'ORD-5001' } })).isError ?? false, false);
+  for (const bad of ['', 'ORD-1', '5001', 'ord-5001', 'ORD-5001; DROP', '../ORD-5001']) {
+    assert.equal((await conn.client.callTool({ name: 'lookup_order', arguments: { orderId: bad } })).isError, true, `"${bad}"`);
+  }
 });
