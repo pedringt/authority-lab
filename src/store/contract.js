@@ -1,6 +1,7 @@
 // Contract builder (#5).
 
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from '../data/contract-templates.js';
+import { DATA_FIELDS } from '../data/seed.js';
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionList, performanceResultsSeen } from './selectors.js';
 import { people, snapshotPerson, requireActive } from './people.js';
@@ -145,6 +146,12 @@ export function contractValueChecks(state, capabilityId, value) {
   const aboveLow = risk.impact && risk.impact !== 'Low';
   if (aboveLow && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `"AI must never" cannot be empty for a ${risk.impact.toLowerCase()}-impact capability.` });
   if (aboveLow && !value.autoRestriction.length) out.push({ id: 'empty-auto', level: 'block', section: 'autoRestriction', text: `"Automatic restriction conditions" cannot be empty for a ${risk.impact.toLowerCase()}-impact capability. Software needs a rule to enforce.` });
+  // The data section lists known fields only, never a restricted one (A2).
+  for (const f of value.dataSeen || []) {
+    const known = DATA_FIELDS.find((x) => x.id === f);
+    if (!known) out.push({ id: `data-unknown-${f}`, level: 'block', section: 'dataSeen', text: `"${f}" is not a field any tool returns.` });
+    else if (known.restricted) out.push({ id: `data-restricted-${f}`, level: 'block', section: 'dataSeen', text: `${known.label} is restricted: it never reaches the model, so a contract can't list it.` });
+  }
   // Contradictions: the same line in "may" and in "must never" or "must ask".
   const may = value.may.map(norm);
   for (const t of value.mustNever) if (may.includes(norm(t))) out.push({ id: `contra-${norm(t).slice(0, 20)}`, level: 'block', section: 'mustNever', text: `"${t}" appears under both "AI may" and "AI must never".` });

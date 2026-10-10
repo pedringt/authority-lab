@@ -17,7 +17,7 @@ export function emptyCapabilityData() {
     monitoringRule: null,
     breach: null,
     testRun: { status: 'not-run', lastRun: null, completed: [] },
-    decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true }, rationale: '', recordId: null, proposed: null },
+    decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true, maxDailyTotal: 500, maxDailyCount: 20 }, rationale: '', recordId: null, proposed: null },
     monitoring: null,
     // Simulated readings for the contract's restriction rules, keyed by the
     // rule's line (#49). Empty until something is measured.
@@ -98,6 +98,10 @@ export function initialState() {
     // empty workspace can set its own.
     workspace: clone(seed.workspace),
     workflow: clone(seed.workflow),
+    // Systems of record (roadmap item 9, A2): orders, customers, fraud flags,
+    // chargebacks, the refund ledger and escalations. The gate reads facts
+    // only from here.
+    systems: clone(seed.systems),
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
     roster: { versions: [{ version: 1, date: seed.TODAY, author: null, authorAt: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },

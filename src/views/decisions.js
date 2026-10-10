@@ -65,7 +65,9 @@ export function decisionRecordView(state, id) {
         <li>value ≤ $${x.conditions.maxValue}</li>
         ${x.conditions.noFraudFlag ? html`<li>no fraud flag</li>` : ''}
         ${x.conditions.policyClear ? html`<li>policy eligibility is clear</li>` : ''}
-        <li>confidence ≥ ${x.conditions.minConfidence}%</li>
+        ${x.conditions.maxDailyTotal != null ? html`<li>at most $${x.conditions.maxDailyTotal} a day across all customers</li>` : ''}
+        ${x.conditions.maxDailyCount != null ? html`<li>at most ${x.conditions.maxDailyCount} a day across all customers</li>` : ''}
+        <li>model-reported confidence ≥ ${x.conditions.minConfidence}% <span class="muted small">(not verified)</span></li>
         ${x.conditions.noChargeback ? html`<li>no active chargeback</li>` : ''}
       </ul>`]] : []),
     ])}
@@ -142,12 +144,14 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     <p>AI may automatically act when all of these hold. Everything else requires human approval.</p>
     <div class="condition-grid">
       <label class="field"><span>Maximum value</span><span class="input-prefix">$<input type="number" min="5" max="500" step="5" value="${c.maxValue}" data-action="set-condition" data-capability="${cap.id}" data-key="maxValue"></span></label>
-      <label class="field"><span>Minimum confidence</span><span class="input-suffix"><input type="number" min="50" max="99" step="1" value="${c.minConfidence}" data-action="set-condition" data-capability="${cap.id}" data-key="minConfidence">%</span></label>
+      <label class="field"><span>Daily total, all customers</span><span class="input-prefix">$<input type="number" min="0" max="100000" step="50" value="${c.maxDailyTotal ?? ''}" data-action="set-condition" data-capability="${cap.id}" data-key="maxDailyTotal"></span></label>
+      <label class="field"><span>Daily count, all customers</span><span class="input-suffix"><input type="number" min="0" max="10000" step="1" value="${c.maxDailyCount ?? ''}" data-action="set-condition" data-capability="${cap.id}" data-key="maxDailyCount"> refunds</span></label>
+      <label class="field"><span>Minimum confidence <span class="muted small">(model-reported, not verified)</span></span><span class="input-suffix"><input type="number" min="50" max="99" step="1" value="${c.minConfidence}" data-action="set-condition" data-capability="${cap.id}" data-key="minConfidence">%</span></label>
       <label class="check"><input type="checkbox" ${c.noFraudFlag ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="noFraudFlag"><span>No fraud flag on the account</span></label>
       <label class="check"><input type="checkbox" ${c.policyClear ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="policyClear"><span>Policy eligibility is clear (no exception needed)</span></label>
       <label class="check"><input type="checkbox" ${c.noChargeback ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="noChargeback"><span>No active chargeback</span></label>
     </div>
-    <p class="muted small">The plain-English preview in the decision panel updates as you change these.</p>
+    <p class="muted small">Over the daily total or count across all customers, an action needs a person. Confidence is what the model reports about itself: software checks it but can't verify it, and never treats it as a reason to allow. The plain-English preview in the decision panel updates as you change these.</p>
   </div>` : '';
   const conditionWarnings = dec.option === 'expand-limits' ? html`
     ${!c.noFraudFlag ? notice('fail', 'Fraud-flagged accounts would be eligible for automatic action.', 'The contract lists fraud-flagged accounts under MUST ASK. The enforcement gate still blocks the action, but the condition should match the contract.') : ''}

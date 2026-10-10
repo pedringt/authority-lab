@@ -19,10 +19,11 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
+import { capabilityView } from '../src/views/capability.js';
 import { proposalView } from '../src/views/proposals.js';
 import { versionsView } from '../src/views/versions.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
@@ -2491,4 +2492,334 @@ test('a stakeholder tightening while a decision is pending goes to sign-off, and
   assert.deepEqual(c.rows.map((r) => [r.label, r.change]), [['Quality', 'stricter']]);
   assert.equal(c.tighteningOnly, false, 'it went through sign-off');
   assert.equal(changes.some((x) => x.kind === 'requirements'), false, 'requirements v2 changed no row, so it is not listed');
+});
+
+// ---------------------------------------------------------------------------
+// The gate: checkAction (roadmap item 9, A1 #65)
+// ---------------------------------------------------------------------------
+
+// Systems of record for the gate tests (A2 seeds the real ones).
+const ORDERS = {
+  'ORD-1': { customerId: 'C-1', value: 120, fraudFlag: false, chargeback: false, policyException: false, paymentMethod: 'card-1' },
+  'ORD-2': { customerId: 'C-1', value: 80, fraudFlag: false, chargeback: false, policyException: false, paymentMethod: 'card-1' },
+  'ORD-3': { customerId: 'C-2', value: 420, fraudFlag: true, chargeback: false, policyException: false, paymentMethod: 'card-2' },
+  'ORD-4': { customerId: 'C-3', value: 60, fraudFlag: false, chargeback: true, policyException: false, paymentMethod: 'card-3' },
+};
+const withSystems = (s, refunds = []) => ({ ...s, systems: { orders: ORDERS, refunds } });
+const refund = (orderId, amount, extra = {}) => ({ tool: 'issue_refund', args: { orderId, amount, confidence: 95, ...extra } });
+// Refund recommendation authorized to Level 3 with limits (max $50, no fraud, clear policy, confidence ≥ 90, no chargeback).
+const atL3 = () => withSystems(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR));
+
+test('gate: Level 3 allows only when every recorded limit holds, and names the rule', () => {
+  const s = atL3();
+  assert.equal(getCapability(s, RR).authority.level, 3);
+  const ok = checkAction(s, RR, refund('ORD-1', 40));
+  assert.deepEqual([ok.verdict, ok.rule.kind], ['allow', 'within-limits']);
+  assert.match(ok.reason, /AC-04/, 'names the record the limits come from');
+  const big = checkAction(s, RR, refund('ORD-1', 60));
+  assert.deepEqual([big.verdict, big.rule.kind], ['needs-person', 'limit']);
+  const unsure = checkAction(s, RR, refund('ORD-1', 40, { confidence: 70 }));
+  assert.equal(unsure.verdict, 'needs-person', 'escalation: confidence below 80%');
+  assert.equal(checkAction(s, RR, refund('ORD-1', 40, { confidence: undefined })).verdict, 'needs-person', 'no confidence, no automatic action');
+  assert.deepEqual(checkAction(s, RR, refund('ORD-1', 40)), ok, 'deterministic');
+});
+
+test('gate bypass: splitting a refund under the limit is refused, per order and per customer per day', () => {
+  // Per order: $40 already refunded today; another $30 on the same order would total $70 > $50.
+  let s = withSystems(atL3(), [{ orderId: 'ORD-1', customerId: 'C-1', amount: 40, date: '2026-10-07' }]);
+  assert.notEqual(checkAction(s, RR, refund('ORD-1', 30)).verdict, 'allow');
+  assert.equal(checkAction(s, RR, refund('ORD-1', 30)).rule.kind, 'limit');
+  // Per customer per day: a different order of the same customer, $40 + $20 > $50.
+  assert.notEqual(checkAction(s, RR, refund('ORD-2', 20)).verdict, 'allow');
+  // A refund the day before doesn't count towards today's customer total.
+  s = withSystems(atL3(), [{ orderId: 'ORD-1', customerId: 'C-1', amount: 40, date: '2026-10-06' }]);
+  assert.equal(checkAction(s, RR, refund('ORD-2', 20)).verdict, 'allow');
+  // Refund execution's contract says must-never split: it blocks, not just asks.
+  let e = withSystems(initialState(), [{ orderId: 'ORD-1', customerId: 'C-1', amount: 40, date: '2026-10-07' }]);
+  e = { ...e, capabilities: e.capabilities.map((c) => (c.id === 'refund-execution-high-value' ? { ...c, authority: { level: 4, limited: false } } : c)) };
+  assert.deepEqual([checkAction(e, 'refund-execution-high-value', refund('ORD-1', 30)).verdict, checkAction(e, 'refund-execution-high-value', refund('ORD-1', 30)).rule.kind], ['block', 'must-never']);
+  // Never more than the order itself.
+  assert.equal(checkAction(withSystems(atL3()), RR, refund('ORD-2', 90)).rule.kind, 'over-order');
+});
+
+test('gate bypass: facts come from the record; a model claim that contradicts it blocks', () => {
+  const s = atL3();
+  const lie = { ...refund('ORD-3', 40), claims: { fraudFlag: false } };
+  assert.deepEqual([checkAction(s, RR, lie).verdict, checkAction(s, RR, lie).rule.kind], ['block', 'fact-mismatch']);
+  assert.equal(checkAction(s, RR, { ...refund('ORD-1', 40), claims: { orderValue: 40 } }).rule.kind, 'fact-mismatch');
+  assert.equal(checkAction(s, RR, refund('ORD-1', 40, { customerId: 'C-9' })).rule.kind, 'fact-mismatch', 'an argument naming a different customer');
+  // A true claim changes nothing: the record decides.
+  assert.equal(checkAction(s, RR, { ...refund('ORD-1', 40), claims: { orderValue: 120, fraudFlag: false } }).verdict, 'allow');
+  // No record, no action.
+  assert.equal(checkAction(s, RR, refund('ORD-404', 10)).rule.kind, 'no-record');
+});
+
+test('gate bypass: an unknown tool, a tool from another capability, and retries are refused', () => {
+  const s = atL3();
+  assert.deepEqual([checkAction(s, RR, { tool: 'delete_account', args: {} }).verdict, checkAction(s, RR, { tool: 'delete_account' }).rule.kind], ['block', 'unknown-tool']);
+  assert.equal(checkAction(s, 'ticket-classification', refund('ORD-1', 10)).rule.kind, 'tool-scope');
+  // Retrying a blocked action gets the same verdict, however many times.
+  const fraud = refund('ORD-3', 40);
+  const first = checkAction(s, RR, fraud);
+  assert.deepEqual([first.verdict, first.rule.kind], ['block', 'must-never'], 'overriding a fraud restriction');
+  for (let i = 0; i < 3; i++) assert.deepEqual(checkAction(s, RR, fraud), first);
+  // Retrying with a lie or a smaller amount doesn't get through either.
+  assert.equal(checkAction(s, RR, { ...fraud, claims: { fraudFlag: false } }).verdict, 'block');
+  assert.equal(checkAction(s, RR, refund('ORD-3', 5)).verdict, 'block');
+});
+
+test('gate bypass: acting at Level 0, 1 or 2 is never allowed', () => {
+  const s = withSystems(initialState());
+  const l0 = checkAction(s, 'account-closure', { tool: 'escalate_to_human', args: {} });
+  assert.deepEqual([l0.verdict, l0.rule.kind], ['block', 'level-0'], 'Level 0 blocks everything');
+  const l1 = checkAction(s, 'refund-execution-high-value', refund('ORD-1', 10));
+  assert.deepEqual([l1.verdict, l1.rule.kind], ['block', 'level-1']);
+  assert.equal(checkAction(s, 'refund-execution-high-value', { tool: 'lookup_order', args: { orderId: 'ORD-1' } }).verdict, 'allow', 'Level 1 may read');
+  const l2 = checkAction(s, RR, refund('ORD-1', 10));
+  assert.deepEqual([l2.verdict, l2.rule.kind], ['needs-person', 'level-2']);
+  assert.equal(checkAction(s, RR, { tool: 'escalate_to_human', args: {} }).verdict, 'allow', 'escalating is always allowed above Level 0');
+});
+
+test('gate bypass: any must-never blocks, at any level', () => {
+  const s = atL3();
+  assert.deepEqual([checkAction(s, RR, refund('ORD-1', 40, { paymentMethod: 'gift-card' })).verdict, checkAction(s, RR, refund('ORD-1', 40, { paymentMethod: 'gift-card' })).rule.kind], ['block', 'must-never']);
+  const l2 = withSystems(initialState());
+  assert.equal(checkAction(l2, RR, refund('ORD-3', 10)).verdict, 'block', 'must-never wins over Level 2 asking a person');
+  const l4 = { ...s, capabilities: s.capabilities.map((c) => (c.id === RR ? { ...c, authority: { level: 4, limited: false } } : c)) };
+  assert.equal(checkAction(l4, RR, refund('ORD-3', 10)).verdict, 'block');
+  // Level 4: allowed unless a must-ask applies (refunds over $100, chargebacks).
+  assert.equal(checkAction(l4, RR, refund('ORD-1', 60)).verdict, 'allow');
+  assert.deepEqual([checkAction(l4, RR, refund('ORD-1', 110)).verdict, checkAction(l4, RR, refund('ORD-1', 110)).rule.kind], ['needs-person', 'must-ask']);
+  assert.equal(checkAction(l4, RR, refund('ORD-4', 10)).rule.kind, 'must-ask', 'an active chargeback');
+});
+
+test('gate bypass: after an automatic restriction the new level applies immediately', () => {
+  let s = atL3();
+  const before = checkAction(s, RR, refund('ORD-1', 40));
+  assert.equal(before.verdict, 'allow');
+  s = simulateBreach(s, RR);
+  const after = checkAction(s, RR, refund('ORD-1', 40));
+  assert.deepEqual([after.verdict, after.rule.kind, after.level], ['needs-person', 'level-2', 2]);
+});
+
+test('gate: Level 3 with no recorded limits asks a person; unenforceable lines are listed, not pretended', () => {
+  const s = withSystems(initialState());
+  const l3 = { ...s, capabilities: s.capabilities.map((c) => (c.id === RR ? { ...c, authority: { level: 3, limited: false } } : c)) };
+  assert.equal(checkAction(l3, RR, refund('ORD-1', 10)).rule.kind, 'no-limits');
+  const t = enforcementTerms(s, RR);
+  assert.ok(t.unenforced.some((l) => l.text === 'Change customer account ownership.'));
+  assert.ok(t.unenforced.some((l) => l.text === 'Customer threatens legal action.'));
+  assert.deepEqual(t.mustNever.map((l) => l.rule.kind), ['payment-method', 'fraud']);
+});
+
+// ---------------------------------------------------------------------------
+// Review fixes on the gate (A1): built-in names, model-reported confidence,
+// capability-wide daily caps
+// ---------------------------------------------------------------------------
+
+const PROTO_NAMES = ['constructor', 'toString', '__proto__', 'hasOwnProperty'];
+const atLevel = (s, id, level) => ({ ...s, capabilities: s.capabilities.map((c) => (c.id === id ? { ...c, authority: { level, limited: level === 3 } } : c)) });
+
+test('gate bypass: built-in object names are never orders or tools, at any level', () => {
+  const l3 = atL3();
+  const states = [
+    ['L0', withSystems(initialState()), 'account-closure'],
+    ['L1', withSystems(initialState()), 'refund-execution-high-value'],
+    ['L2', withSystems(initialState()), RR],
+    ['L3', l3, RR],
+    ['L4', atLevel(l3, RR, 4), RR],
+    ['no systems', atLevel(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 4), RR],
+  ];
+  for (const [label, s, cap] of states) {
+    for (const name of PROTO_NAMES) {
+      const r = checkAction(s, cap, refund(name, 40, { confidence: 99 }));
+      assert.equal(r.verdict, 'block', `${label}: refund on "${name}" is blocked`);
+      if (['L2', 'L3', 'L4', 'no systems'].includes(label)) assert.equal(r.rule.kind, 'no-record', `${label}: "${name}" is not an order`);
+      const t = checkAction(s, cap, { tool: name, args: {} });
+      assert.deepEqual([t.verdict, t.rule.kind], ['block', 'unknown-tool'], `${label}: "${name}" is not a tool`);
+    }
+  }
+});
+
+test('gate: confidence is model-reported, listed as not verified, and never a reason to allow', () => {
+  const s = atL3();
+  const t = enforcementTerms(s, RR);
+  assert.ok(t.notVerified.some((x) => x.text === 'Confidence below 80%.' && /Model-reported/.test(x.why)), 'the contract line');
+  assert.ok(t.notVerified.some((x) => x.section === 'limits' && /confidence/i.test(x.text) && /Model-reported/.test(x.why)), 'the recorded limit');
+  assert.ok(t.notVerified.some((x) => x.text === 'Change customer account ownership.'), 'alongside what software cannot check');
+  const ok = checkAction(s, RR, refund('ORD-1', 40));
+  assert.equal(ok.verdict, 'allow');
+  assert.equal(/confidence/i.test(ok.reason) || /confidence/i.test(ok.rule.text), false, 'confidence is not a reason it was allowed');
+  const low = checkAction(s, RR, refund('ORD-1', 40, { confidence: 70 }));
+  assert.equal(low.verdict, 'needs-person', 'the check still runs');
+  assert.match(low.reason, /not verified/);
+});
+
+test('gate: capability-wide daily caps hold even when every customer is under their own limit', () => {
+  const orders = Object.fromEntries(['A', 'B', 'C', 'D', 'E'].map((k) => [`ORD-${k}`, { customerId: `C-${k}`, value: 100, fraudFlag: false, chargeback: false, policyException: false, paymentMethod: `card-${k}` }]));
+  let s = selectDecision(initialState(), RR, 'expand-limits');
+  s = setCondition(s, RR, 'maxDailyTotal', 100);
+  s = setCondition(s, RR, 'maxDailyCount', 3);
+  s = authorize(s, RR);
+  const today = (k, amount, extra = {}) => ({ orderId: `ORD-${k}`, customerId: `C-${k}`, amount, date: '2026-10-07', capabilityId: RR, ...extra });
+  const at = (refunds) => ({ ...s, systems: { orders, refunds } });
+  // $40 + $40 already today, two customers; a third customer's $30 is under their own $50 but takes the day to $110.
+  const total = checkAction(at([today('A', 40), today('B', 40)]), RR, refund('ORD-C', 30));
+  assert.deepEqual([total.verdict, total.rule.kind], ['needs-person', 'limit']);
+  assert.match(total.rule.text, /\$100 refunded by this capability per day/);
+  assert.equal(checkAction(at([today('A', 40), today('B', 40)]), RR, refund('ORD-C', 20)).verdict, 'allow', 'exactly at the cap is allowed');
+  // Three refunds of $10 already; a fourth crosses the count cap.
+  const count = checkAction(at([today('A', 10), today('B', 10), today('C', 10)]), RR, refund('ORD-D', 10));
+  assert.deepEqual([count.verdict, count.rule.text], ['needs-person', 'At most 3 refunds by this capability per day, across all customers']);
+  // Only this capability's refunds today count: not yesterday's, not another capability's, not a person's.
+  const others = [today('A', 40, { date: '2026-10-06' }), today('B', 40, { capabilityId: 'refund-execution-high-value' }), today('C', 40, { capabilityId: undefined })];
+  assert.equal(checkAction(at(others), RR, refund('ORD-D', 40)).verdict, 'allow');
+  // The record shows the caps, and the defaults carry them.
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual([rec.conditions.maxDailyTotal, rec.conditions.maxDailyCount], [100, 3]);
+  assert.deepEqual([seed.defaultConditions.maxDailyTotal, seed.defaultConditions.maxDailyCount], [500, 20]);
+});
+
+// ---------------------------------------------------------------------------
+// Systems of record and the data boundary (roadmap item 9, A2 #66)
+// ---------------------------------------------------------------------------
+
+// Every value the model must never see: restricted fields, and fields the
+// refund contracts withhold.
+const WITHHELD = (s) => Object.values(s.systems.customers).flatMap((c) => [c.fullName, c.email, c.city, c.address]).concat(Object.values(s.systems.orders).map((o) => o.cardNumber));
+const RX = 'refund-execution-high-value';
+
+test('A2: the gate reads facts from the seeded systems of record', () => {
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.equal(Object.keys(s.systems.orders).length, 6);
+  assert.equal(checkAction(s, RR, refund('ORD-5001', 40)).verdict, 'allow');
+  assert.deepEqual([checkAction(s, RR, refund('ORD-5003', 20)).verdict, checkAction(s, RR, refund('ORD-5003', 20)).rule.kind], ['block', 'must-never'], "Mina Park's fraud flag comes from the fraud list");
+  assert.equal(checkAction(s, RR, refund('ORD-5004', 20)).rule.kind, 'must-ask', 'the active chargeback comes from the chargeback list');
+  assert.equal(checkAction(s, RR, refund('ORD-5005', 20)).rule.kind, 'must-ask', 'policy exception');
+  assert.equal(checkAction(startEmpty(), RR, refund('ORD-5001', 10)).rule.kind, 'unknown-capability', 'a new workspace has neither the capability nor the orders');
+});
+
+test('A2: lookup_order returns only the fields the contract lets the AI see', () => {
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const { result } = callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } });
+  assert.deepEqual([result.verdict, result.executed, result.found], ['allow', true, true]);
+  assert.deepEqual(result.data.order, { id: 'ORD-5003', date: '2026-09-27', items: ['Espresso machine'], value: 420, status: 'Delivered', refundedSoFar: 0, paymentMethod: 'Mastercard ending 4444' });
+  assert.deepEqual(result.data.customer, { id: 'C-1002', firstName: 'Mina', accountSince: '2025-11-02' });
+  assert.deepEqual(result.data.flags, { fraud: true, chargeback: false, policyException: false });
+  const rx = callTool(s, RX, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } }).result;
+  assert.deepEqual(Object.keys(rx.data.customer), ['id'], 'Refund execution sees less');
+  assert.equal(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-0000' } }).result.found, false);
+});
+
+test('A2: withheld fields never appear in any tool result', () => {
+  const states = [initialState(), authorize(selectDecision(initialState(), RR, 'expand-limits'), RR)];
+  for (const s of states) {
+    const secrets = WITHHELD(s);
+    for (const cap of [RR, RX]) {
+      for (const orderId of Object.keys(s.systems.orders)) {
+        const calls = [
+          { tool: 'lookup_order', args: { orderId } },
+          refund(orderId, 10),
+          { ...refund(orderId, 10), claims: { fraudFlag: false, chargeback: false, orderValue: 1 } },
+          refund(orderId, 10, { paymentMethod: 'gift-card' }),
+          { tool: 'escalate_to_human', args: { orderId, reason: 'Checking.' } },
+          { tool: 'delete_account', args: { orderId } },
+        ];
+        for (const call of calls) {
+          const json = JSON.stringify(callTool(s, cap, call).result);
+          for (const secret of secrets) assert.equal(json.includes(secret), false, `${cap} ${call.tool} ${orderId} leaked "${secret}"`);
+        }
+      }
+    }
+  }
+});
+
+test('A2: a refusal tells the model the rule, not the record', () => {
+  // A contract that lets the AI see only the order id.
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  s = amend(s, RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id'] }, author: 'maya', reason: 'Test: only the order id.' });
+  assert.deepEqual(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } }).result.data, { order: { id: 'ORD-5003' } });
+  const lie = callTool(s, RR, { ...refund('ORD-5003', 20), claims: { fraudFlag: false } });
+  assert.deepEqual(Object.keys(lie.result).sort(), ['executed', 'message', 'rule', 'tool', 'verdict']);
+  assert.match(lie.check.reason, /true/, 'the full reason is kept for the record');
+  assert.equal(JSON.stringify(lie.result).includes('true'), false, 'but the model is not told the fraud flag');
+});
+
+test('A2: issue_refund executes only when the gate allows, and writes the ledger', () => {
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const n = s.systems.refunds.length;
+  const first = callTool(s, RR, refund('ORD-5001', 30));
+  assert.deepEqual([first.result.verdict, first.result.executed], ['allow', true]);
+  s = first.state;
+  assert.equal(s.systems.refunds.length, n + 1);
+  assert.deepEqual(s.systems.refunds.at(-1), { id: first.result.refundId, orderId: 'ORD-5001', customerId: 'C-1001', amount: 30, date: '2026-10-07', by: 'ai', capabilityId: RR });
+  // A second refund to the same customer today: $30 + $25 > $50.
+  const second = callTool(s, RR, refund('ORD-5002', 25));
+  assert.deepEqual([second.result.verdict, second.result.executed], ['needs-person', false]);
+  assert.equal(second.state, s, 'nothing changes when the gate does not allow');
+  // At Level 2 nothing executes on its own.
+  const l2 = callTool(initialState(), RR, refund('ORD-5001', 10));
+  assert.deepEqual([l2.result.verdict, l2.result.executed], ['needs-person', false]);
+});
+
+test('A2: escalate_to_human records the hand-off', () => {
+  const s = initialState();
+  const { state, result } = callTool(s, RR, { tool: 'escalate_to_human', args: { orderId: 'ORD-5003', reason: 'Fraud signal on the account.' } });
+  assert.equal(result.executed, true);
+  assert.deepEqual(state.systems.escalations.at(-1), { id: result.escalationId, capabilityId: RR, orderId: 'ORD-5003', reason: 'Fraud signal on the account.', date: '2026-10-07', owner: getCapability(s, RR).owner });
+});
+
+test('A2: the data section is versioned with the contract and checked by software', () => {
+  let s = initialState();
+  const v1 = current(s, RR, 'contract').dataSeen;
+  s = amend(s, RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: [...v1, 'customer.email'] }, author: 'maya', reason: 'Test: show email.' });
+  assert.deepEqual(versionList(s, RR, 'contract')[0].value.dataSeen, v1, 'v1 is unchanged');
+  assert.ok(current(s, RR, 'contract').dataSeen.includes('customer.email'));
+  const checks = (dataSeen) => contractValueChecks(s, RR, { ...current(s, RR, 'contract'), dataSeen }).filter((c) => c.section === 'dataSeen').map((c) => c.text);
+  assert.deepEqual(checks(['order.id']), []);
+  assert.match(checks(['order.cardNumber']).join(), /restricted/);
+  assert.match(checks(['customer.address']).join(), /restricted/);
+  assert.match(checks(['order.secretSauce']).join(), /not a field/);
+  // A proposed contract amendment carries the data section through.
+  const after = proposeAmendment(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id', 'order.value'] }, by: 'maya', reason: 'Narrowing what the AI sees.' });
+  const p = capData(after, RR).proposals.at(-1);
+  assert.deepEqual(p.value.dataSeen, ['order.id', 'order.value']);
+  // Restricted fields never pass the filter, even if a contract lists one.
+  let leaky = amend(initialState(), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.cardNumber', 'customer.address', 'order.id'] }, author: 'maya', reason: 'Test: restricted.' });
+  leaky = authorize(selectDecision(leaky, RR, 'expand-limits'), RR);
+  assert.deepEqual(callTool(leaky, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).result.data, { order: { id: 'ORD-5001' } });
+});
+
+test('A2: a contract with no data section shows the AI nothing from the records', () => {
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const { dataSeen: _drop, ...rest } = current(s, RR, 'contract');
+  s = amend(s, RR, 'contract', { value: rest, author: 'maya', reason: 'Test: no data section.' });
+  assert.deepEqual(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).result.data, {});
+});
+
+test('A2: the contract tab shows the data boundary', () => {
+  const s = initialState();
+  const html = String(capabilityView(s, RR, new URLSearchParams('tab=contract')));
+  assert.match(html, /Data the AI may see/);
+  assert.match(html, /Full card number <span class="muted small">\(restricted\)/);
+  assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=contract'))), /no data section/);
+});
+
+test('A2 bypass: built-in object names are never orders, through every tool, at every level', () => {
+  const l3 = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const states = [['L0', initialState(), 'account-closure'], ['L1', initialState(), RX], ['L2', initialState(), RR], ['L3', l3, RR], ['L4', atLevel(l3, RR, 4), RR]];
+  for (const [label, s, cap] of states) {
+    for (const name of PROTO_NAMES) {
+      const r = callTool(s, cap, refund(name, 40, { confidence: 99 }));
+      assert.deepEqual([r.result.verdict, r.result.executed], ['block', false], `${label}: refund on "${name}"`);
+      assert.equal(r.state, s, `${label}: nothing written for "${name}"`);
+      const look = callTool(s, cap, { tool: 'lookup_order', args: { orderId: name } });
+      assert.equal(look.result.data ?? null, null, `${label}: lookup of "${name}" finds nothing`);
+      if (label !== 'L0') assert.equal(look.result.found, false);
+      const esc = callTool(s, cap, { tool: 'escalate_to_human', args: { orderId: name, reason: 'Checking.' } });
+      if (esc.result.executed) assert.equal(esc.state.systems.escalations.at(-1).orderId, null, `${label}: "${name}" is not linked as an order`);
+    }
+  }
+  // The ledger never gets a refund without a customer.
+  assert.equal(l3.systems.refunds.every((r) => r.customerId), true);
 });

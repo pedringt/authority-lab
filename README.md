@@ -45,6 +45,10 @@ The tests cover the state transitions: running the suite, authorizing each decis
 9. **Monitoring → Record the post-incident review**: Refund recommendation is High impact, so switch **Acting as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changed, and record it. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
 9. **Reset demo** (top right) restores the seeded state.
 
+## Agent tooling (MCP)
+
+`agent/` is an MCP server that gives a model the tools to look up orders, issue refunds and escalate to a person. Every call goes through the gate and the data filter in `src/store/`. It's separate from the static app: it has its own pinned dependencies and is never deployed. See [agent/README.md](agent/README.md) to run it with Claude Code or Claude Desktop.
+
 ## Starting empty
 
 **Start empty** (demo controls, top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). Setup comes first: name the workspace and its one workflow, record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on), and say which founding admin is setting it up. Then add the first capability. **Reset demo** brings Northstar back.

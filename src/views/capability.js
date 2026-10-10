@@ -1,4 +1,5 @@
 import * as seed from '../data/seed.js';
+import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
 import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf } from '../store/index.js';
 import { scenarioTable } from './tests.js';
@@ -99,14 +100,30 @@ function contractTab(state, cap, d) {
       <div class="card contract-block contract-may"><h3>AI may</h3>${list(c.may)}</div>
       <div class="card contract-block contract-ask"><h3>AI must ask / require approval</h3>${list(c.mustAsk)}</div>
       <div class="card contract-block contract-never"><h3>AI must never</h3>${list(c.mustNever)}</div>
-      <div class="card contract-block contract-escalate"><h3>Escalation conditions</h3>${list(c.escalation)}</div>
+      <div class="card contract-block contract-escalate"><h3>Escalation conditions</h3>${list(c.escalation)}${c.escalation.some((l) => /confidence/i.test(l)) ? html`<p class="muted small">Confidence is model-reported, not verified: software checks it but can't confirm it, and never treats it as a reason to allow.</p>` : ''}</div>
     </div>
     <div class="card contract-block contract-auto">
       <h3>Automatic restriction conditions</h3>
       ${list(c.autoRestriction)}
       <p class="muted small">Humans authorize expanded authority. Software may automatically reduce authority when one of these predefined conditions is triggered.</p>
     </div>
+    ${dataBoundaryCard(c)}
     ${riskBlock}`;
+}
+
+// The contract's data boundary (A2): what tool results may show the AI.
+function dataBoundaryCard(c) {
+  const seen = new Set(c.dataSeen || []);
+  const shown = DATA_FIELDS.filter((f) => seen.has(f.id) && !f.restricted);
+  const hidden = DATA_FIELDS.filter((f) => !seen.has(f.id) || f.restricted);
+  return html`<div class="card contract-block contract-data">
+    <h3>Data the AI may see</h3>
+    ${Array.isArray(c.dataSeen)
+      ? html`<div class="two-col data-columns"><div><p class="fact-label">Shown to the AI</p>${shown.length ? html`<ul class="contract-list">${shown.map((f) => html`<li>${f.label}</li>`)}</ul>` : html`<p class="muted">Nothing.</p>`}</div>
+        <div><p class="fact-label">Never shown to the AI</p><ul class="contract-list">${hidden.map((f) => html`<li>${f.label}${f.restricted ? html` <span class="muted small">(restricted)</span>` : ''}</li>`)}</ul></div></div>`
+      : html`<p class="muted">This contract has no data section, so tool results show the AI nothing from the systems of record.</p>`}
+    <p class="muted small">Software filters every tool result to these fields before the model sees it. Card numbers and full addresses are restricted: no contract can list them. A refusal tells the model the rule, never the record.</p>
+  </div>`;
 }
 
 function criteriaTab(state, cap) {

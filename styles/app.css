@@ -580,3 +580,7 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 #workspace { margin-bottom: 20px; }
 #workspace .amendment { margin-top: 10px; }
 .tighten-hint { background: var(--pass-bg); border: 1px solid var(--pass-bd); border-radius: 4px; padding: 8px 10px; margin: 0 0 10px; }
+.contract-data { margin-top: 12px; border-top: 3px solid var(--decide); }
+.data-columns { margin-top: 0; }
+.data-seen { border: 0; padding: 0; margin: 0; }
+.data-seen legend { font-weight: 600; margin-bottom: 8px; }

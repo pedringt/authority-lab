@@ -28,6 +28,8 @@ export function startEmpty() {
     decisionRecords: [],
     activity: [],
     alerts: [],
+    // A new workspace has no systems of record connected yet.
+    systems: { customers: {}, orders: {}, fraudFlags: [], chargebacks: [], refunds: [], escalations: [] },
   };
 }
 

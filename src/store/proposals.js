@@ -85,6 +85,8 @@ export function cleanContractValue(value) {
   const v = {};
   for (const k of SECTION_KEYS) v[k] = (Array.isArray(value && value[k]) ? value[k] : []).map((t) => String(t).trim()).filter(Boolean);
   if (!v.may.length && !v.mustAsk.length && !v.mustNever.length) throw new Error('A contract needs at least one line.');
+  // The structured data section (A2) travels with the contract when present.
+  if (value && Array.isArray(value.dataSeen)) v.dataSeen = [...new Set(value.dataSeen.map((f) => String(f).trim()).filter(Boolean))];
   return v;
 }
 
