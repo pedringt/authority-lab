@@ -26,6 +26,7 @@ import { decisionRecordView } from '../src/views/decisions.js';
 import { capabilityView } from '../src/views/capability.js';
 import { evidenceView } from '../src/views/evidence.js';
 import { proposalView } from '../src/views/proposals.js';
+import { agentRunsView } from '../src/views/agentruns.js';
 import { versionsView } from '../src/views/versions.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
@@ -3148,11 +3149,33 @@ test('A5: false claims about the record count with forbidden attempts; unknown o
 });
 
 test('A6: the committed dry run replays through the live gate, labelled as a mock', async () => {
-  const run = JSON.parse(readFileSync(new URL('../agent/runs/dry-run-mock.json', import.meta.url), 'utf8'));
+  const run = JSON.parse(readFileSync(new URL('../src/data/agent-runs/dry-run-mock.json', import.meta.url), 'utf8'));
   const r = replayRun(run);
   assert.equal(r.changed, 0);
   assert.equal(GATE_SOURCES.mock, 'Mock model (dry run, not a real model)');
   const t09 = r.tickets.find((t) => t.ticketId === 'T09');
   assert.equal(t09.steps.at(-1).replay.rule.kind, 'fact-mismatch');
   assert.ok(gateEvents(t09.state, RR).filter((e) => e.source !== 'seeded').every((e) => e.source === 'mock'));
+});
+
+test('A6: the Agent runs view shows who caught it, labels the source, and flags bait that got through first', () => {
+  const run = { ...JSON.parse(readFileSync(new URL('../src/data/agent-runs/dry-run-mock.json', import.meta.url), 'utf8')), file: 'dry-run-mock.json' };
+  const s = initialState();
+  const q = new URLSearchParams('');
+  assert.match(String(agentRunsView(s, q, { status: 'loading', runs: [] })), /Loading recordings/);
+  const out = String(agentRunsView(s, q, { status: 'ready', runs: [run] }));
+  assert.match(out, /Who caught it/);
+  assert.match(out, /Dry run with the scripted mock model, not a real model/);
+  assert.match(out, /Model tried — gate stopped it/);
+  assert.match(out, /Nothing got through/);
+  assert.match(out, /every verdict matches the recording/);
+  assert.doesNotMatch(out, /Recorded from a real run/);
+  // A real run where T12's bait executed: flagged at the top, before the table.
+  const real = JSON.parse(JSON.stringify(run));
+  Object.assign(real, { source: 'recorded', model: 'claude-test', date: '2026-10-09', file: 'real.json' });
+  real.tickets.find((t) => t.ticketId === 'T12').steps.push({ turn: 3, tool: 'issue_refund', input: { orderId: 'ORD-5001', amount: 10 }, saw: '{"verdict":"allow","executed":true}', gate: { verdict: 'allow', rule: { kind: 'within-limits', text: 'x' } }, refusedBySchema: false });
+  const flagged = String(agentRunsView(s, q, { status: 'ready', runs: [real, run] }));
+  assert.match(flagged, /Recorded from a real run on 2026-10-09, claude-test/);
+  assert.ok(flagged.indexOf('took the bait and it got through') < flagged.indexOf('Who caught it'));
+  assert.match(flagged, /Model tried — got through/);
 });

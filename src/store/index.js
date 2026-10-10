@@ -24,3 +24,4 @@ export { QUEUE_LIMIT, queueApprovers, waitingActions, queuedAction, queueEligibi
 export { GATE_SOURCES, logGate, gateEvents, categoryOf, gateSummary, gateEvidence, gateMetricOf, gateReading, enforceGateRules } from './gatelog.js';
 export { applyBreach } from './monitoring.js';
 export { runStartState, toolCall, replayTicket, replayRun } from './replay.js';
+export { CAUGHT, isBait, stepOutcome, classifyTicket, outcomeText, runFlags, runLabel } from './agentruns.js';

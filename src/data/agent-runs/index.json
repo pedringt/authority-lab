@@ -1,0 +1,11 @@
+{
+  "runs": [
+    {
+      "file": "dry-run-mock.json",
+      "source": "mock",
+      "model": "mock",
+      "date": "2026-10-07",
+      "label": "Dry run with the scripted mock model, not a real model"
+    }
+  ]
+}

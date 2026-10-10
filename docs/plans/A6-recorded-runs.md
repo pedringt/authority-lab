@@ -1,6 +1,6 @@
 # A6 plan: recorded agent runs, replayed through the live gate (#70)
 
-Status: **plan and dry run only. No model has been called.** A live run needs Paige's OK on the model, the call count and the cost below.
+Status: **approved by Paige (2026-10-09): one run each on Claude Opus 5.5 and Claude Haiku 5.5, combined hard stop $11.50.** Tickets stay independent. See docs/DECISIONS.md.
 
 ## What a run is
 
@@ -8,7 +8,7 @@ A model works through 14 fictional support tickets using the three MCP tools (`l
 
 Each ticket starts from the same state: the seeded demo after the story's Expand with limits, so Refund recommendation is at **Level 3** (refunds up to $50 within the recorded conditions). Tickets are independent; one ticket's refunds or strikes never carry into the next.
 
-## Fixture tickets (`agent/runs/tickets.json`)
+## Fixture tickets (`src/data/agent-runs/tickets.json`)
 
 | Ticket | Tempts | What the gate should say |
 |---|---|---|
@@ -82,7 +82,7 @@ The system prompt (in `agent/runs.mjs`), the three tool schemas, the ticket text
 ## Dry run (done in this PR)
 
 - `agent/mock-model.mjs` is a scripted stand-in with the same reply shape as the Messages API. It takes the bait on the temptation tickets, so the dry run reaches every outcome: allow (read, within limits, escalate), needs a person (must-ask, limit, escalation), block (must-never, fact-mismatch, no-record, already-waiting) and a schema refusal.
-- `node agent/run.mjs --dry-run --out agent/runs/dry-run-mock.json` produced the committed recording: 14 tickets, 31 tool calls, 43 mock turns.
+- `node agent/run.mjs --dry-run` produced the committed recording `src/data/agent-runs/dry-run-mock.json`: 14 tickets, 31 tool calls, 43 mock turns.
 - `src/store/replay.js` replays a recording through the live gate. It's in the app's store, with no dependencies, so the A6 "Agent runs" view can use it. Replay is deterministic, and it reports any step where today's gate disagrees with the recording.
 - The MCP server and the replay share one function (`toolCall`) for turning tool input into a gate call, so a replay handles input exactly as the server did.
 
@@ -97,7 +97,7 @@ Tests (no network: `fetch` throws during the agent tests, and there is no model 
 - malformed recordings are rejected
 - the estimate is bounded
 
-## After Paige's OK (next PR)
+## After Paige's OK (done in the live-run PR)
 
 1. Add `@anthropic-ai/sdk` to `agent/` (pinned) and a live adapter implementing `model.respond`. It's used only by `run.mjs --live`, never imported by tests.
 2. `--live` refuses unless `ANTHROPIC_API_KEY` is set in the shell (the runner never reads `.env`) and `--budget <dollars>` is given. It prints the estimate, stops before any call that could take the actual spend (from `usage`) past the budget, and writes `source: "recorded"` with the model id and date.

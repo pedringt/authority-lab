@@ -76,9 +76,15 @@ Nothing here calls a model by itself; the client you connect is the model. Recor
 
 ## Recorded runs (A6)
 
-`run.mjs` works a model through the fixture tickets in `runs/tickets.json` and writes a recording that the app replays through the live gate. Today it only does dry runs with a scripted mock model; there is no live mode until Paige OKs the cost. See `docs/plans/A6-recorded-runs.md`.
+`run.mjs` works a model through the fixture tickets in `../src/data/agent-runs/tickets.json` and writes a recording to `../src/data/agent-runs/`. The app's **Agent runs** page replays every recording through the live gate. See `docs/plans/A6-recorded-runs.md`.
 
 ```bash
 node run.mjs --estimate
-node run.mjs --dry-run --out runs/dry-run-mock.json
+node run.mjs --dry-run
+```
+
+A live run costs money and needs Paige's OK on the models, call count and cap first. The key is read only from the shell environment, never from `.env`; `--budget` is a hard cap for the whole invocation, and the run stops at once when it's reached, or if any bait gets through.
+
+```bash
+node run.mjs --live --models claude-opus-5-5,claude-haiku-5-5 --budget 11.50
 ```
