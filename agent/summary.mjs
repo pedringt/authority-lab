@@ -37,8 +37,13 @@ export function summarize(runs, tickets, { cap = null } = {}) {
     const fired = restrictionIn(r);
     lines.push('');
     lines.push(fired
-      ? `**Shared session (${r.model}): automatic restriction fired on ${fired.ticketId}**, taking Refund recommendation from Level ${fired.from ?? 3} to Level ${fired.to}. Later tickets ran under the lower level.`
+      ? `**Shared session (${r.model}): automatic restriction fired on ${fired.ticketId}**, taking Refund recommendation from Level ${fired.from ?? 3} to Level ${fired.to}. ${fired.ticketId === r.tickets.at(-1).ticketId ? 'That was the last ticket, so no ticket ran under the lower level.' : 'Later tickets ran under the lower level.'}`
       : `**Shared session (${r.model}): automatic restriction did not fire.**`);
+  }
+  // Recordings keep the ticket text they ran with; say where it differs from today's.
+  for (const r of runs) {
+    const changed = r.tickets.filter((t) => { const now = tickets.find((x) => x.id === t.ticketId); return now && t.message && now.message !== t.message; }).map((t) => t.ticketId);
+    if (changed.length) { lines.push(''); lines.push(`_${runLabel(r)} ran ${changed.join(', ')} with their earlier wording; the recording keeps the text the model actually saw._`); }
   }
   const total = runs.reduce((t, r) => t + r.cost, 0);
   lines.push('');
@@ -51,11 +56,11 @@ export function summarize(runs, tickets, { cap = null } = {}) {
 export function writeIndex(dir = RUNS_DIR) {
   const runs = readdirSync(dir).filter((f) => f.endsWith('.json') && !['tickets.json', 'index.json'].includes(f)).map((file) => {
     const r = JSON.parse(readFileSync(join(dir, file), 'utf8'));
-    return { file, source: r.source, model: r.model, date: r.date, label: runLabel(r) };
+    return { file, source: r.source, model: r.model, date: r.date, ...(r.start && r.start.shared ? { shared: true } : {}), label: runLabel(r) };
   });
   // Same date: in the order models are listed in PRICES (Opus, Sonnet, Haiku).
   const rank = (m) => { const i = Object.keys(PRICES).indexOf(m); return i < 0 ? 99 : i; };
-  runs.sort((a, b) => (a.source === b.source ? (b.date || '').localeCompare(a.date || '') || rank(a.model) - rank(b.model) : a.source === 'recorded' ? -1 : 1));
+  runs.sort((a, b) => (a.source === b.source ? (b.date || '').localeCompare(a.date || '') || rank(a.model) - rank(b.model) || Number(Boolean(a.shared)) - Number(Boolean(b.shared)) : a.source === 'recorded' ? -1 : 1));
   writeFileSync(join(dir, 'index.json'), `${JSON.stringify({ runs }, null, 2)}\n`);
   return runs;
 }

@@ -164,7 +164,8 @@ test('committed recordings hold nothing secret and the index lists every one', (
     assert.equal(/sk-ant-|ANTHROPIC_API_KEY|x-api-key|"authorization"\s*:|Bearer\s+[A-Za-z0-9._-]{8,}/i.test(text), false, `${f} holds no credential`);
     const run = JSON.parse(text);
     assert.deepEqual(validateRun(run), [], f);
-    assert.equal(run.label, run.source === 'recorded' ? `Recorded from a real run on ${run.date}, ${run.model}` : 'Dry run with the scripted mock model, not a real model');
+    const shared = run.start.shared ? ', all tickets in one shared session' : '';
+    assert.equal(run.label, run.source === 'recorded' ? `Recorded from a real run on ${run.date}, ${run.model}${shared}` : `Dry run with the scripted mock model, not a real model${shared}`);
   }
 });
 

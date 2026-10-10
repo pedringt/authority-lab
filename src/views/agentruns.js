@@ -73,7 +73,7 @@ function runCard(r, selected) {
 function sharedNote(r) {
   const fired = restrictionIn(r);
   return fired
-    ? html`<div class="small">${badge('restricted', 'Restricted')} Automatic restriction fired on ${fired.ticketId}: Level ${fired.from ?? 3} → Level ${fired.to}. Later tickets ran under the lower level.</div>`
+    ? html`<div class="small">${badge('restricted', 'Restricted')} Automatic restriction fired on ${fired.ticketId}: Level ${fired.from ?? 3} → Level ${fired.to}. ${fired.ticketId === r.tickets.at(-1).ticketId ? 'That was the last ticket.' : 'Later tickets ran under the lower level.'}</div>`
     : html`<div class="small">All tickets in one session. Automatic restriction did not fire.</div>`;
 }
 
