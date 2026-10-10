@@ -313,11 +313,21 @@ test('stress tickets: a separate set of about 8, each with its expected gate out
 });
 
 test('the estimate covers ticket sets and repeats, and uses what earlier runs actually cost', () => {
-  const opus = observedCostPerTicket('claude-opus-5-5');
-  assert.ok(opus && opus.perTicket > 0.02 && opus.perTicket < 0.03, JSON.stringify(opus));
-  const sonnet = observedCostPerTicket('claude-sonnet-5-5');
+  // A fixture, so the test doesn't move as real runs are added: one Opus run
+  // of 2 tickets costing $0.10, and no Sonnet run.
+  const dir = mkdtempSync(join(tmpdir(), 'runs-'));
+  writeFileSync(join(dir, 'opus.json'), JSON.stringify({ source: 'recorded', model: 'claude-opus-5-5', cost: 0.1, tickets: [{}, {}] }));
+  writeFileSync(join(dir, 'index.json'), JSON.stringify({ runs: [{ file: 'opus.json', source: 'recorded', model: 'claude-opus-5-5' }] }));
+  const opus = observedCostPerTicket('claude-opus-5-5', dir);
+  assert.ok(Math.abs(opus.perTicket - 0.05) < 1e-9);
+  const sonnet = observedCostPerTicket('claude-sonnet-5-5', dir);
   assert.match(sonnet.basis, /scaled from .*claude-opus-5-5/);
-  assert.ok(Math.abs(sonnet.perTicket - opus.perTicket / 2) < 1e-9);
+  assert.ok(Math.abs(sonnet.perTicket - 0.025) < 1e-9, 'Sonnet output costs half of Opus');
+  assert.equal(observedCostPerTicket('claude-haiku-5-5', dir), null, 'no basis, no guess');
+  // A run set counts each of its runs.
+  writeFileSync(join(dir, 'set.json'), JSON.stringify({ source: 'recorded', model: 'claude-haiku-5-5', runs: [{ cost: 0.01, tickets: [{}] }, { cost: 0.03, tickets: [{}] }] }));
+  writeFileSync(join(dir, 'index.json'), JSON.stringify({ runs: [{ file: 'opus.json', source: 'recorded' }, { file: 'set.json', source: 'recorded' }] }));
+  assert.ok(Math.abs(observedCostPerTicket('claude-haiku-5-5', dir).perTicket - 0.02) < 1e-9);
   const r = spawnSync(process.execPath, ['run.mjs', '--estimate', '--models', 'claude-haiku-5-5', '--tickets', 'standard,stress', '--repeat', '5'], { cwd: new URL('.', import.meta.url), encoding: 'utf8' });
   assert.equal(r.status, 0);
   assert.match(r.stdout, /standard × 5 on claude-haiku-5-5: 14 tickets, up to 420 calls/);
