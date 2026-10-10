@@ -18,7 +18,8 @@ export function conditionsPreview(conditions, cap) {
   if (conditions.policyClear) gated.push('policy-exception');
   if (conditions.noChargeback) gated.push('chargeback');
   return (
-    `The AI can now automatically approve standard ${noun} of $${conditions.maxValue} or less when confidence is at least ${conditions.minConfidence}%. ` +
+    `The AI can now automatically approve standard ${noun} of $${conditions.maxValue} or less when its own reported confidence is at least ${conditions.minConfidence}% (model-reported, not verified)` +
+    (conditions.maxDailyTotal != null || conditions.maxDailyCount != null ? `, up to ${[conditions.maxDailyTotal != null ? `$${conditions.maxDailyTotal}` : null, conditions.maxDailyCount != null ? `${conditions.maxDailyCount} ${noun}` : null].filter(Boolean).join(' and ')} a day across all customers. ` : '. ') +
     `${capitalize(joinList(gated))} cases continue to require human review.`
   );
 }

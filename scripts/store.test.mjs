@@ -2610,3 +2610,71 @@ test('gate: Level 3 with no recorded limits asks a person; unenforceable lines a
   assert.ok(t.unenforced.some((l) => l.text === 'Customer threatens legal action.'));
   assert.deepEqual(t.mustNever.map((l) => l.rule.kind), ['payment-method', 'fraud']);
 });
+
+// ---------------------------------------------------------------------------
+// Review fixes on the gate (A1): built-in names, model-reported confidence,
+// capability-wide daily caps
+// ---------------------------------------------------------------------------
+
+const PROTO_NAMES = ['constructor', 'toString', '__proto__', 'hasOwnProperty'];
+const atLevel = (s, id, level) => ({ ...s, capabilities: s.capabilities.map((c) => (c.id === id ? { ...c, authority: { level, limited: level === 3 } } : c)) });
+
+test('gate bypass: built-in object names are never orders or tools, at any level', () => {
+  const l3 = atL3();
+  const states = [
+    ['L0', withSystems(initialState()), 'account-closure'],
+    ['L1', withSystems(initialState()), 'refund-execution-high-value'],
+    ['L2', withSystems(initialState()), RR],
+    ['L3', l3, RR],
+    ['L4', atLevel(l3, RR, 4), RR],
+    ['no systems', atLevel(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 4), RR],
+  ];
+  for (const [label, s, cap] of states) {
+    for (const name of PROTO_NAMES) {
+      const r = checkAction(s, cap, refund(name, 40, { confidence: 99 }));
+      assert.equal(r.verdict, 'block', `${label}: refund on "${name}" is blocked`);
+      if (['L2', 'L3', 'L4', 'no systems'].includes(label)) assert.equal(r.rule.kind, 'no-record', `${label}: "${name}" is not an order`);
+      const t = checkAction(s, cap, { tool: name, args: {} });
+      assert.deepEqual([t.verdict, t.rule.kind], ['block', 'unknown-tool'], `${label}: "${name}" is not a tool`);
+    }
+  }
+});
+
+test('gate: confidence is model-reported, listed as not verified, and never a reason to allow', () => {
+  const s = atL3();
+  const t = enforcementTerms(s, RR);
+  assert.ok(t.notVerified.some((x) => x.text === 'Confidence below 80%.' && /Model-reported/.test(x.why)), 'the contract line');
+  assert.ok(t.notVerified.some((x) => x.section === 'limits' && /confidence/i.test(x.text) && /Model-reported/.test(x.why)), 'the recorded limit');
+  assert.ok(t.notVerified.some((x) => x.text === 'Change customer account ownership.'), 'alongside what software cannot check');
+  const ok = checkAction(s, RR, refund('ORD-1', 40));
+  assert.equal(ok.verdict, 'allow');
+  assert.equal(/confidence/i.test(ok.reason) || /confidence/i.test(ok.rule.text), false, 'confidence is not a reason it was allowed');
+  const low = checkAction(s, RR, refund('ORD-1', 40, { confidence: 70 }));
+  assert.equal(low.verdict, 'needs-person', 'the check still runs');
+  assert.match(low.reason, /not verified/);
+});
+
+test('gate: capability-wide daily caps hold even when every customer is under their own limit', () => {
+  const orders = Object.fromEntries(['A', 'B', 'C', 'D', 'E'].map((k) => [`ORD-${k}`, { customerId: `C-${k}`, value: 100, fraudFlag: false, chargeback: false, policyException: false, paymentMethod: `card-${k}` }]));
+  let s = selectDecision(initialState(), RR, 'expand-limits');
+  s = setCondition(s, RR, 'maxDailyTotal', 100);
+  s = setCondition(s, RR, 'maxDailyCount', 3);
+  s = authorize(s, RR);
+  const today = (k, amount, extra = {}) => ({ orderId: `ORD-${k}`, customerId: `C-${k}`, amount, date: '2026-10-07', capabilityId: RR, ...extra });
+  const at = (refunds) => ({ ...s, systems: { orders, refunds } });
+  // $40 + $40 already today, two customers; a third customer's $30 is under their own $50 but takes the day to $110.
+  const total = checkAction(at([today('A', 40), today('B', 40)]), RR, refund('ORD-C', 30));
+  assert.deepEqual([total.verdict, total.rule.kind], ['needs-person', 'limit']);
+  assert.match(total.rule.text, /\$100 refunded by this capability per day/);
+  assert.equal(checkAction(at([today('A', 40), today('B', 40)]), RR, refund('ORD-C', 20)).verdict, 'allow', 'exactly at the cap is allowed');
+  // Three refunds of $10 already; a fourth crosses the count cap.
+  const count = checkAction(at([today('A', 10), today('B', 10), today('C', 10)]), RR, refund('ORD-D', 10));
+  assert.deepEqual([count.verdict, count.rule.text], ['needs-person', 'At most 3 refunds by this capability per day, across all customers']);
+  // Only this capability's refunds today count: not yesterday's, not another capability's, not a person's.
+  const others = [today('A', 40, { date: '2026-10-06' }), today('B', 40, { capabilityId: 'refund-execution-high-value' }), today('C', 40, { capabilityId: undefined })];
+  assert.equal(checkAction(at(others), RR, refund('ORD-D', 40)).verdict, 'allow');
+  // The record shows the caps, and the defaults carry them.
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual([rec.conditions.maxDailyTotal, rec.conditions.maxDailyCount], [100, 3]);
+  assert.deepEqual([seed.defaultConditions.maxDailyTotal, seed.defaultConditions.maxDailyCount], [500, 20]);
+});

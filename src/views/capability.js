@@ -99,7 +99,7 @@ function contractTab(state, cap, d) {
       <div class="card contract-block contract-may"><h3>AI may</h3>${list(c.may)}</div>
       <div class="card contract-block contract-ask"><h3>AI must ask / require approval</h3>${list(c.mustAsk)}</div>
       <div class="card contract-block contract-never"><h3>AI must never</h3>${list(c.mustNever)}</div>
-      <div class="card contract-block contract-escalate"><h3>Escalation conditions</h3>${list(c.escalation)}</div>
+      <div class="card contract-block contract-escalate"><h3>Escalation conditions</h3>${list(c.escalation)}${c.escalation.some((l) => /confidence/i.test(l)) ? html`<p class="muted small">Confidence is model-reported, not verified: software checks it but can't confirm it, and never treats it as a reason to allow.</p>` : ''}</div>
     </div>
     <div class="card contract-block contract-auto">
       <h3>Automatic restriction conditions</h3>

@@ -725,6 +725,9 @@ export const defaultConditions = {
   policyClear: true,
   minConfidence: 90,
   noChargeback: true,
+  // Capability-wide caps across all customers (Paige, 2026-10-10).
+  maxDailyTotal: 500,
+  maxDailyCount: 20,
 };
 
 export const defaultRationale =

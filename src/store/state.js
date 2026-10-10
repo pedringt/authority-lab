@@ -17,7 +17,7 @@ export function emptyCapabilityData() {
     monitoringRule: null,
     breach: null,
     testRun: { status: 'not-run', lastRun: null, completed: [] },
-    decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true }, rationale: '', recordId: null, proposed: null },
+    decision: { option: null, conditions: { maxValue: 50, noFraudFlag: true, policyClear: true, minConfidence: 90, noChargeback: true, maxDailyTotal: 500, maxDailyCount: 20 }, rationale: '', recordId: null, proposed: null },
     monitoring: null,
     // Simulated readings for the contract's restriction rules, keyed by the
     // rule's line (#49). Empty until something is measured.

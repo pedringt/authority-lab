@@ -21,6 +21,11 @@ export const TOOLS = {
   escalate_to_human: { kind: 'escalate', label: 'Hand the case to a person', capabilities: TOOL_SCOPE.escalate_to_human },
 };
 
+// Look up a key the model supplied (an order id, a tool name) as an own
+// property only: "constructor", "toString", "__proto__" and the like are
+// built into every plain object and must never count as a record or a tool.
+export const own = (obj, key) => (obj != null && typeof key === 'string' && Object.hasOwn(obj, key) ? obj[key] : undefined);
+
 // The facts the gate will compare a model's claims against.
 const FACTS = { orderValue: 'value', customerId: 'customerId', fraudFlag: 'fraudFlag', chargeback: 'chargeback', policyException: 'policyException' };
 
@@ -46,7 +51,8 @@ function recognise(line) {
   if (/fraud/.test(t)) return { kind: 'fraud', test: (f) => Boolean(f.order.fraudFlag), describe: 'a fraud flag on the account' };
   if (/chargeback/.test(t)) return { kind: 'chargeback', test: (f) => Boolean(f.order.chargeback), describe: 'an active chargeback' };
   if (/policy exception/.test(t)) return { kind: 'policy-exception', test: (f) => Boolean(f.order.policyException), describe: 'a policy exception' };
-  if (/confidence below\s*(\d+)/.test(t)) { const c = Number(t.match(/confidence below\s*(\d+)/)[1]); return { kind: 'confidence', test: (f) => !(Number(f.args.confidence) >= c), describe: `confidence below ${c}%` }; }
+  // Confidence is whatever the model says it is: checked, but not verified.
+  if (/confidence below\s*(\d+)/.test(t)) { const c = Number(t.match(/confidence below\s*(\d+)/)[1]); return { kind: 'confidence', modelReported: true, test: (f) => !(Number(f.args.confidence) >= c), describe: `model-reported confidence below ${c}%, not verified` }; }
   if (/missing order evidence/.test(t)) return { kind: 'no-order', test: (f) => !f.order.exists, describe: 'missing order evidence' };
   if (n !== null && /refund|execution/.test(t)) return { kind: 'amount', limit: n, test: (f) => Math.max(f.cumulativeOrder, f.cumulativeCustomerDay) > n, describe: `refunds over $${n}, counted per order and per customer per day` };
   return null;
@@ -67,7 +73,9 @@ function limitTerms(conditions) {
   if (conditions.maxValue != null) out.push({ kind: 'max-value', limit: conditions.maxValue, text: `Value at most $${conditions.maxValue}, per order and per customer per day`, test: (f) => f.cumulativeOrder <= conditions.maxValue && f.cumulativeCustomerDay <= conditions.maxValue });
   if (conditions.noFraudFlag) out.push({ kind: 'no-fraud', text: 'No fraud flag on the account', test: (f) => !f.order.fraudFlag });
   if (conditions.policyClear) out.push({ kind: 'policy-clear', text: 'Policy eligibility is clear', test: (f) => !f.order.policyException });
-  if (conditions.minConfidence != null) out.push({ kind: 'min-confidence', text: `Confidence at least ${conditions.minConfidence}%`, test: (f) => Number(f.args.confidence) >= conditions.minConfidence });
+  if (conditions.maxDailyTotal != null) out.push({ kind: 'daily-total', limit: conditions.maxDailyTotal, text: `At most $${conditions.maxDailyTotal} refunded by this capability per day, across all customers`, test: (f) => f.capabilityDayTotal <= conditions.maxDailyTotal });
+  if (conditions.maxDailyCount != null) out.push({ kind: 'daily-count', limit: conditions.maxDailyCount, text: `At most ${conditions.maxDailyCount} refunds by this capability per day, across all customers`, test: (f) => f.capabilityDayCount <= conditions.maxDailyCount });
+  if (conditions.minConfidence != null) out.push({ kind: 'min-confidence', modelReported: true, text: `Model-reported confidence at least ${conditions.minConfidence}% (not verified)`, test: (f) => Number(f.args.confidence) >= conditions.minConfidence });
   if (conditions.noChargeback) out.push({ kind: 'no-chargeback', text: 'No active chargeback', test: (f) => !f.order.chargeback });
   return out;
 }
@@ -86,6 +94,14 @@ export function enforcementTerms(state, capabilityId) {
     limits: limitTerms(rec && rec.conditions),
     limitsFrom: rec && rec.conditions ? rec.id : null,
     unenforced: lines.filter((l) => !l.rule).map(({ section, text }) => ({ section, text })),
+    // What software can't verify: lines it can't check at all, and checks that
+    // rest on the model's own report (confidence). The latter still run, but
+    // never count as a reason an action was allowed.
+    notVerified: [
+      ...lines.filter((l) => !l.rule).map(({ section, text }) => ({ section, text, why: 'Not enforced by software.' })),
+      ...lines.filter((l) => l.rule && l.rule.modelReported).map(({ section, text }) => ({ section, text, why: 'Model-reported, not verified.' })),
+      ...limitTerms(rec && rec.conditions).filter((l) => l.modelReported).map((l) => ({ section: 'limits', text: l.text, why: 'Model-reported, not verified.' })),
+    ],
   };
 }
 
@@ -97,7 +113,7 @@ const verdict = (v, reason, rule, extra = {}) => ({ verdict: v, reason, rule, ..
 
 // action: { tool, args: { orderId, amount, paymentMethod?, confidence?, customerId? }, claims?: { orderValue?, fraudFlag?, ... } }
 export function checkAction(state, capabilityId, action = {}) {
-  const tool = TOOLS[action.tool];
+  const tool = own(TOOLS, action.tool);
   if (!tool) return verdict('block', `"${action.tool}" is not a known tool.`, { kind: 'unknown-tool', text: 'Only listed tools can be used.' });
   const cap = getCapability(state, capabilityId);
   if (!cap) return verdict('block', `Unknown capability "${capabilityId}".`, { kind: 'unknown-capability', text: 'Every action belongs to a capability.' });
@@ -112,7 +128,7 @@ export function checkAction(state, capabilityId, action = {}) {
   // Facts come only from the systems of record.
   const args = action.args || {};
   const { orders, refunds } = systemsOf(state);
-  const rec = orders[args.orderId];
+  const rec = own(orders, args.orderId);
   if (!rec) return verdict('block', `No order "${args.orderId}" in the system of record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
   const order = { ...rec, exists: true };
   for (const [claim, field] of Object.entries(FACTS)) {
@@ -125,6 +141,8 @@ export function checkAction(state, capabilityId, action = {}) {
   if (!(amount > 0)) return verdict('block', 'A refund needs a positive amount.', { kind: 'amount', text: 'A refund needs a positive amount.' }, at);
   const priorOnOrder = refunds.filter((r) => r.orderId === args.orderId).reduce((t, r) => t + r.amount, 0);
   const priorCustomerDay = refunds.filter((r) => r.customerId === order.customerId && r.date === state.today).reduce((t, r) => t + r.amount, 0);
+  // Capability-wide: everything this capability refunded today, any customer.
+  const capabilityToday = refunds.filter((r) => r.capabilityId === cap.id && r.date === state.today);
   if (priorOnOrder + amount > order.value) return verdict('block', `Refunds on ${args.orderId} would total $${priorOnOrder + amount}, more than the order's $${order.value}.`, { kind: 'over-order', text: 'Refunds never exceed the order value.' }, at);
 
   const terms = enforcementTerms(state, capabilityId);
@@ -133,7 +151,7 @@ export function checkAction(state, capabilityId, action = {}) {
   const neverAmount = terms.mustNever.find((l) => l.rule.kind === 'amount');
   const maxValue = terms.limits.find((l) => l.kind === 'max-value');
   const splitLimit = neverAmount ? neverAmount.rule.limit : maxValue ? maxValue.limit : undefined;
-  const facts = { order, args, priorOnOrder, cumulativeOrder: priorOnOrder + amount, cumulativeCustomerDay: priorCustomerDay + amount, splitLimit };
+  const facts = { order, args, priorOnOrder, cumulativeOrder: priorOnOrder + amount, cumulativeCustomerDay: priorCustomerDay + amount, splitLimit, capabilityDayTotal: capabilityToday.reduce((t, r) => t + r.amount, 0) + amount, capabilityDayCount: capabilityToday.length + 1 };
   const fired = (list) => list.find((l) => l.rule.test(facts));
   const never = fired(terms.mustNever);
   if (never) return verdict('block', `Must never: ${never.text} (${never.rule.describe}).`, { kind: 'must-never', text: never.text }, at);
@@ -146,7 +164,9 @@ export function checkAction(state, capabilityId, action = {}) {
     if (!terms.limits.length) return verdict('needs-person', `${cap.name} is at Level 3 but no structured limits are recorded, so software can't confirm the action is within limits.`, { kind: 'no-limits', text: 'Level 3 acts only within recorded limits.' }, at);
     const broken = terms.limits.find((l) => !l.test(facts));
     if (broken) return verdict('needs-person', `Outside the limits set in ${terms.limitsFrom}: ${broken.text}.`, { kind: 'limit', text: broken.text }, at);
-    return verdict('allow', `Within every limit set in ${terms.limitsFrom}.`, { kind: 'within-limits', text: terms.limits.map((l) => l.text).join('; ') }, at);
+    // The reason names only what software verified, never the model's own report.
+    const verified = terms.limits.filter((l) => !l.modelReported);
+    return verdict('allow', `Within every verified limit set in ${terms.limitsFrom}.`, { kind: 'within-limits', text: verified.map((l) => l.text).join('; ') }, at);
   }
   return verdict('allow', `${levelName(level)}: no must-ask or must-never applies.`, { kind: 'level-4', text: 'Level 4 acts unless a must-ask or must-never applies.' }, at);
 }
