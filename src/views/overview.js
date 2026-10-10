@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt, authorityText, evidenceDetail } from '../ui.js';
-import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings, workspaceOf, workflowOf } from '../store/index.js';
+import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings, workspaceOf, workflowOf, waitingActions } from '../store/index.js';
 
 function firstSentences(text, n) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
@@ -31,6 +31,9 @@ export function overviewView(state) {
   </div>`;
 
   const alerts = state.alerts.map((a) => notice('fail', a.title, a.body, { link: a.link, linkText: 'Open monitoring' }));
+  // Actions the AI asked for that are waiting for a person (A4).
+  const waitingByCap = state.capabilities.map((c) => [c, waitingActions(state, c.id).length]).filter(([, n]) => n);
+  const waitingNotes = waitingByCap.map(([c, n]) => notice('decision', `${n} action${n === 1 ? '' : 's'} waiting for a person: ${c.name}`, 'The gate sent these to a person instead of running them. An owner or named stakeholder approves or rejects each one, with a reason.', { link: `#/capabilities/${c.id}?tab=waiting`, linkText: 'Review' }));
 
   let pilotCard;
   if (pending) {
@@ -180,6 +183,7 @@ export function overviewView(state) {
 
   return html`${header}
     ${alerts}
+    ${waitingNotes}
     ${pilotCard}
     ${section('Current evidence', evidenceCards, { subtitle: p ? `Each value is measured against a criterion set before the pilot started on ${fmtDate(p.started)}.` : undefined })}
     ${attention.length ? section('Attention needed', html`<div class="attention-grid">${attention}</div>`, { subtitle: 'Exceptions the aggregate numbers do not show.' }) : ''}

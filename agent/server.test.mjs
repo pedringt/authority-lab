@@ -52,8 +52,11 @@ test('a blocked or needs-person call never executes', async () => {
   assert.deepEqual([fraud.result.verdict, fraud.result.executed], ['block', false]);
   const lie = await conn.call('issue_refund', { orderId: 'ORD-5003', amount: 20, confidence: 95, claims: { fraudFlag: false } });
   assert.deepEqual([lie.result.verdict, lie.result.rule], ['block', 'fact-mismatch']);
-  const big = await conn.call('issue_refund', { orderId: 'ORD-5005', amount: 150, confidence: 95 });
+  // ORD-5004 has an active chargeback: needs a person. (ORD-5005 already has a seeded request waiting.)
+  const big = await conn.call('issue_refund', { orderId: 'ORD-5004', amount: 60, confidence: 95 });
   assert.deepEqual([big.result.verdict, big.result.executed], ['needs-person', false]);
+  const again = await conn.call('issue_refund', { orderId: 'ORD-5005', amount: 150, confidence: 95 });
+  assert.deepEqual([again.result.verdict, again.result.rule, again.result.executed], ['block', 'already-waiting', false]);
   assert.equal(conn.state.systems.refunds.length, before, 'the ledger is unchanged');
 });
 
@@ -134,4 +137,15 @@ test('the order id schema accepts real ids and refuses anything else', async () 
   for (const bad of ['', 'ORD-1', '5001', 'ord-5001', 'ORD-5001; DROP', '../ORD-5001']) {
     assert.equal((await conn.client.callTool({ name: 'lookup_order', arguments: { orderId: bad } })).isError, true, `"${bad}"`);
   }
+});
+
+test('the model can ask, but never approve: a needs-person refund waits, and there is no approval tool', async () => {
+  const conn = await connect(initialState());
+  const r = await conn.call('issue_refund', { orderId: 'ORD-5001', amount: 20, confidence: 95 });
+  assert.deepEqual([r.result.verdict, r.result.waiting, r.result.executed], ['needs-person', true, false]);
+  assert.equal(conn.state.actionQueue.at(-1).id, r.result.queueId);
+  for (const name of ['approve_action', 'reject_action', 'approveAction']) {
+    assert.equal((await conn.client.callTool({ name, arguments: { id: r.result.queueId, by: 'priya', reason: 'Approving my own request.' } })).isError, true, name);
+  }
+  assert.equal(conn.state.actionQueue.at(-1).status, 'waiting');
 });

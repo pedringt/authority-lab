@@ -19,7 +19,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView } from '../src/views/decisions.js';
@@ -2756,7 +2756,8 @@ test('A2: issue_refund executes only when the gate allows, and writes the ledger
   // A second refund to the same customer today: $30 + $25 > $50.
   const second = callTool(s, RR, refund('ORD-5002', 25));
   assert.deepEqual([second.result.verdict, second.result.executed], ['needs-person', false]);
-  assert.equal(second.state, s, 'nothing changes when the gate does not allow');
+  assert.equal(second.state.systems.refunds.length, s.systems.refunds.length, 'nothing executes when the gate does not allow');
+  assert.equal(second.result.waiting, true, 'it waits for a person instead (A4)');
   // At Level 2 nothing executes on its own.
   const l2 = callTool(initialState(), RR, refund('ORD-5001', 10));
   assert.deepEqual([l2.result.verdict, l2.result.executed], ['needs-person', false]);
@@ -2822,4 +2823,199 @@ test('A2 bypass: built-in object names are never orders, through every tool, at 
   }
   // The ledger never gets a refund without a customer.
   assert.equal(l3.systems.refunds.every((r) => r.customerId), true);
+});
+
+// ---------------------------------------------------------------------------
+// "Waiting for a person" (roadmap item 9, A4 #68)
+// ---------------------------------------------------------------------------
+
+const WHY = 'Checked the return and the policy; this is fine.';
+
+test('A4: a needs-person action waits in the queue; a retry is refused, not queued twice; a block never is', () => {
+  let s = initialState();
+  assert.deepEqual(s.actionQueue.map((x) => [x.id, x.status]), [['WA-001', 'waiting'], ['WA-002', 'waiting']], 'the seeded requests go through the real gate');
+  const r = callTool(s, RR, refund('ORD-5001', 20));
+  assert.deepEqual([r.result.verdict, r.result.waiting, r.result.executed], ['needs-person', true, false]);
+  s = r.state;
+  const again = callTool(s, RR, refund('ORD-5001', 20));
+  assert.deepEqual([again.result.verdict, again.result.rule, again.result.message, again.state.actionQueue.length], ['block', 'already-waiting', `Already waiting for a person: ${r.result.queueId}.`, s.actionQueue.length]);
+  const blocked = callTool(s, RR, refund('ORD-5003', 20));
+  assert.deepEqual([blocked.result.verdict, blocked.state.actionQueue.length], ['block', s.actionQueue.length], 'a block is never queued');
+  assert.deepEqual(s.actionQueue.find((x) => x.id === 'WA-002').findings.map((f) => f.rule.kind), ['level-2', 'must-ask', 'must-ask'], 'every reason is recorded');
+});
+
+test('A4 bypass: the AI can never approve, not even its own escalated action', () => {
+  const s = initialState();
+  for (const by of ['ai', 'system', undefined, '', 'constructor', '__proto__']) {
+    assert.throws(() => approveAction(s, 'WA-001', { by, reason: WHY }), /Only a named person|named person/, `by ${JSON.stringify(by)}`);
+    assert.throws(() => rejectAction(s, 'WA-001', { by, reason: WHY }), /named person/);
+  }
+  assert.equal(queuedAction(s, 'WA-001').status, 'waiting');
+  // There is no tool for it: approving isn't something the model can call.
+  assert.equal(Object.keys(TOOLS).some((t) => /approve|reject|decide/.test(t)), false);
+});
+
+test('A4 bypass: only an active, named stakeholder of the capability decides', () => {
+  let s = initialState();
+  assert.equal(queueApprovers(s, RR).includes('jonas'), false);
+  assert.throws(() => approveAction(s, 'WA-001', { by: 'jonas', reason: WHY }), /isn't the owner or a named stakeholder/, 'a workspace admin with no stake');
+  s = deactivatePerson(s, 'elena', { by: 'maya', reason: 'Left the company.' });
+  assert.throws(() => approveAction(s, 'WA-001', { by: 'elena', reason: WHY }), /deactivated/, 'a deactivated stakeholder');
+  assert.throws(() => approveAction(s, 'WA-001', { by: 'priya', reason: 'ok' }), /needs a reason/);
+  assert.throws(() => rejectAction(s, 'WA-001', { by: 'priya', reason: 'no' }), /needs a reason/);
+  assert.throws(() => approveAction(s, 'WA-999', { by: 'priya', reason: WHY }), /No waiting action/);
+  // With no stakeholder list, the owner alone decides; it never widens to everyone.
+  const bare = amend(initialState(), RR, 'stakeholders', { value: [], author: 'maya', reason: 'Test: no stakeholder list.' });
+  assert.deepEqual(queueApprovers(bare, RR), [getCapability(bare, RR).owner]);
+});
+
+test('A4: an approval executes once, recorded with the person; a second decision is refused', () => {
+  let s = initialState();
+  const before = s.systems.refunds.length;
+  s = approveAction(s, 'WA-001', { by: 'priya', reason: WHY });
+  const item = queuedAction(s, 'WA-001');
+  assert.deepEqual([item.status, item.decision.by, item.decision.byAt.name, item.decision.reason], ['executed', 'priya', 'Priya Natarajan', WHY]);
+  assert.equal(s.systems.refunds.length, before + 1);
+  assert.deepEqual(s.systems.refunds.at(-1), { id: item.decision.refundId, orderId: 'ORD-5006', customerId: 'C-1005', amount: 48, date: '2026-10-07', by: 'priya', capabilityId: RR, approvedVia: 'WA-001' });
+  assert.equal(s.activity[0].surfaced, true);
+  // The same action twice: refused, and nothing executes again.
+  assert.throws(() => approveAction(s, 'WA-001', { by: 'maya', reason: WHY }), /already executed by Priya Natarajan/);
+  assert.throws(() => rejectAction(s, 'WA-001', { by: 'maya', reason: WHY }), /already executed/);
+  assert.equal(s.systems.refunds.length, before + 1);
+  // A person accepts every reason it needed a person: over $100 and a policy exception, at Level 2.
+  s = approveAction(s, 'WA-002', { by: 'daniel', reason: 'Exception approved under the goodwill policy.' });
+  assert.equal(queuedAction(s, 'WA-002').status, 'executed');
+});
+
+test('A4: a rejection is recorded and nothing executes', () => {
+  let s = initialState();
+  const before = s.systems.refunds.length;
+  s = rejectAction(s, 'WA-002', { by: 'daniel', reason: 'Outside the window; no exception this time.' });
+  assert.deepEqual([queuedAction(s, 'WA-002').status, s.systems.refunds.length], ['rejected', before]);
+  assert.throws(() => approveAction(s, 'WA-002', { by: 'maya', reason: WHY }), /already rejected/);
+});
+
+test('A4 bypass: an approved action re-runs the gate when it executes; a restriction in between refuses it', () => {
+  // At Level 3, a $60 refund needs a person (over the $50 limit) and waits.
+  // (The seeded request on ORD-5005 is rejected first: one waits per order.)
+  let s = authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+  const big = callTool(s, RR, refund('ORD-5005', 60));
+  assert.equal(big.result.waiting, true);
+  const id = big.result.queueId;
+  // Automatic restriction before anyone approves.
+  const restricted = simulateBreach(big.state, RR);
+  const after = approveAction(restricted, id, { by: 'priya', reason: WHY });
+  const item = queuedAction(after, id);
+  assert.equal(item.status, 'refused');
+  assert.match(item.decision.refusal, /post-incident review/);
+  assert.equal(after.systems.refunds.length, restricted.systems.refunds.length, 'nothing executed');
+  assert.equal(after.activity[0].kind, 'failure');
+  // A person's decision to restrict (no review lock): refused because the level dropped.
+  let r = selectDecision(big.state, RR, 'restrict');
+  r = authorize(r, RR);
+  assert.equal(getCapability(r, RR).authority.level, 2);
+  assert.match(queuedAction(approveAction(r, id, { by: 'priya', reason: WHY }), id).decision.refusal, /dropped from Level 3 to Level 2/);
+});
+
+test('A4 bypass: an approval is refused if a cap was crossed, or the order became blocked, since it was queued', () => {
+  let s = selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits');
+  s = setCondition(s, RR, 'maxDailyTotal', 100);
+  s = authorize(s, RR);
+  // $70 needs a person (over the $50 value limit) and waits; the day is at $0.
+  const big = callTool(s, RR, refund('ORD-5005', 70));
+  const id = big.result.queueId;
+  const accepted = queuedAction(big.state, id).findings.map((f) => f.rule.text);
+  assert.ok(accepted.includes('Value at most $50, per order and per customer per day') && accepted.includes('Any policy exception.'), 'every reason it needed a person is recorded');
+  assert.equal(accepted.some((t) => /per day, across all customers/.test(t)), false, 'the daily cap was not crossed when it was queued');
+  // Meanwhile the AI refunds $40 and $38 on its own: the day is at $78, so $70 more would cross $100.
+  let busy = callTool(big.state, RR, refund('ORD-5001', 40)).state;
+  busy = callTool(busy, RR, refund('ORD-5006', 38)).state;
+  const refused = queuedAction(approveAction(busy, id, { by: 'priya', reason: WHY }), id);
+  assert.equal(refused.status, 'refused');
+  assert.match(refused.decision.refusal, /\$100 refunded by this capability per day/);
+  // Without the other refunds, the same approval executes: the value limit was what the person accepted.
+  assert.equal(queuedAction(approveAction(big.state, id, { by: 'priya', reason: WHY }), id).status, 'executed');
+  // A fraud flag that appears after queuing blocks it.
+  const flagged = { ...big.state, systems: { ...big.state.systems, fraudFlags: [...big.state.systems.fraudFlags, { customerId: 'C-1004', reason: 'New signal.', since: '2026-10-07' }] } };
+  assert.match(queuedAction(approveAction(flagged, id, { by: 'priya', reason: WHY }), id).decision.refusal, /blocked now: Must never/);
+});
+
+test('A4: the Waiting tab lists waiting actions with their reasons, and who may decide', () => {
+  const s = initialState();
+  const h = String(capabilityView(s, RR, new URLSearchParams('tab=waiting')));
+  assert.match(h, /Waiting \(2\)/);
+  assert.match(h, /Refund \$180 on ORD-5005/);
+  assert.match(h, /Any policy exception\./);
+  assert.match(h, /Approve as Maya Chen/, 'the owner, acting by default, may decide');
+  const asJonas = String(capabilityView(setActingAs(s, 'jonas'), RR, new URLSearchParams('tab=waiting')));
+  assert.doesNotMatch(asJonas, /Approve as/);
+  assert.match(asJonas, /isn&#39;t the owner or a named stakeholder/);
+});
+
+// ---------------------------------------------------------------------------
+// The queue can't be flooded (review fixes on A4)
+// ---------------------------------------------------------------------------
+
+// Seeded state plus extra orders, at Level 2 (every refund needs a person).
+const manyOrders = (n) => {
+  const s = initialState();
+  const extra = Object.fromEntries(Array.from({ length: n }, (_, i) => [`ORD-${7001 + i}`, { customerId: `C-${7001 + i}`, date: '2026-10-01', items: ['Test item'], value: 90, status: 'Delivered', paymentMethod: 'Visa ending 0000', cardNumber: '0000', policyException: false }]));
+  return { ...s, systems: { ...s.systems, orders: { ...s.systems.orders, ...extra } } };
+};
+
+test('A4 bypass: near-duplicate amounts and different claims on the same order are refused, not queued', () => {
+  let s = initialState();
+  assert.equal(waitingActions(s, RR).length, 2);
+  // The repro: 25 refunds on ORD-5005 for $60.01 ... $60.25. WA-002 is already waiting on it.
+  for (let i = 1; i <= 25; i++) {
+    const r = callTool(s, RR, refund('ORD-5005', 60 + i / 100));
+    assert.deepEqual([r.result.verdict, r.result.rule, r.result.message], ['block', 'already-waiting', 'Already waiting for a person: WA-002.'], `$${60 + i / 100}`);
+    s = r.state;
+  }
+  assert.equal(waitingActions(s, RR).length, 2, 'still only the two');
+  // Different claims, confidence or amount on the same order: same answer.
+  for (const call of [{ ...refund('ORD-5006', 47), claims: { orderValue: 48 } }, refund('ORD-5006', 48, { confidence: 51 }), refund('ORD-5006', 1)]) {
+    assert.equal(callTool(s, RR, call).result.rule, 'already-waiting');
+  }
+  // Once WA-001 is decided, the order may be asked about again.
+  s = rejectAction(s, 'WA-001', { by: 'priya', reason: 'Wrong amount; ask again.' });
+  assert.equal(callTool(s, RR, refund('ORD-5006', 40)).result.waiting, true);
+});
+
+test('A4 bypass: filling the queue blocks new needs-person actions and opens one incident', () => {
+  let s = manyOrders(12);
+  const start = waitingActions(s, RR).length;
+  let i = 0;
+  while (waitingActions(s, RR).length < QUEUE_LIMIT) s = callTool(s, RR, refund(`ORD-${7001 + i++}`, 20)).state;
+  assert.equal(waitingActions(s, RR).length, QUEUE_LIMIT);
+  assert.equal(i, QUEUE_LIMIT - start);
+  const evidenceBefore = capData(s, RR).evidence.length;
+  const full = callTool(s, RR, refund(`ORD-${7001 + i}`, 20));
+  assert.deepEqual([full.result.verdict, full.result.rule], ['block', 'queue-full']);
+  assert.match(full.result.message, /Queue full/);
+  s = full.state;
+  assert.equal(waitingActions(s, RR).length, QUEUE_LIMIT, 'nothing more queued');
+  assert.equal(capData(s, RR).evidence.length, evidenceBefore + 1, 'an incident is opened');
+  assert.match(capData(s, RR).evidence[0].metric, /waiting queue full/);
+  assert.equal(s.alerts.filter((a) => /Waiting queue full/.test(a.title)).length, 1, 'an Overview alert');
+  // A second attempt while it's still full doesn't open another incident.
+  s = callTool(s, RR, refund(`ORD-${7002 + i}`, 20)).state;
+  assert.equal(capData(s, RR).evidence.length, evidenceBefore + 1);
+  // Deciding one drains it below the limit: the alert clears and new requests queue again.
+  s = rejectAction(s, 'WA-001', { by: 'priya', reason: 'Clearing space in the queue.' });
+  assert.equal(s.alerts.some((a) => /Waiting queue full/.test(a.title)), false);
+  assert.equal(callTool(s, RR, refund(`ORD-${7002 + i}`, 20)).result.waiting, true);
+  // Escalations never touch the queue.
+  assert.equal(callTool(full.state, RR, { tool: 'escalate_to_human', args: { reason: 'Busy day.' } }).result.executed, true);
+});
+
+test('A4: when the AI asks again after a refused approval, the new item follows the refused one', () => {
+  let s = authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+  const first = callTool(s, RR, refund('ORD-5005', 60));
+  s = simulateBreach(first.state, RR);
+  s = approveAction(s, first.result.queueId, { by: 'priya', reason: WHY });
+  assert.equal(queuedAction(s, first.result.queueId).status, 'refused', 'stays closed');
+  const again = callTool(s, RR, refund('ORD-5005', 60));
+  assert.deepEqual([again.result.waiting, again.result.follows], [true, first.result.queueId]);
+  assert.equal(queuedAction(again.state, again.result.queueId).follows, first.result.queueId);
 });

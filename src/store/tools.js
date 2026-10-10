@@ -7,6 +7,7 @@ import { DATA_FIELDS } from '../data/seed.js';
 import { getCapability } from './state.js';
 import { current } from './selectors.js';
 import { checkAction, systemsOf, own } from './gate.js';
+import { enqueue } from './queue.js';
 
 const RESTRICTED = new Set(DATA_FIELDS.filter((f) => f.restricted).map((f) => f.id));
 
@@ -47,12 +48,29 @@ export function filterForModel(view, allowed) {
 // gate's full reason, which can quote record values the model may not see.
 const told = (check) => ({ verdict: check.verdict, rule: check.rule.kind, message: check.rule.text });
 
+// Write a refund to the ledger. Only ever called after the gate allowed it,
+// or after a person approved it and the gate's re-check passed (A4).
+export function executeRefund(state, capabilityId, args, by, extra = {}) {
+  const sys = state.systems || {};
+  const order = own(systemsOf(state).orders, args.orderId);
+  const ledger = sys.refunds || [];
+  const entry = { id: `RF-${String(ledger.length + 1).padStart(4, '0')}`, orderId: args.orderId, customerId: order.customerId, amount: Number(args.amount), date: state.today, by, capabilityId, ...extra };
+  return { state: { ...state, systems: { ...sys, refunds: [...ledger, entry] } }, entry };
+}
+
 // Run one tool call. Returns the next state (unchanged unless the call
 // executed) and the result the model sees. `check` is the gate's full
 // verdict, kept for the record (A5 logs it).
 export function callTool(state, capabilityId, call = {}) {
   const check = checkAction(state, capabilityId, call);
   const result = { tool: call.tool, ...told(check), executed: false };
+  // An action that needs a person waits in the queue for one (A4).
+  if (check.verdict === 'needs-person') {
+    const { state: next, item, refused } = enqueue(state, capabilityId, call, check);
+    // The queue refused it (already one waiting for this order, or full): blocked.
+    if (refused) return { state: next, result: { tool: call.tool, verdict: 'block', rule: refused.kind, message: refused.text, executed: false, ...(refused.waitingId ? { waitingId: refused.waitingId } : {}) }, check: { ...check, verdict: 'block', reason: refused.text, rule: { kind: refused.kind, text: refused.text } } };
+    return { state: next, result: { ...result, waiting: true, queueId: item.id, ...(item.follows ? { follows: item.follows } : {}) }, check };
+  }
   if (check.verdict !== 'allow') return { state, result, check };
   const args = call.args || {};
 
@@ -63,10 +81,8 @@ export function callTool(state, capabilityId, call = {}) {
 
   const sys = state.systems || {};
   if (call.tool === 'issue_refund') {
-    const order = own(systemsOf(state).orders, args.orderId);
-    const ledger = sys.refunds || [];
-    const entry = { id: `RF-${String(ledger.length + 1).padStart(4, '0')}`, orderId: args.orderId, customerId: order.customerId, amount: Number(args.amount), date: state.today, by: 'ai', capabilityId };
-    return { state: { ...state, systems: { ...sys, refunds: [...ledger, entry] } }, result: { ...result, executed: true, refundId: entry.id, amount: entry.amount }, check };
+    const { state: next, entry } = executeRefund(state, capabilityId, args, 'ai');
+    return { state: next, result: { ...result, executed: true, refundId: entry.id, amount: entry.amount }, check };
   }
 
   if (call.tool === 'escalate_to_human') {

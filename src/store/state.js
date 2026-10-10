@@ -4,6 +4,7 @@
 import * as seed from '../data/seed.js';
 import { isSurfaced } from './selectors.js';
 import { snapshotPerson } from './people.js';
+import { callTool } from './tools.js';
 
 export const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -91,7 +92,7 @@ export function initialState() {
   // The contract and risk profile live in the version lists; the pending
   // decision, last decision and last-evaluated date are derived by selectors.
   const capabilities = seed.capabilities.map(({ contract, risk, proposed, decisionRequired, lastEvaluated, lastDecisionId, ...rest }) => clone(rest));
-  return {
+  const base = {
     version: 14,
     today: seed.TODAY,
     // The workspace and its one workflow (roadmap item 7). Seeded here so an
@@ -102,6 +103,8 @@ export function initialState() {
     // chargebacks, the refund ledger and escalations. The gate reads facts
     // only from here.
     systems: clone(seed.systems),
+    // "Waiting for a person" (A4): actions the gate sent to a person.
+    actionQueue: [],
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
     roster: { versions: [{ version: 1, date: seed.TODAY, author: null, authorAt: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },
@@ -117,6 +120,8 @@ export function initialState() {
     activity: clone(seed.activity),
     alerts: [],
   };
+  // Seeded requests go through the real gate, so the queue holds exactly what it would.
+  return seed.waitingRequests.reduce((st, r) => callTool(st, r.capabilityId, r.call).state, base);
 }
 
 

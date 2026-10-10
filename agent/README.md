@@ -10,6 +10,7 @@ This folder is never part of the deployed app. `.vercelignore` excludes it, and 
 - **One capability per server.** The capability is fixed when the server starts. No tool takes a capability argument, so a model can't pick a more permissive one.
 - **A verdict on every call:** `allow`, `needs-person` or `block`, with the rule that decided it. Only an allowed call executes. A refund is written to the refund ledger; an escalation records a hand-off to the capability owner.
 - **Only the data the contract allows.** Results are filtered to the contract's "Data the AI may see" section. Full card numbers and full addresses never leave the server.
+- **Asking, never approving.** A refund that needs a person comes back as `waiting` with a queue id. A person approves or rejects it in the app; no MCP tool can. Repeating the same request returns the same queue id instead of queueing it again.
 - **The rule, not the record.** A refusal tells the model which rule applied, never the gate's full reason, which can quote record values. The full reason goes to stderr for whoever runs the server.
 
 The data is the fictional Northstar demo: six orders, five customers, one fraud flag (Mina Park, ORD-5003), one active chargeback (ORD-5004) and a policy exception (ORD-5005).
