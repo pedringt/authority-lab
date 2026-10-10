@@ -4,7 +4,7 @@ import { initialState, reset } from './state.js';
 import { addPerson, editPerson, deactivatePerson, proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, setActingAs } from './people.js';
 import { addCapability, amend } from './capabilities.js';
 import { startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection, finalizeContract } from './contract.js';
-import { selectDecision, setCondition, setRationale, authorize, proposeAuthority } from './decisions.js';
+import { selectDecision, setCondition, setRationale, setOutcome, authorize, proposeAuthority } from './decisions.js';
 import { startTestRun, advanceTestRun, saveCriteria, saveScenarios, addStarterScenarios } from './evidence.js';
 import { proposeAmendment, approveProposal, withdrawProposal, rejectProposal, saveStakeholders } from './proposals.js';
 import { simulateBreach, recordReview } from './monitoring.js';
@@ -68,6 +68,7 @@ export const ACTIONS = {
   selectDecision,
   setCondition,
   setRationale,
+  setOutcome,
   authorize,
   simulateBreach,
   recordReview,

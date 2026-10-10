@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -29,6 +29,21 @@ export function decisionsListView(state) {
       <td>${personAt(x.authorizedByAt, x.authorizedBy).name}</td>
     </tr>`)}</tbody>
   </table></div>`;
+}
+
+// The expected-impact rows for an expansion (B1): a metric and a target with
+// a number, up to four. Problems show inline; the Authorize button says why
+// it's disabled.
+function impactCard(cap, dec) {
+  const rows = Array.from({ length: OUTCOMES_MAX }, (_, i) => (dec.outcomes || [])[i] || { metric: '', target: '' });
+  const oc = outcomeChecks(rows);
+  return html`<div class="card impact">
+    <div class="impact-rows">
+      <span class="fact-label">Metric</span><span class="fact-label">Target, with a number</span>
+      ${rows.map((o, i) => html`<input type="text" maxlength="80" aria-label="Outcome ${i + 1}: metric" placeholder="${i === 0 ? 'e.g. Resolution time' : ''}" value="${o.metric}" data-action="set-outcome" data-capability="${cap.id}" data-index="${i}" data-field="metric"><input type="text" maxlength="60" aria-label="Outcome ${i + 1}: target" placeholder="${i === 0 ? 'e.g. at least 35% faster' : ''}" value="${o.target}" data-action="set-outcome" data-capability="${cap.id}" data-index="${i}" data-field="target">`)}
+    </div>
+    ${oc.ok ? html`<p class="muted small">${oc.outcomes.length} expected outcome${oc.outcomes.length === 1 ? '' : 's'}. B2 will compare them with what actually happens.</p>` : html`<ul class="form-error plain-list">${oc.errors.map((e) => html`<li>${e}</li>`)}</ul>`}
+  </div>`;
 }
 
 export function decisionRecordView(state, id) {
@@ -61,6 +76,12 @@ export function decisionRecordView(state, id) {
       ['Rationale', x.rationale],
       ['Evidence snapshot', html`<ul class="plain-list">${x.evidenceSnapshot.map((e) => html`<li>${e}</li>`)}</ul>`],
       ['Open condition', x.openCondition],
+      // B1: what an expansion was expected to achieve, fixed on the record.
+      ...(x.expectedOutcomes && x.expectedOutcomes.length
+        ? [['Expected impact', html`<ul class="plain-list">${x.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>`]]
+        : x.previous && x.next && x.next.level > x.previous.level && x.authorizedBy !== 'system'
+          ? [['Expected impact', html`<span class="muted">Recorded before expected outcomes were required for expansions.</span>`]]
+          : []),
       ...(x.conditions ? [['Automatic action allowed when', html`<ul class="plain-list">
         <li>value ≤ $${x.conditions.maxValue}</li>
         ${x.conditions.noFraudFlag ? html`<li>no fraud flag</li>` : ''}
@@ -180,6 +201,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   <div class="decision-grid">
     <div class="decision-main">
       ${conditions ? section('Conditions', conditions, { subtitle: 'For Expand with limits: when the AI may act on its own.' }) : ''}
+      ${isExpansion(state, cap.id, dec.option) ? section('Expected impact', impactCard(cap, dec), { subtitle: `${OUTCOMES_MIN} to ${OUTCOMES_MAX} outcomes this expansion should achieve, each with a number. They go on the decision record and can't be changed afterwards.` }) : ''}
       ${section('Evidence summary', html`
         ${barChangedNote(state, cap)}
         ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}

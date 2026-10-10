@@ -109,11 +109,71 @@ export function setRationale(state, capabilityId, rationale) {
   return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rationale } }));
 }
 
+// Expected impact (roadmap item 9, B1, #72). Authorizing an expansion (any
+// decision that raises the level) needs 2 to 4 expected outcomes, each a
+// metric with a numeric target. They go on the decision record and never
+// change. Restrict, suspend, redesign and hold don't need them.
+export const OUTCOMES_MIN = 2;
+export const OUTCOMES_MAX = 4;
+
+// The number in a target, with its unit: "−40%" → { value: -40, unit: '%' },
+// "< $0.20" → { value: 0.2, unit: '$' }. Null when there is no number.
+export function parseTarget(target) {
+  const m = String(target || '').match(/([-−+])?\s*(\$)?\s*(\d+(?:\.\d+)?)\s*(%)?/);
+  if (!m) return null;
+  const sign = m[1] === '-' || m[1] === '−' ? -1 : 1;
+  return { value: sign * Number(m[3]), unit: m[4] ? '%' : m[2] ? '$' : null };
+}
+
+// Filled rows (a metric or a target typed), and what's wrong with them.
+export function outcomeChecks(outcomes) {
+  const rows = (Array.isArray(outcomes) ? outcomes : []).map((o) => ({ metric: String((o && o.metric) || '').trim(), target: String((o && o.target) || '').trim() }));
+  const filled = rows.filter((o) => o.metric || o.target);
+  const errors = [];
+  if (filled.length < OUTCOMES_MIN) errors.push(`Add at least ${OUTCOMES_MIN} expected outcomes, each with a number (for example "Resolution time: at least 35% faster").`);
+  if (filled.length > OUTCOMES_MAX) errors.push(`At most ${OUTCOMES_MAX} expected outcomes.`);
+  filled.forEach((o, i) => {
+    if (o.metric.length < 3) errors.push(`Outcome ${i + 1} needs a metric.`);
+    if (o.metric.length > 80 || o.target.length > 60) errors.push(`Outcome ${i + 1} is too long.`);
+    if (!parseTarget(o.target)) errors.push(`Outcome ${i + 1} needs a target with a number.`);
+  });
+  const metrics = filled.map((o) => o.metric.toLowerCase());
+  if (new Set(metrics).size !== metrics.length) errors.push('Each expected outcome needs a different metric.');
+  return { ok: !errors.length, errors, outcomes: filled.map((o) => ({ ...o, ...parseTarget(o.target) })) };
+}
+
+// Does this decision raise the capability's authority?
+export function isExpansion(state, capabilityId, option) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap || !option) return false;
+  return nextAuthority(option, cap.authority, proposedAuthority(state, capabilityId)).level > cap.authority.level;
+}
+
+// Edit one expected-outcome row on the open decision. Refused once the
+// decision is recorded: the outcomes are part of the record from then on.
+export function setOutcome(state, capabilityId, index, field, value) {
+  if (!decisionRequired(state, capabilityId)) throw new Error('No decision is open. Expected outcomes are part of the decision record and can\'t be edited after authorization.');
+  const i = Number(index);
+  if (!(Number.isInteger(i) && i >= 0 && i < OUTCOMES_MAX)) throw new Error(`An expected outcome is row 1 to ${OUTCOMES_MAX}.`);
+  if (field !== 'metric' && field !== 'target') throw new Error('An expected outcome has a metric and a target.');
+  return updateCap(state, capabilityId, (d) => {
+    const rows = Array.from({ length: OUTCOMES_MAX }, (_, k) => ({ metric: '', target: '', ...((d.decision.outcomes || [])[k] || {}) }));
+    rows[i] = { ...rows[i], [field]: String(value ?? '') };
+    return { ...d, decision: { ...d.decision, outcomes: rows } };
+  });
+}
+
+const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === 'object') deepFreeze(v); }); return Object.freeze(o); };
+
 export function canAuthorize(state, capabilityId) {
   const d = capData(state, capabilityId).decision;
   if (!d.option) return { ok: false, reason: 'Choose a decision option first.' };
   if ((d.option === 'expand' || d.option === 'expand-limits') && !d.proposed) return { ok: false, reason: 'No authority change is proposed for this capability. Propose the next level first.' };
   if (!d.rationale || d.rationale.trim().length < 20) return { ok: false, reason: 'Write a decision rationale (at least a sentence).' };
+  if (isExpansion(state, capabilityId, d.option)) {
+    const oc = outcomeChecks(d.outcomes);
+    if (!oc.ok) return { ok: false, reason: `Expected impact: ${oc.errors[0]}` };
+  }
   const expanding = d.option === 'expand' || d.option === 'expand-limits';
   if (expanding && capData(state, capabilityId).reviewRequired) {
     return { ok: false, reason: 'A post-incident review must be recorded before authority can expand again.' };
@@ -178,6 +238,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
     openCondition: openConditionText(option, state, capabilityId),
     conditions: option === 'expand-limits' && next.level >= 3 ? { ...d.decision.conditions } : null,
+    // B1: what this expansion is expected to achieve, fixed from here on.
+    expectedOutcomes: next.level > previous.level ? deepFreeze(outcomeChecks(d.decision.outcomes).outcomes) : null,
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
