@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
-import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, kv, warningNotice } from '../ui.js';
+import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, kv, warningNotice, lede } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store/index.js';
 import { diffTable } from './activity.js';
 
@@ -10,7 +10,7 @@ const KIND_TITLE = { criteria: 'success criteria and evidence requirements', con
 export function proposeView(state, capabilityId, kind, query) {
   const cap = getCapability(state, capabilityId);
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
-  if (kind === 'stakeholders') return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Amend the stakeholders</h1><p class="lede">Stakeholders are edited in their editor. After performance results, a change to who is listed or to a team label becomes a proposal with sign-off; position and reasoning updates apply directly.</p></div></div>${notice('neutral', 'Use the stakeholder editor', 'Save there; the store decides whether sign-off is needed.', { link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: 'Stakeholder editor' })}`;
+  if (kind === 'stakeholders') return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Amend the stakeholders</h1>${lede('Stakeholders are edited in their editor.', 'After performance results, a change to who is listed or to a team label becomes a proposal with sign-off; position and reasoning updates apply directly.')}</div></div>${notice('neutral', 'Use the stakeholder editor', 'Save there; the store decides whether sign-off is needed.', { link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: 'Stakeholder editor' })}`;
   if (!['criteria', 'contract'].includes(kind)) return html`<div class="page-head"><h1>Unknown amendment</h1></div>`;
   const error = query.get('error');
   const acting = person(actor(state, capabilityId));

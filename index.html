@@ -17,16 +17,21 @@
         <span class="brand-sep" aria-hidden="true">/</span>
         <span class="brand-ws" id="brand-ws">Northstar Support</span>
       </div>
-      <div class="demo-controls" role="group" aria-label="Demo controls" title="Seeded demo data. No real customers, money or model calls.">
-        <span class="acting-demo">Demo</span>
+      <div class="demo-controls" role="group" aria-label="Demo controls">
+        <!-- The demo's controls in one small menu (#93). -->
+        <details class="menu demo-menu" id="demo-buttons">
+          <summary class="acting-demo" title="Seeded demo data. No real customers, money or model calls.">Demo</summary>
+          <div class="menu-list">
+            <button class="menu-item" data-action="start-empty" title="Swap the Northstar demo for a blank workspace to set up from scratch. Reset demo brings Northstar back.">Start empty</button>
+            <button class="menu-item" data-action="reset" title="Restore the seeded Northstar demo">Reset demo</button>
+            <p class="menu-note">Seeded demo data. No real customers, money or model calls.</p>
+          </div>
+        </details>
         <div id="acting"></div>
         <span class="demo-sep" aria-hidden="true"></span>
         <span class="demo-date" id="demo-date">Oct 7</span>
         <span class="demo-sep" aria-hidden="true"></span>
-        <span class="demo-buttons" id="demo-buttons">
-          <button class="btn btn-ghost btn-sm" data-action="start-empty" title="Swap the Northstar demo for a blank workspace to set up from scratch. Reset demo brings Northstar back.">Start empty</button>
-          <button class="btn btn-ghost btn-sm" data-action="reset" title="Restore the seeded Northstar demo">Reset demo</button>
-        </span>
+        <a class="header-link" href="#/people">People</a>
         <span class="demo-confirm" id="demo-confirm" role="group" aria-label="Confirm erasing all records" hidden>
           <span class="demo-confirm-text">This erases all records in this workspace. Continue?</span>
           <button class="btn btn-danger btn-sm" data-action="confirm-erase" id="demo-confirm-go">Erase</button>

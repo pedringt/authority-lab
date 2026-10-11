@@ -129,6 +129,14 @@ The product decisions behind Authority Lab, why they were made, and what's next.
 - **One date format.** "Oct 7", with the year only when it isn't the workspace's current year. Dates are stored as data and formatted when shown, never baked into stored text. Every authority level has a tooltip with its description. (#43)
 - **Errors are inline, never pop-ups.** Every action that can fail shows its error on the page it was started from. A test keeps `alert()` out of the UI. (#36, #44)
 
+- **A simpler layout (#93, 2026-10-11):** a reader should be able to follow the story in two minutes. No rule or store behaviour changed.
+  - **Five places across the top:** Overview, Capabilities, Evidence (with Tests), Records (Decisions and Activity), Agent runs. People is in the header, and Start empty and Reset demo are in a Demo menu next to Acting as.
+  - **Five capability tabs:** Contract, Evidence (with Success criteria and Testing), Stakeholders, Decisions (with Waiting for a person), Monitoring.
+  - **Old addresses still work:** they are rewritten in place (`src/routes.js`).
+  - **Authority is shown once,** on the L0–L4 strip, which also says "limited".
+  - **One-sentence intros:** page and tab intros are one sentence, with the rest behind "How this works".
+  - **The Agent runs page leads with three numbers and a by-model table:** declined, gate stopped, within limits on an unverified instruction, got through. Each run is collapsed, the single runs from before the repeat batch sit under "Earlier runs", models show by friendly name, and the date appears once.
+  - **No internal wording on screen:** no people's names from the team, no "bait", and ticket codes only inside a run's detail.
 ### Monitoring (roadmap item 6: #48, #49, #50)
 
 - **Restriction rules come from the contract.** Each capability's monitoring rules are derived from its contract's "Automatic restriction" lines, using the number and window the contract checks already require. No separate rule editor. (Decided 2026-10-08.)

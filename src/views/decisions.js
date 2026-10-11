@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
+import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
 import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
@@ -11,7 +11,7 @@ export function decisionsListView(state) {
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
       <h1>Decisions</h1>
-      <p class="lede">Every authority change, who authorized it, and the evidence it rested on at the time. Records are not edited after they are written.</p>
+      ${lede('Every authority change, who authorized it, and the evidence it rested on.', 'Records are not edited after they are written.')}
     </div>
     ${pending.length === 1 ? html`<div class="page-actions"><a class="btn btn-primary" href="#/capabilities/${pending[0].id}/decision">Open authority decision</a></div>` : ''}
   </div>
@@ -232,7 +232,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     <div>
       <p class="eyebrow"><a href="#/decisions">Decisions</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Authority decision</h1>
-      <p class="lede">Current: <strong>${authorityText(cap.authority)}</strong>. Proposed: <strong>${authorityText(proposed)}</strong>. ${rec ? 'The system has summarized the evidence and made a recommendation. ' : ''}A named person decides.</p>
+      ${lede('A named person decides; the strip below shows the current and proposed level.', rec ? 'The system has summarized the evidence and made a recommendation. A named person decides.' : null)}
     </div>
   </div>
   <div class="card">${levelScale(cap.authority, proposed)}</div>

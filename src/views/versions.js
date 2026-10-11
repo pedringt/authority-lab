@@ -1,4 +1,4 @@
-import { html, badge, fmtDate, person, personAt, rightsNote, empty, kv } from '../ui.js';
+import { html, badge, fmtDate, person, personAt, rightsNote, empty, kv, lede } from '../ui.js';
 import { getCapability, versionList, VERSIONED_KINDS, KIND_LABELS } from '../store/index.js';
 import { diffTable, deviationsView } from './activity.js';
 import { contractReviewView } from './contract.js';
@@ -35,7 +35,7 @@ export function versionsView(state, capabilityId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Versions</h1>
-      <p class="lede">Every version of the ${cap.name} ${KIND_LABELS[kind].toLowerCase()}. Versions are written, never edited. Decision records name the version that was in force when they were made.</p>
+      ${lede(html`Every version of the ${cap.name} ${KIND_LABELS[kind].toLowerCase()}.`, 'Versions are written, never edited. Decision records name the version that was in force when they were made.')}
     </div>
   </div>
   ${tabs}
