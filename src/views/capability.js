@@ -67,7 +67,7 @@ export function capabilityView(state, id, query) {
       body = html`${subNav([{ href: `${base}?tab=decisions`, label: 'History', active: v === 'history' }, { href: `${base}?tab=decisions&show=waiting`, label: 'Waiting for a person', active: v === 'waiting', count: waitingActions(state, cap.id).length }], 'Decision views')}${v === 'waiting' ? waitingTab(state, cap, query) : decisionsTab(state, cap)}`;
       break;
     }
-    case 'monitoring': body = monitoringTab(state, cap, d); break;
+    case 'monitoring': body = monitoringTab(state, cap, d, show); break;
     default: body = contractTab(state, cap, d);
   }
 
@@ -398,7 +398,9 @@ function reviewCard(state, cap, d) {
   </form>${recorded}`;
 }
 
-function monitoringTab(state, cap, d) {
+// Two views (#95): Health (is it working and safe?) and Value (is it worth
+// it, and are people using it well?). Value's chip counts what needs a look.
+function monitoringTab(state, cap, d, show = null) {
   const m = d.monitoring;
   const st = monitoringStatus(state, cap.id);
   const applying = st.rules.filter((r) => r.active).length;
@@ -432,7 +434,16 @@ function monitoringTab(state, cap, d) {
     ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
         <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
     : '';
-  return html`${head}${reviewCard(state, cap, d)}${metrics}${expectedCard(state, cap)}${roiCard(state, cap)}${adoptionCard(state, cap)}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
+  const base = `#/capabilities/${cap.id}?tab=monitoring`;
+  const missed = expectedVsActual(state, cap.id).rows.filter((r) => r.status === 'not-met').length;
+  const warnings = adoptionSignals(state, cap.id).length;
+  const value = show === 'value';
+  const views = subNav([{ href: base, label: 'Health', active: !value }, { href: `${base}&show=value`, label: 'Value', active: value, count: missed + warnings }], 'Monitoring views');
+  if (value) {
+    const parts = html`${expectedCard(state, cap)}${roiCard(state, cap)}${adoptionCard(state, cap)}`;
+    return html`${views}${String(parts).trim() ? parts : html`<p class="empty">Nothing to show yet: value appears once an expansion is authorized with expected outcomes.</p>`}`;
+  }
+  return html`${views}${head}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
 }
 
 // Where a number came from, always shown (B2): seeded demo data, or the gate log with its sources.

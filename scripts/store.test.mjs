@@ -3660,7 +3660,7 @@ test('B2: ROI assumptions change only as a new version, with author and reason; 
 
 test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded data labelled', () => {
   const s = expandedRRB2();
-  const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(page, /Expected vs actual/);
   assert.match(page, /8 points short of the target/);
   assert.match(page, /Seeded demo data \(pilot\)/);
@@ -3825,14 +3825,14 @@ test('C2: adoption signals never block: the gate, the queue and authorizing beha
 });
 
 test('C2: the Monitoring tab lists each warning with what, why and source, and says when the data is simulated', () => {
-  const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring')));
+  const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(page, /Adoption signals/);
   assert.match(page, /Warnings only: they never block/);
   assert.match(page, /Possible rubber-stamping/);
   assert.match(page, /Overrides are rising/);
   assert.match(page, /Why it matters/);
   assert.match(page, /Simulated demo data/);
-  const quiet = String(capabilityView(withAdoption(initialState(), null), RR, new URLSearchParams('tab=monitoring')));
+  const quiet = String(capabilityView(withAdoption(initialState(), null), RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(quiet, /No adoption warnings/);
 });
 
@@ -3869,4 +3869,20 @@ test('#93: five capability tabs; the old tabs open as views inside Evidence and 
   assert.match(waiting, /class="chip is-active"[^>]*>Waiting for a person/);
   const criteria = String(capabilityView(s, RR, new URLSearchParams('tab=criteria')));
   assert.match(criteria, /class="chip is-active"[^>]*>Success criteria/);
+});
+
+test('#95: Monitoring has a Health view and a Value view; Value counts what needs a look', () => {
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  assert.match(health, /class="chip is-active"[^>]*>Health/);
+  assert.match(health, /Restriction rules/);
+  assert.match(health, /Gate activity/);
+  assert.doesNotMatch(health, /Expected vs actual|Return on investment|Adoption signals/);
+  // Three outcomes not met, two simulated adoption warnings: 5 on the Value chip.
+  assert.match(health, /show=value"[^>]*>Value <span class="chip-count">5<\/span>/);
+  const value = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
+  assert.match(value, /Expected vs actual/);
+  assert.match(value, /Return on investment/);
+  assert.match(value, /Adoption signals/);
+  assert.doesNotMatch(value, /Restriction rules/);
 });
