@@ -20,7 +20,7 @@ import {
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
   parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
-  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, setRolloutField, rolloutChecks, ROLLOUT_FIELDS, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility,
+  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, setRolloutField, rolloutChecks, ROLLOUT_FIELDS, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility, adoptionSignals,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView, decisionWorkspaceView } from '../src/views/decisions.js';
@@ -3747,4 +3747,79 @@ test('C1: the plan shows on the decision workspace, the record and the capabilit
   assert.match(capPage, /Rollout<\/dt><dd>Priya Natarajan · from/);
   const older = initialState().decisionRecords.find((r) => r.next && r.previous && r.next.level > r.previous.level);
   assert.match(String(decisionRecordView(initialState(), older.id)), /before rollout plans were required/);
+});
+
+// C2 (#75): adoption signals, warnings only.
+const withAdoption = (s, adoption) => ({ ...s, capabilityData: { ...s.capabilityData, [RR]: { ...capData(s, RR), adoption } } });
+const ids = (s) => adoptionSignals(s, RR).map((x) => x.id);
+
+test('C2 rubber-stamping: raised by near-100% approval or very fast reviews; not by careful ones or too few decisions', () => {
+  const s = initialState();
+  const seeded = adoptionSignals(s, RR).find((x) => x.id === 'rubber-stamping');
+  assert.ok(seeded, 'the simulated pilot reviews raise it');
+  assert.equal(seeded.simulated, true);
+  assert.match(seeded.source, /Simulated demo data/);
+  const log = (n, seconds, rejected = 0) => Array.from({ length: n }, (_, i) => ({ seconds, outcome: i < rejected ? 'rejected' : 'approved' }));
+  assert.ok(ids(withAdoption(s, { reviewLog: log(12, 60) })).includes('rubber-stamping'), '100% approvals, even slowly');
+  assert.ok(ids(withAdoption(s, { reviewLog: log(12, 5, 4) })).includes('rubber-stamping'), 'mixed outcomes, but 5-second reviews');
+  assert.ok(!ids(withAdoption(s, { reviewLog: log(12, 60, 3) })).includes('rubber-stamping'), '75% approvals at a minute each is fine');
+  assert.ok(!ids(withAdoption(s, { reviewLog: log(5, 3) })).includes('rubber-stamping'), 'too few decisions to say');
+  assert.ok(!ids(withAdoption(s, null)).includes('rubber-stamping'), 'no data, no warning');
+});
+
+test('C2 rising overrides: raised by three weekly rises totalling 3 points or more; not by a flat, falling or small rise', () => {
+  const s = initialState();
+  assert.ok(ids(s).includes('rising-overrides'), 'the simulated weekly series raises it');
+  const weeks = (...r) => ({ overrideWeeks: r.map((rate, i) => ({ week: `w${i}`, rate })) });
+  assert.ok(ids(withAdoption(s, weeks(5, 6, 7, 9))).includes('rising-overrides'));
+  // [5, 9, 7, 10] rises 5 points overall but dips in week three: not "every week".
+  for (const series of [[9, 9, 9, 9], [12, 11, 10, 9], [7, 8, 7, 9], [7, 7.5, 8, 9], [7, 9, 12], [5, 9, 7, 10]]) assert.ok(!ids(withAdoption(s, weeks(...series))).includes('rising-overrides'), JSON.stringify(series));
+});
+
+test('C2 escalations left waiting: raised by an action waiting more than 2 days; not by fresh ones', () => {
+  const s = initialState();
+  assert.ok(!ids(s).includes('waiting-too-long'), 'the seeded waiting actions were queued today');
+  const aged = (days) => ({ ...s, actionQueue: s.actionQueue.map((x, i) => (i === 0 ? { ...x, date: new Date(Date.parse(`${s.today}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10) } : x)) });
+  const raised = adoptionSignals(aged(3), RR).find((x) => x.id === 'waiting-too-long');
+  assert.ok(raised);
+  assert.match(raised.what, /WA-001/);
+  assert.equal(raised.simulated, false);
+  assert.ok(!ids(aged(2)).includes('waiting-too-long'), 'exactly 2 days is not "more than 2"');
+});
+
+test('C2 work-arounds: raised by a refund issued by hand after the expansion; not by the AI, the queue, or before', () => {
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.ok(!ids(s).includes('workarounds'));
+  const add = (st, entry) => ({ ...st, systems: { ...st.systems, refunds: [...st.systems.refunds, { id: `RF-${st.systems.refunds.length + 1}`, orderId: 'ORD-5002', customerId: 'C-1001', amount: 20, date: st.today, capabilityId: RR, ...entry }] } });
+  const raised = adoptionSignals(add(s, { by: 'priya' }), RR).find((x) => x.id === 'workarounds');
+  assert.ok(raised);
+  assert.match(raised.what, /issued by hand since AC-04/);
+  assert.ok(!ids(add(s, { by: 'ai' })).includes('workarounds'), 'the AI itself');
+  assert.ok(!ids(add(s, { by: 'maya', approvedVia: 'WA-001' })).includes('workarounds'), 'through an approved waiting action');
+  assert.ok(!ids(add(s, { by: 'priya', date: '2026-09-30' })).includes('workarounds'), 'before the expansion');
+  assert.ok(!ids(add(initialState(), { by: 'priya' })).includes('workarounds'), 'no autonomous expansion in force yet');
+});
+
+test('C2: adoption signals never block: the gate, the queue and authorizing behave the same with every signal raised', () => {
+  let loud = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  loud = { ...loud, actionQueue: loud.actionQueue.map((x) => ({ ...x, date: '2026-10-01' })), systems: { ...loud.systems, refunds: [...loud.systems.refunds, { id: 'RF-X', orderId: 'ORD-5002', customerId: 'C-1001', amount: 20, date: loud.today, by: 'priya', capabilityId: RR }] } };
+  assert.deepEqual(ids(loud).sort(), ['rising-overrides', 'rubber-stamping', 'waiting-too-long', 'workarounds']);
+  const quiet = withAdoption(loud, null);
+  const call = refund('ORD-5006', 10);
+  assert.deepEqual(checkAction(loud, RR, call), checkAction(quiet, RR, call), 'the gate ignores them');
+  assert.equal(canAuthorize(selectDecision(initialState(), RR, 'expand-limits'), RR).ok, true);
+  const approved = approveAction(loud, 'WA-001', { by: 'maya', reason: 'Checked the order and the return; fine to refund.' });
+  assert.ok(['executed', 'refused'].includes(queuedAction(approved, 'WA-001').status), 'a person can still decide');
+});
+
+test('C2: the Monitoring tab lists each warning with what, why and source, and says when the data is simulated', () => {
+  const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring')));
+  assert.match(page, /Adoption signals/);
+  assert.match(page, /Warnings only: they never block/);
+  assert.match(page, /Possible rubber-stamping/);
+  assert.match(page, /Overrides are rising/);
+  assert.match(page, /Why it matters/);
+  assert.match(page, /Simulated demo data/);
+  const quiet = String(capabilityView(withAdoption(initialState(), null), RR, new URLSearchParams('tab=monitoring')));
+  assert.match(quiet, /No adoption warnings/);
 });

@@ -833,6 +833,16 @@ export const defaultRollout = {
   reviewDate: '2026-10-22',
 };
 
+// Adoption data for Refund recommendation (C2). Simulated: the demo has no
+// clock for how long a review took and no weekly history, so these are made
+// up for the demo and labelled "Simulated demo data" wherever they show.
+export const adoption = {
+  // Pilot reviews: outcome, and seconds from opening the case to deciding.
+  reviewLog: [6, 4, 9, 5, 7, 12, 3, 8, 6, 5, 11, 4, 7, 6, 9, 5, 8, 4, 6, 10, 7, 5, 30, 6].map((seconds, i) => ({ seconds, outcome: i === 22 ? 'rejected' : 'approved' })),
+  // Weekly override rate on the pilot, oldest first.
+  overrideWeeks: [{ week: '2026-09-15', rate: 7 }, { week: '2026-09-22', rate: 9 }, { week: '2026-09-29', rate: 11 }, { week: '2026-10-06', rate: 12 }],
+};
+
 // ROI assumptions for Refund recommendation (B2), version 1. Seeded demo data:
 // fictional, and labelled as seeded wherever it shows.
 export const roiAssumptions = [
@@ -1083,6 +1093,7 @@ export const capabilityData = {
     pendingDecision: { level: 3, limited: true },
     monitoringRule: monitoringSeed,
     roiAssumptions,
+    adoption,
     breach: breachSeed,
     lastTestRun: '2026-10-03',
   },

@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -427,12 +427,24 @@ function monitoringTab(state, cap, d) {
     ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
         <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
     : '';
-  return html`${head}${reviewCard(state, cap, d)}${metrics}${expectedCard(state, cap)}${roiCard(state, cap)}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
+  return html`${head}${reviewCard(state, cap, d)}${metrics}${expectedCard(state, cap)}${roiCard(state, cap)}${adoptionCard(state, cap)}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
 }
 
 // Where a number came from, always shown (B2): seeded demo data, or the gate log with its sources.
 const sourceTag = (source, seeded) => html`<span class="muted small">${source}</span>${seeded ? html` ${badge('neutral', 'Seeded')}` : ''}`;
 const money = (v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+// Adoption signals (C2): warnings, never blocking, each with what it saw,
+// why it matters and where the data came from.
+function adoptionCard(state, cap) {
+  const signals = adoptionSignals(state, cap.id);
+  const checked = 'Rubber-stamping, rising overrides, escalations left waiting and work-arounds outside the agent.';
+  const body = signals.length
+    ? signals.map((x) => html`<div class="notice notice-watch adoption-signal" role="status"><div class="notice-body"><strong>${x.title}</strong>${x.simulated ? html` ${badge('neutral', 'Simulated')}` : ''}
+        <p>${x.what}</p><p class="muted small">Why it matters: ${x.why}</p><p class="muted small">Source: ${x.source}.</p></div></div>`)
+    : notice('pass', 'No adoption warnings', `Checked: ${checked}`);
+  return section('Adoption signals', body, { subtitle: `Warnings only: they never block an action or a decision. ${signals.length ? `Checked: ${checked}` : ''}` });
+}
 
 // Expected vs actual (B2): each expected outcome on the record in force.
 function expectedCard(state, cap) {

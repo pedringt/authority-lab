@@ -93,6 +93,12 @@ The product decisions behind Authority Lab, why they were made, and what's next.
   - **Where it shows:** on the record, and in the capability's summary ("Rollout: owner · from · review · Plan").
   - **The seed:** the seeded decision's plan is prefilled for the demo (Priya; Tier 1 standard refunds ≤ $50; from Oct 8, reviewed Oct 22), and labelled that way.
   - **Earlier records:** records written before the rule say "Recorded before rollout plans were required for expansions".
+- **Adoption signals (C2, #75, 2026-10-10).** The Monitoring tab warns about four things. Each warning says what it saw, why it matters and where the data came from. **Warnings never block:** the gate, the queue and authorizing ignore them, and a test checks that with every signal raised.
+  - **Rubber-stamping:** 95% or more approvals over at least 10 decisions, or a median review under 15 seconds. Real queue decisions count toward the approval rate. Review times exist only in the simulated pilot review log, because the demo clock records days, not times.
+  - **Rising overrides:** the weekly override rate rose in each of the last three weeks, by 3 points or more in all. The weekly series is simulated.
+  - **Escalations left waiting:** an action waiting for a person for more than 2 days. Real data, from the waiting queue.
+  - **Work-arounds:** a refund someone issued by hand since the expansion in force, not by the AI and not through an approved waiting action. Real data, from the refund ledger.
+  - **Simulated data says so:** the seed's simulated data raises the first two warnings in the demo, each badged "Simulated" with its source. The thresholds are constants in `src/store/adoption.js`.
 ### Workspace setup
 
 - **"Start empty" sits beside Reset demo.** It swaps the seeded Northstar demo for a blank workspace; Reset demo brings Northstar back. One workspace at a time. Until setup is done, every route shows the setup screen, with no tabs and no acting-as picker. (Decided 2026-10-09, #58.)
@@ -167,5 +173,5 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 9. **Learning-gap roadmap: from deciding authority to enforcing it, measuring it, rolling it out and explaining it** (replaces "real evidence integrations"; Paige approved 2026-10-09). Authority Lab stays the place for AI governance, and now also covers agents, tools and MCP, data-handling boundaries, rollout and adoption, measurement and business value, executive communication, and standards. Order: A1 → A6, then B, C, D. Every PR stays open for Paige.
    - **Phase A, runtime enforcement** (label `enforcement`): ~~A1 the gate, `checkAction` (#65)~~ · ~~A2 systems of record and the data boundary (#66)~~ · ~~A3 MCP server in `agent/` (#67)~~ (A1–A3 done, merged together in #82) · ~~A4 the "waiting for a person" queue (#68)~~ · ~~A5 gate decisions as instrumentation (#69)~~ · ~~A6 recorded agent runs replayed through the gate (#70)~~ (done: #85, #86, #87, #88) · A7 live run mode, **not to be built** without Paige's decision, since it changes the no-network rule (#71).
    - **Phase B, measurement and business value** (label `value`): ~~B1 expected impact required to authorize an expansion (#72)~~ · ~~B2 expected vs actual, with a simple ROI (#73)~~.
-   - **Phase C, rollout and adoption** (label `adoption`): ~~C1 a rollout plan required on every expansion (#74)~~ · C2 adoption signals as non-blocking warnings (#75).
+   - **Phase C, rollout and adoption** (label `adoption`): ~~C1 a rollout plan required on every expansion (#74)~~ · ~~C2 adoption signals as non-blocking warnings (#75)~~.
    - **Phase D, communication and landscape** (label `communication`): D1 a one-page decision brief for a leadership reader (#76) · D2 a standards map to NIST AI RMF, the EU AI Act and ISO/IEC 42001, as learning notes and not a compliance claim (#77).

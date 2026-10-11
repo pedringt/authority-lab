@@ -61,6 +61,8 @@ export function seededCapabilityData(id) {
     ruleReadings: clone(s.ruleReadings || {}),
     // ROI assumptions, one entry per version (B2). Seeded ones say so.
     roiAssumptions: clone(s.roiAssumptions || []),
+    // Simulated adoption data (C2), labelled as such wherever it shows.
+    adoption: s.adoption ? clone(s.adoption) : null,
     testRun: { status: 'not-run', lastRun: s.lastTestRun || null, completed: [] },
     decision: {
       option: null,
