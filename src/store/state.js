@@ -66,6 +66,8 @@ export function seededCapabilityData(id) {
       rationale: s.defaultRationale || '',
       // Expected impact for an expansion (B1), prefilled for the seeded decision.
       outcomes: s.defaultOutcomes ? clone(s.defaultOutcomes) : [],
+      // Shown as "prefilled for the demo" until someone edits them.
+      outcomesPrefilled: Boolean(s.defaultOutcomes),
       recordId: null,
       // The pending authority change, if a decision is open.
       proposed: s.pendingDecision ? clone(s.pendingDecision) : null,
@@ -148,6 +150,20 @@ export function logEvent(state, event) {
   const e = { id: `ACT-${Date.now()}-${state.activity.length}`, date: state.today, ...event };
   if (e.surfaced === undefined) e.surfaced = isSurfaced(e);
   return { ...state, activity: [e, ...state.activity] };
+}
+
+// When authority drops for any reason (an automatic restriction, a restrict,
+// suspend or redesign decision), an open proposal to expand closes: it was
+// made from a level the capability no longer has. A new proposal, from the
+// new level, is required (#89 review: a proposal for Level 4 survived a
+// restriction to Level 2 and was then authorized, L2 to L4 in one step).
+export function closeOpenProposal(state, capabilityId, previous, next) {
+  const d = capData(state, capabilityId);
+  const p = d && d.decision && d.decision.proposed;
+  if (!p || !(next.level < previous.level)) return state;
+  const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false } }));
+  const cap = getCapability(state, capabilityId);
+  return logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: the open proposal to move to Level ${p.level} was made at Level ${previous.level}. Authority is now Level ${next.level}, so the proposal is closed. Any expansion needs a new proposal, one level up from Level ${next.level}.`, capabilityId, link: `#/capabilities/${capabilityId}/decision` });
 }
 
 export function reset() {

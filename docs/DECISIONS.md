@@ -74,7 +74,8 @@ The product decisions behind Authority Lab, why they were made, and what's next.
   - **Which decisions:** authorizing any decision that raises the level, Expand or Expand with limits, including a move to Draft. It needs 2 to 4 expected outcomes. Hold, restrict, suspend and redesign need none.
   - **What an outcome is:** a metric (3 to 80 characters) and a target with a number (up to 60 characters), for example "Resolution time: at least 35% faster" or "AI cost per case: ≤ $0.15". The number and unit (% or $) are parsed and stored, so B2 can compare expected with actual. Duplicate metrics are refused.
   - **On the record:** the outcomes are written onto the decision record and frozen. Once the decision is recorded, they can't be edited through the decision, because there is no open decision any more.
-  - **The seed:** the seeded Refund recommendation decision is prefilled, in line with its pilot (42% faster, $0.08 a case, 11% overrides): at least 35% faster resolution, ≤ $0.15 AI cost per case, and ≤ 10% overrides.
+  - **The seed:** the seeded Refund recommendation decision is prefilled, labelled "prefilled for the demo", and a little more ambitious than its pilot (42% faster, $0.08 a case, 11% overrides), so B2 has a real gap to show: at least 50% faster resolution, ≤ $0.06 AI cost per case, and ≤ 8% overrides. A record authorized with them unedited says so.
+  - **Paige's answers (review of #89):** she agreed to all four assumptions: any move up is an expansion (including to Draft); hold needs no outcomes; metrics are free text plus a numeric target for now; and older records are left as they are.
   - **Earlier records:** records written before the rule show "Recorded before expected outcomes were required for expansions" and are not changed.
 ### Workspace setup
 
@@ -125,6 +126,10 @@ Each one now has a test that tries the bypass and confirms it is refused.
 3. A proposal from the only Risk person could never complete and blocked the item. Fixed with a feasibility check, withdrawal, and a second Risk person in the seed.
 4. An admin editing someone's team made them a Risk approver. Fixed with the explicit Risk approver right.
 5. The person receiving a right could approve their own grant. Fixed: the recipient can't approve.
+6. An open proposal to expand survived a drop in authority (found in review of #89, already on main). Refund recommendation at Level 3, a proposal for Level 4, then an automatic restriction to Level 2, a review, and Expand: Level 2 → Level 4 in one step. Fixed in three places:
+   - Any drop in authority closes an open proposal and records why in Activity ("Proposal closed: authority changed from Level X to Level Y"). That covers automatic restrictions from either monitoring or the gate log, and restrict, suspend or redesign decisions. A new proposal is required, one level up from the new level.
+   - `canAuthorize` refuses an expansion unless the proposal is for exactly the current level + 1.
+   - `nextAuthority` never falls back to Level 3: with no proposal one level up, authority stays as it is.
 
 Lesson: most gaps came from assumptions about who people are and what role they hold. Test those first.
 

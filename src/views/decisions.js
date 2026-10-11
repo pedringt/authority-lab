@@ -42,6 +42,7 @@ function impactCard(cap, dec) {
       <span class="fact-label">Metric</span><span class="fact-label">Target, with a number</span>
       ${rows.map((o, i) => html`<input type="text" maxlength="80" aria-label="Outcome ${i + 1}: metric" placeholder="${i === 0 ? 'e.g. Resolution time' : ''}" value="${o.metric}" data-action="set-outcome" data-capability="${cap.id}" data-index="${i}" data-field="metric"><input type="text" maxlength="60" aria-label="Outcome ${i + 1}: target" placeholder="${i === 0 ? 'e.g. at least 35% faster' : ''}" value="${o.target}" data-action="set-outcome" data-capability="${cap.id}" data-index="${i}" data-field="target">`)}
     </div>
+    ${dec.outcomesPrefilled ? html`<p class="muted small"><strong>Prefilled for the demo.</strong> A little more ambitious than the pilot results; edit them before authorizing.</p>` : ''}
     ${oc.ok ? html`<p class="muted small">${oc.outcomes.length} expected outcome${oc.outcomes.length === 1 ? '' : 's'}. B2 will compare them with what actually happens.</p>` : html`<ul class="form-error plain-list">${oc.errors.map((e) => html`<li>${e}</li>`)}</ul>`}
   </div>`;
 }
@@ -78,7 +79,7 @@ export function decisionRecordView(state, id) {
       ['Open condition', x.openCondition],
       // B1: what an expansion was expected to achieve, fixed on the record.
       ...(x.expectedOutcomes && x.expectedOutcomes.length
-        ? [['Expected impact', html`<ul class="plain-list">${x.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>`]]
+        ? [['Expected impact', html`<ul class="plain-list">${x.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>${x.outcomesPrefilled ? html`<p class="muted small">Prefilled for the demo.</p>` : ''}`]]
         : x.previous && x.next && x.next.level > x.previous.level && x.authorizedBy !== 'system'
           ? [['Expected impact', html`<span class="muted">Recorded before expected outcomes were required for expansions.</span>`]]
           : []),

@@ -58,11 +58,14 @@ export function scopeText(option, conditions, cap, next = null) {
   }
 }
 
+// An expansion moves exactly one level, to the open proposal. Without a
+// proposal for the next level up there is no expansion: authority stays as
+// it is (it never falls back to a default level).
 export function nextAuthority(option, current, proposed = null) {
-  const target = proposed && proposed.level > current.level ? proposed.level : 3;
+  const oneUp = proposed && proposed.level === current.level + 1 ? proposed.level : null;
   switch (option) {
-    case 'expand': return { level: target, limited: false };
-    case 'expand-limits': return { level: target, limited: true };
+    case 'expand': return oneUp ? { level: oneUp, limited: false } : { ...current };
+    case 'expand-limits': return oneUp ? { level: oneUp, limited: true } : { ...current };
     case 'hold': return { ...current };
     case 'restrict': return { level: Math.max(0, current.level - 1), limited: false };
     case 'suspend': return { level: 0, limited: false };
@@ -159,7 +162,7 @@ export function setOutcome(state, capabilityId, index, field, value) {
   return updateCap(state, capabilityId, (d) => {
     const rows = Array.from({ length: OUTCOMES_MAX }, (_, k) => ({ metric: '', target: '', ...((d.decision.outcomes || [])[k] || {}) }));
     rows[i] = { ...rows[i], [field]: String(value ?? '') };
-    return { ...d, decision: { ...d.decision, outcomes: rows } };
+    return { ...d, decision: { ...d.decision, outcomes: rows, outcomesPrefilled: false } };
   });
 }
 
@@ -169,6 +172,11 @@ export function canAuthorize(state, capabilityId) {
   const d = capData(state, capabilityId).decision;
   if (!d.option) return { ok: false, reason: 'Choose a decision option first.' };
   if ((d.option === 'expand' || d.option === 'expand-limits') && !d.proposed) return { ok: false, reason: 'No authority change is proposed for this capability. Propose the next level first.' };
+  // Belt and braces: the proposal must be for exactly one level up from now.
+  if (d.option === 'expand' || d.option === 'expand-limits') {
+    const cap = getCapability(state, capabilityId);
+    if (d.proposed.level !== cap.authority.level + 1) return { ok: false, reason: `The open proposal is for Level ${d.proposed.level}, but ${cap.name} is at Level ${cap.authority.level}. Propose the next level, Level ${cap.authority.level + 1}, again.` };
+  }
   if (!d.rationale || d.rationale.trim().length < 20) return { ok: false, reason: 'Write a decision rationale (at least a sentence).' };
   if (isExpansion(state, capabilityId, d.option)) {
     const oc = outcomeChecks(d.outcomes);
@@ -240,6 +248,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     conditions: option === 'expand-limits' && next.level >= 3 ? { ...d.decision.conditions } : null,
     // B1: what this expansion is expected to achieve, fixed from here on.
     expectedOutcomes: next.level > previous.level ? deepFreeze(outcomeChecks(d.decision.outcomes).outcomes) : null,
+    // Authorized as prefilled for the demo, unedited: the record says so.
+    ...(next.level > previous.level && d.decision.outcomesPrefilled ? { outcomesPrefilled: true } : {}),
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
@@ -281,8 +291,14 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'Authority automatically returns to Draft if the severe error rate exceeds 5% across the rolling 50-case window.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
-  const s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null }, monitoring });
-  return { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null }, monitoring });
+  s = { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
+  // A restrict, suspend or redesign decided while a proposal to expand was
+  // open closes that proposal too, and says so.
+  if (d.decision.proposed && next.level < previous.level) {
+    s = logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: the open proposal to move to Level ${d.decision.proposed.level} was closed by this ${option} decision (${id}). Any expansion needs a new proposal, one level up from Level ${next.level}.`, capabilityId: cap.id, link: `#/decisions/${id}` });
+  }
+  return s;
 }
 
 // Open an authority decision for a capability: propose the next level. Needs
