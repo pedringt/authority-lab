@@ -160,7 +160,7 @@ The sections that follow describe each step.
 
 ### Starting from an empty workspace
 
-**Start empty**, in the demo controls next to Reset demo, swaps the Northstar demo for a blank workspace. Both buttons erase every record, so each first asks, inline, "This erases all records in this workspace. Continue?" Until it is set up, every page shows **Set up the workspace**: name the workspace and its one workflow, and record the **founding roster**, the first people with their titles, teams and rights. The founding roster is the only time rights are set directly; it needs at least two workspace admins, because every later rights change is a proposal that a different admin approves. Risk approvers are optional at setup, and coverage warnings explain any gap once High-impact or Financial capabilities exist. The form asks **who is setting this up**, one of the founding admins, and records them as the author of the founding roster; they are acting when the workspace opens. If fewer than two Risk approvers are listed, a note explains that High-impact and Financial changes can't be signed off until the right is granted; it doesn't block setup. From there the Overview, Tests and Evidence point to **Add the first capability**, and everything works exactly as in the demo. **Reset demo** brings Northstar back.
+**Start empty**, in the Demo menu next to Acting as (beside Reset demo), swaps the Northstar demo for a blank workspace. Both buttons erase every record, so each first asks, inline, "This erases all records in this workspace. Continue?" Until it is set up, every page shows **Set up the workspace**: name the workspace and its one workflow, and record the **founding roster**, the first people with their titles, teams and rights. The founding roster is the only time rights are set directly; it needs at least two workspace admins, because every later rights change is a proposal that a different admin approves. Risk approvers are optional at setup, and coverage warnings explain any gap once High-impact or Financial capabilities exist. The form asks **who is setting this up**, one of the founding admins, and records them as the author of the founding roster; they are acting when the workspace opens. If fewer than two Risk approvers are listed, a note explains that High-impact and Financial changes can't be signed off until the right is granted; it doesn't block setup. From there the Overview, Tests and Evidence point to **Add the first capability**, and everything works exactly as in the demo. **Reset demo** brings Northstar back.
 
 ### Adding a capability
 
@@ -218,7 +218,7 @@ After the first test run, the Decision history tab and the Setup page offer **Pr
 
 ### People
 
-The **People** page is the workspace roster: name, title, team, whether the person is active, and two explicit, recorded rights. **Workspace admin** can change the roster; **Risk approver** can sign off as Risk. Rights are recorded on the person, never inferred from a team name. In the seed, Maya Chen and Jonas Lindqvist are workspace admins, and Daniel Okafor and Sofia Alvarez hold the Risk approver right.
+The **People** page (the link at the right of the header) is the workspace roster: name, title, team, whether the person is active, and two explicit, recorded rights. **Workspace admin** can change the roster; **Risk approver** can sign off as Risk. Rights are recorded on the person, never inferred from a team name. In the seed, Maya Chen and Jonas Lindqvist are workspace admins, and Daniel Okafor and Sofia Alvarez hold the Risk approver right.
 
 Only a workspace admin adds a person, edits a name, title or team, or deactivates someone, and every change records the admin and a reason as a new roster version, with the history and a before/after diff on the page. Nobody is ever deleted: records, approvals and stakeholder lists keep referring to people after they are deactivated. A deactivated person cannot be the acting person, cannot propose, cannot approve, and cannot be added as a stakeholder, and drops out of the pickers.
 
@@ -239,7 +239,7 @@ When a workspace admin proposes removing a right or deactivating someone, the fo
 
 ### Demo: acting as
 
-The header's grouped demo area (top right, next to the demo date and Reset demo) has a picker labelled **Demo · Acting as**. It is a demo control: a real version would know who is signed in, and the picker stands in for sign-in so one visitor can show different people proposing, approving and authorizing. Only active people appear in it. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
+The header's grouped demo area (top right) has the **Demo** menu (Start empty, Reset demo), a picker labelled **Acting as**, the demo date and a link to People. It is a demo control: a real version would know who is signed in, and the picker stands in for sign-in so one visitor can show different people proposing, approving and authorizing. Only active people appear in it. It defaults to the owner of the capability you are looking at and can be switched to any named person; on the Add capability page, choosing an owner switches it to that owner. Whoever is acting is recorded as the author of records written from that screen: the first record when adding a capability, and the authorization on a decision. When the acting person is not the owner, the record shows both. This is what lets a proposer and an approver be different people when sign-off rules arrive.
 
 ## 2. The screens
 
@@ -247,17 +247,19 @@ The header's grouped demo area (top right, next to the demo date and Reset demo)
 
 **Capabilities** is the authority map: every capability, its current authority, status, risk, owner and last evaluation, plus the Add capability button. This is the page for "what is the AI actually allowed to do here?"
 
-**Capability detail** is the full picture of one capability, with tabs for the contract, success criteria, testing, evidence, stakeholders, decision history and monitoring. The current and proposed authority are always visible at the top.
+**Capability detail** is the full picture of one capability, with five tabs: **Contract**; **Evidence** (with Success criteria and Testing as views); **Stakeholders**; **Decisions** (the history, and Waiting for a person); and **Monitoring**. The L0–L4 strip at the top shows the current and proposed authority, once.
 
-**Tests** is the testing ground: 26 scenarios in five groups (standard, ambiguous, adversarial, high impact, edge cases). The heading names the capability and switches it ("Tests for: … ▾"). Before the first run the groups are collapsed with their counts beside one Run test suite button; after a run, groups with failures come first and open, and a filter bar narrows by result and group. Running the suite shows each scenario's expected behaviour, what the AI did, the outcome, the severity, and what the human reviewer decided. One scenario fails badly on purpose: a $420 refund on a fraud-flagged account was recommended instead of escalated.
+The top navigation has five places: Overview, Capabilities, Evidence, Records and Agent runs. Each page opens with one sentence, with more behind **How this works**.
+
+**Evidence → Tests** is the testing ground: 26 scenarios in five groups (standard, ambiguous, adversarial, high impact, edge cases). The heading names the capability and switches it ("Tests for: … ▾"). Before the first run the groups are collapsed with their counts beside one Run test suite button; after a run, groups with failures come first and open, and a filter bar narrows by result and group. Running the suite shows each scenario's expected behaviour, what the AI did, the outcome, the severity, and what the human reviewer decided. One scenario fails badly on purpose: a $420 refund on a fraud-flagged account was recommended instead of escalated.
 
 **Evidence** is the repository of everything the decision rests on ("Evidence for: … ▾" switches capability), filterable on one bar by status, source, segment and risk, with a count of what is shown and the evidence requirements checklist underneath.
 
-**Decisions** lists every authority change and opens the decision workspace for the pending one. In the workspace, the options, the plain-English preview, the rationale and the Authorize button share one panel that stays in view while you read the evidence; the condition inputs for Expand with limits sit at the top of the page.
+**Records → Decisions** lists every authority change and opens the decision workspace for the pending one. In the workspace, the options, the plain-English preview, the rationale and the Authorize button share one panel that stays in view while you read the evidence; the condition inputs for Expand with limits sit at the top of the page.
 
 When an action can't go through (a missing rationale, a rule that refuses it), the reason appears as a notice on the same page. Dates read "Oct 7", with the year only when it differs from the current one, and hovering any authority level shows what it allows.
 
-**Activity** is the timeline. Every event is recorded. The default view ("Important") shows decisions, automatic restrictions, test runs, pilot milestones, failures, mitigations, stakeholder reviews, and amendments made after evidence; "Full history" shows everything, including setup-type events such as criteria being defined and amendments made before any results existed. Both views filter by kind and by capability, and an amendment expands to a before/after table.
+**Records → Activity** is the timeline. Every event is recorded. The default view ("Important") shows decisions, automatic restrictions, test runs, pilot milestones, failures, mitigations, stakeholder reviews, and amendments made after evidence; "Full history" shows everything, including setup-type events such as criteria being defined and amendments made before any results existed. Both views filter by kind and by capability, and an amendment expands to a before/after table.
 
 ---
 
@@ -265,15 +267,15 @@ When an action can't go through (a missing rationale, a rule that refuses it), t
 
 1. **Overview.** Refund recommendation needs a decision. Five of six requirements are met. High-value refunds are the gap.
 2. **Capabilities, then Refund recommendation.** Read the contract: what it may do, must ask about, must never do.
-3. **Tests, then Run test suite.** 24 of 26 pass. Open the failed filter and read H-04, the fraud-flag miss.
+3. **Evidence, then Tests, then Run test suite.** 24 of 26 pass. Open the failed filter and read H-04, the fraud-flag miss.
 4. **Capability, Evidence tab.** 218 pilot cases at 94% overall. 18 high-value cases at 83%.
 5. **Capability, Stakeholders tab.** Operations wants to expand everything. Risk wants anything over $50 kept with a person.
-6. **Decisions, Open authority decision.** The evidence summary, the recommendation and the positions are side by side.
-7. **Choose Expand with limits.** Set the conditions (value at most $50, no fraud flag, clear policy, confidence at least 90%, no chargeback). Read the plain-English preview.
+6. **Open decision** (from the Overview or the capability's summary). The evidence summary, the recommendation and the positions are side by side.
+7. **Choose Expand with limits.** Set the conditions (value at most $50, no fraud flag, clear policy, confidence at least 90%, no chargeback), and check the rollout plan and the expected impact, both prefilled for the demo. Read the plain-English preview.
 8. **Authorize.** Record #04 is written with the evidence snapshot. The authority map now shows Level 3 (limited).
 9. **Capability, Monitoring tab, Simulate threshold breach.** Three severe errors land in the rolling window. Software returns the capability to Draft, writes record #05, raises an alert on the Overview, and locks expansion until a review is recorded.
 10. **Monitoring tab, Record the post-incident review.** Refund recommendation is High impact, so switch Acting as to a Risk approver (Daniel Okafor or Sofia Alvarez). Write what happened, the cause and what changed. The lock and the alert clear, and the restriction record shows the review; authority stays at Draft until a new proposal is authorized.
-11. **Reset demo** (top right) puts everything back.
+11. **Demo → Reset demo** (the menu at the top right) puts everything back.
 
 ---
 

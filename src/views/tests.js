@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, section, notice, fmtDate } from '../ui.js';
+import { html, raw, badge, section, notice, fmtDate, lede } from '../ui.js';
 import { testSummary, capData, getCapability, canRunSuite, workspaceOf } from '../store/index.js';
 
 const FILTERS = [
@@ -47,7 +47,7 @@ export function testsView(state, capabilityId, query) {
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/tests?capability=${id}`)}</h1>
-      <p class="lede">The testing ground: ${t.total} seeded scenarios in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}), run against the capability's current contract. No real model call is made; results replay the recorded decisions so the demo is repeatable.</p>
+      ${lede(html`${t.total} seeded scenarios run against the capability's current contract.`, html`They come in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}). No real model call is made; results replay the recorded decisions so the demo is repeatable.`)}
     </div>
     ${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}
   </div>

@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, notice, section, person, fmtDate, selectField } from '../ui.js';
+import { html, raw, notice, section, person, fmtDate, selectField, lede } from '../ui.js';
 import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal, activePeople, people } from '../store/index.js';
 
 export function stakeholdersEditorView(state, capabilityId, query) {
@@ -22,7 +22,7 @@ export function stakeholdersEditorView(state, capabilityId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 4</p>
       <h1>Stakeholders</h1>
-      <p class="lede">The people whose positions are recorded at decision time. Name them now; positions can be filled in when they are known and are never averaged into a score. A Risk stakeholder is needed to sign off amendments on high-impact or financial capabilities.</p>
+      ${lede('The people whose positions are recorded at decision time.', 'Name them now; positions can be filled in when they are known and are never averaged into a score. A Risk stakeholder is needed to sign off amendments on high-impact or financial capabilities.')}
     </div>
   </div>
   ${error ? notice('fail', 'Could not save', error) : ''}

@@ -1,4 +1,4 @@
-import { html, raw, badge, notice, section, person, personAt, fmtDate, kv } from '../ui.js';
+import { html, raw, badge, notice, section, person, personAt, fmtDate, kv, lede } from '../ui.js';
 import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf } from '../store/index.js';
 import { diffTable } from './activity.js';
 
@@ -84,7 +84,7 @@ export function peopleView(state, query) {
     <div>
       <p class="eyebrow">${workspaceOf(state).name}</p>
       <h1>People</h1>
-      <p class="lede">Everyone who can act in this workspace. Rights are explicit and recorded: <strong>workspace admin</strong> changes the roster; <strong>Risk approver</strong> can sign off as Risk. Nobody is deleted; records keep referring to people after they are deactivated.</p>
+      ${lede('Everyone who can act in this workspace.', html`Rights are explicit and recorded: <strong>workspace admin</strong> changes the roster; <strong>Risk approver</strong> can sign off as Risk. Nobody is deleted; records keep referring to people after they are deactivated.`)}
     </div>
   </div>
   ${error ? notice('fail', query.get('workspace') === 'edit' ? 'Could not rename the workspace' : 'Could not change the roster', error) : ''}

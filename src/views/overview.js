@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt, authorityText, evidenceDetail } from '../ui.js';
+import { html, badge, metricCard, section, notice, authorityBadge, capStatusBadge, fmtDate, person, personAt, authorityText, evidenceDetail, lede } from '../ui.js';
 import { focusCapability, capData, readiness, authorityLabel, testSummary, current, decisionRequired, proposedAuthority, lastDecisionId, coverageWarnings, workspaceOf, workflowOf, waitingActions } from '../store/index.js';
 
 function firstSentences(text, n) {
@@ -22,11 +22,11 @@ export function overviewView(state) {
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
       <h1>Where do we need to make a decision?</h1>
-      <p class="lede">${pending
-        ? 'One capability in this workflow is waiting on an authority decision. The evidence, the open gap and the disagreement are below.'
+      ${pending
+        ? lede('One capability is waiting on an authority decision.', 'The evidence, the open gap and the disagreement are below.')
         : breached
-          ? 'One capability was restricted automatically and needs a human review before its authority can expand again.'
-          : 'No capability is waiting on an authority decision. The most recent change and its monitoring are below.'}</p>
+          ? lede('One capability was restricted automatically and needs a human review before its authority can expand again.')
+          : lede('No capability is waiting on an authority decision.', 'The most recent change and its monitoring are below.')}
     </div>
   </div>`;
 

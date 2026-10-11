@@ -1,7 +1,7 @@
 // The empty-workspace path (roadmap item 7): the setup screen shown on every
 // route until the workspace, its workflow and the founding roster are set,
 // and the empty state screens show before the first capability exists.
-import { html, raw, notice } from '../ui.js';
+import { html, raw, notice, lede } from '../ui.js';
 import { MIN_FOUNDING_ADMINS, foundingRiskGap, workspaceOf, workflowOf } from '../store/index.js';
 
 const BLANK = { name: '', title: '', team: '', workspaceAdmin: false, riskApprover: false };
@@ -40,7 +40,7 @@ export function workspaceSetupView(state, query, draft = null) {
     <div>
       <p class="eyebrow">New workspace</p>
       <h1>Set up the workspace</h1>
-      <p class="lede">Before any capability: name the workspace and its workflow, and record who is in it. Everything after this is governed by the same rules as the demo.</p>
+      ${lede('Before any capability: name the workspace and its workflow, and record who is in it.', 'Everything after this is governed by the same rules as the demo.')}
     </div>
   </div>
   ${error ? notice('fail', 'Could not set up the workspace', error) : ''}

@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, selectField, person, section, kv } from '../ui.js';
+import { html, raw, badge, notice, selectField, person, section, kv, lede } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId, activePeople, workflowOf } from '../store/index.js';
 
 // Add a capability: define it, give it a risk profile, choose its starting
@@ -12,7 +12,7 @@ export function addCapabilityView(state, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${workflowOf(state).name}</p>
       <h1>Add a capability</h1>
-      <p class="lede">One discrete thing the AI might be trusted to do in this workflow. It starts at Level 0 or Level 1; authority above that is earned through the contract, criteria, tests and a decision.</p>
+      ${lede('One discrete thing the AI might be trusted to do in this workflow.', 'It starts at Level 0 or Level 1; authority above that is earned through the contract, criteria, tests and a decision.')}
     </div>
   </div>
   ${error ? notice('fail', 'Could not add the capability', error) : ''}
@@ -93,7 +93,7 @@ export function setupView(state, capabilityId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Setup</h1>
-      <p class="lede">${done} of ${steps.length} steps done. Each step has to be real before the next one means anything: a contract before criteria, criteria before tests, tests before a decision.</p>
+      ${lede(html`${done} of ${steps.length} steps done.`, 'Each step has to be real before the next one means anything: a contract before criteria, criteria before tests, tests before a decision.')}
     </div>
   </div>
   <ol class="setup-steps">${steps.map((st, i) => html`<li class="card setup-step ${st.done ? 'is-done' : ''} ${st.next ? 'is-next' : ''} ${focus === st.id ? 'is-focus' : ''}" id="step-${st.id}">
