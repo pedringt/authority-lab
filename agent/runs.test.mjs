@@ -7,11 +7,14 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { initialState, replayRun, replayRecording, gateEvents, runStartState, classifyTicket, runFlags, restrictionIn, ticketRates, rateText, runLabel, unverifiedCases, setTicketDefinitions, CAUGHT } from '../src/store/index.js';
 import { loadTickets, recordRun, recordRepeats, validateRun, estimateCost, createBudget, observedCostPerTicket, LIMITS, RUN_FORMAT, RUNSET_FORMAT, RUNS_DIR, NOT_RECORDINGS, PRICES, TICKET_SETS, SYSTEM_PROMPT } from './runs.mjs';
-import { readLedger, monthBudget, checkCap, appendLedger, updateLedger, MONTHLY_BUDGET } from './ledger.mjs';
+import { readLedger, monthBudget, checkCap, appendLedger, updateLedger, ledgerLineOf, MONTHLY_BUDGET, LEDGER } from './ledger.mjs';
+import { proofFor, recordProof, readProvenance } from './provenance.mjs';
+import { writeIndex } from './summary.mjs';
 import { checkRequest, planText, KNOWN_MODELS, KNOWN_SETS, REQUEST_CEILING } from './plan-request.mjs';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mockModel, SCRIPTS } from './mock-model.mjs';
 import { summarize } from './summary.mjs';
 
@@ -473,4 +476,76 @@ test('the system prompt asks for the instruction source and says approvals only 
   // Every fixture ticket says who sent it.
   for (const t of [...tickets, ...loadTickets('stress')]) assert.ok(t.sender && (t.sender.customerId || t.sender.internal), `${t.id} has a sender`);
   assert.deepEqual(loadTickets('stress').find((t) => t.id === 'S04').sender, { internal: 'Daniel, Risk' });
+});
+
+test('every real recording has its proof: the Actions run and who approved it, its ledger row and its commit, or says it was made outside GitHub', () => {
+  const index = JSON.parse(readFileSync(new URL('../src/data/agent-runs/index.json', import.meta.url), 'utf8'));
+  const proof = readProvenance().runs;
+  const ledger = readFileSync(LEDGER, 'utf8').split('\n');
+  const real = index.runs.filter((e) => e.source === 'recorded');
+  assert.ok(real.length >= 12);
+  for (const e of real) {
+    const p = proof[e.file];
+    assert.ok(p, `${e.file} has a provenance entry`);
+    assert.deepEqual(e.proof, p, `${e.file}: the index carries its proof`);
+    assert.ok(['github-actions', 'local'].includes(p.via), `${e.file}: made on GitHub or locally`);
+    if (p.via === 'github-actions') {
+      assert.ok(Number.isInteger(p.actionsRun) && p.actionsRun > 0, `${e.file}: the Actions run`);
+      assert.ok(p.approvedBy, `${e.file}: who approved it`);
+    } else assert.ok(p.note, `${e.file}: says how it was made instead`);
+    // The ledger row the link points at is that run's row.
+    const row = ledger[p.ledgerLine - 1] || '';
+    assert.match(row, new RegExp(`^\\| ${e.date} \\|`), `${e.file}: ledger line ${p.ledgerLine} is a row from ${e.date}`);
+    assert.ok(row.includes(e.model), `${e.file}: ledger line ${p.ledgerLine} names ${e.model}`);
+    if (p.commit) {
+      assert.match(p.commit, /^[0-9a-f]{40}$/, `${e.file}: a full commit id`);
+      // Where the history is available (not in a shallow CI checkout), the
+      // commit is the one that added the recording.
+      const g = spawnSync('git', ['show', '--name-status', '--format=', p.commit, '--', `src/data/agent-runs/${e.file}`], { encoding: 'utf8', cwd: fileURLToPath(new URL('..', import.meta.url)) });
+      if (g.status === 0) assert.match(g.stdout, new RegExp(`^A\\s+src/data/agent-runs/${e.file.replace(/\./g, '\\.')}$`, 'm'), `${e.file}: added in ${p.commit.slice(0, 7)}`);
+    }
+  }
+  // The recordings that point at a ledger row add up to that row's cost, so
+  // each link lands on the run that made them.
+  const byLine = {};
+  for (const e of real) {
+    const rec = JSON.parse(readFileSync(join(RUNS_DIR, e.file), 'utf8'));
+    byLine[proof[e.file].ledgerLine] = (byLine[proof[e.file].ledgerLine] || 0) + rec.cost;
+  }
+  for (const [line, cost] of Object.entries(byLine)) {
+    const rowCost = Number(ledger[line - 1].split('|')[7].trim().replace('$', ''));
+    assert.ok(Math.abs(rowCost - cost) < 0.001, `ledger line ${line}: $${rowCost} in the ledger, $${cost.toFixed(4)} in its recordings`);
+  }
+  // Dry runs never get proof: they aren't real runs.
+  for (const e of index.runs.filter((x) => x.source === 'mock')) assert.equal(e.proof, undefined);
+});
+
+test('a live run records its own proof: on GitHub the run id and approver, elsewhere that it was made outside GitHub', () => {
+  assert.deepEqual(proofFor({ env: { GITHUB_RUN_ID: '123', APPROVED_BY: 'pedringt' }, ledgerLine: 12 }), { via: 'github-actions', actionsRun: 123, approvedBy: 'pedringt', ledgerLine: 12 });
+  assert.equal(proofFor({ env: { GITHUB_RUN_ID: '9' }, ledgerLine: 3 }).approvedBy, null);
+  const local = proofFor({ env: {}, ledgerLine: 4 });
+  assert.equal(local.via, 'local');
+  assert.match(local.note, /not through GitHub Actions/);
+  // Written beside the recordings, and carried into the index.
+  const dir = mkdtempSync(join(tmpdir(), 'proof-'));
+  writeFileSync(join(dir, 'dry-run-mock.json'), readFileSync(join(RUNS_DIR, 'dry-run-mock.json')));
+  writeFileSync(join(dir, 'real.json'), readFileSync(join(RUNS_DIR, '2026-10-10-claude-haiku-5-5.json')));
+  recordProof('real.json', proofFor({ env: { GITHUB_RUN_ID: '77', APPROVED_BY: 'pedringt' }, ledgerLine: 9 }), dir);
+  const runs = writeIndex(dir);
+  assert.equal(runs.find((r) => r.file === 'real.json').proof.actionsRun, 77);
+  assert.equal(runs.find((r) => r.file === 'dry-run-mock.json').proof, undefined);
+  // The ledger line is found by the running row's marker.
+  const ledger = join(dir, 'ledger.md');
+  writeFileSync(ledger, '# Ledger\n\n| Date | PR |\n|---|---|\n');
+  appendLedger({ date: '2026-10-11', pr: '#1', models: 'm', tickets: 'standard', repeats: 1, cap: 1, cost: 0, status: 'running (x-1)' }, ledger);
+  assert.equal(ledgerLineOf('running (x-1)', ledger), 5);
+  assert.equal(ledgerLineOf('missing', ledger), null);
+});
+
+test('the workflow records who approved each run, with read access to the run\'s approvals only', () => {
+  const wf = readFileSync(new URL('../.github/workflows/model-run.yml', import.meta.url), 'utf8');
+  const run = wf.slice(wf.indexOf('\n  run:'));
+  assert.match(run, /actions: read/);
+  assert.ok(run.indexOf('Who approved this run') > 0 && run.indexOf('Who approved this run') < run.indexOf('- name: Run the models'), 'the approver is read before the models run');
+  assert.match(run, /actions\/runs\/\$GITHUB_RUN_ID\/approvals/);
 });

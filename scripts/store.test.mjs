@@ -3957,3 +3957,28 @@ test('D1: a one-page brief for seeded, new and automatic decisions, from recorde
   assert.equal(canonicalHash('#/decisions/AC-04/brief'), '#/records/AC-04/brief');
   assert.match(String(decisionBriefView(s, 'AC-99')), /Record not found/);
 });
+
+test('Agent runs: the site never calls a model, and each real recording links its proof or says it was made outside GitHub', () => {
+  const s = initialState();
+  const dir = new URL('../src/data/agent-runs/', import.meta.url);
+  const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
+  const runs = index.runs.map((e) => ({ ...JSON.parse(readFileSync(new URL(e.file, dir), 'utf8')), file: e.file, proof: e.proof || null }));
+  const out = String(agentRunsView(s, new URLSearchParams(''), { status: 'ready', runs }));
+  assert.match(out, /This site never calls a model\.<\/strong> Every run here was recorded and approved; follow the links to check\./);
+  // GitHub runs: the Actions run with its approver, the ledger row, the commit.
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/actions\/runs\/38070415162">GitHub Actions run 38070415162<\/a>, approved by @pedringt/);
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/blob\/main\/agent\/runs\/ledger\.md\?plain=1#L10">ledger row<\/a>/);
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/commit\/624a7c96137f065669ab58ad9749df991cd29b3c">commit 624a7c9<\/a>/);
+  // The first local runs say so instead of linking an Actions run.
+  assert.match(out, /Made outside GitHub: Run from Paige&#39;s machine on Paige&#39;s earlier Anthropic account, before paid runs moved to GitHub Actions\. There's no Actions run or approval to link/);
+  // Every real recording on the page carries a proof line; dry runs say they aren't real.
+  const real = runs.filter((r) => r.source === 'recorded').length;
+  assert.equal((out.match(/<span class="muted">Proof:<\/span>/g) || []).length, real);
+  assert.match(out, /A dry run with the scripted mock: no model was called and nothing was spent\./);
+  assert.doesNotMatch(out, /No proof on file/);
+  // The opened run shows its proof too; a new run without a commit links the file's history.
+  const opened = String(agentRunsView(s, new URLSearchParams('run=2026-10-10-claude-haiku-5-5-shared.json'), { status: 'ready', runs }));
+  assert.match(opened, /actions\/runs\/38063334929/);
+  const fresh = { ...runs.find((r) => r.file === '2026-10-10-claude-haiku-5-5-shared.json'), file: 'new.json', proof: { via: 'github-actions', actionsRun: 5, approvedBy: 'pedringt', ledgerLine: 12 } };
+  assert.match(String(agentRunsView(s, new URLSearchParams('run=new.json'), { status: 'ready', runs: [fresh] })), /href="https:\/\/github\.com\/pedringt\/authority-lab\/commits\/main\/src\/data\/agent-runs\/new\.json">the commit that added it<\/a>/);
+});

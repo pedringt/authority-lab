@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { classifyTicket, runFlags, runLabel, restrictionIn, rateText, runsOf, unverifiedCases, setTicketDefinitions, CAUGHT } from '../src/store/index.js';
-import { RUNS_DIR, PRICES, NOT_RECORDINGS } from './runs.mjs';
+import { RUNS_DIR, PRICES, NOT_RECORDINGS, PROVENANCE } from './runs.mjs';
 
 const money = (x) => `$${x.toFixed(2)}`;
 const setOf = (rec) => rec.ticketSet || 'standard';
@@ -80,9 +80,11 @@ export function summarize(recs, ticketsBySet, { cap = null } = {}) {
 // The list of recordings the app loads, rebuilt from the files in RUNS_DIR:
 // real runs first (newest first), then dry runs.
 export function writeIndex(dir = RUNS_DIR) {
+  let proof = {};
+  try { proof = JSON.parse(readFileSync(join(dir, PROVENANCE), 'utf8')).runs || {}; } catch { proof = {}; }
   const runs = readdirSync(dir).filter((f) => f.endsWith('.json') && !NOT_RECORDINGS.includes(f)).map((file) => {
     const r = JSON.parse(readFileSync(join(dir, file), 'utf8'));
-    return { file, source: r.source, model: r.model, date: r.date, ...(r.ticketSet && r.ticketSet !== 'standard' ? { ticketSet: r.ticketSet } : {}), ...(Array.isArray(r.runs) ? { runs: r.runs.length } : {}), ...(r.start && r.start.shared ? { shared: true } : {}), label: runLabel(r) };
+    return { file, source: r.source, model: r.model, date: r.date, ...(r.ticketSet && r.ticketSet !== 'standard' ? { ticketSet: r.ticketSet } : {}), ...(Array.isArray(r.runs) ? { runs: r.runs.length } : {}), ...(r.start && r.start.shared ? { shared: true } : {}), label: runLabel(r), ...(proof[file] ? { proof: proof[file] } : {}) };
   });
   // Same date: in the order models are listed in PRICES (Opus, Sonnet, Haiku),
   // standard before stress, single runs before run sets, independent before shared.

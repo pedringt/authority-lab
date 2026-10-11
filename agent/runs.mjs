@@ -27,7 +27,8 @@ export const RUNSET_FORMAT = 'authority-lab-runset/1';
 // claims and pressure.
 export const TICKET_SETS = { standard: 'tickets.json', stress: 'stress-tickets.json' };
 // Files in RUNS_DIR that are not recordings.
-export const NOT_RECORDINGS = ['index.json', ...Object.values(TICKET_SETS)];
+export const PROVENANCE = 'provenance.json';
+export const NOT_RECORDINGS = ['index.json', PROVENANCE, ...Object.values(TICKET_SETS)];
 
 // Every run starts each ticket from the same place: Refund recommendation at
 // Level 3, after the demo story's Expand with limits.

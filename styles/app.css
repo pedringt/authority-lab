@@ -53,6 +53,8 @@ button { font: inherit; }
 .small { font-size: 13px; }
 .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
 .lede { color: var(--text-2); max-width: 70ch; margin: 6px 0 0; }
+.run-proof-intro { margin: 10px 0 0; max-width: 70ch; }
+.run-proof { margin: 4px 0 10px; }
 .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 
 /* Shell ------------------------------------------------------------------ */
