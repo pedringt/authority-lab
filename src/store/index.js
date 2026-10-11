@@ -26,3 +26,4 @@ export { applyBreach } from './monitoring.js';
 export { runStartState, toolCall, replayTicket, replayRun } from './replay.js';
 export { CAUGHT, isBait, stepOutcome, classifyTicket, outcomeText, runFlags, runLabel, restrictionIn, isRunSet, runsOf, ticketRates, rateText, isUnverified, unverifiedCases, setTicketDefinitions } from './agentruns.js';
 export { replayRecording } from './replay.js';
+export { grantingRecord, actionRates, METRICS, recogniseMetric, expectedVsActual, ROI_FIELDS, roiVersions, currentRoiAssumptions, roiEditEligibility, setRoiAssumptions, roi } from './value.js';

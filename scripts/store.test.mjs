@@ -20,7 +20,7 @@ import {
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
   parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
-  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority,
+  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView, decisionWorkspaceView } from '../src/views/decisions.js';
@@ -3546,4 +3546,116 @@ test('#89 loophole: a stale proposal (equal, below, or more than one level up) n
   assert.deepEqual(nextAuthority('expand', { level: 2, limited: false }, { level: 4 }), { level: 2, limited: false });
   assert.deepEqual(nextAuthority('expand-limits', { level: 2, limited: false }, null), { level: 2, limited: false });
   assert.deepEqual(nextAuthority('expand-limits', { level: 2, limited: false }, { level: 3 }), { level: 3, limited: true });
+});
+
+// B2 (#73): expected vs actual, and a simple ROI with versioned assumptions.
+const expandedRRB2 = () => authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+
+test('B2: each expected outcome is compared with its actual, with the gap and where the number came from', () => {
+  const s = expandedRRB2();
+  const { record, rows } = expectedVsActual(s, RR);
+  assert.equal(record.id, 'AC-04');
+  assert.deepEqual(rows.map((r) => [r.measuredAs, r.actualText, r.status, r.gapText]), [
+    ['Resolution, % faster than before', '42%', 'not-met', '8 points short of the target'],
+    ['AI cost per case', '$0.08', 'not-met', '$0.02 over the target'],
+    ['Override rate', '11%', 'not-met', '3 points over the target'],
+  ]);
+  assert.ok(rows.every((r) => r.seeded && r.source === 'Seeded demo data (pilot)'), 'seeded data is labelled');
+  // Before the expansion, the record in force predates B1: nothing to compare.
+  const before = expectedVsActual(initialState(), RR);
+  assert.ok(before.record);
+  assert.deepEqual(before.rows, []);
+});
+
+test('B2: targets read as ceilings or floors from their words, "−40%" on time means faster, and unmatched outcomes are not guessed', () => {
+  let s = selectDecision(initialState(), RR, 'expand-limits');
+  const rows = [
+    { metric: 'Handling time', target: '−40%' },
+    { metric: 'AI cost per case', target: 'at most $0.10' },
+    { metric: 'Automation rate', target: 'at least 70%' },
+    { metric: 'Customer satisfaction', target: '4.5 out of 5' },
+  ];
+  rows.forEach((r, i) => { s = setOutcome(setOutcome(s, RR, i, 'metric', r.metric), RR, i, 'target', r.target); });
+  s = authorize(s, RR);
+  const got = expectedVsActual(s, RR).rows;
+  assert.deepEqual(got.map((r) => r.status), ['met', 'met', 'met', 'not-measured']);
+  assert.equal(got[0].targetValue, 40, '−40% on a time metric is 40% faster; the pilot was 42% faster');
+  assert.equal(got[2].source, 'Seeded demo data (monitoring window)', 'automation comes from the seeded monitoring window until the gate log has real activity');
+  assert.match(got[3].note, /No measured metric matches/);
+});
+
+test('B2: once the gate log has real activity, the rates come from it, labelled by source (session or recorded, never seeded)', () => {
+  let s = expandedRRB2();
+  for (let i = 0; i < 3; i++) s = callTool(s, RR, refund('ORD-5001', 5)).state; // allowed
+  s = callTool(s, RR, refund('ORD-5003', 5)).state; // blocked: fraud
+  const r = actionRates(s, RR);
+  assert.deepEqual([r.automation, r.block, r.seeded], [75, 25, false]);
+  assert.match(r.source, /^Gate log: .*This session/);
+  let rec = expandedRRB2();
+  for (let i = 0; i < 2; i++) rec = callTool(rec, RR, refund('ORD-5001', 5), { source: 'recorded' }).state;
+  assert.match(actionRates(rec, RR).source, /Recorded from a real run/);
+  // The two seeded waiting requests alone don't count as a sample.
+  assert.equal(actionRates(expandedRRB2(), RR).source, 'Seeded demo data (monitoring window)');
+});
+
+test('B2: the ROI shows its working: cases × automation × minutes × hourly cost, less AI cost on every case', () => {
+  const r = roi(expandedRRB2(), RR);
+  assert.equal(r.assumptions.version, 1);
+  assert.equal(r.assumptions.seeded, true);
+  assert.deepEqual(r.assumptions.values, { monthlyCases: 1100, humanMinutesPerCase: 8, humanCostPerHour: 36 });
+  assert.equal(r.inputs.automationRate.value, 78.2);
+  assert.deepEqual([r.automated, r.hoursSaved, r.laborSaved, r.aiCost, r.net], [860, 114.69, 4128.96, 88, 4040.96]);
+  assert.equal(r.seeded, true);
+  assert.equal(roi(initialState(), RR), null, 'no ROI before there is an automation rate to work from');
+});
+
+test('B2: ROI assumptions change only as a new version, with author and reason; earlier versions never change', () => {
+  const s0 = expandedRRB2();
+  const v1 = JSON.parse(JSON.stringify(currentRoiAssumptions(s0, RR)));
+  const s = setRoiAssumptions(s0, RR, { humanMinutesPerCase: 6 }, { by: 'elena', reason: 'The time study came back: refunds take six minutes, not eight.' });
+  const versions = roiVersions(s, RR);
+  assert.equal(versions.length, 2);
+  assert.deepEqual(versions[0], v1, 'version 1 is unchanged');
+  const v2 = versions[1];
+  assert.deepEqual([v2.version, v2.by, v2.byAt.name, v2.date, v2.seeded], [2, 'elena', 'Elena Rossi', s0.today, false]);
+  assert.deepEqual(v2.values, { monthlyCases: 1100, humanMinutesPerCase: 6, humanCostPerHour: 36 }, 'unspecified fields carry over');
+  assert.match(v2.reason, /six minutes/);
+  assert.equal(roi(s, RR).assumptions.version, 2);
+  assert.match(s.activity[0].title, /ROI assumptions v2/);
+  assert.match(s.activity[0].body, /human handling time per case 8 → 6/);
+  // Refused: no reason, nobody named, someone outside the capability, bad numbers, nothing changed.
+  const bad = [
+    [{ humanMinutesPerCase: 6 }, { by: 'elena', reason: '' }, /Say why/],
+    [{ humanMinutesPerCase: 6 }, { by: 'ai', reason: 'The model thinks this is better.' }, /Only a named person/],
+    [{ humanMinutesPerCase: 6 }, { by: 'system', reason: 'Automatic recalculation of the numbers.' }, /Only a named person/],
+    [{ humanMinutesPerCase: 6 }, { by: 'constructor', reason: 'Trying a built-in name as a person.' }, /Only a named person/],
+    [{ humanMinutesPerCase: -1 }, { by: 'elena', reason: 'A negative time to inflate the savings.' }, /must be a number/],
+    [{ monthlyCases: 'lots' }, { by: 'elena', reason: 'Not a number at all, just a word.' }, /must be a number/],
+    [{ humanMinutesPerCase: 8 }, { by: 'elena', reason: 'Saving the same values as before again.' }, /Nothing changed/],
+  ];
+  for (const [values, opts, want] of bad) assert.throws(() => setRoiAssumptions(s0, RR, values, opts), want, JSON.stringify(values) + JSON.stringify(opts));
+  // Jonas is active but neither the owner nor a named stakeholder.
+  assert.ok(isActivePerson(s0, 'jonas'));
+  assert.ok(!current(s0, RR, 'stakeholders').some((x) => x.person === 'jonas') && getCapability(s0, RR).owner !== 'jonas');
+  assert.throws(() => setRoiAssumptions(s0, RR, { humanMinutesPerCase: 6 }, { by: 'jonas', reason: 'Someone outside the capability tries.' }), /isn't the owner or a named stakeholder/);
+  const gone = deactivatePerson(s0, 'elena', { by: 'maya', reason: 'Left the company this week, so access goes.' });
+  if (!isActivePerson(gone, 'elena')) assert.throws(() => setRoiAssumptions(gone, RR, { humanMinutesPerCase: 6 }, { by: 'elena', reason: 'Trying after being deactivated.' }), /deactivated/);
+});
+
+test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded data labelled', () => {
+  const s = expandedRRB2();
+  const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  assert.match(page, /Expected vs actual/);
+  assert.match(page, /8 points short of the target/);
+  assert.match(page, /Seeded demo data \(pilot\)/);
+  assert.match(page, /Return on investment/);
+  assert.match(page, /Assumptions, version 1/);
+  assert.match(page, /Seeded demo data/);
+  assert.match(page, /data-form="roi-assumptions"/);
+  assert.match(page, /Save as version 2/);
+});
+
+test('B2: the seeded assumptions\' author snapshot has the same shape as a real one', () => {
+  const s = initialState();
+  assert.deepEqual(roiVersions(s, RR)[0].byAt, snapshotPerson(s, 'elena'));
 });

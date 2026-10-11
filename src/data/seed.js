@@ -823,6 +823,21 @@ export const defaultOutcomes = [
   { metric: 'Override rate on automatic refunds', target: '≤ 8%' },
 ];
 
+// ROI assumptions for Refund recommendation (B2), version 1. Seeded demo data:
+// fictional, and labelled as seeded wherever it shows.
+export const roiAssumptions = [
+  {
+    version: 1,
+    values: { monthlyCases: 1100, humanMinutesPerCase: 8, humanCostPerHour: 36 },
+    by: 'elena',
+    // A person snapshot, in the same shape as snapshotPerson.
+    byAt: { key: 'elena', name: 'Elena Rossi', title: 'Finance Business Partner', team: 'Finance', rights: { riskApprover: false, workspaceAdmin: false }, active: true },
+    reason: 'Starting assumptions for the refund business case: pilot volume (218 cases in 6 days, about 1,100 a month), the support team\'s handling-time estimate, and Finance\'s loaded hourly rate.',
+    date: '2026-10-06',
+    seeded: true,
+  },
+];
+
 export const defaultRationale =
   'Standard refund performance exceeds quality thresholds and has sufficient pilot volume. High-value cases remain under-tested, so authority will expand only for low-value standard refunds.';
 
@@ -1056,6 +1071,7 @@ export const capabilityData = {
     defaultOutcomes,
     pendingDecision: { level: 3, limited: true },
     monitoringRule: monitoringSeed,
+    roiAssumptions,
     breach: breachSeed,
     lastTestRun: '2026-10-03',
   },

@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -424,5 +424,62 @@ function monitoringTab(state, cap, d) {
     ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
         <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
     : '';
-  return html`${head}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
+  return html`${head}${reviewCard(state, cap, d)}${metrics}${expectedCard(state, cap)}${roiCard(state, cap)}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
+}
+
+// Where a number came from, always shown (B2): seeded demo data, or the gate log with its sources.
+const sourceTag = (source, seeded) => html`<span class="muted small">${source}</span>${seeded ? html` ${badge('neutral', 'Seeded')}` : ''}`;
+const money = (v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+// Expected vs actual (B2): each expected outcome on the record in force.
+function expectedCard(state, cap) {
+  const { record, rows } = expectedVsActual(state, cap.id);
+  if (!record) return '';
+  if (!rows.length) return section('Expected vs actual', html`<p class="empty">${record.id} was authorized before expected outcomes were required, so there is nothing to compare yet. The next expansion will carry them.</p>`);
+  const tone = { met: 'pass', 'not-met': 'fail', 'not-measured': 'neutral' };
+  const word = { met: 'Met', 'not-met': 'Not met', 'not-measured': 'Not measured' };
+  return section('Expected vs actual', html`<div class="card table-card"><table class="table">
+    <thead><tr><th>Expected outcome</th><th>Target</th><th>Actual</th><th>Status</th><th>Source</th></tr></thead>
+    <tbody>${rows.map((r) => html`<tr>
+      <td><strong>${r.metric}</strong>${r.measuredAs ? html`<div class="muted small">Compared with: ${r.measuredAs}</div>` : ''}</td>
+      <td>${r.target}</td>
+      <td>${r.actualText || html`<span class="muted">—</span>`}</td>
+      <td>${badge(tone[r.status], word[r.status])}${r.status === 'not-met' ? html`<div class="muted small">${r.gapText}</div>` : r.note ? html`<div class="muted small">${r.note}</div>` : ''}</td>
+      <td>${r.source ? sourceTag(r.source, r.seeded) : html`<span class="muted small">—</span>`}</td>
+    </tr>`)}</tbody>
+  </table></div>`, { subtitle: html`From <a href="#/decisions/${record.id}">${record.id}</a>, the decision in force. Each outcome is matched to a measured metric by its wording; one that doesn't match is shown as not measured, never guessed.` });
+}
+
+// A simple ROI (B2), every assumption visible, versioned with author and reason.
+function roiCard(state, cap) {
+  const a = currentRoiAssumptions(state, cap.id);
+  if (!a) return '';
+  const r = roi(state, cap.id);
+  const who = actor(state, cap.id);
+  const e = roiEditEligibility(state, cap.id, who);
+  const by = personAt(a.byAt, a.by);
+  const versions = roiVersions(state, cap.id);
+  const result = r ? html`<div class="metric-grid metric-grid-4">
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Cases handled by the AI</span></div><div class="metric-value">${r.automated.toLocaleString('en-US')}</div><div class="metric-note">a month, at ${r.inputs.automationRate.value}% automation</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Human hours saved</span></div><div class="metric-value">${Math.round(r.hoursSaved)}</div><div class="metric-note">${money(r.laborSaved)} a month</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">AI cost</span></div><div class="metric-value">${money(r.aiCost)}</div><div class="metric-note">a month, at $${r.inputs.aiCostPerCase.value.toFixed(2)} a case</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Net a month</span>${badge(r.net >= 0 ? 'pass' : 'fail', r.roiPct != null ? `ROI ${r.roiPct}%` : '')}</div><div class="metric-value">${money(r.net)}</div><div class="metric-note">hours saved × hourly cost − AI cost</div></div>
+    </div>` : html`<p class="empty">The ROI appears once there is an automation rate to work from: after an expansion to automatic action, from the monitoring window or the gate log.</p>`;
+  const inputs = r ? html`<li><strong>Automation rate:</strong> ${r.inputs.automationRate.value}% · ${sourceTag(r.inputs.automationRate.source, r.inputs.automationRate.seeded)}</li>
+      <li><strong>AI cost per case:</strong> $${r.inputs.aiCostPerCase.value.toFixed(2)} · ${sourceTag(r.inputs.aiCostPerCase.source, r.inputs.aiCostPerCase.seeded)}</li>` : '';
+  const form = html`<details class="card"><summary>Change the assumptions (creates version ${a.version + 1})</summary>
+    <form class="roi-form" data-form="roi-assumptions" data-capability="${cap.id}">
+      <div class="roi-fields">${ROI_FIELDS.map((f) => html`<label class="field field-stack"><span>${f.label} (${f.unit})</span><input type="number" name="${f.key}" step="any" min="${f.min}" max="${f.max}" value="${a.values[f.key]}" required></label>`)}</div>
+      <label class="field field-stack"><span>Why they changed</span><textarea name="reason" rows="2" required></textarea></label>
+      ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} Switch who is acting in the header.</p>`}
+      <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Save as version ${a.version + 1}</button>
+      <p class="muted small">Earlier versions never change. The owner or a named stakeholder can change them.</p>
+    </form></details>`;
+  return section('Return on investment', html`${result}
+    <div class="card">
+      <p class="eyebrow">Assumptions, version ${a.version}${a.seeded ? html` ${badge('neutral', 'Seeded demo data')}` : ''}</p>
+      <ul class="plain-list">${ROI_FIELDS.map((f) => html`<li><strong>${f.label}:</strong> ${f.unit === '$' ? `$${a.values[f.key]}` : `${a.values[f.key].toLocaleString('en-US')} ${f.unit}`}</li>`)}${inputs}</ul>
+      <p class="muted small">Set by ${by.name}, ${by.role}, on ${fmtDate(a.date)}. Reason: ${a.reason}</p>
+      ${versions.length > 1 ? html`<details><summary>Earlier versions (${versions.length - 1})</summary><ul class="plain-list">${versions.slice(0, -1).reverse().map((v) => html`<li><strong>v${v.version}</strong>, ${fmtDate(v.date)}, ${personAt(v.byAt, v.by).name}: ${ROI_FIELDS.map((f) => `${f.label.toLowerCase()} ${v.values[f.key]}`).join('; ')}. <span class="muted small">${v.reason}</span></li>`)}</ul></details>` : ''}
+    </div>${form}`, { subtitle: 'A simple monthly estimate: the human time saved on cases the AI handles on its own, less what the AI costs on every case. It leaves out review time on escalations and set-up costs.' });
 }

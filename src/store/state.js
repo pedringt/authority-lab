@@ -59,6 +59,8 @@ export function seededCapabilityData(id) {
     monitoringRule: s.monitoringRule ? clone(s.monitoringRule) : null,
     breach: s.breach ? clone(s.breach) : null,
     ruleReadings: clone(s.ruleReadings || {}),
+    // ROI assumptions, one entry per version (B2). Seeded ones say so.
+    roiAssumptions: clone(s.roiAssumptions || []),
     testRun: { status: 'not-run', lastRun: s.lastTestRun || null, completed: [] },
     decision: {
       option: null,

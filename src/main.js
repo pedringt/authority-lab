@@ -193,7 +193,7 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -451,6 +451,19 @@ document.addEventListener('submit', (e) => {
     const pid = rejectForm.dataset.proposal;
     const route = `#/capabilities/${capId}/proposals/${pid}`;
     dispatchOr(route, () => { store.dispatch('rejectProposal', capId, pid, { by: actor(store.get(), capId), reason: rejectForm.reason.value }); location.hash = route; render(); });
+    return;
+  }
+  // ROI assumptions (B2): a new version, with who and why.
+  const roiForm = e.target.closest('[data-form="roi-assumptions"]');
+  if (roiForm) {
+    e.preventDefault();
+    const capId = roiForm.dataset.capability;
+    const f = new FormData(roiForm);
+    dispatchOr(here(), () => {
+      store.dispatch('setRoiAssumptions', capId, { monthlyCases: f.get('monthlyCases'), humanMinutesPerCase: f.get('humanMinutesPerCase'), humanCostPerHour: f.get('humanCostPerHour') }, { by: actor(store.get(), capId), reason: f.get('reason') });
+      clearErrorOn(here(), 'error');
+      render();
+    });
     return;
   }
   const reviewForm = e.target.closest('[data-form="record-review"]');

@@ -604,3 +604,7 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .impact-rows input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
 .impact .form-error { margin-top: 10px; }
 @media (max-width: 640px) { .impact-rows { grid-template-columns: 1fr; } .impact-rows .fact-label:nth-child(2) { display: none; } }
+
+/* ROI (B2) */
+.roi-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.roi-form { display: grid; gap: 10px; margin-top: 10px; }

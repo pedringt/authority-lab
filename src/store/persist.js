@@ -5,6 +5,7 @@ import { addPerson, editPerson, deactivatePerson, proposeRosterChange, approveRo
 import { addCapability, amend } from './capabilities.js';
 import { startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection, finalizeContract } from './contract.js';
 import { selectDecision, setCondition, setRationale, setOutcome, authorize, proposeAuthority } from './decisions.js';
+import { setRoiAssumptions } from './value.js';
 import { startTestRun, advanceTestRun, saveCriteria, saveScenarios, addStarterScenarios } from './evidence.js';
 import { proposeAmendment, approveProposal, withdrawProposal, rejectProposal, saveStakeholders } from './proposals.js';
 import { simulateBreach, recordReview } from './monitoring.js';
@@ -77,6 +78,7 @@ export const ACTIONS = {
   renameWorkspace,
   approveAction,
   rejectAction,
+  setRoiAssumptions,
   reset,
 };
 
