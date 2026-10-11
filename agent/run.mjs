@@ -24,7 +24,8 @@ import { fileURLToPath } from 'node:url';
 import { loadTickets, estimateCost, recordRun, recordRepeats, validateRun, createBudget, observedCostPerTicket, PRICES, RUNS_DIR, TICKET_SETS } from './runs.mjs';
 import { mockModel } from './mock-model.mjs';
 import { summarize, writeIndex } from './summary.mjs';
-import { readLedger, checkCap, appendLedger, updateLedger } from './ledger.mjs';
+import { readLedger, checkCap, appendLedger, updateLedger, ledgerLineOf } from './ledger.mjs';
+import { proofFor, recordProof } from './provenance.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -123,6 +124,7 @@ if (flag('live')) {
   const marker = `running (${process.pid}-${Date.now()})`;
   const base = { date, pr: pr ? `#${pr}` : '—', models: models.join(', ') + (shared ? ' (shared session)' : ''), tickets: ticketSets.join(', '), repeats: repeat, cap };
   appendLedger({ ...base, cost: 0, status: marker });
+  const ledgerLine = ledgerLineOf(marker);
   const budget = createBudget(cap, { onSpend: (spent) => updateLedger(marker, { ...base, cost: spent, status: marker }) });
   const recs = [];
   let status = 'finished';
@@ -140,6 +142,7 @@ if (flag('live')) {
       for (const m of models) {
         console.error(`Running ${m} on the ${set} tickets${repeat > 1 ? ` × ${repeat}` : ''}…`);
         const file = fileFor(date, m, set, { shared, repeat });
+        recordProof(file, proofFor({ ledgerLine }));
         const opts = { tickets: ticketsBySet[set], model: liveModel({ model: m, apiKey }), modelId: m, source: 'recorded', date, budget, shared, ticketSet: set };
         // Each finished run of a set is saved at once, not only at the end.
         const rec = repeat > 1 ? await recordRepeats({ ...opts, repeat, onProgress: (partial) => { write(partial, file); writeIndex(); } }) : await recordRun(opts);

@@ -3660,7 +3660,7 @@ test('B2: ROI assumptions change only as a new version, with author and reason; 
 
 test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded data labelled', () => {
   const s = expandedRRB2();
-  const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(page, /Expected vs actual/);
   assert.match(page, /8 points short of the target/);
   assert.match(page, /Seeded demo data \(pilot\)/);
@@ -3825,14 +3825,14 @@ test('C2: adoption signals never block: the gate, the queue and authorizing beha
 });
 
 test('C2: the Monitoring tab lists each warning with what, why and source, and says when the data is simulated', () => {
-  const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring')));
+  const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(page, /Adoption signals/);
   assert.match(page, /Warnings only: they never block/);
   assert.match(page, /Possible rubber-stamping/);
   assert.match(page, /Overrides are rising/);
   assert.match(page, /Why it matters/);
   assert.match(page, /Simulated demo data/);
-  const quiet = String(capabilityView(withAdoption(initialState(), null), RR, new URLSearchParams('tab=monitoring')));
+  const quiet = String(capabilityView(withAdoption(initialState(), null), RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(quiet, /No adoption warnings/);
 });
 
@@ -3869,4 +3869,116 @@ test('#93: five capability tabs; the old tabs open as views inside Evidence and 
   assert.match(waiting, /class="chip is-active"[^>]*>Waiting for a person/);
   const criteria = String(capabilityView(s, RR, new URLSearchParams('tab=criteria')));
   assert.match(criteria, /class="chip is-active"[^>]*>Success criteria/);
+});
+
+test('#95: Monitoring has a Health view and a Value view; Value counts what needs a look', () => {
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  assert.match(health, /class="chip is-active"[^>]*>Health/);
+  assert.match(health, /Restriction rules/);
+  assert.match(health, /Gate activity/);
+  assert.doesNotMatch(health, /Expected vs actual|Return on investment|Adoption signals/);
+  // Three outcomes not met, two simulated adoption warnings: 5 on the Value chip.
+  assert.match(health, /show=value"[^>]*>Value <span class="chip-count">5<\/span>/);
+  const value = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
+  assert.match(value, /Expected vs actual/);
+  assert.match(value, /Return on investment/);
+  assert.match(value, /Adoption signals/);
+  assert.doesNotMatch(value, /Restriction rules/);
+});
+
+test('#96: the decision page numbers its steps and the checklist says exactly what blocks Authorize', () => {
+  const marks = (page) => [...page.matchAll(/<li class="check-item (is-done|is-blocked)">.*?<a href="#[a-z-]+">([A-Za-z ]+)<\/a>/g)].map((m) => `${m[2]}:${m[1] === 'is-done' ? '✓' : '✗'}`);
+  // No option yet: only the option and the rationale are asked for.
+  const none = String(decisionWorkspaceView(initialState(), RR));
+  assert.deepEqual(marks(none), ['Option:✗', 'Rationale:✓']);
+  assert.match(none, /Step 1:<\/strong> choose an option/);
+  assert.match(none, /data-action="authorize"[^>]*disabled/);
+  // The seeded expansion: every step done, Authorize enabled.
+  const ready = String(decisionWorkspaceView(pendingRR(), RR));
+  assert.deepEqual(marks(ready), ['Option:✓', 'Conditions:✓', 'Rollout plan:✓', 'Expected impact:✓', 'Rationale:✓']);
+  assert.match(ready, /Step 2 · Conditions/);
+  assert.match(ready, /Step 3 · Rollout plan/);
+  assert.match(ready, /Step 4 · Expected impact/);
+  assert.match(ready, /Step 5 · Decision rationale/);
+  assert.match(ready, /<details class="context" open>/);
+  assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);
+  // Each blocker shows against its own step, with its first problem.
+  const noPlan = String(decisionWorkspaceView(setRolloutField(pendingRR(), RR, 'reviewDate', ''), RR));
+  assert.match(noPlan, /is-blocked">.*?Rollout plan<\/a><span class="muted small">: Review date: a date is needed\./s);
+  assert.match(noPlan, /data-action="authorize"[^>]*disabled/);
+  const noImpact = String(decisionWorkspaceView(setOutcome(pendingRR(), RR, 1, 'target', 'cheaper'), RR));
+  assert.match(noImpact, /Expected impact<\/a><span class="muted small">: Outcome 2 needs a target with a number\./);
+  const noWhy = String(decisionWorkspaceView(setRationale(pendingRR(), RR, 'ok'), RR));
+  assert.match(noWhy, /Rationale<\/a><span class="muted small">: Write a decision rationale/);
+  // Something canAuthorize refuses that no step explains is listed too: here,
+  // a review lock after an automatic restriction, forced onto an open decision.
+  let locked = pendingRR();
+  locked = { ...locked, capabilityData: { ...locked.capabilityData, [RR]: { ...capData(locked, RR), reviewRequired: true } } };
+  const lockedPage = String(decisionWorkspaceView(locked, RR));
+  assert.match(lockedPage, /is-blocked"><span class="check-mark" aria-hidden="true">✗<\/span> A post-incident review must be recorded/);
+  assert.match(lockedPage, /data-action="authorize"[^>]*disabled/);
+});
+
+// D1 (#76): the decision brief.
+test('D1: a one-page brief for seeded, new and automatic decisions, from recorded data only', async () => {
+  const { decisionBriefView } = await import('../src/views/brief.js');
+  const { canonicalHash } = await import('../src/routes.js');
+  const text = (st, id) => String(decisionBriefView(st, id)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  // Seeded records.
+  for (const id of ['AC-01', 'AC-02', 'AC-03']) {
+    const t = text(initialState(), id);
+    for (const h of ['What changed', 'Why', 'The evidence', 'The disagreement', 'Expected impact', 'When it gets pulled back']) assert.ok(t.includes(h), `${id}: ${h}`);
+    assert.match(t, /Built only from decision record/);
+  }
+  assert.match(text(initialState(), 'AC-02'), /predates expected outcomes/);
+  // A new expansion carries its expected impact, rollout and the positions as recorded.
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const t4 = text(s, 'AC-04');
+  assert.match(t4, /Refund recommendation: Level 2 → Level 3/);
+  assert.match(t4, /Authorized by Maya Chen/);
+  assert.match(t4, /AI cost per case: ≤ \$0.06/);
+  assert.match(t4, /review on Oct 22/);
+  assert.match(t4, /Not unanimous: 4 different positions among 5 people/);
+  assert.match(t4, /Risk \(Daniel Okafor\): Hold high-value cases/);
+  assert.match(t4, /3 forbidden attempts or false claims within 7 days/);
+  // Later changes to the live contract don't change the brief: it reads the version in force.
+  const d = capData(s, RR);
+  const changed = { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...d, versions: { ...d.versions, contract: [...d.versions.contract, { ...d.versions.contract.at(-1), version: 99, value: { ...d.versions.contract.at(-1).value, autoRestriction: ['A rule added later.'] } }] } } } };
+  assert.equal(text(changed, 'AC-04'), t4);
+  // An automatic restriction says no person decided it.
+  s = simulateBreach(s, RR);
+  const t5 = text(s, s.decisionRecords.at(-1).id);
+  assert.match(t5, /Applied automatically by a contract rule/);
+  assert.match(t5, /Not applicable: no person decided this/);
+  assert.match(t5, /Not applicable: authority did not expand/);
+  // Linked from the record; the old address still resolves.
+  assert.match(String(decisionRecordView(s, 'AC-04')), /href="#\/records\/AC-04\/brief"/);
+  assert.equal(canonicalHash('#/decisions/AC-04/brief'), '#/records/AC-04/brief');
+  assert.match(String(decisionBriefView(s, 'AC-99')), /Record not found/);
+});
+
+test('Agent runs: the site never calls a model, and each real recording links its proof or says it was made outside GitHub', () => {
+  const s = initialState();
+  const dir = new URL('../src/data/agent-runs/', import.meta.url);
+  const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
+  const runs = index.runs.map((e) => ({ ...JSON.parse(readFileSync(new URL(e.file, dir), 'utf8')), file: e.file, proof: e.proof || null }));
+  const out = String(agentRunsView(s, new URLSearchParams(''), { status: 'ready', runs }));
+  assert.match(out, /This site never calls a model\.<\/strong> Every run here was recorded and approved; follow the links to check\./);
+  // GitHub runs: the Actions run with its approver, the ledger row, the commit.
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/actions\/runs\/38070415162">GitHub Actions run 38070415162<\/a>, approved by @pedringt/);
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/blob\/main\/agent\/runs\/ledger\.md\?plain=1#L10">ledger row<\/a>/);
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/commit\/624a7c96137f065669ab58ad9749df991cd29b3c">commit 624a7c9<\/a>/);
+  // The first local runs say so instead of linking an Actions run.
+  assert.match(out, /Made outside GitHub: Run from Paige&#39;s machine on Paige&#39;s earlier Anthropic account, before paid runs moved to GitHub Actions\. There's no Actions run or approval to link/);
+  // Every real recording on the page carries a proof line; dry runs say they aren't real.
+  const real = runs.filter((r) => r.source === 'recorded').length;
+  assert.equal((out.match(/<span class="muted">Proof:<\/span>/g) || []).length, real);
+  assert.match(out, /A dry run with the scripted mock: no model was called and nothing was spent\./);
+  assert.doesNotMatch(out, /No proof on file/);
+  // The opened run shows its proof too; a new run without a commit links the file's history.
+  const opened = String(agentRunsView(s, new URLSearchParams('run=2026-10-10-claude-haiku-5-5-shared.json'), { status: 'ready', runs }));
+  assert.match(opened, /actions\/runs\/38063334929/);
+  const fresh = { ...runs.find((r) => r.file === '2026-10-10-claude-haiku-5-5-shared.json'), file: 'new.json', proof: { via: 'github-actions', actionsRun: 5, approvedBy: 'pedringt', ledgerLine: 12 } };
+  assert.match(String(agentRunsView(s, new URLSearchParams('run=new.json'), { status: 'ready', runs: [fresh] })), /href="https:\/\/github\.com\/pedringt\/authority-lab\/commits\/main\/src\/data\/agent-runs\/new\.json">the commit that added it<\/a>/);
 });

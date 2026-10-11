@@ -163,7 +163,7 @@ export function setRoiAssumptions(state, capabilityId, values, { by, reason } = 
   const version = { version: (prev ? prev.version : 0) + 1, values: next, by, byAt: snapshotPerson(state, by), reason: why, date: state.today, seeded: false };
   const cap = getCapability(state, capabilityId);
   const s = updateCap(state, capabilityId, (d) => ({ ...d, roiAssumptions: [...(d.roiAssumptions || []), version] }));
-  return logEvent(s, { kind: 'amendment', surfaced: true, title: `ROI assumptions v${version.version}: ${cap.name}`, body: `${people(state)[by].name} changed the ROI assumptions: ${ROI_FIELDS.filter((f) => !prev || prev.values[f.key] !== next[f.key]).map((f) => `${f.label.toLowerCase()} ${prev ? `${prev.values[f.key]} → ` : ''}${next[f.key]}`).join('; ')}. Reason: ${why}`, capabilityId, link: `#/capabilities/${capabilityId}?tab=monitoring` });
+  return logEvent(s, { kind: 'amendment', surfaced: true, title: `ROI assumptions v${version.version}: ${cap.name}`, body: `${people(state)[by].name} changed the ROI assumptions: ${ROI_FIELDS.filter((f) => !prev || prev.values[f.key] !== next[f.key]).map((f) => `${f.label.toLowerCase()} ${prev ? `${prev.values[f.key]} → ` : ''}${next[f.key]}`).join('; ')}. Reason: ${why}`, capabilityId, link: `#/capabilities/${capabilityId}?tab=monitoring&show=value` });
 }
 
 // The ROI, a month at a time. AI cost applies to every case; the human time
