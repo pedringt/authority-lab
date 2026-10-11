@@ -823,6 +823,16 @@ export const defaultOutcomes = [
   { metric: 'Override rate on automatic refunds', target: '≤ 8%' },
 ];
 
+// The seeded expansion's rollout plan (C1), prefilled for the demo.
+export const defaultRollout = {
+  owner: 'priya',
+  scope: 'Standard refunds of $50 or less in the Tier 1 refunds queue, all regions, within the conditions on the decision. High-value, fraud-flagged, chargeback and policy-exception cases stay with agents.',
+  startDate: '2026-10-08',
+  feedbackChannel: '#refund-ai-feedback, and the "AI refund" tag in the helpdesk',
+  reviewerNotes: 'Refunds the AI issues on its own carry an "AI refund" tag. Reverse any you disagree with and say why in the ticket; reversals feed the override rate. Anything the AI sends you is waiting for a person in the queue: approve or reject it there, with a reason.',
+  reviewDate: '2026-10-22',
+};
+
 // ROI assumptions for Refund recommendation (B2), version 1. Seeded demo data:
 // fictional, and labelled as seeded wherever it shows.
 export const roiAssumptions = [
@@ -1069,6 +1079,7 @@ export const capabilityData = {
     defaultConditions,
     defaultRationale,
     defaultOutcomes,
+    defaultRollout,
     pendingDecision: { level: 3, limited: true },
     monitoringRule: monitoringSeed,
     roiAssumptions,

@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -34,6 +34,38 @@ export function decisionsListView(state) {
 // The expected-impact rows for an expansion (B1): a metric and a target with
 // a number, up to four. Problems show inline; the Authorize button says why
 // it's disabled.
+// The rollout plan for an expansion (C1): every field required.
+function rolloutCard(state, cap, dec) {
+  const p = dec.rollout || {};
+  const rc = rolloutChecks(state, p);
+  const field = (key, label, input) => html`<label class="field field-stack"><span>${label}</span>${input}</label>`;
+  const attrs = (key) => raw(`data-action="set-rollout" data-capability="${cap.id}" data-field="${key}"`);
+  return html`<div class="card rollout">
+    <div class="rollout-grid">
+      ${field('owner', 'Rollout owner', html`<select ${attrs('owner')}><option value="" ${p.owner ? '' : raw('selected')}>Choose a person</option>${Object.entries(activePeople(state)).map(([k, v]) => html`<option value="${k}" ${p.owner === k ? raw('selected') : ''}>${v.name} · ${v.role}</option>`)}</select>`)}
+      ${field('startDate', 'Start date', html`<input type="date" value="${p.startDate || ''}" min="${state.today}" ${attrs('startDate')}>`)}
+      ${field('reviewDate', `Review date (within ${ROLLOUT_REVIEW_WITHIN_DAYS} days)`, html`<input type="date" value="${p.reviewDate || ''}" ${attrs('reviewDate')}>`)}
+      ${field('feedbackChannel', 'Feedback channel', html`<input type="text" maxlength="120" value="${p.feedbackChannel || ''}" placeholder="e.g. #refund-ai-feedback" ${attrs('feedbackChannel')}>`)}
+    </div>
+    ${field('scope', 'Scope', html`<textarea rows="3" maxlength="300" ${attrs('scope')}>${p.scope || ''}</textarea>`)}
+    ${field('reviewerNotes', 'What reviewers need to know', html`<textarea rows="4" maxlength="600" ${attrs('reviewerNotes')}>${p.reviewerNotes || ''}</textarea>`)}
+    ${dec.rolloutPrefilled ? html`<p class="muted small"><strong>Prefilled for the demo.</strong> Edit it before authorizing.</p>` : ''}
+    ${rc.ok ? '' : html`<ul class="form-error plain-list">${rc.errors.map((e) => html`<li>${e}</li>`)}</ul>`}
+  </div>`;
+}
+
+// The rollout plan as it stands on a record, or as it applies to a capability.
+export function rolloutList(plan) {
+  const o = plan.ownerAt || {};
+  return html`<ul class="plain-list">
+    <li><strong>Owner:</strong> ${o.name || plan.owner}${o.title ? `, ${o.title}` : ''}</li>
+    <li><strong>Scope:</strong> ${plan.scope}</li>
+    <li><strong>Starts:</strong> ${fmtDate(plan.startDate)} · <strong>Review:</strong> ${fmtDate(plan.reviewDate)}</li>
+    <li><strong>Feedback:</strong> ${plan.feedbackChannel}</li>
+    <li><strong>What reviewers need to know:</strong> ${plan.reviewerNotes}</li>
+  </ul>`;
+}
+
 function impactCard(cap, dec) {
   const rows = Array.from({ length: OUTCOMES_MAX }, (_, i) => (dec.outcomes || [])[i] || { metric: '', target: '' });
   const oc = outcomeChecks(rows);
@@ -43,7 +75,7 @@ function impactCard(cap, dec) {
       ${rows.map((o, i) => html`<input type="text" maxlength="80" aria-label="Outcome ${i + 1}: metric" placeholder="${i === 0 ? 'e.g. Resolution time' : ''}" value="${o.metric}" data-action="set-outcome" data-capability="${cap.id}" data-index="${i}" data-field="metric"><input type="text" maxlength="60" aria-label="Outcome ${i + 1}: target" placeholder="${i === 0 ? 'e.g. at least 35% faster' : ''}" value="${o.target}" data-action="set-outcome" data-capability="${cap.id}" data-index="${i}" data-field="target">`)}
     </div>
     ${dec.outcomesPrefilled ? html`<p class="muted small"><strong>Prefilled for the demo.</strong> A little more ambitious than the pilot results; edit them before authorizing.</p>` : ''}
-    ${oc.ok ? html`<p class="muted small">${oc.outcomes.length} expected outcome${oc.outcomes.length === 1 ? '' : 's'}. B2 will compare them with what actually happens.</p>` : html`<ul class="form-error plain-list">${oc.errors.map((e) => html`<li>${e}</li>`)}</ul>`}
+    ${oc.ok ? html`<p class="muted small">${oc.outcomes.length} expected outcome${oc.outcomes.length === 1 ? '' : 's'}. The Monitoring tab compares them with what actually happens.</p>` : html`<ul class="form-error plain-list">${oc.errors.map((e) => html`<li>${e}</li>`)}</ul>`}
   </div>`;
 }
 
@@ -82,6 +114,12 @@ export function decisionRecordView(state, id) {
         ? [['Expected impact', html`<ul class="plain-list">${x.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>${x.outcomesPrefilled ? html`<p class="muted small">Prefilled for the demo.</p>` : ''}`]]
         : x.previous && x.next && x.next.level > x.previous.level && x.authorizedBy !== 'system'
           ? [['Expected impact', html`<span class="muted">Recorded before expected outcomes were required for expansions.</span>`]]
+          : []),
+      // C1: how the expansion went into service.
+      ...(x.rolloutPlan
+        ? [['Rollout plan', html`${rolloutList(x.rolloutPlan)}${x.rolloutPrefilled ? html`<p class="muted small">Prefilled for the demo.</p>` : ''}`]]
+        : x.previous && x.next && x.next.level > x.previous.level && x.authorizedBy !== 'system'
+          ? [['Rollout plan', html`<span class="muted">Recorded before rollout plans were required for expansions.</span>`]]
           : []),
       ...(x.conditions ? [['Automatic action allowed when', html`<ul class="plain-list">
         <li>value ≤ $${x.conditions.maxValue}</li>
@@ -202,6 +240,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   <div class="decision-grid">
     <div class="decision-main">
       ${conditions ? section('Conditions', conditions, { subtitle: 'For Expand with limits: when the AI may act on its own.' }) : ''}
+      ${isExpansion(state, cap.id, dec.option) ? section('Rollout plan', rolloutCard(state, cap, dec), { subtitle: `How this expansion goes into service. It goes on the decision record and can't be changed afterwards.` }) : ''}
       ${isExpansion(state, cap.id, dec.option) ? section('Expected impact', impactCard(cap, dec), { subtitle: `${OUTCOMES_MIN} to ${OUTCOMES_MAX} outcomes this expansion should achieve, each with a number. They go on the decision record and can't be changed afterwards.` }) : ''}
       ${section('Evidence summary', html`
         ${barChangedNote(state, cap)}

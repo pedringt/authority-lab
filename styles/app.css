@@ -608,3 +608,8 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 /* ROI (B2) */
 .roi-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .roi-form { display: grid; gap: 10px; margin-top: 10px; }
+
+/* Rollout plan (C1) */
+.rollout { display: grid; gap: 10px; }
+.rollout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.rollout select, .rollout input, .rollout textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }

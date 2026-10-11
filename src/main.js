@@ -159,7 +159,7 @@ function render() {
   const opened = lastRoute === location.hash ? [...app.querySelectorAll('details[id][open]')].map((el) => el.id) : [];
   // A field being typed into (expected impact, rationale) keeps its focus and
   // caret across the re-render its own debounced dispatch causes.
-  const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale'].includes(document.activeElement.dataset.action)
+  const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale', 'set-rollout'].includes(document.activeElement.dataset.action)
     ? { action: document.activeElement.dataset.action, index: document.activeElement.dataset.index || '', field: document.activeElement.dataset.field || '', start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd }
     : null;
   app.innerHTML = String(view);
@@ -592,6 +592,15 @@ document.addEventListener('input', (e) => {
     const text = vagueNameWarning(nameEl.value);
     warn.textContent = text || '';
     warn.hidden = !text;
+    return;
+  }
+  const ro = e.target.closest('[data-action="set-rollout"]');
+  if (ro) {
+    // Rollout plan (C1): one field at a time, debounced like the rationale.
+    const { capability, field } = ro.dataset;
+    const value = ro.value;
+    clearTimeout(outcomeTimers[`rollout-${field}`]);
+    outcomeTimers[`rollout-${field}`] = setTimeout(() => store.dispatch('setRolloutField', capability, field, value), ro.tagName === 'SELECT' || ro.type === 'date' ? 0 : 300);
     return;
   }
   const out = e.target.closest('[data-action="set-outcome"]');

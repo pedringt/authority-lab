@@ -20,7 +20,7 @@ import {
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
   parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
-  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility,
+  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, setRolloutField, rolloutChecks, ROLLOUT_FIELDS, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView, decisionWorkspaceView } from '../src/views/decisions.js';
@@ -1285,6 +1285,8 @@ test('a new capability can reach its second record: propose a move to Draft afte
   s = selectDecision(s, id, 'expand');
   s = setOutcome(setOutcome(s, id, 0, 'metric', 'Edit rate on drafts'), id, 0, 'target', '≤ 20%');
   s = setOutcome(setOutcome(s, id, 1, 'metric', 'Time to first response'), id, 1, 'target', 'at least 25% faster');
+  // C1: and its rollout plan.
+  for (const [k, v] of Object.entries({ owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' })) s = setRolloutField(s, id, k, v);
   s = authorize(s, id, { by: 'priya' });
   const c = getCapability(s, id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
@@ -1333,6 +1335,8 @@ test('end to end in the store: add → contract → criteria → stakeholders �
   store.dispatch('setOutcome', id, 0, 'target', '≤ 20%');
   store.dispatch('setOutcome', id, 1, 'metric', 'Time to first response');
   store.dispatch('setOutcome', id, 1, 'target', 'at least 25% faster');
+  // C1: and its rollout plan.
+  for (const [k, v] of Object.entries({ owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' })) store.dispatch('setRolloutField', id, k, v);
   store.dispatch('authorize', id, { by: 'priya' });
   const c = getCapability(store.get(), id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
@@ -3485,7 +3489,7 @@ const atL3WithL4Proposal = () => proposeAuthority(authorize(selectDecision(initi
 const tryExpand = (s, option = 'expand') => {
   s = setRationale(selectDecision(s, RR, option), RR, 'Going up again after the incident review was recorded.');
   const d = capData(s, RR);
-  return { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...d, decision: { ...d.decision, outcomes: [{ metric: 'Resolution time', target: '50% faster' }, { metric: 'Cost per case', target: '< $0.05' }] } } } };
+  return { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...d, decision: { ...d.decision, outcomes: [{ metric: 'Resolution time', target: '50% faster' }, { metric: 'Cost per case', target: '< $0.05' }], rollout: { owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' } } } } };
 };
 const closedNote = (s) => s.activity.find((a) => /^Proposal closed: authority changed from Level \d to Level \d/.test(a.title));
 
@@ -3658,4 +3662,89 @@ test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded d
 test('B2: the seeded assumptions\' author snapshot has the same shape as a real one', () => {
   const s = initialState();
   assert.deepEqual(roiVersions(s, RR)[0].byAt, snapshotPerson(s, 'elena'));
+});
+
+// C1 (#74): a rollout plan required on every expansion.
+const withPlan = (s, plan, cap = RR) => { for (const [k, v] of Object.entries(plan)) s = setRolloutField(s, cap, k, v); return s; };
+const GOOD_PLAN = { owner: 'priya', scope: 'Standard refunds of $50 or less in the Tier 1 queue.', startDate: '2026-10-08', feedbackChannel: '#refund-ai-feedback', reviewerNotes: 'Reverse any AI refund you disagree with and say why in the ticket.', reviewDate: '2026-10-22' };
+
+test('C1: the seeded decision carries a rollout plan, prefilled for the demo, and it lands frozen on the record', () => {
+  const s0 = pendingRR();
+  assert.equal(rolloutChecks(s0, capData(s0, RR).decision.rollout).ok, true);
+  const s = authorize(s0, RR);
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual([rec.rolloutPlan.owner, rec.rolloutPlan.ownerAt.name, rec.rolloutPlan.startDate, rec.rolloutPlan.reviewDate], ['priya', 'Priya Natarajan', '2026-10-08', '2026-10-22']);
+  assert.equal(rec.rolloutPrefilled, true);
+  assert.ok(Object.isFrozen(rec.rolloutPlan) && Object.isFrozen(rec.rolloutPlan.ownerAt));
+});
+
+test('C1 bypass: a missing field is refused, field by field', () => {
+  for (const f of ROLLOUT_FIELDS) {
+    const s = withPlan(pendingRR(), { ...GOOD_PLAN, [f.key]: '' });
+    const c = canAuthorize(s, RR);
+    assert.equal(c.ok, false, `missing ${f.key}`);
+    assert.match(c.reason, /^Rollout plan:/, f.key);
+    assert.throws(() => authorize(s, RR), /Rollout plan/, `${f.key}: authorize refuses too`);
+  }
+  assert.equal(canAuthorize(withPlan(pendingRR(), GOOD_PLAN), RR).ok, true, 'a complete plan passes');
+});
+
+test('C1 bypass: the owner must be an active person, and the dates must make sense', () => {
+  const bad = [
+    [{ owner: 'nobody' }, /active person/],
+    [{ owner: 'constructor' }, /active person/],
+    [{ owner: '__proto__' }, /active person/],
+    [{ owner: 'ai' }, /active person/],
+    [{ scope: 'short' }, /Scope/],
+    [{ reviewerNotes: 'Be careful.' }, /what reviewers need to know/],
+    [{ startDate: '2026-10-06' }, /can't start before the decision/],
+    [{ startDate: '2026-02-30' }, /Start date: a date is needed/],
+    [{ startDate: 'next week' }, /Start date: a date is needed/],
+    [{ reviewDate: '2026-10-08' }, /after the start date/],
+    [{ reviewDate: '2026-10-01' }, /after the start date/],
+    [{ reviewDate: '2027-02-01' }, /within 90 days/],
+  ];
+  for (const [patch, want] of bad) {
+    const c = rolloutChecks(pendingRR(), { ...GOOD_PLAN, ...patch });
+    assert.equal(c.ok, false, JSON.stringify(patch));
+    assert.match(c.errors.join(' '), want, JSON.stringify(patch));
+  }
+  const gone = deactivatePerson(pendingRR(), 'priya', { by: 'maya', reason: 'Moved to another team, so access goes.' });
+  if (!isActivePerson(gone, 'priya')) assert.equal(rolloutChecks(gone, GOOD_PLAN).ok, false, 'a deactivated owner is refused');
+  assert.throws(() => setRolloutField(pendingRR(), RR, 'approvedBy', 'maya'), /Not a field/);
+});
+
+test('C1 bypass: the rollout plan can\'t be edited after authorization', () => {
+  const s = authorize(pendingRR(), RR);
+  assert.throws(() => setRolloutField(s, RR, 'reviewDate', '2026-12-31'), /can't be edited after authorization/);
+  const rec = s.decisionRecords.at(-1);
+  assert.throws(() => { rec.rolloutPlan.reviewDate = '2026-12-31'; }, TypeError);
+  assert.throws(() => { rec.rolloutPlan.ownerAt.name = 'Someone else'; }, TypeError);
+  assert.equal(s.decisionRecords.at(-1).rolloutPlan.reviewDate, '2026-10-22');
+});
+
+test('C1: restrict, suspend, redesign and hold need no rollout plan', () => {
+  for (const option of ['restrict', 'suspend', 'redesign', 'hold']) {
+    let s = selectDecision(initialState(), RR, option);
+    for (const f of ROLLOUT_FIELDS) s = setRolloutField(s, RR, f.key, '');
+    assert.equal(canAuthorize(s, RR).ok, true, option);
+    assert.equal(authorize(s, RR).decisionRecords.at(-1).rolloutPlan, null, `${option} records none`);
+  }
+});
+
+test('C1: the plan shows on the decision workspace, the record and the capability', () => {
+  const s0 = pendingRR();
+  const page = String(decisionWorkspaceView(s0, RR));
+  assert.match(page, /Rollout plan/);
+  assert.match(page, /data-action="set-rollout"/);
+  assert.match(page, /Prefilled for the demo/);
+  const s = authorize(s0, RR);
+  const rec = String(decisionRecordView(s, s.decisionRecords.at(-1).id));
+  assert.match(rec, /Rollout plan/);
+  assert.match(rec, /#refund-ai-feedback/);
+  assert.match(rec, /Priya Natarajan/);
+  const capPage = String(capabilityView(s, RR, new URLSearchParams('')));
+  assert.match(capPage, /Rollout<\/dt><dd>Priya Natarajan · from/);
+  const older = initialState().decisionRecords.find((r) => r.next && r.previous && r.next.level > r.previous.level);
+  assert.match(String(decisionRecordView(initialState(), older.id)), /before rollout plans were required/);
 });

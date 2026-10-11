@@ -70,6 +70,9 @@ export function seededCapabilityData(id) {
       outcomes: s.defaultOutcomes ? clone(s.defaultOutcomes) : [],
       // Shown as "prefilled for the demo" until someone edits them.
       outcomesPrefilled: Boolean(s.defaultOutcomes),
+      // The rollout plan for an expansion (C1), prefilled for the seeded decision.
+      rollout: s.defaultRollout ? clone(s.defaultRollout) : {},
+      rolloutPrefilled: Boolean(s.defaultRollout),
       recordId: null,
       // The pending authority change, if a decision is open.
       proposed: s.pendingDecision ? clone(s.pendingDecision) : null,
@@ -163,7 +166,7 @@ export function closeOpenProposal(state, capabilityId, previous, next) {
   const d = capData(state, capabilityId);
   const p = d && d.decision && d.decision.proposed;
   if (!p || !(next.level < previous.level)) return state;
-  const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false } }));
+  const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false, rollout: {}, rolloutPrefilled: false } }));
   const cap = getCapability(state, capabilityId);
   return logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: the open proposal to move to Level ${p.level} was made at Level ${previous.level}. Authority is now Level ${next.level}, so the proposal is closed. Any expansion needs a new proposal, one level up from Level ${next.level}.`, capabilityId, link: `#/capabilities/${capabilityId}/decision` });
 }
