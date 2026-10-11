@@ -3,7 +3,7 @@
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { versionsInForce, proposedAuthority, decisionRequired, levelName, authorityLabel, readiness, testSummary } from './selectors.js';
-import { people, snapshotPerson, requireActive } from './people.js';
+import { people, snapshotPerson, requireActive, isActivePerson } from './people.js';
 
 export function actionNoun(cap) {
   return (cap && cap.actionNoun) || 'actions';
@@ -166,6 +166,48 @@ export function setOutcome(state, capabilityId, index, field, value) {
   });
 }
 
+// Rollout plan (roadmap item 9, C1, #74). Authorizing an expansion also needs
+// a plan for putting it into service: who owns the rollout, its scope, when
+// it starts, where feedback goes, what reviewers need to know, and when it's
+// reviewed. Frozen on the record like the expected outcomes.
+export const ROLLOUT_FIELDS = [
+  { key: 'owner', label: 'Rollout owner' },
+  { key: 'scope', label: 'Scope', min: 10, max: 300 },
+  { key: 'startDate', label: 'Start date' },
+  { key: 'feedbackChannel', label: 'Feedback channel', min: 3, max: 120 },
+  { key: 'reviewerNotes', label: 'What reviewers need to know', min: 20, max: 600 },
+  { key: 'reviewDate', label: 'Review date' },
+];
+// A review no later than this many days after the start.
+export const ROLLOUT_REVIEW_WITHIN_DAYS = 90;
+
+const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+const days = (a, b) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000;
+
+export function rolloutChecks(state, plan) {
+  const p = Object.fromEntries(ROLLOUT_FIELDS.map((f) => [f.key, String((plan && plan[f.key]) || '').trim()]));
+  const errors = [];
+  if (!p.owner || !Object.hasOwn(people(state), p.owner) || !isActivePerson(state, p.owner)) errors.push('Choose an active person as the rollout owner.');
+  for (const f of ROLLOUT_FIELDS.filter((x) => x.min)) {
+    if (p[f.key].length < f.min) errors.push(`${f.label}: ${f.key === 'reviewerNotes' ? 'say what reviewers need to know (a sentence or two)' : 'fill this in'}.`);
+    if (p[f.key].length > f.max) errors.push(`${f.label} is too long.`);
+  }
+  if (!isDate(p.startDate)) errors.push('Start date: a date is needed.');
+  else if (p.startDate < state.today) errors.push('Start date: a rollout can\'t start before the decision.');
+  if (!isDate(p.reviewDate)) errors.push('Review date: a date is needed.');
+  else if (isDate(p.startDate) && !(p.reviewDate > p.startDate)) errors.push('Review date: after the start date.');
+  else if (isDate(p.startDate) && days(p.startDate, p.reviewDate) > ROLLOUT_REVIEW_WITHIN_DAYS) errors.push(`Review date: within ${ROLLOUT_REVIEW_WITHIN_DAYS} days of the start.`);
+  return { ok: !errors.length, errors, plan: p };
+}
+
+// Edit one field of the rollout plan on the open decision. Refused once the
+// decision is recorded: the plan is part of the record from then on.
+export function setRolloutField(state, capabilityId, field, value) {
+  if (!decisionRequired(state, capabilityId)) throw new Error('No decision is open. The rollout plan is part of the decision record and can\'t be edited after authorization.');
+  if (!ROLLOUT_FIELDS.some((f) => f.key === field)) throw new Error('Not a field of the rollout plan.');
+  return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rollout: { ...(d.decision.rollout || {}), [field]: String(value ?? '') }, rolloutPrefilled: false } }));
+}
+
 const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === 'object') deepFreeze(v); }); return Object.freeze(o); };
 
 export function canAuthorize(state, capabilityId) {
@@ -181,6 +223,8 @@ export function canAuthorize(state, capabilityId) {
   if (isExpansion(state, capabilityId, d.option)) {
     const oc = outcomeChecks(d.outcomes);
     if (!oc.ok) return { ok: false, reason: `Expected impact: ${oc.errors[0]}` };
+    const rc = rolloutChecks(state, d.rollout);
+    if (!rc.ok) return { ok: false, reason: `Rollout plan: ${rc.errors[0]}` };
   }
   const expanding = d.option === 'expand' || d.option === 'expand-limits';
   if (expanding && capData(state, capabilityId).reviewRequired) {
@@ -250,6 +294,9 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     expectedOutcomes: next.level > previous.level ? deepFreeze(outcomeChecks(d.decision.outcomes).outcomes) : null,
     // Authorized as prefilled for the demo, unedited: the record says so.
     ...(next.level > previous.level && d.decision.outcomesPrefilled ? { outcomesPrefilled: true } : {}),
+    // C1: how the expansion goes into service, fixed from here on.
+    rolloutPlan: next.level > previous.level ? deepFreeze({ ...rolloutChecks(state, d.decision.rollout).plan, ownerAt: snapshotPerson(state, d.decision.rollout.owner) }) : null,
+    ...(next.level > previous.level && d.decision.rolloutPrefilled ? { rolloutPrefilled: true } : {}),
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
