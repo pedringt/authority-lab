@@ -5,7 +5,13 @@
       "source": "recorded",
       "model": "claude-opus-5-5",
       "date": "2026-10-10",
-      "label": "Recorded from a real run on 2026-10-10, claude-opus-5-5"
+      "label": "Recorded from a real run on 2026-10-10, claude-opus-5-5",
+      "proof": {
+        "via": "local",
+        "ledgerLine": 7,
+        "commit": "09e7b05efe4070351b32b1279b8d5b46d54e1788",
+        "note": "Run from Paige's machine on Paige's earlier Anthropic account, before paid runs moved to GitHub Actions"
+      }
     },
     {
       "file": "2026-10-10-claude-opus-5-5-x5.json",
@@ -13,7 +19,14 @@
       "model": "claude-opus-5-5",
       "date": "2026-10-10",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38070415162,
+        "approvedBy": "pedringt",
+        "ledgerLine": 10,
+        "commit": "624a7c96137f065669ab58ad9749df991cd29b3c"
+      }
     },
     {
       "file": "2026-10-10-claude-sonnet-5-5-x5.json",
@@ -21,14 +34,27 @@
       "model": "claude-sonnet-5-5",
       "date": "2026-10-10",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38070415162,
+        "approvedBy": "pedringt",
+        "ledgerLine": 10,
+        "commit": "624a7c96137f065669ab58ad9749df991cd29b3c"
+      }
     },
     {
       "file": "2026-10-10-claude-haiku-5-5.json",
       "source": "recorded",
       "model": "claude-haiku-5-5",
       "date": "2026-10-10",
-      "label": "Recorded from a real run on 2026-10-10, claude-haiku-5-5"
+      "label": "Recorded from a real run on 2026-10-10, claude-haiku-5-5",
+      "proof": {
+        "via": "local",
+        "ledgerLine": 7,
+        "commit": "09e7b05efe4070351b32b1279b8d5b46d54e1788",
+        "note": "Run from Paige's machine on Paige's earlier Anthropic account, before paid runs moved to GitHub Actions"
+      }
     },
     {
       "file": "2026-10-10-claude-haiku-5-5-shared.json",
@@ -36,7 +62,14 @@
       "model": "claude-haiku-5-5",
       "date": "2026-10-10",
       "shared": true,
-      "label": "Recorded from a real run on 2026-10-10, claude-haiku-5-5, all tickets in one shared session"
+      "label": "Recorded from a real run on 2026-10-10, claude-haiku-5-5, all tickets in one shared session",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38063334929,
+        "approvedBy": "pedringt",
+        "ledgerLine": 8,
+        "commit": "c1ceb01e39004df44cb22871160004a64c7623f2"
+      }
     },
     {
       "file": "2026-10-10-claude-haiku-5-5-x5.json",
@@ -44,7 +77,14 @@
       "model": "claude-haiku-5-5",
       "date": "2026-10-10",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38070415162,
+        "approvedBy": "pedringt",
+        "ledgerLine": 10,
+        "commit": "624a7c96137f065669ab58ad9749df991cd29b3c"
+      }
     },
     {
       "file": "2026-10-10-claude-opus-5-5-stress-x5-2.json",
@@ -53,7 +93,14 @@
       "date": "2026-10-10",
       "ticketSet": "stress",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5, stress tickets"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5, stress tickets",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38079661428,
+        "approvedBy": "pedringt",
+        "ledgerLine": 11,
+        "commit": "a8551b8a64d1019e0c1b84ba0de184ddb75d2020"
+      }
     },
     {
       "file": "2026-10-10-claude-opus-5-5-stress-x5.json",
@@ -62,7 +109,14 @@
       "date": "2026-10-10",
       "ticketSet": "stress",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5, stress tickets"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-opus-5-5, stress tickets",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38070415162,
+        "approvedBy": "pedringt",
+        "ledgerLine": 10,
+        "commit": "624a7c96137f065669ab58ad9749df991cd29b3c"
+      }
     },
     {
       "file": "2026-10-10-claude-sonnet-5-5-stress-x5-2.json",
@@ -71,7 +125,14 @@
       "date": "2026-10-10",
       "ticketSet": "stress",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5, stress tickets"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5, stress tickets",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38079661428,
+        "approvedBy": "pedringt",
+        "ledgerLine": 11,
+        "commit": "a8551b8a64d1019e0c1b84ba0de184ddb75d2020"
+      }
     },
     {
       "file": "2026-10-10-claude-sonnet-5-5-stress-x5.json",
@@ -80,7 +141,14 @@
       "date": "2026-10-10",
       "ticketSet": "stress",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5, stress tickets"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-sonnet-5-5, stress tickets",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38070415162,
+        "approvedBy": "pedringt",
+        "ledgerLine": 10,
+        "commit": "624a7c96137f065669ab58ad9749df991cd29b3c"
+      }
     },
     {
       "file": "2026-10-10-claude-haiku-5-5-stress-x5-2.json",
@@ -89,7 +157,14 @@
       "date": "2026-10-10",
       "ticketSet": "stress",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5, stress tickets"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5, stress tickets",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38079661428,
+        "approvedBy": "pedringt",
+        "ledgerLine": 11,
+        "commit": "a8551b8a64d1019e0c1b84ba0de184ddb75d2020"
+      }
     },
     {
       "file": "2026-10-10-claude-haiku-5-5-stress-x5.json",
@@ -98,7 +173,14 @@
       "date": "2026-10-10",
       "ticketSet": "stress",
       "runs": 5,
-      "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5, stress tickets"
+      "label": "Recorded from 5 independent runs on 2026-10-10, claude-haiku-5-5, stress tickets",
+      "proof": {
+        "via": "github-actions",
+        "actionsRun": 38070415162,
+        "approvedBy": "pedringt",
+        "ledgerLine": 10,
+        "commit": "624a7c96137f065669ab58ad9749df991cd29b3c"
+      }
     },
     {
       "file": "dry-run-mock.json",

@@ -60,7 +60,7 @@ function loadAgentRuns() {
   fetch(`${base}index.json`, { cache: 'no-cache' })
     .then((r) => { if (!r.ok) throw new Error(`index.json: ${r.status}`); return r.json(); })
     .then((index) => Promise.all([
-      ...index.runs.map((e) => fetch(`${base}${e.file}`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`${e.file}: ${r.status}`); return r.json(); }).then((run) => ({ ...run, file: e.file }))),
+      ...index.runs.map((e) => fetch(`${base}${e.file}`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`${e.file}: ${r.status}`); return r.json(); }).then((run) => ({ ...run, file: e.file, proof: e.proof || null }))),
       // Today's ticket definitions, for rules older recordings don't carry.
       ...['tickets.json', 'stress-tickets.json'].map((f) => fetch(`${base}${f}`, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : { tickets: [] })).then((d) => ({ definitions: d.tickets }))),
     ]))
