@@ -65,6 +65,24 @@ function ticketDetail(run, replayed, t) {
   </details>`;
 }
 
+// Where a recording came from, with links anyone can check: the GitHub
+// Actions run and who approved it, its ledger row, and the commit that added
+// it (or the file's history, for a run committed after this was written).
+const REPO = 'https://github.com/pedringt/authority-lab';
+export function proofLine(rec) {
+  if (rec.source !== 'recorded') return html`<p class="small muted run-proof">A dry run with the scripted mock: no model was called and nothing was spent.</p>`;
+  const p = rec.proof;
+  if (!p) return html`<p class="small run-proof">${badge('watch', 'No proof on file')} This recording has no provenance entry.</p>`;
+  const ledger = p.ledgerLine ? html`<a href="${REPO}/blob/main/agent/runs/ledger.md?plain=1#L${p.ledgerLine}">ledger row</a>` : 'no ledger row';
+  const commit = p.commit
+    ? html`<a href="${REPO}/commit/${p.commit}">commit ${p.commit.slice(0, 7)}</a>`
+    : html`<a href="${REPO}/commits/main/src/data/agent-runs/${encodeURIComponent(rec.file)}">the commit that added it</a>`;
+  const made = p.via === 'github-actions'
+    ? html`<a href="${REPO}/actions/runs/${p.actionsRun}">GitHub Actions run ${p.actionsRun}</a>${p.approvedBy ? `, approved by @${p.approvedBy}` : ''}`
+    : html`Made outside GitHub: ${p.note || 'not run through GitHub Actions'}. There's no Actions run or approval to link`;
+  return html`<p class="small run-proof"><span class="muted">Proof:</span> ${made} · ${ledger} · ${commit}</p>`;
+}
+
 // Friendly model names (#93): "Opus 5.5", not the model id.
 export function modelName(id) {
   const m = String(id || '').match(/^claude-([a-z]+)-(\d+)-(\d+)$/);
@@ -106,7 +124,7 @@ function runBlock(rec) {
   const shared = rec.start && rec.start.shared && !isRunSet(rec) ? html`<p class="small">${sharedNote(rec)}</p>` : '';
   return html`<details class="card run-block">
     <summary><strong>${modelName(rec.model)}</strong> · ${setName(rec)} · ${runs.length} run${runs.length === 1 ? '' : 's'}${rec.start && rec.start.shared ? ' · one shared session' : ''}${rec.source === 'recorded' && beforeRule(rec) ? html` · <span class="muted">before the instruction-source rule</span>` : ''}${rec.source === 'recorded' ? html` · <span class="muted">$${Number(rec.cost || 0).toFixed(2)}</span>` : html` · <span class="muted">not a real model</span>`}</summary>
-    ${shared}
+    ${proofLine(rec)}${shared}
     <div class="table-card"><table class="table">
       <thead><tr><th>Ticket</th><th>What it tempts</th><th class="num">Declined</th><th class="num">Gate stopped</th><th class="num">Within limits, unverified</th><th class="num">Got through</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -121,6 +139,7 @@ export function agentRunsView(state, query, loaded) {
     <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
     <h1>Agent runs</h1>
     ${lede('Real models working fictional support tickets, with every action checked by the gate.', 'Some tickets are temptations: they try to get the model to do something it shouldn\'t, like a forbidden refund, a false claim about the record, or a refund on someone else\'s say-so. Every recording is replayed through today\'s gate on this page; nothing here calls a model.')}
+    <p class="run-proof-intro"><strong>This site never calls a model.</strong> Every run here was recorded and approved; follow the links to check.</p>
   </div></div>`;
   if (!loaded || loaded.status === 'loading') return html`${head}<p class="empty">Loading recordings…</p>`;
   if (loaded.status === 'error') return html`${head}${notice('fail', 'Recordings could not be loaded', loaded.error)}`;
@@ -166,6 +185,7 @@ export function agentRunsView(state, query, loaded) {
     const changed = replay.changed;
     const repPicker = reps.length > 1 ? html`<div class="filter-bar"><div class="filter-group" role="group" aria-label="Run">${reps.map((_, i) => html`<a class="chip ${i + 1 === rep ? 'is-active' : ''}" href="#/agent-runs?run=${encodeURIComponent(selected.file)}&rep=${i + 1}">Run ${i + 1}</a>`)}</div></div>` : '';
     steps = section(`${modelName(selected.model)}, ${setName(selected)}${reps.length > 1 ? ` · run ${rep} of ${reps.length}` : ''}`, html`<p class="muted small">${/^claude-/.test(selected.model) ? runLabel(selected).replace(selected.model, modelName(selected.model)) : runLabel(selected)}. <a href="#/agent-runs">Close</a></p>
+      ${proofLine(selected)}
       ${changed ? notice('watch', `${changed} step${changed === 1 ? '' : 's'} would be decided differently today`, 'The gate has changed since this was recorded. Both verdicts are shown.') : html`<p class="muted small">Replayed through today's gate: every verdict matches the recording.</p>`}
       ${repPicker}${shown.tickets.map((tk, i) => ticketDetail(shown, replay.tickets[i], tk))}`, { id: 'steps', subtitle: 'Each ticket: what the model asked for, what it was shown, and the gate\'s verdict then and now.' });
   }

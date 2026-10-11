@@ -3919,3 +3919,66 @@ test('#96: the decision page numbers its steps and the checklist says exactly wh
   assert.match(lockedPage, /is-blocked"><span class="check-mark" aria-hidden="true">✗<\/span> A post-incident review must be recorded/);
   assert.match(lockedPage, /data-action="authorize"[^>]*disabled/);
 });
+
+// D1 (#76): the decision brief.
+test('D1: a one-page brief for seeded, new and automatic decisions, from recorded data only', async () => {
+  const { decisionBriefView } = await import('../src/views/brief.js');
+  const { canonicalHash } = await import('../src/routes.js');
+  const text = (st, id) => String(decisionBriefView(st, id)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  // Seeded records.
+  for (const id of ['AC-01', 'AC-02', 'AC-03']) {
+    const t = text(initialState(), id);
+    for (const h of ['What changed', 'Why', 'The evidence', 'The disagreement', 'Expected impact', 'When it gets pulled back']) assert.ok(t.includes(h), `${id}: ${h}`);
+    assert.match(t, /Built only from decision record/);
+  }
+  assert.match(text(initialState(), 'AC-02'), /predates expected outcomes/);
+  // A new expansion carries its expected impact, rollout and the positions as recorded.
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const t4 = text(s, 'AC-04');
+  assert.match(t4, /Refund recommendation: Level 2 → Level 3/);
+  assert.match(t4, /Authorized by Maya Chen/);
+  assert.match(t4, /AI cost per case: ≤ \$0.06/);
+  assert.match(t4, /review on Oct 22/);
+  assert.match(t4, /Not unanimous: 4 different positions among 5 people/);
+  assert.match(t4, /Risk \(Daniel Okafor\): Hold high-value cases/);
+  assert.match(t4, /3 forbidden attempts or false claims within 7 days/);
+  // Later changes to the live contract don't change the brief: it reads the version in force.
+  const d = capData(s, RR);
+  const changed = { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...d, versions: { ...d.versions, contract: [...d.versions.contract, { ...d.versions.contract.at(-1), version: 99, value: { ...d.versions.contract.at(-1).value, autoRestriction: ['A rule added later.'] } }] } } } };
+  assert.equal(text(changed, 'AC-04'), t4);
+  // An automatic restriction says no person decided it.
+  s = simulateBreach(s, RR);
+  const t5 = text(s, s.decisionRecords.at(-1).id);
+  assert.match(t5, /Applied automatically by a contract rule/);
+  assert.match(t5, /Not applicable: no person decided this/);
+  assert.match(t5, /Not applicable: authority did not expand/);
+  // Linked from the record; the old address still resolves.
+  assert.match(String(decisionRecordView(s, 'AC-04')), /href="#\/records\/AC-04\/brief"/);
+  assert.equal(canonicalHash('#/decisions/AC-04/brief'), '#/records/AC-04/brief');
+  assert.match(String(decisionBriefView(s, 'AC-99')), /Record not found/);
+});
+
+test('Agent runs: the site never calls a model, and each real recording links its proof or says it was made outside GitHub', () => {
+  const s = initialState();
+  const dir = new URL('../src/data/agent-runs/', import.meta.url);
+  const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
+  const runs = index.runs.map((e) => ({ ...JSON.parse(readFileSync(new URL(e.file, dir), 'utf8')), file: e.file, proof: e.proof || null }));
+  const out = String(agentRunsView(s, new URLSearchParams(''), { status: 'ready', runs }));
+  assert.match(out, /This site never calls a model\.<\/strong> Every run here was recorded and approved; follow the links to check\./);
+  // GitHub runs: the Actions run with its approver, the ledger row, the commit.
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/actions\/runs\/38070415162">GitHub Actions run 38070415162<\/a>, approved by @pedringt/);
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/blob\/main\/agent\/runs\/ledger\.md\?plain=1#L10">ledger row<\/a>/);
+  assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/commit\/624a7c96137f065669ab58ad9749df991cd29b3c">commit 624a7c9<\/a>/);
+  // The first local runs say so instead of linking an Actions run.
+  assert.match(out, /Made outside GitHub: Run from Paige&#39;s machine on Paige&#39;s earlier Anthropic account, before paid runs moved to GitHub Actions\. There's no Actions run or approval to link/);
+  // Every real recording on the page carries a proof line; dry runs say they aren't real.
+  const real = runs.filter((r) => r.source === 'recorded').length;
+  assert.equal((out.match(/<span class="muted">Proof:<\/span>/g) || []).length, real);
+  assert.match(out, /A dry run with the scripted mock: no model was called and nothing was spent\./);
+  assert.doesNotMatch(out, /No proof on file/);
+  // The opened run shows its proof too; a new run without a commit links the file's history.
+  const opened = String(agentRunsView(s, new URLSearchParams('run=2026-10-10-claude-haiku-5-5-shared.json'), { status: 'ready', runs }));
+  assert.match(opened, /actions\/runs\/38063334929/);
+  const fresh = { ...runs.find((r) => r.file === '2026-10-10-claude-haiku-5-5-shared.json'), file: 'new.json', proof: { via: 'github-actions', actionsRun: 5, approvedBy: 'pedringt', ledgerLine: 12 } };
+  assert.match(String(agentRunsView(s, new URLSearchParams('run=new.json'), { status: 'ready', runs: [fresh] })), /href="https:\/\/github\.com\/pedringt\/authority-lab\/commits\/main\/src\/data\/agent-runs\/new\.json">the commit that added it<\/a>/);
+});
