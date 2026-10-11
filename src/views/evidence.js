@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, badge, section, fmtDate, evidenceDetail } from '../ui.js';
+import { html, badge, section, fmtDate, evidenceDetail, lede } from '../ui.js';
 import { capData, getCapability, current, workspaceOf, gateEvidence } from '../store/index.js';
 import { requirementsList, proposedChangeLabel } from './capability.js';
 import { capabilityHeading, filterBar } from './tests.js';
@@ -62,7 +62,7 @@ export function evidenceView(state, capabilityId, query) {
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>${capabilityHeading(state, cap, 'Evidence for', (id) => `#/evidence?capability=${id}`)}</h1>
-      <p class="lede">Everything the authority decision rests on, from automated tests, the pilot, human review, operations, cost, incidents, user feedback and stakeholder assessment. Each item links back to where it came from.</p>
+      ${lede('Everything the authority decision rests on.', 'Evidence comes from automated tests, the pilot, human review, operations, cost, incidents, user feedback and stakeholder assessment. Each item links back to where it came from.')}
     </div>
   </div>
   ${all.length ? filters : ''}

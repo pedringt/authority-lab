@@ -604,3 +604,37 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .impact-rows input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
 .impact .form-error { margin-top: 10px; }
 @media (max-width: 640px) { .impact-rows { grid-template-columns: 1fr; } .impact-rows .fact-label:nth-child(2) { display: none; } }
+
+/* ROI (B2) */
+.roi-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.roi-form { display: grid; gap: 10px; margin-top: 10px; }
+
+/* Rollout plan (C1) */
+.rollout { display: grid; gap: 10px; }
+.rollout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.rollout select, .rollout input, .rollout textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
+
+/* Page intros (#93) */
+.how { margin: 4px 0 0; max-width: 70ch; font-size: 14px; color: var(--text-2); }
+.how summary { cursor: pointer; color: var(--link); font-size: 13px; width: max-content; }
+.how p { margin: 6px 0 0; }
+
+/* Header: Demo menu and People link (#93) */
+.demo-menu > summary.acting-demo { cursor: pointer; margin-right: 0; }
+.demo-menu > summary.acting-demo::after { content: ' ▾'; }
+.demo-menu .menu-list { left: 0; right: auto; }
+.menu-item { appearance: none; background: none; border: 0; text-align: left; padding: 7px 10px; border-radius: 4px; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; }
+.menu-item:hover { background: var(--neutral-bg); }
+.menu-note { margin: 4px 10px 6px; font-size: 12px; color: var(--muted); max-width: 26ch; }
+.header-link { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.subnav { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+
+/* Agent runs (#93) */
+.metric-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+@media (max-width: 640px) { .metric-grid-3 { grid-template-columns: 1fr; } }
+.run-block summary, .earlier > summary { cursor: pointer; }
+.run-block .table-card { margin: 10px 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.earlier { margin-top: 12px; }
+.earlier > summary { font-weight: 600; margin-bottom: 10px; }
+.tab-intro { margin-top: 0; }
+.how-tab { margin: -4px 0 12px; }

@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, section, capStatusBadge, authorityBadge, levelScale, fmtDate, person, levelTip } from '../ui.js';
+import { html, section, capStatusBadge, authorityBadge, levelScale, fmtDate, person, levelTip, lede } from '../ui.js';
 import { authorityLabel, current, decisionRequired, lastEvaluated, workspaceOf, workflowOf } from '../store/index.js';
 
 export function capabilitiesView(state) {
@@ -18,7 +18,7 @@ export function capabilitiesView(state) {
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
       <h1>Authority map</h1>
-      <p class="lede">What the AI is allowed to do in this workflow, one capability at a time. Authority is earned per capability. Not every capability should reach Level 4; two here are intended to stay where they are.</p>
+      ${lede('What the AI is allowed to do in this workflow, one capability at a time.', 'Authority is earned per capability. Not every capability should reach Level 4; two here are intended to stay where they are.')}
     </div>
     <div class="page-actions"><a class="btn btn-primary" href="#/capabilities/new">Add capability</a></div>
   </div>

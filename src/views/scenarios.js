@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, fmtDate, selectField } from '../ui.js';
+import { html, raw, badge, notice, section, person, fmtDate, selectField, lede } from '../ui.js';
 import { getCapability, capData, actor, scenarioNudge } from '../store/index.js';
 
 export function scenariosEditorView(state, capabilityId, query) {
@@ -24,7 +24,7 @@ export function scenariosEditorView(state, capabilityId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 5</p>
       <h1>Scenario library</h1>
-      <p class="lede">Real-shaped cases in five groups: standard, ambiguous, adversarial, high impact and edge. Results are seeded and deterministic: the same scenario always gets the same recorded result, so the suite replays. ${d.testRun.lastRun ? 'Saving changes to the library clears the last run; the next run re-records results.' : ''}</p>
+      ${lede('Real-shaped cases in five groups: standard, ambiguous, adversarial, high impact and edge.', html`Results are seeded and deterministic: the same scenario always gets the same recorded result, so the suite replays. ${d.testRun.lastRun ? 'Saving changes to the library clears the last run; the next run re-records results.' : ''}`)}
     </div>
     <div class="page-actions">${hasStarter ? '' : html`<button class="btn" data-action="starter-add" data-capability="${cap.id}">Add starter set · Suggested by AI</button><p class="muted small">20 scenarios, four per group, phrased for ${cap.name}.</p>`}</div>
   </div>

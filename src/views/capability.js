@@ -1,30 +1,31 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
-import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES } from '../store/index.js';
+import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote, lede, subNav, tabIntro } from '../ui.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
 import { proposalsList, amendLink } from './proposals.js';
+import { rolloutList } from './decisions.js';
 import { evidenceSourcesCard } from './scenarios.js';
 
+// Five tabs (#93). Success criteria and Testing live under Evidence; the
+// waiting queue under Decisions. Old tab names still open the right view.
 const TABS = [
   ['contract', 'Contract'],
-  ['criteria', 'Success criteria'],
-  ['testing', 'Testing'],
   ['evidence', 'Evidence'],
   ['stakeholders', 'Stakeholders'],
-  ['decisions', 'Decision history'],
+  ['decisions', 'Decisions'],
   ['monitoring', 'Monitoring'],
-  ['waiting', 'Waiting for a person'],
 ];
+const OLD_TABS = { criteria: ['evidence', 'criteria'], testing: ['evidence', 'testing'], waiting: ['decisions', 'waiting'] };
 
 export function capabilityView(state, id, query) {
   const cap = getCapability(state, id);
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
   const d = capData(state, id);
   const requested = query.get('tab') || 'contract';
-  const tab = TABS.some(([k]) => k === requested) ? requested : 'contract';
+  const [tab, show] = OLD_TABS[requested] || [TABS.some(([k]) => k === requested) ? requested : 'contract', query.get('show')];
   const risk = current(state, id, 'risk');
   const r = readiness(state, id);
   const owner = person(cap.owner);
@@ -34,11 +35,12 @@ export function capabilityView(state, id, query) {
   const summary = html`<div class="card cap-summary">
     <div class="cap-summary-grid">
       ${kv([
+        // Current and proposed authority are shown once, on the strip below (#93).
         ['Status', html`${capStatusBadge(cap.status)}${cap.pilotLabel ? html` <span class="muted">${cap.pilotLabel}</span>` : ''}`],
-        ['Current authority', authorityBadge(cap.authority)],
-        ['Proposed authority', proposed ? authorityBadge(proposed) : html`<span class="muted">None proposed</span>`],
         ['Risk', html`${risk.impact} impact · ${risk.exposure} · ${risk.reversibility}`],
         ['Owner', html`${owner.name}, ${owner.role}`],
+        // C1: the rollout plan of the decision in force, if it has one.
+        ...(() => { const g = grantingRecord(state, id); return g && g.rolloutPlan ? [['Rollout', html`${g.rolloutPlan.ownerAt ? g.rolloutPlan.ownerAt.name : g.rolloutPlan.owner} · from ${fmtDate(g.rolloutPlan.startDate)} · review ${fmtDate(g.rolloutPlan.reviewDate)} · <a href="#/decisions/${g.id}">Plan</a>`]] : []; })(),
         ['Last evaluated', lastEvaluated(state, id) ? fmtDate(lastEvaluated(state, id)) : html`<span class="muted">Not yet</span>`],
         ['Evidence readiness', r.total
           ? html`${r.met} of ${r.total} requirements met${pending ? html` · <a href="#/capabilities/${cap.id}/decision">Open decision</a>` : ''}`
@@ -49,17 +51,23 @@ export function capabilityView(state, id, query) {
   </div>`;
 
   const tabs = html`<nav class="tabs" aria-label="Capability sections">${TABS
-    .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}${k === 'waiting' && waitingActions(state, cap.id).length ? html` <span class="nav-count">${waitingActions(state, cap.id).length}</span>` : ''}</a>`)}</nav>`;
+    .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}${k === 'decisions' && waitingActions(state, cap.id).length ? html` <span class="nav-count">${waitingActions(state, cap.id).length}</span>` : ''}</a>`)}</nav>`;
+  const base = `#/capabilities/${cap.id}`;
 
   let body;
   switch (tab) {
-    case 'criteria': body = criteriaTab(state, cap); break;
-    case 'testing': body = testingTab(state, cap); break;
-    case 'evidence': body = evidenceTab(state, cap, d); break;
+    case 'evidence': {
+      const v = ['criteria', 'testing'].includes(show) ? show : 'evidence';
+      body = html`${subNav([{ href: `${base}?tab=evidence`, label: 'Evidence', active: v === 'evidence' }, { href: `${base}?tab=evidence&show=criteria`, label: 'Success criteria', active: v === 'criteria' }, { href: `${base}?tab=evidence&show=testing`, label: 'Testing', active: v === 'testing' }], 'Evidence views')}${v === 'criteria' ? criteriaTab(state, cap) : v === 'testing' ? testingTab(state, cap) : evidenceTab(state, cap, d)}`;
+      break;
+    }
     case 'stakeholders': body = stakeholdersTab(state, cap, d); break;
-    case 'decisions': body = decisionsTab(state, cap); break;
+    case 'decisions': {
+      const v = show === 'waiting' ? 'waiting' : 'history';
+      body = html`${subNav([{ href: `${base}?tab=decisions`, label: 'History', active: v === 'history' }, { href: `${base}?tab=decisions&show=waiting`, label: 'Waiting for a person', active: v === 'waiting', count: waitingActions(state, cap.id).length }], 'Decision views')}${v === 'waiting' ? waitingTab(state, cap, query) : decisionsTab(state, cap)}`;
+      break;
+    }
     case 'monitoring': body = monitoringTab(state, cap, d); break;
-    case 'waiting': body = waitingTab(state, cap, query); break;
     default: body = contractTab(state, cap, d);
   }
 
@@ -67,7 +75,7 @@ export function capabilityView(state, id, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${workflowOf(state).name}</p>
       <h1>${cap.name}</h1>
-      <p class="lede">${cap.summary}${risk.note ? html` ${risk.note}` : ''}</p>
+      ${lede(cap.summary)}
     </div>
   </div>
   ${query.get('error') ? notice('fail', 'Could not complete that action', query.get('error')) : ''}
@@ -95,7 +103,7 @@ function contractTab(state, cap, d) {
   }
   const latest = contractVersions[contractVersions.length - 1];
   return html`
-    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment. <span class="muted">Version ${latest.version}, ${personAt(latest.authorAt, latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}</p>
+    ${tabIntro('What the AI may do on its own, what needs a person, and what it must never do.', 'The contract is enforced by software, not by the model\'s judgment.', html`<span class="muted">Version ${latest.version}, ${personAt(latest.authorAt, latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}`)}
     ${proposalsList(state, cap.id, 'contract')}
     ${contractReviewView(contractVersions[0].review)}
     <div class="contract-grid">
@@ -165,7 +173,7 @@ function waitingTab(state, cap, query) {
   };
   return html`
     ${error ? notice('fail', 'Could not record that decision', error) : ''}
-    <p class="muted">When the gate says an action needs a person, it waits here instead of running. ${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve. At most one action waits per order, and at most ${QUEUE_LIMIT} per capability; past that, new requests are blocked and an incident is opened.</p>
+    ${tabIntro('When the gate says an action needs a person, it waits here instead of running.', `${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve. At most one action waits per order, and at most ${QUEUE_LIMIT} per capability; past that, new requests are blocked and an incident is opened.`)}
     ${section(`Waiting (${waiting.length})`, waiting.length ? html`${waiting.map(card)}` : html`<p class="empty">Nothing is waiting for a person.</p>`)}
     ${decided.length ? section('Decided', html`${decided.map(card)}`) : ''}`;
 }
@@ -424,5 +432,74 @@ function monitoringTab(state, cap, d) {
     ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
         <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
     : '';
-  return html`${head}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
+  return html`${head}${reviewCard(state, cap, d)}${metrics}${expectedCard(state, cap)}${roiCard(state, cap)}${adoptionCard(state, cap)}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
+}
+
+// Where a number came from, always shown (B2): seeded demo data, or the gate log with its sources.
+const sourceTag = (source, seeded) => html`<span class="muted small">${source}</span>${seeded ? html` ${badge('neutral', 'Seeded')}` : ''}`;
+const money = (v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+// Adoption signals (C2): warnings, never blocking, each with what it saw,
+// why it matters and where the data came from.
+function adoptionCard(state, cap) {
+  const signals = adoptionSignals(state, cap.id);
+  const checked = 'Rubber-stamping, rising overrides, escalations left waiting and work-arounds outside the agent.';
+  const body = signals.length
+    ? signals.map((x) => html`<div class="notice notice-watch adoption-signal" role="status"><div class="notice-body"><strong>${x.title}</strong>${x.simulated ? html` ${badge('neutral', 'Simulated')}` : ''}
+        <p>${x.what}</p><p class="muted small">Why it matters: ${x.why}</p><p class="muted small">Source: ${x.source}.</p></div></div>`)
+    : notice('pass', 'No adoption warnings', `Checked: ${checked}`);
+  return section('Adoption signals', body, { subtitle: `Warnings only: they never block an action or a decision. ${signals.length ? `Checked: ${checked}` : ''}` });
+}
+
+// Expected vs actual (B2): each expected outcome on the record in force.
+function expectedCard(state, cap) {
+  const { record, rows } = expectedVsActual(state, cap.id);
+  if (!record) return '';
+  if (!rows.length) return section('Expected vs actual', html`<p class="empty">${record.id} was authorized before expected outcomes were required, so there is nothing to compare yet. The next expansion will carry them.</p>`);
+  const tone = { met: 'pass', 'not-met': 'fail', 'not-measured': 'neutral' };
+  const word = { met: 'Met', 'not-met': 'Not met', 'not-measured': 'Not measured' };
+  return section('Expected vs actual', html`<div class="card table-card"><table class="table">
+    <thead><tr><th>Expected outcome</th><th>Target</th><th>Actual</th><th>Status</th><th>Source</th></tr></thead>
+    <tbody>${rows.map((r) => html`<tr>
+      <td><strong>${r.metric}</strong>${r.measuredAs ? html`<div class="muted small">Compared with: ${r.measuredAs}</div>` : ''}</td>
+      <td>${r.target}</td>
+      <td>${r.actualText || html`<span class="muted">—</span>`}</td>
+      <td>${badge(tone[r.status], word[r.status])}${r.status === 'not-met' ? html`<div class="muted small">${r.gapText}</div>` : r.note ? html`<div class="muted small">${r.note}</div>` : ''}</td>
+      <td>${r.source ? sourceTag(r.source, r.seeded) : html`<span class="muted small">—</span>`}</td>
+    </tr>`)}</tbody>
+  </table></div>`, { subtitle: html`From <a href="#/decisions/${record.id}">${record.id}</a>, the decision in force. Each outcome is matched to a measured metric by its wording; one that doesn't match is shown as not measured, never guessed.` });
+}
+
+// A simple ROI (B2), every assumption visible, versioned with author and reason.
+function roiCard(state, cap) {
+  const a = currentRoiAssumptions(state, cap.id);
+  if (!a) return '';
+  const r = roi(state, cap.id);
+  const who = actor(state, cap.id);
+  const e = roiEditEligibility(state, cap.id, who);
+  const by = personAt(a.byAt, a.by);
+  const versions = roiVersions(state, cap.id);
+  const result = r ? html`<div class="metric-grid metric-grid-4">
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Cases handled by the AI</span></div><div class="metric-value">${r.automated.toLocaleString('en-US')}</div><div class="metric-note">a month, at ${r.inputs.automationRate.value}% automation</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Human hours saved</span></div><div class="metric-value">${Math.round(r.hoursSaved)}</div><div class="metric-note">${money(r.laborSaved)} a month</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">AI cost</span></div><div class="metric-value">${money(r.aiCost)}</div><div class="metric-note">a month, at $${r.inputs.aiCostPerCase.value.toFixed(2)} a case</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Net a month</span>${badge(r.net >= 0 ? 'pass' : 'fail', r.roiPct != null ? `ROI ${r.roiPct}%` : '')}</div><div class="metric-value">${money(r.net)}</div><div class="metric-note">hours saved × hourly cost − AI cost</div></div>
+    </div>` : html`<p class="empty">The ROI appears once there is an automation rate to work from: after an expansion to automatic action, from the monitoring window or the gate log.</p>`;
+  const inputs = r ? html`<li><strong>Automation rate:</strong> ${r.inputs.automationRate.value}% · ${sourceTag(r.inputs.automationRate.source, r.inputs.automationRate.seeded)}</li>
+      <li><strong>AI cost per case:</strong> $${r.inputs.aiCostPerCase.value.toFixed(2)} · ${sourceTag(r.inputs.aiCostPerCase.source, r.inputs.aiCostPerCase.seeded)}</li>` : '';
+  const form = html`<details class="card"><summary>Change the assumptions (creates version ${a.version + 1})</summary>
+    <form class="roi-form" data-form="roi-assumptions" data-capability="${cap.id}">
+      <div class="roi-fields">${ROI_FIELDS.map((f) => html`<label class="field field-stack"><span>${f.label} (${f.unit})</span><input type="number" name="${f.key}" step="any" min="${f.min}" max="${f.max}" value="${a.values[f.key]}" required></label>`)}</div>
+      <label class="field field-stack"><span>Why they changed</span><textarea name="reason" rows="2" required></textarea></label>
+      ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} Switch who is acting in the header.</p>`}
+      <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Save as version ${a.version + 1}</button>
+      <p class="muted small">Earlier versions never change. The owner or a named stakeholder can change them.</p>
+    </form></details>`;
+  return section('Return on investment', html`${result}
+    <div class="card">
+      <p class="eyebrow">Assumptions, version ${a.version}${a.seeded ? html` ${badge('neutral', 'Seeded demo data')}` : ''}</p>
+      <ul class="plain-list">${ROI_FIELDS.map((f) => html`<li><strong>${f.label}:</strong> ${f.unit === '$' ? `$${a.values[f.key]}` : `${a.values[f.key].toLocaleString('en-US')} ${f.unit}`}</li>`)}${inputs}</ul>
+      <p class="muted small">Set by ${by.name}, ${by.role}, on ${fmtDate(a.date)}. Reason: ${a.reason}</p>
+      ${versions.length > 1 ? html`<details><summary>Earlier versions (${versions.length - 1})</summary><ul class="plain-list">${versions.slice(0, -1).reverse().map((v) => html`<li><strong>v${v.version}</strong>, ${fmtDate(v.date)}, ${personAt(v.byAt, v.by).name}: ${ROI_FIELDS.map((f) => `${f.label.toLowerCase()} ${v.values[f.key]}`).join('; ')}. <span class="muted small">${v.reason}</span></li>`)}</ul></details>` : ''}
+    </div>${form}`, { subtitle: 'A simple monthly estimate: the human time saved on cases the AI handles on its own, less what the AI costs on every case. It leaves out review time on escalations and set-up costs.' });
 }

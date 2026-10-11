@@ -823,6 +823,41 @@ export const defaultOutcomes = [
   { metric: 'Override rate on automatic refunds', target: '≤ 8%' },
 ];
 
+// The seeded expansion's rollout plan (C1), prefilled for the demo.
+export const defaultRollout = {
+  owner: 'priya',
+  scope: 'Standard refunds of $50 or less in the Tier 1 refunds queue, all regions, within the conditions on the decision. High-value, fraud-flagged, chargeback and policy-exception cases stay with agents.',
+  startDate: '2026-10-08',
+  feedbackChannel: '#refund-ai-feedback, and the "AI refund" tag in the helpdesk',
+  reviewerNotes: 'Refunds the AI issues on its own carry an "AI refund" tag. Reverse any you disagree with and say why in the ticket; reversals feed the override rate. Anything the AI sends you is waiting for a person in the queue: approve or reject it there, with a reason.',
+  reviewDate: '2026-10-22',
+};
+
+// Adoption data for Refund recommendation (C2). Simulated: the demo has no
+// clock for how long a review took and no weekly history, so these are made
+// up for the demo and labelled "Simulated demo data" wherever they show.
+export const adoption = {
+  // Pilot reviews: outcome, and seconds from opening the case to deciding.
+  reviewLog: [6, 4, 9, 5, 7, 12, 3, 8, 6, 5, 11, 4, 7, 6, 9, 5, 8, 4, 6, 10, 7, 5, 30, 6].map((seconds, i) => ({ seconds, outcome: i === 22 ? 'rejected' : 'approved' })),
+  // Weekly override rate on the pilot, oldest first.
+  overrideWeeks: [{ week: '2026-09-15', rate: 7 }, { week: '2026-09-22', rate: 9 }, { week: '2026-09-29', rate: 11 }, { week: '2026-10-06', rate: 12 }],
+};
+
+// ROI assumptions for Refund recommendation (B2), version 1. Seeded demo data:
+// fictional, and labelled as seeded wherever it shows.
+export const roiAssumptions = [
+  {
+    version: 1,
+    values: { monthlyCases: 1100, humanMinutesPerCase: 8, humanCostPerHour: 36 },
+    by: 'elena',
+    // A person snapshot, in the same shape as snapshotPerson.
+    byAt: { key: 'elena', name: 'Elena Rossi', title: 'Finance Business Partner', team: 'Finance', rights: { riskApprover: false, workspaceAdmin: false }, active: true },
+    reason: 'Starting assumptions for the refund business case: pilot volume (218 cases in 6 days, about 1,100 a month), the support team\'s handling-time estimate, and Finance\'s loaded hourly rate.',
+    date: '2026-10-06',
+    seeded: true,
+  },
+];
+
 export const defaultRationale =
   'Standard refund performance exceeds quality thresholds and has sufficient pilot volume. High-value cases remain under-tested, so authority will expand only for low-value standard refunds.';
 
@@ -1054,8 +1089,11 @@ export const capabilityData = {
     defaultConditions,
     defaultRationale,
     defaultOutcomes,
+    defaultRollout,
     pendingDecision: { level: 3, limited: true },
     monitoringRule: monitoringSeed,
+    roiAssumptions,
+    adoption,
     breach: breachSeed,
     lastTestRun: '2026-10-03',
   },

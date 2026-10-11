@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, fmtDate } from '../ui.js';
+import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS } from '../store/index.js';
 import { diffTable } from './activity.js';
 
@@ -26,7 +26,7 @@ export function contractBuilderView(state, capabilityId, query) {
   }
 
   if (!draft) {
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 2</p><h1>Contract builder</h1><p class="lede">A starter contract is picked from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown exposure').toLowerCase()}). Seeded suggestions are added from the capability's name and summary, each labelled <strong>Suggested by AI</strong>. You review every suggestion one by one, confirm all five sections, pass the software checks, and a named person finalizes contract v1.</p></div></div>
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 2</p><h1>Contract builder</h1>${lede(html`A starter contract picked from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown exposure').toLowerCase()}).`, html`Seeded suggestions are added from the capability's name and summary, each labelled <strong>Suggested by AI</strong>. You review every suggestion one by one, confirm all five sections, pass the software checks, and a named person finalizes contract v1.`)}</div></div>
       ${error ? notice('fail', 'Could not start the draft', error) : ''}
       <div class="card"><p>Starting as <strong>${acting.name}</strong>, ${acting.role}.</p><button class="btn btn-primary" data-action="contract-start" data-capability="${cap.id}">Start from the template</button></div>`;
   }
@@ -71,7 +71,7 @@ export function contractBuilderView(state, capabilityId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 2</p>
       <h1>Contract builder</h1>
-      <p class="lede">Template <strong>${draft.templateName}</strong>, picked from the risk profile. ${draft.lines.filter((l) => l.source === 'ai').length} suggestions from the name and summary, labelled "Suggested by AI". Each is accepted, edited or rejected on its own; there is no accept-all. Rejected suggestions stay in the record.</p>
+      ${lede(html`Template <strong>${draft.templateName}</strong>, picked from the risk profile.`, html`${draft.lines.filter((l) => l.source === 'ai').length} suggestions from the name and summary, labelled "Suggested by AI". Each is accepted, edited or rejected on its own; there is no accept-all. Rejected suggestions stay in the record.`)}
     </div>
   </div>
   ${error ? notice('fail', 'Could not apply that change', error) : ''}
