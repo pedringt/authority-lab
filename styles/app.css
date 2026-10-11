@@ -598,3 +598,9 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .run-message { font-style: italic; margin: 0 0 6px; }
 .run-ticket .table-card { border: 1px solid var(--border); border-radius: var(--radius); margin: 10px 0; }
 .run-set-head { font-size: 15px; margin: 18px 0 8px; }
+
+/* Expected impact (B1) */
+.impact-rows { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px 10px; }
+.impact-rows input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 14px; }
+.impact .form-error { margin-top: 10px; }
+@media (max-width: 640px) { .impact-rows { grid-template-columns: 1fr; } .impact-rows .fact-label:nth-child(2) { display: none; } }

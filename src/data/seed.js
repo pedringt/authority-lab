@@ -814,6 +814,15 @@ export const defaultConditions = {
   maxDailyCount: 20,
 };
 
+// What the seeded expansion is expected to achieve (B1), prefilled for the
+// demo. A little more ambitious than the pilot (42% faster resolution, $0.08
+// AI cost per case, 11% override rate), so B2 has a real gap to show.
+export const defaultOutcomes = [
+  { metric: 'Resolution time, standard refunds', target: 'at least 50% faster' },
+  { metric: 'AI cost per case', target: '≤ $0.06' },
+  { metric: 'Override rate on automatic refunds', target: '≤ 8%' },
+];
+
 export const defaultRationale =
   'Standard refund performance exceeds quality thresholds and has sufficient pilot volume. High-value cases remain under-tested, so authority will expand only for low-value standard refunds.';
 
@@ -1044,6 +1053,7 @@ export const capabilityData = {
     recommendation: systemRecommendation,
     defaultConditions,
     defaultRationale,
+    defaultOutcomes,
     pendingDecision: { level: 3, limited: true },
     monitoringRule: monitoringSeed,
     breach: breachSeed,

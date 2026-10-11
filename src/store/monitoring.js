@@ -1,7 +1,7 @@
 // Monitoring: the restriction rules read from the contract, a simulated
 // breach, and the automatic restriction it triggers.
 
-import { getCapability, capData, updateCap } from './state.js';
+import { getCapability, capData, updateCap, closeOpenProposal } from './state.js';
 import { versionsInForce, authorityLabel, current, currentVersion, levelName } from './selectors.js';
 import { people, snapshotPerson, isActivePerson, isRiskApprover } from './people.js';
 import { isHighOrFinancial } from './coverage.js';
@@ -199,7 +199,8 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
       ...(windowed ? { severeErrorsInWindow: severeErrorsInWindow, autonomousActions: m.autonomousActions + 7, incidents: (m.incidents || 0) + 1 } : {}),
     },
   });
-  return { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity, alerts: [alert, ...state.alerts] };
+  // An open proposal to expand doesn't survive the drop.
+  return closeOpenProposal({ ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity, alerts: [alert, ...state.alerts] }, capabilityId, previous, next);
 }
 
 // ---------------------------------------------------------------------------

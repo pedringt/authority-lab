@@ -20,9 +20,10 @@ import {
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
   parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
+  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
-import { decisionRecordView } from '../src/views/decisions.js';
+import { decisionRecordView, decisionWorkspaceView } from '../src/views/decisions.js';
 import { capabilityView } from '../src/views/capability.js';
 import { evidenceView } from '../src/views/evidence.js';
 import { proposalView } from '../src/views/proposals.js';
@@ -1280,7 +1281,11 @@ test('a new capability can reach its second record: propose a move to Draft afte
   assert.deepEqual(proposedAuthority(s, id), { level: 2, limited: false });
   assert.equal(s.activity[0].kind, 'decision');
   assert.throws(() => proposeAuthority(s, id, 2, { by: 'priya' }), /already open/);
-  s = authorize(selectDecision(s, id, 'expand'), id, { by: 'priya' });
+  // B1: a move up needs its expected impact.
+  s = selectDecision(s, id, 'expand');
+  s = setOutcome(setOutcome(s, id, 0, 'metric', 'Edit rate on drafts'), id, 0, 'target', '≤ 20%');
+  s = setOutcome(setOutcome(s, id, 1, 'metric', 'Time to first response'), id, 1, 'target', 'at least 25% faster');
+  s = authorize(s, id, { by: 'priya' });
   const c = getCapability(s, id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
   assert.equal(c.status, 'pilot');
@@ -1323,6 +1328,11 @@ test('end to end in the store: add → contract → criteria → stakeholders �
   // Decision.
   store.dispatch('proposeAuthority', id, 2, { by: 'priya' });
   store.dispatch('selectDecision', id, 'expand');
+  // B1: a move up needs its expected impact.
+  store.dispatch('setOutcome', id, 0, 'metric', 'Edit rate on drafts');
+  store.dispatch('setOutcome', id, 0, 'target', '≤ 20%');
+  store.dispatch('setOutcome', id, 1, 'metric', 'Time to first response');
+  store.dispatch('setOutcome', id, 1, 'target', 'at least 25% faster');
   store.dispatch('authorize', id, { by: 'priya' });
   const c = getCapability(store.get(), id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
@@ -3362,4 +3372,178 @@ test('sender: a refund waiting for a person keeps its ticket, and the approval r
   // A named stakeholder approves: the re-check sees the same reasons, so it executes.
   const after = approveAction(out.state, item.id, { by: 'maya', reason: 'Checked with Daniel directly; the refund is fine.' });
   assert.equal(queuedAction(after, item.id).status, 'executed');
+});
+
+// B1 (#72): expected impact required to authorize an expansion.
+const pendingRR = () => selectDecision(initialState(), RR, 'expand-limits');
+const withRows = (s, rows, cap = RR) => {
+  for (let i = 0; i < OUTCOMES_MAX; i++) {
+    const r = rows[i] || { metric: '', target: '' };
+    s = setOutcome(setOutcome(s, cap, i, 'metric', r.metric), cap, i, 'target', r.target);
+  }
+  return s;
+};
+
+test('B1: the seeded expansion carries plausible expected outcomes and the demo story still authorizes', () => {
+  const s0 = pendingRR();
+  assert.equal(canAuthorize(s0, RR).ok, true);
+  const s = authorize(s0, RR);
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual(rec.expectedOutcomes.map((o) => [o.metric, o.target, o.value, o.unit]), [
+    ['Resolution time, standard refunds', 'at least 50% faster', 50, '%'],
+    ['AI cost per case', '≤ $0.06', 0.06, '$'],
+    ['Override rate on automatic refunds', '≤ 8%', 8, '%'],
+  ]);
+  // Prefilled for the demo, and a little more ambitious than the pilot (42% faster, $0.08, 11%).
+  assert.equal(rec.outcomesPrefilled, true);
+  const p = capData(s0, RR).pilot;
+  assert.ok(50 > Math.abs(p.resolutionChange) && 0.06 < p.costPerCase && 8 < p.overrideRate);
+  // Edited outcomes aren't labelled prefilled.
+  const edited = authorize(setOutcome(s0, RR, 1, 'target', '≤ $0.07'), RR).decisionRecords.at(-1);
+  assert.equal(edited.outcomesPrefilled, undefined);
+});
+
+test('B1 bypass: no outcomes, one outcome, outcomes without numbers and more than four are all refused', () => {
+  const cases = [
+    ['none', []],
+    ['one', [{ metric: 'Resolution time', target: '−40%' }]],
+    ['no numbers', [{ metric: 'Resolution time', target: 'much faster' }, { metric: 'Customer happiness', target: 'higher' }]],
+    ['a number in the metric only', [{ metric: 'Top 10 complaints', target: 'fewer' }, { metric: 'Cost per case', target: 'lower' }]],
+    ['blank metric', [{ metric: '', target: '−40%' }, { metric: '  ', target: '≤ $0.20' }]],
+    ['duplicate metric', [{ metric: 'Cost per case', target: '≤ $0.20' }, { metric: 'cost per case', target: '≤ $0.10' }]],
+  ];
+  for (const [name, rows] of cases) {
+    const s = withRows(pendingRR(), rows);
+    const c = canAuthorize(s, RR);
+    assert.equal(c.ok, false, name);
+    assert.match(c.reason, /^Expected impact:/, name);
+    assert.throws(() => authorize(s, RR), /Expected impact/, `${name}: authorize refuses too`);
+  }
+  // Five rows can't even be entered: there are four.
+  assert.throws(() => setOutcome(pendingRR(), RR, 4, 'metric', 'Fifth'), /row 1 to 4/);
+  assert.equal(outcomeChecks([1, 2, 3, 4, 5].map((n) => ({ metric: `Metric ${n}`, target: `${n}%` }))).ok, false, 'more than four is refused');
+  // Two good outcomes are enough.
+  const ok = withRows(pendingRR(), [{ metric: 'Resolution time', target: '−40%' }, { metric: 'Cost per case', target: '< $0.20' }]);
+  assert.equal(canAuthorize(ok, RR).ok, true);
+});
+
+test('B1 bypass: expected outcomes can\'t be edited after authorization', () => {
+  const s = authorize(pendingRR(), RR);
+  const rec = s.decisionRecords.at(-1);
+  // The open decision is closed, so there is nothing to edit through.
+  assert.throws(() => setOutcome(s, RR, 0, 'target', 'at least 90% faster'), /can't be edited after authorization/);
+  // And the record itself is frozen in place.
+  assert.ok(Object.isFrozen(rec.expectedOutcomes) && Object.isFrozen(rec.expectedOutcomes[0]));
+  assert.throws(() => { rec.expectedOutcomes[0].target = 'at least 90% faster'; }, TypeError);
+  assert.throws(() => { rec.expectedOutcomes.push({ metric: 'x', target: '1' }); }, TypeError);
+  assert.equal(s.decisionRecords.at(-1).expectedOutcomes[0].target, 'at least 50% faster');
+});
+
+test('B1: restrict, suspend, redesign and hold need no expected outcomes; any move up does', () => {
+  for (const option of ['restrict', 'suspend', 'redesign', 'hold']) {
+    const s = withRows(selectDecision(initialState(), RR, option), []);
+    assert.equal(isExpansion(s, RR, option), false, option);
+    assert.equal(canAuthorize(s, RR).ok, true, option);
+    assert.equal(authorize(s, RR).decisionRecords.at(-1).expectedOutcomes, null, `${option} records none`);
+  }
+  for (const option of ['expand', 'expand-limits']) assert.equal(isExpansion(pendingRR(), RR, option), true, option);
+});
+
+test('B1: a target\'s number and unit are parsed for later comparison (B2)', () => {
+  assert.deepEqual(parseTarget('resolution time −40%'), { value: -40, unit: '%' });
+  assert.deepEqual(parseTarget('< $0.20'), { value: 0.2, unit: '$' });
+  assert.deepEqual(parseTarget('≤ 15% escalated'), { value: 15, unit: '%' });
+  assert.deepEqual(parseTarget('at most 3 incidents'), { value: 3, unit: null });
+  assert.equal(parseTarget('lower'), null);
+});
+
+test('B1: the decision workspace asks for expected outcomes on an expansion, and the record shows them', () => {
+  const s = pendingRR();
+  const page = String(decisionWorkspaceView(s, RR));
+  assert.match(page, /Expected impact/);
+  assert.match(page, /data-action="set-outcome"/);
+  assert.match(page, /Resolution time, standard refunds/);
+  const restrict = String(decisionWorkspaceView(selectDecision(initialState(), RR, 'restrict'), RR));
+  assert.doesNotMatch(restrict, /data-action="set-outcome"/, 'not asked for a restriction');
+  const after = authorize(s, RR);
+  const rec = String(decisionRecordView(after, after.decisionRecords.at(-1).id));
+  assert.match(rec, /Expected impact/);
+  assert.match(rec, /at least 50% faster/);
+  assert.match(rec, /Prefilled for the demo/);
+  assert.match(page, /Prefilled for the demo/);
+  // An expansion recorded before B1 says so instead.
+  const older = initialState().decisionRecords.find((r) => r.next && r.previous && r.next.level > r.previous.level);
+  assert.ok(older, 'the seed has an earlier expansion');
+  assert.match(String(decisionRecordView(initialState(), older.id)), /before expected outcomes were required/);
+});
+
+// Review of #89: an open expansion proposal must not survive a drop in authority.
+const atL3WithL4Proposal = () => proposeAuthority(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 4, { by: 'maya' });
+// Select an expansion with a rationale and two outcomes. The outcomes are
+// written straight into the state, as a crafted state would: with no open
+// decision, setOutcome itself refuses, and the checks behind it must hold too.
+const tryExpand = (s, option = 'expand') => {
+  s = setRationale(selectDecision(s, RR, option), RR, 'Going up again after the incident review was recorded.');
+  const d = capData(s, RR);
+  return { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...d, decision: { ...d.decision, outcomes: [{ metric: 'Resolution time', target: '50% faster' }, { metric: 'Cost per case', target: '< $0.05' }] } } } };
+};
+const closedNote = (s) => s.activity.find((a) => /^Proposal closed: authority changed from Level \d to Level \d/.test(a.title));
+
+test('#89 loophole: an automatic restriction closes an open proposal, so L2 → L4 in one step is impossible', () => {
+  let s = atL3WithL4Proposal();
+  assert.equal(capData(s, RR).decision.proposed.level, 4);
+  s = simulateBreach(s, RR);
+  assert.equal(getCapability(s, RR).authority.level, 2);
+  assert.equal(capData(s, RR).decision.proposed, null, 'the proposal is closed');
+  assert.match(closedNote(s).title, /from Level 3 to Level 2/);
+  assert.match(closedNote(s).body, /proposal to move to Level 4/);
+  s = recordReview(s, RR, { by: 'daniel', whatHappened: 'Severe error rate crossed the threshold.', cause: 'Idempotency check failed on retries.', changes: 'Added a duplicate guard and a test.' });
+  // The probe: select Expand, rationale, two outcomes, authorize. Entering
+  // outcomes is already refused (no open decision)...
+  assert.throws(() => setOutcome(selectDecision(s, RR, 'expand'), RR, 0, 'metric', 'Resolution time'), /No decision is open/);
+  // ...and with them forced into the state, authorizing is refused too.
+  const probe = tryExpand(s);
+  assert.equal(canAuthorize(probe, RR).ok, false);
+  assert.match(canAuthorize(probe, RR).reason, /No authority change is proposed/);
+  assert.throws(() => authorize(probe, RR));
+  assert.equal(getCapability(probe, RR).authority.level, 2);
+  // A new proposal can only be one level up from the new level.
+  assert.throws(() => proposeAuthority(s, RR, 4, { by: 'maya' }), /next level is 3/);
+  const again = tryExpand(proposeAuthority(s, RR, 3, { by: 'maya' }), 'expand-limits');
+  assert.equal(authorize(again, RR).capabilities.find((c) => c.id === RR).authority.level, 3);
+});
+
+test('#89 loophole: a restriction from the gate log closes an open proposal too', () => {
+  let s = atL3WithL4Proposal();
+  for (let i = 0; i < 3; i++) s = callTool(s, RR, { ...refund('ORD-5003', 10) }).state; // three must-never attempts
+  assert.equal(getCapability(s, RR).authority.level, 2);
+  assert.equal(capData(s, RR).decision.proposed, null);
+  assert.ok(closedNote(s));
+});
+
+test('#89 loophole: a restrict, suspend or redesign decided while a proposal is open closes it, and says so', () => {
+  for (const option of ['restrict', 'suspend', 'redesign']) {
+    let s = setRationale(selectDecision(atL3WithL4Proposal(), RR, option), RR, `Deciding to ${option} instead of expanding further.`);
+    s = authorize(s, RR);
+    assert.ok(getCapability(s, RR).authority.level < 3, option);
+    assert.equal(capData(s, RR).decision.proposed, null, `${option}: proposal closed`);
+    assert.ok(closedNote(s), `${option}: recorded in Activity`);
+    assert.equal(canAuthorize(tryExpand(s), RR).ok, false, `${option}: no expansion without a new proposal`);
+  }
+});
+
+test('#89 loophole: a stale proposal (equal, below, or more than one level up) never authorizes, and never falls back to Level 3', () => {
+  const base = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR); // at Level 3
+  const withProposal = (s, level) => ({ ...s, capabilityData: { ...s.capabilityData, [RR]: { ...capData(s, RR), decision: { ...capData(s, RR).decision, proposed: { level, limited: false } } } } });
+  for (const level of [3, 2, 1, 5]) {
+    const s = tryExpand(withProposal(base, level));
+    const c = canAuthorize(s, RR);
+    assert.equal(c.ok, false, `proposal for Level ${level} at Level 3`);
+    assert.match(c.reason, /Propose the next level, Level 4, again/);
+    assert.throws(() => authorize(s, RR));
+  }
+  // nextAuthority moves exactly one level, to the proposal, or not at all.
+  assert.deepEqual(nextAuthority('expand', { level: 2, limited: false }, { level: 4 }), { level: 2, limited: false });
+  assert.deepEqual(nextAuthority('expand-limits', { level: 2, limited: false }, null), { level: 2, limited: false });
+  assert.deepEqual(nextAuthority('expand-limits', { level: 2, limited: false }, { level: 3 }), { level: 3, limited: true });
 });

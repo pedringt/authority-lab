@@ -58,11 +58,14 @@ export function scopeText(option, conditions, cap, next = null) {
   }
 }
 
+// An expansion moves exactly one level, to the open proposal. Without a
+// proposal for the next level up there is no expansion: authority stays as
+// it is (it never falls back to a default level).
 export function nextAuthority(option, current, proposed = null) {
-  const target = proposed && proposed.level > current.level ? proposed.level : 3;
+  const oneUp = proposed && proposed.level === current.level + 1 ? proposed.level : null;
   switch (option) {
-    case 'expand': return { level: target, limited: false };
-    case 'expand-limits': return { level: target, limited: true };
+    case 'expand': return oneUp ? { level: oneUp, limited: false } : { ...current };
+    case 'expand-limits': return oneUp ? { level: oneUp, limited: true } : { ...current };
     case 'hold': return { ...current };
     case 'restrict': return { level: Math.max(0, current.level - 1), limited: false };
     case 'suspend': return { level: 0, limited: false };
@@ -109,11 +112,76 @@ export function setRationale(state, capabilityId, rationale) {
   return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rationale } }));
 }
 
+// Expected impact (roadmap item 9, B1, #72). Authorizing an expansion (any
+// decision that raises the level) needs 2 to 4 expected outcomes, each a
+// metric with a numeric target. They go on the decision record and never
+// change. Restrict, suspend, redesign and hold don't need them.
+export const OUTCOMES_MIN = 2;
+export const OUTCOMES_MAX = 4;
+
+// The number in a target, with its unit: "−40%" → { value: -40, unit: '%' },
+// "< $0.20" → { value: 0.2, unit: '$' }. Null when there is no number.
+export function parseTarget(target) {
+  const m = String(target || '').match(/([-−+])?\s*(\$)?\s*(\d+(?:\.\d+)?)\s*(%)?/);
+  if (!m) return null;
+  const sign = m[1] === '-' || m[1] === '−' ? -1 : 1;
+  return { value: sign * Number(m[3]), unit: m[4] ? '%' : m[2] ? '$' : null };
+}
+
+// Filled rows (a metric or a target typed), and what's wrong with them.
+export function outcomeChecks(outcomes) {
+  const rows = (Array.isArray(outcomes) ? outcomes : []).map((o) => ({ metric: String((o && o.metric) || '').trim(), target: String((o && o.target) || '').trim() }));
+  const filled = rows.filter((o) => o.metric || o.target);
+  const errors = [];
+  if (filled.length < OUTCOMES_MIN) errors.push(`Add at least ${OUTCOMES_MIN} expected outcomes, each with a number (for example "Resolution time: at least 35% faster").`);
+  if (filled.length > OUTCOMES_MAX) errors.push(`At most ${OUTCOMES_MAX} expected outcomes.`);
+  filled.forEach((o, i) => {
+    if (o.metric.length < 3) errors.push(`Outcome ${i + 1} needs a metric.`);
+    if (o.metric.length > 80 || o.target.length > 60) errors.push(`Outcome ${i + 1} is too long.`);
+    if (!parseTarget(o.target)) errors.push(`Outcome ${i + 1} needs a target with a number.`);
+  });
+  const metrics = filled.map((o) => o.metric.toLowerCase());
+  if (new Set(metrics).size !== metrics.length) errors.push('Each expected outcome needs a different metric.');
+  return { ok: !errors.length, errors, outcomes: filled.map((o) => ({ ...o, ...parseTarget(o.target) })) };
+}
+
+// Does this decision raise the capability's authority?
+export function isExpansion(state, capabilityId, option) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap || !option) return false;
+  return nextAuthority(option, cap.authority, proposedAuthority(state, capabilityId)).level > cap.authority.level;
+}
+
+// Edit one expected-outcome row on the open decision. Refused once the
+// decision is recorded: the outcomes are part of the record from then on.
+export function setOutcome(state, capabilityId, index, field, value) {
+  if (!decisionRequired(state, capabilityId)) throw new Error('No decision is open. Expected outcomes are part of the decision record and can\'t be edited after authorization.');
+  const i = Number(index);
+  if (!(Number.isInteger(i) && i >= 0 && i < OUTCOMES_MAX)) throw new Error(`An expected outcome is row 1 to ${OUTCOMES_MAX}.`);
+  if (field !== 'metric' && field !== 'target') throw new Error('An expected outcome has a metric and a target.');
+  return updateCap(state, capabilityId, (d) => {
+    const rows = Array.from({ length: OUTCOMES_MAX }, (_, k) => ({ metric: '', target: '', ...((d.decision.outcomes || [])[k] || {}) }));
+    rows[i] = { ...rows[i], [field]: String(value ?? '') };
+    return { ...d, decision: { ...d.decision, outcomes: rows, outcomesPrefilled: false } };
+  });
+}
+
+const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === 'object') deepFreeze(v); }); return Object.freeze(o); };
+
 export function canAuthorize(state, capabilityId) {
   const d = capData(state, capabilityId).decision;
   if (!d.option) return { ok: false, reason: 'Choose a decision option first.' };
   if ((d.option === 'expand' || d.option === 'expand-limits') && !d.proposed) return { ok: false, reason: 'No authority change is proposed for this capability. Propose the next level first.' };
+  // Belt and braces: the proposal must be for exactly one level up from now.
+  if (d.option === 'expand' || d.option === 'expand-limits') {
+    const cap = getCapability(state, capabilityId);
+    if (d.proposed.level !== cap.authority.level + 1) return { ok: false, reason: `The open proposal is for Level ${d.proposed.level}, but ${cap.name} is at Level ${cap.authority.level}. Propose the next level, Level ${cap.authority.level + 1}, again.` };
+  }
   if (!d.rationale || d.rationale.trim().length < 20) return { ok: false, reason: 'Write a decision rationale (at least a sentence).' };
+  if (isExpansion(state, capabilityId, d.option)) {
+    const oc = outcomeChecks(d.outcomes);
+    if (!oc.ok) return { ok: false, reason: `Expected impact: ${oc.errors[0]}` };
+  }
   const expanding = d.option === 'expand' || d.option === 'expand-limits';
   if (expanding && capData(state, capabilityId).reviewRequired) {
     return { ok: false, reason: 'A post-incident review must be recorded before authority can expand again.' };
@@ -178,6 +246,10 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
     openCondition: openConditionText(option, state, capabilityId),
     conditions: option === 'expand-limits' && next.level >= 3 ? { ...d.decision.conditions } : null,
+    // B1: what this expansion is expected to achieve, fixed from here on.
+    expectedOutcomes: next.level > previous.level ? deepFreeze(outcomeChecks(d.decision.outcomes).outcomes) : null,
+    // Authorized as prefilled for the demo, unedited: the record says so.
+    ...(next.level > previous.level && d.decision.outcomesPrefilled ? { outcomesPrefilled: true } : {}),
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
@@ -219,8 +291,14 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'Authority automatically returns to Draft if the severe error rate exceeds 5% across the rolling 50-case window.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
-  const s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null }, monitoring });
-  return { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null }, monitoring });
+  s = { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
+  // A restrict, suspend or redesign decided while a proposal to expand was
+  // open closes that proposal too, and says so.
+  if (d.decision.proposed && next.level < previous.level) {
+    s = logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: the open proposal to move to Level ${d.decision.proposed.level} was closed by this ${option} decision (${id}). Any expansion needs a new proposal, one level up from Level ${next.level}.`, capabilityId: cap.id, link: `#/decisions/${id}` });
+  }
+  return s;
 }
 
 // Open an authority decision for a capability: propose the next level. Needs
