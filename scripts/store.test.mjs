@@ -3886,3 +3886,36 @@ test('#95: Monitoring has a Health view and a Value view; Value counts what need
   assert.match(value, /Adoption signals/);
   assert.doesNotMatch(value, /Restriction rules/);
 });
+
+test('#96: the decision page numbers its steps and the checklist says exactly what blocks Authorize', () => {
+  const marks = (page) => [...page.matchAll(/<li class="check-item (is-done|is-blocked)">.*?<a href="#[a-z-]+">([A-Za-z ]+)<\/a>/g)].map((m) => `${m[2]}:${m[1] === 'is-done' ? '✓' : '✗'}`);
+  // No option yet: only the option and the rationale are asked for.
+  const none = String(decisionWorkspaceView(initialState(), RR));
+  assert.deepEqual(marks(none), ['Option:✗', 'Rationale:✓']);
+  assert.match(none, /Step 1:<\/strong> choose an option/);
+  assert.match(none, /data-action="authorize"[^>]*disabled/);
+  // The seeded expansion: every step done, Authorize enabled.
+  const ready = String(decisionWorkspaceView(pendingRR(), RR));
+  assert.deepEqual(marks(ready), ['Option:✓', 'Conditions:✓', 'Rollout plan:✓', 'Expected impact:✓', 'Rationale:✓']);
+  assert.match(ready, /Step 2 · Conditions/);
+  assert.match(ready, /Step 3 · Rollout plan/);
+  assert.match(ready, /Step 4 · Expected impact/);
+  assert.match(ready, /Step 5 · Decision rationale/);
+  assert.match(ready, /<details class="context" open>/);
+  assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);
+  // Each blocker shows against its own step, with its first problem.
+  const noPlan = String(decisionWorkspaceView(setRolloutField(pendingRR(), RR, 'reviewDate', ''), RR));
+  assert.match(noPlan, /is-blocked">.*?Rollout plan<\/a><span class="muted small">: Review date: a date is needed\./s);
+  assert.match(noPlan, /data-action="authorize"[^>]*disabled/);
+  const noImpact = String(decisionWorkspaceView(setOutcome(pendingRR(), RR, 1, 'target', 'cheaper'), RR));
+  assert.match(noImpact, /Expected impact<\/a><span class="muted small">: Outcome 2 needs a target with a number\./);
+  const noWhy = String(decisionWorkspaceView(setRationale(pendingRR(), RR, 'ok'), RR));
+  assert.match(noWhy, /Rationale<\/a><span class="muted small">: Write a decision rationale/);
+  // Something canAuthorize refuses that no step explains is listed too: here,
+  // a review lock after an automatic restriction, forced onto an open decision.
+  let locked = pendingRR();
+  locked = { ...locked, capabilityData: { ...locked.capabilityData, [RR]: { ...capData(locked, RR), reviewRequired: true } } };
+  const lockedPage = String(decisionWorkspaceView(locked, RR));
+  assert.match(lockedPage, /is-blocked"><span class="check-mark" aria-hidden="true">✗<\/span> A post-incident review must be recorded/);
+  assert.match(lockedPage, /data-action="authorize"[^>]*disabled/);
+});

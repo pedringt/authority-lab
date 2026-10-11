@@ -638,3 +638,11 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .earlier > summary { font-weight: 600; margin-bottom: 10px; }
 .tab-intro { margin-top: 0; }
 .how-tab { margin: -4px 0 12px; }
+
+/* Decision page as steps (#96) */
+.checklist { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; font-size: 14px; }
+.check-item.is-done .check-mark { color: var(--pass); }
+.check-item.is-blocked .check-mark { color: var(--fail); }
+.check-mark { display: inline-block; width: 1em; font-weight: 700; }
+.context > summary { cursor: pointer; font-weight: 600; margin: 18px 0 8px; }
+.step-hint { border-style: dashed; }

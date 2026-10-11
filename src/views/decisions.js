@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk } from '../store/index.js';
 import { requirementsList, optionLabel } from './capability.js';
 
 export function decisionsListView(state) {
@@ -34,6 +34,24 @@ export function decisionsListView(state) {
 // The expected-impact rows for an expansion (B1): a metric and a target with
 // a number, up to four. Problems show inline; the Authorize button says why
 // it's disabled.
+// What still stands between the person and Authorize (#96): each step done
+// or not, with its first problem, linking to it. canAuthorize stays the only
+// judge: anything it refuses that no step explains is listed too.
+export function checklist(state, cap, dec, check) {
+  const expanding = isExpansion(state, cap.id, dec.option);
+  const oc = expanding ? outcomeChecks(dec.outcomes) : null;
+  const rc = expanding ? rolloutChecks(state, dec.rollout) : null;
+  const items = [
+    { href: '#decision-panel', label: 'Option', ok: Boolean(dec.option), why: 'Choose an option.' },
+    ...(dec.option === 'expand-limits' ? [{ href: '#step-conditions', label: 'Conditions', ok: true, why: '' }] : []),
+    ...(expanding ? [{ href: '#step-rollout', label: 'Rollout plan', ok: rc.ok, why: rc.errors[0] }, { href: '#step-impact', label: 'Expected impact', ok: oc.ok, why: oc.errors[0] }] : []),
+    { href: '#step-rationale', label: 'Rationale', ok: rationaleOk(dec.rationale), why: 'Write a decision rationale (at least a sentence).' },
+  ];
+  const explained = items.some((i) => !i.ok);
+  const extra = !check.ok && !explained ? html`<li class="check-item is-blocked"><span class="check-mark" aria-hidden="true">✗</span> ${check.reason}</li>` : '';
+  return html`<ul class="checklist" role="status" aria-label="Before you can authorize">${items.map((i) => html`<li class="check-item ${i.ok ? 'is-done' : 'is-blocked'}"><span class="check-mark" aria-hidden="true">${i.ok ? '✓' : '✗'}</span> <a href="${i.href}">${i.label}</a>${i.ok ? '' : html`<span class="muted small">: ${i.why}</span>`}</li>`)}${extra}</ul>`;
+}
+
 // The rollout plan for an expansion (C1): every field required.
 function rolloutCard(state, cap, dec) {
   const p = dec.rollout || {};
@@ -239,9 +257,11 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
 
   <div class="decision-grid">
     <div class="decision-main">
-      ${conditions ? section('Conditions', conditions, { subtitle: 'For Expand with limits: when the AI may act on its own.' }) : ''}
-      ${isExpansion(state, cap.id, dec.option) ? section('Rollout plan', rolloutCard(state, cap, dec), { subtitle: `How this expansion goes into service. It goes on the decision record and can't be changed afterwards.` }) : ''}
-      ${isExpansion(state, cap.id, dec.option) ? section('Expected impact', impactCard(cap, dec), { subtitle: `${OUTCOMES_MIN} to ${OUTCOMES_MAX} outcomes this expansion should achieve, each with a number. They go on the decision record and can't be changed afterwards.` }) : ''}
+      ${!dec.option ? html`<div class="card step-hint"><p><strong>Step 1:</strong> choose an option in the Decision panel. The steps it needs appear here.</p></div>` : ''}
+      ${conditions ? section('Step 2 · Conditions', conditions, { id: 'step-conditions', subtitle: 'For Expand with limits: when the AI may act on its own.' }) : ''}
+      ${isExpansion(state, cap.id, dec.option) ? section('Step 3 · Rollout plan', rolloutCard(state, cap, dec), { id: 'step-rollout', subtitle: `How this expansion goes into service. It goes on the decision record and can't be changed afterwards.` }) : ''}
+      ${isExpansion(state, cap.id, dec.option) ? section('Step 4 · Expected impact', impactCard(cap, dec), { id: 'step-impact', subtitle: `${OUTCOMES_MIN} to ${OUTCOMES_MAX} outcomes this expansion should achieve, each with a number. They go on the decision record and can't be changed afterwards.` }) : ''}
+      <details class="context" open><summary>Context: the evidence, the recommendation and the positions</summary>
       ${section('Evidence summary', html`
         ${barChangedNote(state, cap)}
         ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}
@@ -257,19 +277,20 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
       ${stakeholders.length ? section('Stakeholder positions', html`<div class="card"><ul class="position-list">${stakeholders.map((s) => html`<li><span class="position-team">${s.team}</span>${badge(stakeholderTone[s.stance] || 'neutral', s.position)}<span class="muted small">${person(s.person).name}</span></li>`)}</ul>
         ${d.stakeholderSummary ? html`<p><strong>Consensus:</strong> ${d.stakeholderSummary.consensus}</p>
         <p><strong>Unresolved:</strong> ${d.stakeholderSummary.disagreement} <a href="#/capabilities/${cap.id}?tab=stakeholders">Full positions</a></p>` : ''}</div>`) : ''}
+      </details>
     </div>
 
     <div class="decision-side">
-      <div class="card decision-panel">
-        <p class="eyebrow">Decision</p>
+      <div class="card decision-panel" id="decision-panel">
+        <p class="eyebrow">Step 1 · Decision</p>
         <div class="option-rows" role="radiogroup" aria-label="Decision options">${options}</div>
         <p class="muted small">Authority can move down as well as up.</p>
         <div class="preview"><span class="fact-label">${chosen ? html`Chosen: <strong>${chosen.name}</strong> · plain-English preview` : 'Plain-English preview'}</span>${preview}</div>
         ${conditionWarnings}
-        <label class="field field-stack"><span>Decision rationale</span><textarea rows="4" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>
+        <label class="field field-stack" id="step-rationale"><span>Step 5 · Decision rationale</span><textarea rows="4" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>
         <p class="muted small">Authorizing as <strong>${authorizer.name}</strong>, ${authorizer.role}. This action changes what the AI is allowed to do in production for ${cap.name}. It writes an immutable decision record with the evidence snapshot above.</p>
         ${query.get('error') ? notice('fail', 'Could not authorize', query.get('error')) : ''}
-        ${check.ok ? '' : html`<p class="form-error" role="status">${check.reason}</p>`}
+        ${checklist(state, cap, dec, check)}
         <button class="btn btn-primary btn-block" data-action="authorize" data-capability="${cap.id}" ${check.ok ? '' : raw('disabled')}>Authorize authority change</button>
       </div>
     </div>
