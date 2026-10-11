@@ -49,6 +49,10 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 Five places across the top: **Overview**, **Capabilities**, **Evidence** (with the testing ground under Tests), **Records** (decision records and the Activity history) and **Agent runs**. **People** is in the header, and the **Demo** menu next to Acting as holds Start empty and Reset demo. A capability has five tabs: Contract, Evidence (with Success criteria and Testing), Stakeholders, Decisions (with Waiting for a person) and Monitoring. Old links (`#/tests`, `#/activity`, `#/decisions/…`, `?tab=criteria`, `?tab=testing`, `?tab=waiting`) still open the right page. Each page opens with one sentence; the rest is behind **How this works**.
 
+## Standards
+
+[docs/STANDARDS.md](docs/STANDARDS.md) maps Authority Lab's ideas (authority levels, human oversight, the audit trail, automatic restriction, the data boundary) to the NIST AI RMF, the EU AI Act and ISO/IEC 42001. These are learning notes, not a compliance claim. Every mapping links to its primary source, and anything uncertain is marked as such.
+
 ## Agent tooling (MCP)
 
 `agent/` is an MCP server that gives a model the tools to look up orders, issue refunds and escalate to a person. Every call goes through the gate and the data filter in `src/store/`. It's separate from the static app: it has its own pinned dependencies and is never deployed. See [agent/README.md](agent/README.md) to run it with Claude Code or Claude Desktop.
