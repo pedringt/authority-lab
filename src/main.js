@@ -19,6 +19,7 @@ import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
 import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
 import { agentRunsView } from './views/agentruns.js';
+import { decisionBriefView } from './views/brief.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -126,6 +127,7 @@ function render() {
     }
     case 'records': {
       // Decision records and the activity history, one place (#93).
+      if (sub && action === 'brief') { view = decisionBriefView(state, sub); title = 'Decision brief'; break; }
       if (sub) { view = decisionRecordView(state, sub); title = 'Decision record'; break; }
       const showActivity = query.get('show') === 'activity';
       const pendingCount = state.capabilities.filter((c) => decisionRequired(state, c.id)).length;
@@ -334,6 +336,8 @@ document.addEventListener('click', (e) => {
   if (action === 'row-remove') { btn.closest('tr').remove(); return; }
   // Start empty and Reset demo erase every record, so each asks first, inline.
   if (action === 'start-empty' || action === 'reset') askToErase(action);
+  // The decision brief's Print button (D1).
+  if (action === 'print') window.print();
   if (action === 'cancel-erase') closeEraseConfirm();
   if (action === 'confirm-erase') {
     const kind = pendingErase;

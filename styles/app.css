@@ -646,3 +646,31 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .check-mark { display: inline-block; width: 1em; font-weight: 700; }
 .context > summary { cursor: pointer; font-weight: 600; margin: 18px 0 8px; }
 .step-hint { border-style: dashed; }
+
+/* Decision brief (D1) */
+.brief { max-width: 900px; }
+.brief-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.brief-head h1 { margin: 2px 0 4px; }
+.brief-meta { color: var(--text-2); margin: 0 0 14px; }
+.brief-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+.brief-block h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 4px; }
+.brief-block p { margin: 0 0 4px; }
+.brief-list { margin: 0; padding-left: 18px; }
+.brief-list li { margin: 0 0 2px; }
+.brief-foot { margin-top: 14px; font-size: 12px; }
+@media (max-width: 720px) { .brief-grid { grid-template-columns: 1fr; } }
+@media print {
+  @page { size: auto; margin: 10mm; }
+  .topbar, .foot, .no-print, .skip { display: none !important; }
+  body, .app { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+  .brief { font-size: 9.5pt; line-height: 1.3; max-width: none; }
+  .brief .eyebrow { margin: 0; }
+  .brief-head h1 { font-size: 15pt; margin: 0 0 2px; }
+  .brief-meta { margin: 0 0 8px; }
+  .brief-block h2 { font-size: 8.5pt; margin: 0 0 2px; }
+  .brief-grid { gap: 6px 16px; }
+  .brief-list { padding-left: 14px; }
+  .brief-list li { margin: 0; }
+  .brief-foot { margin-top: 8px; font-size: 8pt; }
+  .brief a { color: inherit; text-decoration: none; }
+}

@@ -110,6 +110,7 @@ export function decisionRecordView(state, id) {
       <h1>Authority change #${String(x.number).padStart(2, '0')}</h1>
       <p class="lede"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${fmtDate(x.date)} · ${recordNames(state, x)}</p>
     </div>
+    <a class="btn btn-sm" href="#/records/${x.id}/brief">Decision brief (one page)</a>
   </div>
   ${auto ? notice('fail', 'This change was made by a software rule, not by a person.', 'The rule was authorized in advance in the contract. Humans authorize expanded authority; software may reduce it when a predefined condition is triggered.') : ''}
   ${auto && reviewForRecord(state, x.id) ? (() => { const rv = reviewForRecord(state, x.id); return notice('pass', `Reviewed: ${rv.id}, ${fmtDate(rv.date)}, by ${personAt(rv.byAt, rv.by).name}`, `Cause: ${rv.cause} What changed: ${rv.changes} The review is a separate record; this restriction record is unchanged.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Review' }); })() : auto && capData(state, cap.id).reviewRequired ? notice('watch', 'Not yet reviewed', 'The owner or a Risk approver records the post-incident review on the Monitoring tab.', { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' }) : ''}

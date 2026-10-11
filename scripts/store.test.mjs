@@ -3919,3 +3919,41 @@ test('#96: the decision page numbers its steps and the checklist says exactly wh
   assert.match(lockedPage, /is-blocked"><span class="check-mark" aria-hidden="true">✗<\/span> A post-incident review must be recorded/);
   assert.match(lockedPage, /data-action="authorize"[^>]*disabled/);
 });
+
+// D1 (#76): the decision brief.
+test('D1: a one-page brief for seeded, new and automatic decisions, from recorded data only', async () => {
+  const { decisionBriefView } = await import('../src/views/brief.js');
+  const { canonicalHash } = await import('../src/routes.js');
+  const text = (st, id) => String(decisionBriefView(st, id)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  // Seeded records.
+  for (const id of ['AC-01', 'AC-02', 'AC-03']) {
+    const t = text(initialState(), id);
+    for (const h of ['What changed', 'Why', 'The evidence', 'The disagreement', 'Expected impact', 'When it gets pulled back']) assert.ok(t.includes(h), `${id}: ${h}`);
+    assert.match(t, /Built only from decision record/);
+  }
+  assert.match(text(initialState(), 'AC-02'), /predates expected outcomes/);
+  // A new expansion carries its expected impact, rollout and the positions as recorded.
+  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const t4 = text(s, 'AC-04');
+  assert.match(t4, /Refund recommendation: Level 2 → Level 3/);
+  assert.match(t4, /Authorized by Maya Chen/);
+  assert.match(t4, /AI cost per case: ≤ \$0.06/);
+  assert.match(t4, /review on Oct 22/);
+  assert.match(t4, /Not unanimous: 4 positions/);
+  assert.match(t4, /Risk \(Daniel Okafor\): Hold high-value cases/);
+  assert.match(t4, /3 forbidden attempts or false claims within 7 days/);
+  // Later changes to the live contract don't change the brief: it reads the version in force.
+  const d = capData(s, RR);
+  const changed = { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...d, versions: { ...d.versions, contract: [...d.versions.contract, { ...d.versions.contract.at(-1), version: 99, value: { ...d.versions.contract.at(-1).value, autoRestriction: ['A rule added later.'] } }] } } } };
+  assert.equal(text(changed, 'AC-04'), t4);
+  // An automatic restriction says no person decided it.
+  s = simulateBreach(s, RR);
+  const t5 = text(s, s.decisionRecords.at(-1).id);
+  assert.match(t5, /Applied automatically by a contract rule/);
+  assert.match(t5, /Not applicable: no person decided this/);
+  assert.match(t5, /Not applicable: authority did not expand/);
+  // Linked from the record; the old address still resolves.
+  assert.match(String(decisionRecordView(s, 'AC-04')), /href="#\/records\/AC-04\/brief"/);
+  assert.equal(canonicalHash('#/decisions/AC-04/brief'), '#/records/AC-04/brief');
+  assert.match(String(decisionBriefView(s, 'AC-99')), /Record not found/);
+});
