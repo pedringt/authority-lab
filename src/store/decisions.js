@@ -210,6 +210,11 @@ export function setRolloutField(state, capabilityId, field, value) {
 
 const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === 'object') deepFreeze(v); }); return Object.freeze(o); };
 
+// The rationale rule, in one place: canAuthorize uses it, and the decision
+// page's checklist shows it (#96).
+export const RATIONALE_MIN = 20;
+export const rationaleOk = (text) => Boolean(text) && String(text).trim().length >= RATIONALE_MIN;
+
 export function canAuthorize(state, capabilityId) {
   const d = capData(state, capabilityId).decision;
   if (!d.option) return { ok: false, reason: 'Choose a decision option first.' };
@@ -219,7 +224,7 @@ export function canAuthorize(state, capabilityId) {
     const cap = getCapability(state, capabilityId);
     if (d.proposed.level !== cap.authority.level + 1) return { ok: false, reason: `The open proposal is for Level ${d.proposed.level}, but ${cap.name} is at Level ${cap.authority.level}. Propose the next level, Level ${cap.authority.level + 1}, again.` };
   }
-  if (!d.rationale || d.rationale.trim().length < 20) return { ok: false, reason: 'Write a decision rationale (at least a sentence).' };
+  if (!rationaleOk(d.rationale)) return { ok: false, reason: 'Write a decision rationale (at least a sentence).' };
   if (isExpansion(state, capabilityId, d.option)) {
     const oc = outcomeChecks(d.outcomes);
     if (!oc.ok) return { ok: false, reason: `Expected impact: ${oc.errors[0]}` };

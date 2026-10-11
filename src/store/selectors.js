@@ -79,6 +79,13 @@ export function versionFor(state, capabilityId, kind, number) {
   return (capData(state, capabilityId).versions[kind] || []).find((v) => v.version === number) || null;
 }
 
+// The version of a kind (contract, stakeholders, …) that was in force when a
+// decision record was written, or null (D1: the brief reads only these).
+export function recordVersion(state, record, kind) {
+  const n = record && record.versions ? record.versions[kind] : null;
+  return n ? versionFor(state, record.capabilityId, kind, n) : null;
+}
+
 // Amendments to the criteria or evidence requirements that were made after
 // performance results were seen and that a decision record relied on
 // (version 2 up to the version in force at the time of the record).

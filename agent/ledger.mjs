@@ -46,6 +46,12 @@ export function appendLedger(row, file = LEDGER) {
 
 const format = (row) => `| ${row.date} | ${row.pr || '—'} | ${row.models} | ${row.tickets} | ${row.repeats} | $${row.cap.toFixed(2)} | $${row.cost.toFixed(4)} | ${row.status} |`;
 
+// The 1-based line of the row whose status carries `marker`, for linking.
+export function ledgerLineOf(marker, file = LEDGER) {
+  const i = readFileSync(file, 'utf8').split('\n').findIndex((l) => l.startsWith('|') && l.includes(marker));
+  return i < 0 ? null : i + 1;
+}
+
 // Replace the row whose status carries `marker` (a running row), so a run's
 // spend stays current while it runs.
 export function updateLedger(marker, row, file = LEDGER) {
