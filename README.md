@@ -36,14 +36,18 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 1. **Overview**: Refund recommendation needs an authority decision. 5 of 6 evidence requirements are met; high-value refunds are the gap.
 2. **Capability → Contract**: what the AI may do, must ask about, must never do, and when software pulls authority back.
-3. **Tests → Run test suite**: 24 of 26 pass. H-04 (fraud flag present) is a high-severity miss.
+3. **Evidence → Tests → Run test suite**: 24 of 26 pass. H-04 (fraud flag present) is a high-severity miss.
 4. **Capability → Evidence**: 218 pilot cases at 94%, but 18 high-value cases at 83%.
 5. **Capability → Stakeholders**: Support Operations wants to expand; Risk wants high-value cases held.
-6. **Decisions → Open authority decision**: choose **Expand with limits**, set the conditions, read the plain-English preview, write the rationale, authorize.
+6. **Open decision** (from the Overview or the capability's summary): choose **Expand with limits**, check the conditions, the rollout plan and the expected impact (all prefilled for the demo), read the plain-English preview, write the rationale, authorize.
 7. **Decision record #04** is written with the evidence snapshot. The authority map updates.
 8. **Capability → Monitoring → Simulate threshold breach**: severe errors exceed 5% of the rolling 50; software returns the capability to Draft, creates an alert, an activity event and a restriction record, and locks expansion until a review is recorded.
 9. **Monitoring → Record the post-incident review**: Refund recommendation is High impact, so switch **Acting as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changed, and record it. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
-9. **Reset demo** (top right) restores the seeded state.
+10. **Demo → Reset demo** (the menu at the top right) restores the seeded state.
+
+## Where things are
+
+Five places across the top: **Overview**, **Capabilities**, **Evidence** (with the testing ground under Tests), **Records** (decision records and the Activity history) and **Agent runs**. **People** is in the header, and the **Demo** menu next to Acting as holds Start empty and Reset demo. A capability has five tabs: Contract, Evidence (with Success criteria and Testing), Stakeholders, Decisions (with Waiting for a person) and Monitoring. Old links (`#/tests`, `#/activity`, `#/decisions/…`, `?tab=criteria`, `?tab=testing`, `?tab=waiting`) still open the right page. Each page opens with one sentence; the rest is behind **How this works**.
 
 ## Agent tooling (MCP)
 
@@ -51,7 +55,7 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 ## Starting empty
 
-**Start empty** (demo controls, top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). Setup comes first: name the workspace and its one workflow, record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on), and say which founding admin is setting it up. Then add the first capability. **Reset demo** brings Northstar back.
+**Demo → Start empty** (the menu at the top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). Setup comes first: name the workspace and its one workflow, record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on), and say which founding admin is setting it up. Then add the first capability. **Reset demo** brings Northstar back.
 
 ## Adding a capability
 

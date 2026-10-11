@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, section, person, fmtDate } from '../ui.js';
+import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
 import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS } from '../store/index.js';
 
 // Editor for success criteria and evidence requirements (#6). Before the
@@ -41,7 +41,7 @@ export function criteriaEditorView(state, capabilityId, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p>
       <h1>Success criteria and evidence requirements</h1>
-      <p class="lede">What good looks like, as thresholds, and what must be true before the first authority change. ${saved ? `Criteria v${v.criteria} and requirements v${v.requirements} are saved; every save writes a new version.` : `Defaults come from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown').toLowerCase()}${risk.reversibility === 'Difficult to reverse' ? ', difficult to reverse' : ''}); each row says where it came from.`} These lock on the first test run.</p>
+      ${lede('What good looks like, as thresholds, and what must be true before the first authority change.', html`${saved ? `Criteria v${v.criteria} and requirements v${v.requirements} are saved; every save writes a new version.` : `Defaults come from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown').toLowerCase()}${risk.reversibility === 'Difficult to reverse' ? ', difficult to reverse' : ''}); each row says where it came from.`} These lock on the first test run.`)}
     </div>
   </div>
   ${error ? notice('fail', 'Could not save', error) : ''}

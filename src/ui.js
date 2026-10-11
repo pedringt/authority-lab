@@ -137,8 +137,8 @@ export function levelScale(current, proposed) {
       current && l.level < current.level ? 'is-below' : '',
     ].join(' ');
     return html`<li class="${cls}" title="${levelTip(l.level)}"><span class="level-num">L${l.level}</span><span class="level-name">${l.name}</span>${
-      current && l.level === current.level ? html`<span class="level-tag">Current</span>` : ''
-    }${proposed && l.level === proposed.level && (!current || current.level !== l.level) ? html`<span class="level-tag level-tag-proposed">Proposed</span>` : ''}</li>`;
+      current && l.level === current.level ? html`<span class="level-tag">Current${current.limited ? ' · limited' : ''}</span>` : ''
+    }${proposed && l.level === proposed.level && (!current || current.level !== l.level) ? html`<span class="level-tag level-tag-proposed">Proposed${proposed.limited ? ' · limited' : ''}</span>` : ''}</li>`;
   })}</ol>`;
 }
 
@@ -151,6 +151,22 @@ export function metricCard({ label, value, target, status, note, href }) {
   return href
     ? html`<a class="metric card card-link" href="${href}">${inner}</a>`
     : html`<div class="metric card">${inner}</div>`;
+}
+
+// A page intro: one sentence, with anything longer behind "How this works"
+// (#93: a reader should follow each page at a glance).
+export function lede(first, more = null) {
+  return html`<p class="lede">${first}</p>${more ? html`<details class="how"><summary>How this works</summary><p>${more}</p></details>` : ''}`;
+}
+
+// A row of sub-views inside a page or tab (#93): each is a link.
+// A tab's intro: one sentence, with the rest behind "How this works" (#93).
+export function tabIntro(first, more = null, after = '') {
+  return html`<p class="muted tab-intro">${first} ${after}</p>${more ? html`<details class="how how-tab"><summary>How this works</summary><p>${more}</p></details>` : ''}`;
+}
+
+export function subNav(items, label = 'Views') {
+  return html`<nav class="subnav" aria-label="${label}">${items.map((i) => html`<a class="chip ${i.active ? 'is-active' : ''}" href="${i.href}" ${i.active ? raw('aria-current="page"') : ''}>${i.label}${i.count ? html` <span class="chip-count">${i.count}</span>` : ''}</a>`)}</nav>`;
 }
 
 export function section(title, body, { subtitle, actions, id } = {}) {

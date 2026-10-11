@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
-import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord } from '../store/index.js';
+import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote, lede, subNav, tabIntro } from '../ui.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals } from '../store/index.js';
 import { scenarioTable } from './tests.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
@@ -9,23 +9,23 @@ import { proposalsList, amendLink } from './proposals.js';
 import { rolloutList } from './decisions.js';
 import { evidenceSourcesCard } from './scenarios.js';
 
+// Five tabs (#93). Success criteria and Testing live under Evidence; the
+// waiting queue under Decisions. Old tab names still open the right view.
 const TABS = [
   ['contract', 'Contract'],
-  ['criteria', 'Success criteria'],
-  ['testing', 'Testing'],
   ['evidence', 'Evidence'],
   ['stakeholders', 'Stakeholders'],
-  ['decisions', 'Decision history'],
+  ['decisions', 'Decisions'],
   ['monitoring', 'Monitoring'],
-  ['waiting', 'Waiting for a person'],
 ];
+const OLD_TABS = { criteria: ['evidence', 'criteria'], testing: ['evidence', 'testing'], waiting: ['decisions', 'waiting'] };
 
 export function capabilityView(state, id, query) {
   const cap = getCapability(state, id);
   if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
   const d = capData(state, id);
   const requested = query.get('tab') || 'contract';
-  const tab = TABS.some(([k]) => k === requested) ? requested : 'contract';
+  const [tab, show] = OLD_TABS[requested] || [TABS.some(([k]) => k === requested) ? requested : 'contract', query.get('show')];
   const risk = current(state, id, 'risk');
   const r = readiness(state, id);
   const owner = person(cap.owner);
@@ -35,9 +35,8 @@ export function capabilityView(state, id, query) {
   const summary = html`<div class="card cap-summary">
     <div class="cap-summary-grid">
       ${kv([
+        // Current and proposed authority are shown once, on the strip below (#93).
         ['Status', html`${capStatusBadge(cap.status)}${cap.pilotLabel ? html` <span class="muted">${cap.pilotLabel}</span>` : ''}`],
-        ['Current authority', authorityBadge(cap.authority)],
-        ['Proposed authority', proposed ? authorityBadge(proposed) : html`<span class="muted">None proposed</span>`],
         ['Risk', html`${risk.impact} impact · ${risk.exposure} · ${risk.reversibility}`],
         ['Owner', html`${owner.name}, ${owner.role}`],
         // C1: the rollout plan of the decision in force, if it has one.
@@ -52,17 +51,23 @@ export function capabilityView(state, id, query) {
   </div>`;
 
   const tabs = html`<nav class="tabs" aria-label="Capability sections">${TABS
-    .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}${k === 'waiting' && waitingActions(state, cap.id).length ? html` <span class="nav-count">${waitingActions(state, cap.id).length}</span>` : ''}</a>`)}</nav>`;
+    .map(([k, label]) => html`<a class="tab ${k === tab ? 'is-active' : ''}" href="#/capabilities/${cap.id}?tab=${k}" ${k === tab ? raw('aria-current="page"') : ''}>${label}${k === 'decisions' && waitingActions(state, cap.id).length ? html` <span class="nav-count">${waitingActions(state, cap.id).length}</span>` : ''}</a>`)}</nav>`;
+  const base = `#/capabilities/${cap.id}`;
 
   let body;
   switch (tab) {
-    case 'criteria': body = criteriaTab(state, cap); break;
-    case 'testing': body = testingTab(state, cap); break;
-    case 'evidence': body = evidenceTab(state, cap, d); break;
+    case 'evidence': {
+      const v = ['criteria', 'testing'].includes(show) ? show : 'evidence';
+      body = html`${subNav([{ href: `${base}?tab=evidence`, label: 'Evidence', active: v === 'evidence' }, { href: `${base}?tab=evidence&show=criteria`, label: 'Success criteria', active: v === 'criteria' }, { href: `${base}?tab=evidence&show=testing`, label: 'Testing', active: v === 'testing' }], 'Evidence views')}${v === 'criteria' ? criteriaTab(state, cap) : v === 'testing' ? testingTab(state, cap) : evidenceTab(state, cap, d)}`;
+      break;
+    }
     case 'stakeholders': body = stakeholdersTab(state, cap, d); break;
-    case 'decisions': body = decisionsTab(state, cap); break;
+    case 'decisions': {
+      const v = show === 'waiting' ? 'waiting' : 'history';
+      body = html`${subNav([{ href: `${base}?tab=decisions`, label: 'History', active: v === 'history' }, { href: `${base}?tab=decisions&show=waiting`, label: 'Waiting for a person', active: v === 'waiting', count: waitingActions(state, cap.id).length }], 'Decision views')}${v === 'waiting' ? waitingTab(state, cap, query) : decisionsTab(state, cap)}`;
+      break;
+    }
     case 'monitoring': body = monitoringTab(state, cap, d); break;
-    case 'waiting': body = waitingTab(state, cap, query); break;
     default: body = contractTab(state, cap, d);
   }
 
@@ -70,7 +75,7 @@ export function capabilityView(state, id, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${workflowOf(state).name}</p>
       <h1>${cap.name}</h1>
-      <p class="lede">${cap.summary}${risk.note ? html` ${risk.note}` : ''}</p>
+      ${lede(cap.summary)}
     </div>
   </div>
   ${query.get('error') ? notice('fail', 'Could not complete that action', query.get('error')) : ''}
@@ -98,7 +103,7 @@ function contractTab(state, cap, d) {
   }
   const latest = contractVersions[contractVersions.length - 1];
   return html`
-    <p class="muted">The delegation contract states what the AI may do on its own, what needs a person, and what it must never do. The contract is enforced by software, not by the model's judgment. <span class="muted">Version ${latest.version}, ${personAt(latest.authorAt, latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}</p>
+    ${tabIntro('What the AI may do on its own, what needs a person, and what it must never do.', 'The contract is enforced by software, not by the model\'s judgment.', html`<span class="muted">Version ${latest.version}, ${personAt(latest.authorAt, latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}`)}
     ${proposalsList(state, cap.id, 'contract')}
     ${contractReviewView(contractVersions[0].review)}
     <div class="contract-grid">
@@ -168,7 +173,7 @@ function waitingTab(state, cap, query) {
   };
   return html`
     ${error ? notice('fail', 'Could not record that decision', error) : ''}
-    <p class="muted">When the gate says an action needs a person, it waits here instead of running. ${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve. At most one action waits per order, and at most ${QUEUE_LIMIT} per capability; past that, new requests are blocked and an incident is opened.</p>
+    ${tabIntro('When the gate says an action needs a person, it waits here instead of running.', `${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve. At most one action waits per order, and at most ${QUEUE_LIMIT} per capability; past that, new requests are blocked and an incident is opened.`)}
     ${section(`Waiting (${waiting.length})`, waiting.length ? html`${waiting.map(card)}` : html`<p class="empty">Nothing is waiting for a person.</p>`)}
     ${decided.length ? section('Decided', html`${decided.map(card)}`) : ''}`;
 }
@@ -427,12 +432,24 @@ function monitoringTab(state, cap, d) {
     ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
         <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
     : '';
-  return html`${head}${reviewCard(state, cap, d)}${metrics}${expectedCard(state, cap)}${roiCard(state, cap)}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
+  return html`${head}${reviewCard(state, cap, d)}${metrics}${expectedCard(state, cap)}${roiCard(state, cap)}${adoptionCard(state, cap)}${rulesCard(state, cap)}${gateActivityCard(state, cap)}${fired}${opened}${control}`;
 }
 
 // Where a number came from, always shown (B2): seeded demo data, or the gate log with its sources.
 const sourceTag = (source, seeded) => html`<span class="muted small">${source}</span>${seeded ? html` ${badge('neutral', 'Seeded')}` : ''}`;
 const money = (v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+// Adoption signals (C2): warnings, never blocking, each with what it saw,
+// why it matters and where the data came from.
+function adoptionCard(state, cap) {
+  const signals = adoptionSignals(state, cap.id);
+  const checked = 'Rubber-stamping, rising overrides, escalations left waiting and work-arounds outside the agent.';
+  const body = signals.length
+    ? signals.map((x) => html`<div class="notice notice-watch adoption-signal" role="status"><div class="notice-body"><strong>${x.title}</strong>${x.simulated ? html` ${badge('neutral', 'Simulated')}` : ''}
+        <p>${x.what}</p><p class="muted small">Why it matters: ${x.why}</p><p class="muted small">Source: ${x.source}.</p></div></div>`)
+    : notice('pass', 'No adoption warnings', `Checked: ${checked}`);
+  return section('Adoption signals', body, { subtitle: `Warnings only: they never block an action or a decision. ${signals.length ? `Checked: ${checked}` : ''}` });
+}
 
 // Expected vs actual (B2): each expected outcome on the record in force.
 function expectedCard(state, cap) {

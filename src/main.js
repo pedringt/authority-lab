@@ -1,6 +1,7 @@
 import * as seed from './data/seed.js';
 import { setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
-import { html, setPeople, setToday, fmtDate } from './ui.js';
+import { html, setPeople, setToday, fmtDate, subNav } from './ui.js';
+import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
 import { capabilityView } from './views/capability.js';
@@ -27,16 +28,16 @@ const demoDate = document.getElementById('demo-date');
 const brandWs = document.getElementById('brand-ws');
 const footData = document.getElementById('foot-data');
 
+// Five top-level places (#93). Tests live under Evidence, Activity under
+// Records, and People in the header.
 const NAV = [
   ['overview', 'Overview'],
   ['capabilities', 'Capabilities'],
-  ['tests', 'Tests'],
   ['evidence', 'Evidence'],
-  ['decisions', 'Decisions'],
-  ['activity', 'Activity'],
+  ['records', 'Records'],
   ['agent-runs', 'Agent runs'],
-  ['people', 'People'],
 ];
+
 
 function safeStorage() {
   try {
@@ -68,7 +69,7 @@ function loadAgentRuns() {
 }
 
 function parseRoute() {
-  const hash = location.hash || '#/overview';
+  const hash = canonicalHash(location.hash || '#/overview');
   const [path, qs] = hash.slice(1).split('?');
   const parts = path.split('/').filter(Boolean);
   return { parts, query: new URLSearchParams(qs || '') };
@@ -84,6 +85,9 @@ function capabilityFor(state, query) {
 }
 
 function render() {
+  // An old address is rewritten in place, without adding a history entry.
+  const canon = canonicalHash(location.hash);
+  if (location.hash && canon !== location.hash) history.replaceState(null, '', canon);
   const state = store.get();
   setPeople(people(state));
   setToday(state.today);
@@ -111,13 +115,25 @@ function render() {
       else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
       break;
-    case 'tests': view = empty ? noCapabilitiesView(state, 'Testing ground') : testsView(state, capabilityFor(state, query), query); title = 'Tests'; break;
-    case 'evidence': view = empty ? noCapabilitiesView(state, 'Evidence') : evidenceView(state, capabilityFor(state, query), query); title = 'Evidence'; break;
-    case 'decisions':
-      if (sub) { view = decisionRecordView(state, sub); title = 'Decision record'; }
-      else { view = decisionsListView(state); title = 'Decisions'; }
+    case 'evidence': {
+      // Evidence and the testing ground, one place (#93).
+      const showTests = query.get('show') === 'tests';
+      const capQ = query.get('capability') ? `&capability=${encodeURIComponent(query.get('capability'))}` : '';
+      const tabs = subNav([{ href: `#/evidence?show=evidence${capQ}`, label: 'Evidence', active: !showTests }, { href: `#/evidence?show=tests${capQ}`, label: 'Tests', active: showTests }], 'Evidence views');
+      view = empty ? noCapabilitiesView(state, showTests ? 'Testing ground' : 'Evidence') : html`${tabs}${showTests ? testsView(state, capabilityFor(state, query), query) : evidenceView(state, capabilityFor(state, query), query)}`;
+      title = showTests ? 'Tests' : 'Evidence';
       break;
-    case 'activity': view = activityView(state, query); title = 'Activity'; break;
+    }
+    case 'records': {
+      // Decision records and the activity history, one place (#93).
+      if (sub) { view = decisionRecordView(state, sub); title = 'Decision record'; break; }
+      const showActivity = query.get('show') === 'activity';
+      const pendingCount = state.capabilities.filter((c) => decisionRequired(state, c.id)).length;
+      const tabs = subNav([{ href: '#/records', label: 'Decisions', active: !showActivity, count: pendingCount }, { href: '#/records?show=activity', label: 'Activity', active: showActivity }], 'Record views');
+      view = html`${tabs}${showActivity ? activityView(state, query) : decisionsListView(state)}`;
+      title = showActivity ? 'Activity' : 'Decisions';
+      break;
+    }
     case 'people': view = peopleView(state, query); title = 'People'; break;
     case 'agent-runs': loadAgentRuns(); view = agentRunsView(state, query, agentRuns); title = 'Agent runs'; break;
     default: view = empty ? noCapabilitiesView(state, 'Where do we need to make a decision?') : overviewView(state); title = 'Overview';
@@ -127,7 +143,7 @@ function render() {
   const pending = state.capabilities.filter((c) => decisionRequired(state, c.id)).length;
   const counts = {
     overview: state.alerts.length || pending,
-    decisions: pending,
+    records: pending,
   };
   // Until the workspace is set up there is nothing to navigate to and nobody
   // to act as.
@@ -238,6 +254,7 @@ const demoConfirm = document.getElementById('demo-confirm');
 function askToErase(kind) {
   pendingErase = kind;
   document.getElementById('demo-confirm-go').textContent = kind === 'start-empty' ? 'Erase and start empty' : 'Erase and reset demo';
+  demoButtons.open = false;
   demoButtons.hidden = true;
   demoConfirm.hidden = false;
   // The confirm takes the whole demo group, so the header stays one row.
@@ -250,7 +267,7 @@ function closeEraseConfirm(restoreFocus = true) {
   demoConfirm.hidden = true;
   demoButtons.hidden = false;
   demoConfirm.closest('.demo-controls').classList.remove('is-confirming');
-  if (restoreFocus && kind) demoButtons.querySelector(`[data-action="${kind}"]`).focus();
+  if (restoreFocus && kind) demoButtons.querySelector('summary').focus();
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pendingErase) closeEraseConfirm(); });
 
