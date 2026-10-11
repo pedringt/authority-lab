@@ -3939,7 +3939,7 @@ test('D1: a one-page brief for seeded, new and automatic decisions, from recorde
   assert.match(t4, /Authorized by Maya Chen/);
   assert.match(t4, /AI cost per case: ≤ \$0.06/);
   assert.match(t4, /review on Oct 22/);
-  assert.match(t4, /Not unanimous: 4 positions/);
+  assert.match(t4, /Not unanimous: 4 different positions among 5 people/);
   assert.match(t4, /Risk \(Daniel Okafor\): Hold high-value cases/);
   assert.match(t4, /3 forbidden attempts or false claims within 7 days/);
   // Later changes to the live contract don't change the brief: it reads the version in force.

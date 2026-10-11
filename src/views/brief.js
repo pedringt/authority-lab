@@ -16,7 +16,7 @@ function disagreement(state, rec) {
   const list = v && Array.isArray(v.value) ? v.value.filter((s) => s.position) : [];
   if (!list.length) return none('No stakeholder positions were recorded.');
   const stances = [...new Set(list.map((s) => s.position))];
-  return html`<p>${stances.length > 1 ? `Not unanimous: ${stances.length} positions.` : 'Unanimous.'}</p>
+  return html`<p>${stances.length > 1 ? `Not unanimous: ${stances.length} different positions among ${list.length} people.` : `Unanimous: ${list.length} ${list.length === 1 ? 'person' : 'people'}.`}</p>
     <ul class="brief-list">${list.map((s) => html`<li><strong>${s.team}</strong> (${personAt(null, s.person).name}): ${s.position}</li>`)}</ul>`;
 }
 
