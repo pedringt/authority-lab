@@ -15,19 +15,19 @@ export function stakeholdersEditorView(state, capabilityId, query) {
     <td><input type="hidden" name="s-position" value="${st.position || ''}"><input type="hidden" name="s-stance-was" value="${st.stance || ''}"><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
     <td>${selectField(`s-person`, '', choices, st.person || '', { placeholder: 'Choose a person' })}</td>
     <td><select name="s-stance" aria-label="Position">${STANCES.map(([k, l]) => html`<option value="${k}" ${k === (st.stance || 'undecided') ? raw('selected') : ''}>${l}</option>`)}</select></td>
-    <td><input type="text" name="s-quote" value="${st.quote || ''}" maxlength="240" placeholder="Their reasoning, in their words" aria-label="Quote"></td>
+    <td><input type="text" name="s-quote" value="${st.quote || ''}" maxlength="240" placeholder="Their reasoning, in their words" aria-label="Their reasoning"></td>
     <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove stakeholder ${i + 1}">Remove</button></td>
   </tr>`;
   return html`<div class="page-head">
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 4</p>
       <h1>Stakeholders</h1>
-      ${lede('The people whose positions are recorded at decision time.', 'Name them now; positions can be filled in when they are known and are never averaged into a score. A Risk stakeholder is needed to sign off amendments on high-impact or financial capabilities.')}
+      ${lede('The people whose view counts when this AI\'s authority changes.', 'Add them now and fill in positions when you know them. Positions are shown side by side, never averaged into a score. For high-impact or financial AI, changes need two approvals, one of them from a stakeholder with the Risk approver right. That right is set on People; the team typed here doesn\'t make anyone a Risk approver.')}
     </div>
   </div>
-  ${error ? notice('fail', 'Could not save', error) : ''}
-  ${needsSignoff(state, capabilityId, 'stakeholders') ? notice('watch', 'Membership changes need sign-off now', 'Performance results have been seen. Adding or removing a person, or changing a team label, becomes a proposal for the usual approvers. Position, stance and reasoning updates still save directly. Risk eligibility comes from a person\u2019s own team, not from this list.') : ''}
-  ${openProposal(state, capabilityId, 'stakeholders') ? notice('decision', `Proposal ${openProposal(state, capabilityId, 'stakeholders').id} is awaiting sign-off`, 'A membership change is already proposed. Approve or reject it before proposing another.', { link: `#/capabilities/${cap.id}/proposals/${openProposal(state, capabilityId, 'stakeholders').id}`, linkText: 'Open' }) : ''}
+  ${error ? notice('fail', 'Couldn\'t save', error) : ''}
+  ${needsSignoff(state, capabilityId, 'stakeholders') ? notice('watch', 'Adding or removing people now needs approval', 'Now that results exist, adding or removing someone, or changing their team, is submitted for approval. Updates to positions and reasoning still save straight away. Who counts as Risk comes from the Risk approver right on People, not from the team in this list.', { link: '#/people', linkText: 'People' }) : ''}
+  ${openProposal(state, capabilityId, 'stakeholders') ? notice('decision', 'A stakeholder change needs approval', 'Someone already proposed a stakeholder change. It has to be approved, rejected or withdrawn before another can be proposed.', { link: `#/capabilities/${cap.id}/proposals/${openProposal(state, capabilityId, 'stakeholders').id}`, linkText: 'Open' }) : ''}
   <form class="setup-form criteria-form" data-form="save-stakeholders" novalidate>
     <div class="card table-card"><table class="table table-edit">
       <thead><tr><th>Team</th><th>Person</th><th>Position</th><th>In their words</th><th></th></tr></thead>
@@ -36,8 +36,8 @@ export function stakeholdersEditorView(state, capabilityId, query) {
     <button class="btn btn-sm" type="button" data-action="row-add" data-kind="stakeholders">Add stakeholder</button>
     <div class="card authorize">
       <p class="eyebrow">Save</p>
-      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, writes stakeholders v${v + 1} for ${cap.name}, dated ${fmtDate(state.today)}. Every save is a new version.</p>
-      <button class="btn btn-primary btn-block" type="submit">${v ? 'Save new version' : 'Save stakeholders'}</button>
+      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}. Changes are kept in history.${needsSignoff(state, capabilityId, 'stakeholders') ? ' If you add or remove someone, the change is submitted for approval instead.' : ''}</p>
+      <button class="btn btn-primary btn-block" type="submit">${v ? 'Save changes' : 'Save stakeholders'}</button>
     </div>
   </form>
   <template id="row-stakeholders">${row({ team: '', person: '', stance: 'undecided', quote: '' }, 0)}</template>`;

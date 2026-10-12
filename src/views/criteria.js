@@ -19,51 +19,51 @@ export function criteriaEditorView(state, capabilityId, query) {
   const v = versionsInForce(state, capabilityId);
 
   if (locked) {
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p><h1>Success criteria and evidence requirements</h1><p class="lede">Locked. Performance results have been seen for ${cap.name}, so criteria v${v.criteria} and requirements v${v.requirements} cannot be edited in place.</p></div></div>
-      ${notice('watch', 'Criteria are locked', 'Changing the bar after seeing results needs a proposed amendment with sign-off. The current versions are on the capability page.', { link: `#/capabilities/${cap.id}?tab=criteria`, linkText: 'Success criteria' })}
-      <a class="btn btn-primary" href="#/capabilities/${cap.id}/amend/criteria">Propose amendment</a>`;
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p><h1>Targets and decision requirements</h1><p class="lede">These targets can't be changed directly now that results exist.</p></div></div>
+      ${notice('watch', 'Propose a change instead', 'Submit a target change for review. It takes effect once it is approved. The current targets are on the capability page.', { link: `#/capabilities/${cap.id}?tab=evidence&show=targets`, linkText: 'Current targets' })}
+      <a class="btn btn-primary" href="#/capabilities/${cap.id}/amend/criteria">Propose a target change</a>`;
   }
 
   const row = (c, i) => html`<tr>
-    <td><input type="hidden" name="c-id" value="${c.id || ''}"><input type="hidden" name="c-source" value="${c.source || ''}"><input type="text" name="c-name" value="${c.name}" maxlength="60" aria-label="Criterion name" required></td>
+    <td><input type="hidden" name="c-id" value="${c.id || ''}"><input type="hidden" name="c-source" value="${c.source || ''}"><input type="text" name="c-name" value="${c.name}" maxlength="60" aria-label="Measure" required></td>
     <td><input type="text" name="c-target" value="${c.target}" maxlength="120" aria-label="Target" required></td>
     <td><input type="text" name="c-note" value="${c.note || ''}" maxlength="240" aria-label="Note"></td>
     <td class="muted small">${c.source || 'Written by hand'}</td>
-    <td>${CORE_CRITERIA.includes(c.id) ? html`<span class="muted small" title="Core row: adjust the threshold, but it cannot be removed">Core</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove criterion ${i + 1}">Remove</button>`}</td>
+    <td>${CORE_CRITERIA.includes(c.id) ? html`<span class="muted small" title="You can change the threshold but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove target ${i + 1}">Remove</button>`}</td>
   </tr>`;
   const rrow = (r, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required></td>
+    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Check" required></td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
-    <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="Core row: adjust the count, but it cannot be removed">Core</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove requirement ${i + 1}">Remove</button>`}</td>
+    <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="You can change the number but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove check ${i + 1}">Remove</button>`}</td>
   </tr>`;
 
   return html`<div class="page-head">
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p>
-      <h1>Success criteria and evidence requirements</h1>
-      ${lede('What good looks like, as thresholds, and what must be true before the first authority change.', html`${saved ? `Criteria v${v.criteria} and requirements v${v.requirements} are saved; every save writes a new version.` : `Defaults come from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown').toLowerCase()}${risk.reversibility === 'Difficult to reverse' ? ', difficult to reverse' : ''}); each row says where it came from.`} These lock on the first test run.`)}
+      <h1>Targets and decision requirements</h1>
+      ${lede('What good looks like, in numbers, and what we need before giving the AI any authority.', html`${saved ? 'Saved. Changes are kept in history.' : `Starting values come from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown').toLowerCase()}${risk.reversibility === 'Difficult to reverse' ? ', difficult to reverse' : ''}). Each row shows where it came from.`} Once the first test runs, these can only be changed with approval.`)}
     </div>
   </div>
-  ${error ? notice('fail', 'Could not save', error) : ''}
+  ${error ? notice('fail', 'Couldn\'t save', error) : ''}
   <form class="setup-form criteria-form" data-form="save-criteria" novalidate>
-    ${section('Success criteria', html`<div class="card table-card"><table class="table table-edit">
-      <thead><tr><th>Criterion</th><th>Target</th><th>Note</th><th>Source</th><th></th></tr></thead>
+    ${section('Targets', html`<div class="card table-card"><table class="table table-edit">
+      <thead><tr><th>Measure</th><th>Target</th><th>Note</th><th>Source</th><th></th></tr></thead>
       <tbody data-rows="criteria">${criteria.map(row)}</tbody>
     </table></div>
-    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="criteria">Add criterion</button>`, { subtitle: 'Measurable thresholds. "Current" values are filled by evidence, not typed here.' })}
+    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="criteria">Add target</button>`, { subtitle: 'Numbers to hit. Current results come from testing and the pilot, not typed here.' })}
 
-    ${section('Evidence requirements', html`<div class="card table-card"><table class="table table-edit">
-      <thead><tr><th>Must be true before the first authority change</th><th>Source</th><th></th></tr></thead>
+    ${section('Decision requirements', html`<div class="card table-card"><table class="table table-edit">
+      <thead><tr><th>Must be true before the AI gets any authority</th><th>Source</th><th></th></tr></thead>
       <tbody data-rows="requirements">${requirements.map(rrow)}</tbody>
     </table></div>
-    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add requirement</button>`, { subtitle: 'A checklist, not a score. Readiness is "N of M met".' })}
+    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add check</button>`, { subtitle: 'What we need before expanding. A checklist, not a score: "Ready for a decision?" shows as "X of Y checks met".' })}
 
     <div class="card authorize">
       <p class="eyebrow">Save</p>
-      <label class="field field-stack"><span>Reason <span class="muted small">(required if a risk-derived default is loosened or removed; otherwise optional)</span></span><input type="text" name="reason" maxlength="200" placeholder="${saved ? 'What changed and why.' : 'Saved before testing.'}"></label>
-      <p class="muted small">Core rows (a quality threshold, a severe-error threshold, a minimum case count) can be adjusted but not removed. Lowering a default threshold, reducing a case count or removing a default row is kept on the version with your reason.</p>
-      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, writes ${saved ? `criteria v${v.criteria + 1} and requirements v${v.requirements + 1}` : 'criteria v1 and requirements v1'} for ${cap.name}, dated ${fmtDate(state.today)}. Until the first test run you can save again; after it, changes need a proposed amendment.</p>
-      <button class="btn btn-primary btn-block" type="submit">${saved ? 'Save new versions' : 'Save criteria and requirements'}</button>
+      <label class="field field-stack"><span>Why are you changing this? <span class="muted small">(Required if you lower or remove a starting value from the risk profile.)</span></span><input type="text" name="reason" maxlength="200" placeholder="${saved ? 'What changed and why.' : 'e.g. First version, before testing.'}"></label>
+      <p class="muted small">Required rows (quality, severe errors, minimum cases) can be adjusted but not removed. If you lower a starting value or remove a row, your reason is saved with the change.</p>
+      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}. Changes are kept in history. You can keep editing until the first test runs; after that, changes need approval.</p>
+      <button class="btn btn-primary btn-block" type="submit">${saved ? 'Save changes' : 'Save targets'}</button>
     </div>
   </form>
   <template id="row-criteria">${row({ id: '', name: '', target: '', note: '', source: 'Written by hand' }, 0)}</template>
