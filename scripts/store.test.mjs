@@ -4082,7 +4082,7 @@ test('Agent runs: the site never calls a model, and each real recording links it
   assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/blob\/main\/agent\/runs\/ledger\.md\?plain=1#L10">ledger row<\/a>/);
   assert.match(out, /href="https:\/\/github\.com\/pedringt\/authority-lab\/commit\/624a7c96137f065669ab58ad9749df991cd29b3c">commit 624a7c9<\/a>/);
   // The first local runs say so instead of linking an Actions run.
-  assert.match(out, /Made outside GitHub: Run from Paige&#39;s machine on Paige&#39;s earlier Anthropic account, before paid runs moved to GitHub Actions\. There's no Actions run or approval to link/);
+  assert.match(out, /Made outside GitHub: Run from Paige&#39;s machine, before paid runs moved to GitHub Actions\. There's no Actions run or approval to link/);
   // Every real recording on the page carries a proof line; dry runs say they aren't real.
   const real = runs.filter((r) => r.source === 'recorded').length;
   assert.equal((out.match(/<span class="muted">Proof:<\/span>/g) || []).length, real);

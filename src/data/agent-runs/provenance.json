@@ -1,8 +1,8 @@
 {
   "about": "Where each real recording came from, so anyone can check it. GitHub runs link the Actions run (with who approved it in the model-runs environment), the ledger row and the commit that added the recording. agent/run.mjs adds an entry for every new live run; the commit isn't known until after the run, so new entries link the file's history instead.",
   "runs": {
-    "2026-10-10-claude-opus-5-5.json": { "via": "local", "ledgerLine": 7, "commit": "09e7b05efe4070351b32b1279b8d5b46d54e1788", "note": "Run from Paige's machine on Paige's earlier Anthropic account, before paid runs moved to GitHub Actions" },
-    "2026-10-10-claude-haiku-5-5.json": { "via": "local", "ledgerLine": 7, "commit": "09e7b05efe4070351b32b1279b8d5b46d54e1788", "note": "Run from Paige's machine on Paige's earlier Anthropic account, before paid runs moved to GitHub Actions" },
+    "2026-10-10-claude-opus-5-5.json": { "via": "local", "ledgerLine": 7, "commit": "09e7b05efe4070351b32b1279b8d5b46d54e1788", "note": "Run from Paige's machine, before paid runs moved to GitHub Actions" },
+    "2026-10-10-claude-haiku-5-5.json": { "via": "local", "ledgerLine": 7, "commit": "09e7b05efe4070351b32b1279b8d5b46d54e1788", "note": "Run from Paige's machine, before paid runs moved to GitHub Actions" },
     "2026-10-10-claude-haiku-5-5-shared.json": { "via": "github-actions", "actionsRun": 38063334929, "approvedBy": "pedringt", "ledgerLine": 8, "commit": "c1ceb01e39004df44cb22871160004a64c7623f2" },
     "2026-10-10-claude-opus-5-5-x5.json": { "via": "github-actions", "actionsRun": 38070415162, "approvedBy": "pedringt", "ledgerLine": 10, "commit": "624a7c96137f065669ab58ad9749df991cd29b3c" },
     "2026-10-10-claude-sonnet-5-5-x5.json": { "via": "github-actions", "actionsRun": 38070415162, "approvedBy": "pedringt", "ledgerLine": 10, "commit": "624a7c96137f065669ab58ad9749df991cd29b3c" },

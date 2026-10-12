@@ -161,7 +161,7 @@ The product decisions behind Authority Lab, why they were made, and what's next.
   - **Old addresses still work.** `routes.js` rewrites the old tabs and the old Evidence, Tests and Agent runs pages to where they live now, keeping their filters.
 - **Agent runs show their proof (2026-10-11):** under the intro, one line says "This site never calls a model. Every run here was recorded and approved; follow the links to check."
   - **Runs made on GitHub** link to the GitHub Actions run, which names who approved it in the `model-runs` environment, plus the ledger row and the commit that added the recording.
-  - **Recordings made outside GitHub** (the first local runs, on Paige's earlier account) say so instead of linking an Actions run. They still link their ledger row and commit.
+  - **Recordings made outside GitHub** (the first local runs, from Paige's machine) say so instead of linking an Actions run. They still link their ledger row and commit.
   - **Dry runs** say no model was called and nothing was spent.
   - **Where the links come from:** `src/data/agent-runs/provenance.json`. `agent/run.mjs` adds an entry for every new live run. On GitHub it records the run id and the approver, which the workflow reads from the run's approvals. A new run's commit isn't known yet, so its link opens the file's history instead.
   - **A test checks every link.** Each real recording has an entry, and the recordings pointing at a ledger row add up to that row's cost. Where the git history is available, the commit is the one that added the file.
