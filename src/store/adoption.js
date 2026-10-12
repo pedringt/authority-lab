@@ -43,10 +43,10 @@ function rubberStamping(state, capabilityId, t) {
   if (!reasons.length) return null;
   return {
     id: 'rubber-stamping',
-    title: 'Possible rubber-stamping',
+    title: 'Approvals may not be real reviews',
     what: `${reasons.join('; ')}.`,
-    why: 'Approvals that come this fast, or this uniformly, may mean people are clicking through rather than reviewing. Then the "needs a person" safeguard is only on paper.',
-    source: log.length ? `${real.length ? `${real.length} real queue decisions and ` : ''}${log.length} simulated reviews (${SIMULATED}; decision times exist only there)` : `${real.length} real queue decisions`,
+    why: 'When nearly everything is approved, or approved this fast, people may be clicking through without reading. Then asking a person doesn\'t protect anything.',
+    source: log.length ? `${real.length ? `${real.length} real approval decisions and ` : ''}${log.length} simulated reviews (${SIMULATED}; only the simulated reviews have timings)` : `${real.length} real approval decisions`,
     simulated: log.length > 0,
   };
 }
@@ -61,10 +61,10 @@ function risingOverrides(state, capabilityId, t) {
   if (!rising || rise < t.overrideRisePoints) return null;
   return {
     id: 'rising-overrides',
-    title: 'Overrides are rising',
-    what: `The override rate rose every week for three weeks: ${weeks.map((w) => `${w.rate}%`).join(' → ')} (${rise} points; warning at ${t.overrideRisePoints}).`,
-    why: 'People reversing more of the AI\'s decisions week after week suggests its quality or its fit is slipping, before any restriction rule fires.',
-    source: `Weekly override rates (${SIMULATED})`,
+    title: 'Reviewers are reversing more',
+    what: `The share of AI decisions reversed rose every week for three weeks: ${weeks.map((w) => `${w.rate}%`).join(' → ')} (up ${rise} points; warning at ${t.overrideRisePoints}).`,
+    why: 'People reversing more of the AI\'s decisions week after week suggests its quality or fit is slipping, before any safety limit is crossed.',
+    source: `Weekly reversal rates (${SIMULATED})`,
     simulated: true,
   };
 }
@@ -76,10 +76,10 @@ function waitingTooLong(state, capabilityId, t) {
   const oldest = Math.max(...old.map((x) => daysBetween(x.date, state.today)));
   return {
     id: 'waiting-too-long',
-    title: 'Escalations left waiting',
-    what: `${old.length} action${old.length === 1 ? '' : 's'} ha${old.length === 1 ? 's' : 've'} waited for a person more than ${t.waitDays} days (oldest: ${oldest} days): ${old.map((x) => x.id).join(', ')}.`,
-    why: 'Customers wait while escalations sit. If it keeps happening, people may start working around the queue, or approving in bulk to clear it.',
-    source: 'The waiting queue (this workspace)',
+    title: 'Approvals left waiting',
+    what: `${old.length} action${old.length === 1 ? '' : 's'} ha${old.length === 1 ? 's' : 've'} waited for approval more than ${t.waitDays} days (oldest: ${oldest} days): ${old.map((x) => x.id).join(', ')}.`,
+    why: 'Customers wait while these sit. If it keeps happening, people may start working around the AI, or approving in bulk to clear the list.',
+    source: 'Actions that need approval (this workspace)',
     simulated: false,
   };
 }
@@ -94,10 +94,10 @@ function workarounds(state, capabilityId) {
   if (!manual.length) return null;
   return {
     id: 'workarounds',
-    title: 'Cases handled outside the agent',
-    what: `${manual.length} refund${manual.length === 1 ? ' was' : 's were'} issued by hand since ${rec.id} (${rec.date}), not by the AI or through the waiting queue: ${manual.map((r) => `${r.id} on ${r.orderId}`).join(', ')}.`,
-    why: 'Work-arounds hide cases from the gate log, the evidence and the restriction rules, and usually mean the process is getting in people\'s way.',
-    source: 'The refund ledger (this workspace)',
+    title: 'Refunds done by hand',
+    what: `${manual.length} refund${manual.length === 1 ? ' was' : 's were'} issued by hand since ${rec.id} (${rec.date}), not by the AI or through an approval: ${manual.map((r) => `${r.id} on ${r.orderId}`).join(', ')}.`,
+    why: 'Work done outside the AI doesn\'t show up in the logged actions, the evidence or the safety limits. It usually means the process is getting in people\'s way.',
+    source: 'Refund records (this workspace)',
     simulated: false,
   };
 }

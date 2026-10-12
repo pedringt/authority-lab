@@ -5,8 +5,6 @@ import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
 import { capabilityView } from './views/capability.js';
-import { testsView } from './views/tests.js';
-import { evidenceView } from './views/evidence.js';
 import { decisionsListView, decisionWorkspaceView, decisionRecordView } from './views/decisions.js';
 import { activityView } from './views/activity.js';
 import { versionsView } from './views/versions.js';
@@ -18,7 +16,6 @@ import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
 import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
-import { agentRunsView } from './views/agentruns.js';
 import { decisionBriefView } from './views/brief.js';
 
 const store = createStore({ storage: safeStorage() });
@@ -29,14 +26,13 @@ const demoDate = document.getElementById('demo-date');
 const brandWs = document.getElementById('brand-ws');
 const footData = document.getElementById('foot-data');
 
-// Five top-level places (#93). Tests live under Evidence, Activity under
-// Records, and People in the header.
+// Three top-level places (simplification pass). Evidence, tests and model
+// runs live inside each capability; People and the workspace are in the
+// Settings menu.
 const NAV = [
   ['overview', 'Overview'],
   ['capabilities', 'Capabilities'],
-  ['evidence', 'Evidence'],
   ['records', 'Records'],
-  ['agent-runs', 'Agent runs'],
 ];
 
 
@@ -66,65 +62,54 @@ function loadAgentRuns() {
     ]))
     .then((all) => { setTicketDefinitions(all.filter((x) => x.definitions).flatMap((x) => x.definitions)); agentRuns = { status: 'ready', runs: all.filter((x) => !x.definitions) }; })
     .catch((err) => { agentRuns = { status: 'error', runs: [], error: err.message }; })
-    .then(() => { if (parseRoute().parts[0] === 'agent-runs') render(); });
+    .then(() => { const { parts, query } = parseRoute(); if (parts[0] === 'capabilities' && query.get('show') === 'runs') render(); });
 }
 
+// Where an old address that named no capability should go.
+const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
+
 function parseRoute() {
-  const hash = canonicalHash(location.hash || '#/overview');
+  const hash = canonicalHash(location.hash || '#/overview', { focus: focusId() });
   const [path, qs] = hash.slice(1).split('?');
   const parts = path.split('/').filter(Boolean);
   return { parts, query: new URLSearchParams(qs || '') };
 }
 
-// Tests and Evidence are per capability; without one in the query they show
-// the capability the workspace is focused on.
-function capabilityFor(state, query) {
-  const id = query.get('capability');
-  if (id && getCapability(state, id)) return id;
-  const focus = focusCapability(state);
-  return focus ? focus.id : null;
-}
-
 function render() {
   // An old address is rewritten in place, without adding a history entry.
-  const canon = canonicalHash(location.hash);
+  const canon = canonicalHash(location.hash, { focus: focusId() });
   if (location.hash && canon !== location.hash) history.replaceState(null, '', canon);
   const state = store.get();
   setPeople(people(state));
   setToday(state.today);
   demoDate.textContent = fmtDate(state.today);
   brandWs.textContent = workspaceOf(state).name;
-  footData.textContent = state.startedEmpty ? 'AI outputs are simulated; nothing calls a model.' : 'All data is seeded and fictional.';
+  footData.textContent = state.startedEmpty ? 'AI responses here are simulated. Nothing calls a real model.' : 'All data is fictional demo data.';
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;
   let view;
   let title = 'Overview';
   const empty = !state.capabilities.length;
-  if (setupPending(state)) { view = workspaceSetupView(state, query, setupDraft); title = 'Set up the workspace'; }
+  if (setupPending(state)) { view = workspaceSetupView(state, query, setupDraft); title = 'Set up your workspace'; }
   else switch (root) {
     case 'capabilities':
       if (sub === 'new') { view = addCapabilityView(state, query); title = 'Add a capability'; }
-      else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub, query); title = 'Authority decision'; }
-      else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'Versions'; }
+      else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub, query); title = 'Decision'; }
+      else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
-      else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Contract builder'; }
-      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = 'Success criteria'; }
+      else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Set up rules'; }
+      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = 'Targets and decision requirements'; }
       else if (sub && action === 'stakeholders' && parts[3] === 'edit') { view = stakeholdersEditorView(state, sub, query); title = 'Stakeholders'; }
-      else if (sub && action === 'scenarios' && parts[3] === 'edit') { view = scenariosEditorView(state, sub, query); title = 'Scenario library'; }
-      else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Amend'; }
-      else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed amendment'; }
-      else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
+      else if (sub && action === 'scenarios' && parts[3] === 'edit') { view = scenariosEditorView(state, sub, query); title = 'Tests'; }
+      else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Propose a change'; }
+      else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed change'; }
+      else if (sub) {
+        if (query.get('tab') === 'evidence' && query.get('show') === 'runs') loadAgentRuns();
+        view = capabilityView(state, sub, query, { runs: agentRuns });
+        title = getCapability(state, sub)?.name || 'Capability';
+      }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
       break;
-    case 'evidence': {
-      // Evidence and the testing ground, one place (#93).
-      const showTests = query.get('show') === 'tests';
-      const capQ = query.get('capability') ? `&capability=${encodeURIComponent(query.get('capability'))}` : '';
-      const tabs = subNav([{ href: `#/evidence?show=evidence${capQ}`, label: 'Evidence', active: !showTests }, { href: `#/evidence?show=tests${capQ}`, label: 'Tests', active: showTests }], 'Evidence views');
-      view = empty ? noCapabilitiesView(state, showTests ? 'Testing ground' : 'Evidence') : html`${tabs}${showTests ? testsView(state, capabilityFor(state, query), query) : evidenceView(state, capabilityFor(state, query), query)}`;
-      title = showTests ? 'Tests' : 'Evidence';
-      break;
-    }
     case 'records': {
       // Decision records and the activity history, one place (#93).
       if (sub && action === 'brief') { view = decisionBriefView(state, sub); title = 'Decision brief'; break; }
@@ -137,8 +122,7 @@ function render() {
       break;
     }
     case 'people': view = peopleView(state, query); title = 'People'; break;
-    case 'agent-runs': loadAgentRuns(); view = agentRunsView(state, query, agentRuns); title = 'Agent runs'; break;
-    default: view = empty ? noCapabilitiesView(state, 'Where do we need to make a decision?') : overviewView(state); title = 'Overview';
+    default: view = empty ? noCapabilitiesView(state, 'Overview') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
 
@@ -161,7 +145,7 @@ function render() {
   const defaultName = (roster[defaultOwner] || roster[current] || {}).name || 'Nobody yet';
   // A demo control: a real version would know who is signed in. Only active
   // people can be chosen.
-  if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo control. A real version would use sign-in; this picker stands in for it so the demo can show different people proposing, approving and authorizing.">
+  if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo only. In a real product you'd be signed in. Switch people here to see how proposing, approving and deciding work for each role.">
     <span class="acting-label">Acting as</span>
     <select data-action="set-acting" aria-label="Demo: acting as">
       <option value="" ${state.actingAs ? '' : 'selected'}>${defaultName}${defaultOwner ? ' (owner)' : ''}</option>
@@ -188,6 +172,10 @@ function render() {
   }
   for (const id of opened) { const el = document.getElementById(id); if (el) el.open = true; }
   if (lastRoute === location.hash) window.scrollTo(0, y); else window.scrollTo(0, 0);
+  // Settings → Workspace opens People at the workspace section.
+  if (lastRoute !== location.hash && root === 'people' && query.get('focus') === 'workspace') { const ws = document.getElementById('workspace'); if (ws) ws.scrollIntoView(); }
+  // Opening a model run shows its steps.
+  if (lastRoute !== location.hash && query.get('run')) { const st = document.getElementById('steps'); if (st) st.scrollIntoView(); }
   lastRoute = location.hash;
 }
 let lastRoute = null;
@@ -255,7 +243,7 @@ const demoButtons = document.getElementById('demo-buttons');
 const demoConfirm = document.getElementById('demo-confirm');
 function askToErase(kind) {
   pendingErase = kind;
-  document.getElementById('demo-confirm-go').textContent = kind === 'start-empty' ? 'Erase and start empty' : 'Erase and reset demo';
+  document.getElementById('demo-confirm-go').textContent = kind === 'start-empty' ? 'Erase and start empty' : 'Erase and reset the demo';
   demoButtons.open = false;
   demoButtons.hidden = true;
   demoConfirm.hidden = false;
@@ -293,7 +281,7 @@ document.addEventListener('click', (e) => {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
       const rec = capData(store.get(), capId).decision.recordId;
-      location.hash = `#/decisions/${rec}`;
+      location.hash = `#/records/${rec}`;
     });
   }
   const builder = () => `#/capabilities/${capId}/contract/build`;
@@ -306,7 +294,7 @@ document.addEventListener('click', (e) => {
   if (action === 'section-unconfirm') tryDispatch(() => store.dispatch('confirmSection', capId, btn.dataset.section, false));
   if (action === 'contract-finalize') {
     tryDispatch(() => store.dispatch('finalizeContract', capId, { by: actor(store.get(), capId) }));
-    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=contract`;
+    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=rules`;
   }
   if (action === 'starter-add') {
     const route = `#/capabilities/${capId}/scenarios/edit`;
@@ -443,7 +431,7 @@ document.addEventListener('submit', (e) => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) });
       const after = capData(store.get(), capId).proposals;
-      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=stakeholders`;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=summary`;
     });
     return;
   }
@@ -453,7 +441,7 @@ document.addEventListener('submit', (e) => {
     const capId = parseRoute().parts[1];
     const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
     const scenarios = [...scForm.querySelectorAll('[data-rows="scenarios"] tr')].map((tr) => ({ id: val(tr, 'sc-id') || undefined, source: val(tr, 'sc-source'), group: val(tr, 'sc-group'), name: val(tr, 'sc-name'), situation: val(tr, 'sc-situation'), expected: val(tr, 'sc-expected') }));
-    dispatchOr(`#/capabilities/${capId}/scenarios/edit`, () => { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/tests?capability=${capId}`; });
+    dispatchOr(`#/capabilities/${capId}/scenarios/edit`, () => { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}?tab=evidence&show=tests`; });
     return;
   }
   const withdrawForm = e.target.closest('[data-form="withdraw-proposal"]');
@@ -507,7 +495,7 @@ document.addEventListener('submit', (e) => {
     const reason = new FormData(decideForm).get('reason');
     const decision = e.submitter && e.submitter.value === 'reject' ? 'rejectAction' : 'approveAction';
     const item = (store.get().actionQueue || []).find((x) => x.id === id);
-    const route = `#/capabilities/${item ? item.capabilityId : ''}?tab=waiting`;
+    const route = `#/capabilities/${item ? item.capabilityId : ''}?tab=decision&show=approvals`;
     dispatchOr(route, () => { store.dispatch(decision, id, { by: actor(store.get(), item && item.capabilityId), reason }); clearErrorOn(route, 'error'); render(); });
     return;
   }
@@ -544,7 +532,7 @@ document.addEventListener('submit', (e) => {
     const { criteria, requirements } = readCriteriaRows(critForm);
     dispatchOr(`#/capabilities/${capId}/criteria/edit`, () => {
       store.dispatch('saveCriteria', capId, { criteria, requirements, by: actor(store.get(), capId), reason: critForm.reason.value });
-      location.hash = `#/capabilities/${capId}?tab=criteria`;
+      location.hash = `#/capabilities/${capId}?tab=evidence&show=targets`;
     });
     return;
   }

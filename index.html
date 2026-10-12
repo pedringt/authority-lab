@@ -18,20 +18,23 @@
         <span class="brand-ws" id="brand-ws">Northstar Support</span>
       </div>
       <div class="demo-controls" role="group" aria-label="Demo controls">
-        <!-- The demo's controls in one small menu (#93). -->
-        <details class="menu demo-menu" id="demo-buttons">
-          <summary class="acting-demo" title="Seeded demo data. No real customers, money or model calls.">Demo</summary>
-          <div class="menu-list">
-            <button class="menu-item" data-action="start-empty" title="Swap the Northstar demo for a blank workspace to set up from scratch. Reset demo brings Northstar back.">Start empty</button>
-            <button class="menu-item" data-action="reset" title="Restore the seeded Northstar demo">Reset demo</button>
-            <p class="menu-note">Seeded demo data. No real customers, money or model calls.</p>
-          </div>
-        </details>
+        <span class="acting-demo" title="Demo data only. No real customers, money or model calls.">Demo</span>
         <div id="acting"></div>
         <span class="demo-sep" aria-hidden="true"></span>
         <span class="demo-date" id="demo-date">Oct 7</span>
-        <span class="demo-sep" aria-hidden="true"></span>
-        <a class="header-link" href="#/people">People</a>
+        <!-- People, the workspace and the demo controls, behind one gear (simplification pass). -->
+        <details class="menu settings-menu" id="demo-buttons">
+          <summary class="gear" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82 1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></summary>
+          <div class="menu-list">
+            <p class="menu-label">Settings</p>
+            <a class="menu-item" href="#/people">People</a>
+            <a class="menu-item" href="#/people?focus=workspace">Workspace</a>
+            <p class="menu-label">Demo</p>
+            <button class="menu-item" data-action="start-empty" title="Replace the Northstar demo with a blank workspace. Use Reset demo to bring Northstar back.">Start empty</button>
+            <button class="menu-item" data-action="reset" title="Bring back the original Northstar demo">Reset demo</button>
+            <p class="menu-note">Demo data only. No real customers, money or model calls.</p>
+          </div>
+        </details>
         <span class="demo-confirm" id="demo-confirm" role="group" aria-label="Confirm erasing all records" hidden>
           <span class="demo-confirm-text">This erases all records in this workspace. Continue?</span>
           <button class="btn btn-danger btn-sm" data-action="confirm-erase" id="demo-confirm-go">Erase</button>
@@ -43,7 +46,7 @@
   </header>
   <main class="app" id="app" tabindex="-1"></main>
   <footer class="foot">
-    <p><strong>AI interprets. Software enforces. Humans authorize.</strong> A product prototype for deciding what an AI capability should be allowed to do, based on evidence. <span id="foot-data">All data is seeded and fictional.</span></p>
+    <p><strong>AI interprets. Software enforces. Humans authorize.</strong> A prototype for deciding, based on evidence, what an AI should be allowed to do. <span id="foot-data">All data is fictional demo data.</span></p>
   </footer>
   <script type="module" src="src/main.js"></script>
 </body>

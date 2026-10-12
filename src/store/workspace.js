@@ -56,19 +56,19 @@ export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = 
     .map((p) => ({ name: String(p.name || '').trim(), title: String(p.title || '').trim(), team: String(p.team || '').trim(), workspaceAdmin: Boolean(p.workspaceAdmin), riskApprover: Boolean(p.riskApprover) }))
     .filter((p) => p.name || p.title || p.team);
   if (rows.some((p) => !p.name || !p.title || !p.team)) throw new Error('Every person needs a name, a title and a team.');
-  if (rows.length < 2) throw new Error('The founding roster needs at least two people.');
+  if (rows.length < 2) throw new Error('Add at least two people.');
   const keys = rows.map((p) => personKey(p.name));
   if (new Set(keys).size !== keys.length) throw new Error('Two people have the same name. Make each name distinct.');
   const admins = rows.filter((p) => p.workspaceAdmin);
-  if (admins.length < MIN_FOUNDING_ADMINS) throw new Error(`The founding roster needs at least ${MIN_FOUNDING_ADMINS} workspace admins, because every later rights change needs a different admin to approve it.`);
+  if (admins.length < MIN_FOUNDING_ADMINS) throw new Error(`Mark at least ${MIN_FOUNDING_ADMINS} people as workspace admins. After setup, changing anyone's rights needs a second admin's approval.`);
 
   const byKey = personKey(by);
   if (!byKey) throw new Error('Choose who is setting this up.');
-  if (!admins.some((p) => personKey(p.name) === byKey)) throw new Error(`${String(by).trim()} is not one of the founding workspace admins. The person setting the workspace up must be one.`);
+  if (!admins.some((p) => personKey(p.name) === byKey)) throw new Error(`${String(by).trim()} isn't marked as a workspace admin. Choose a workspace admin to set this up.`);
   const value = Object.fromEntries(rows.map((p, i) => [keys[i], { name: p.name, role: p.title, team: p.team, active: true, rights: { riskApprover: p.riskApprover, workspaceAdmin: p.workspaceAdmin } }]));
   const founder = byKey;
   const rosterState = { roster: { versions: [{ value }] } };
-  const version = { version: 1, date: state.today, author: founder, authorAt: snapshotPerson(rosterState, founder), reason: 'Founding roster, recorded at workspace setup.', afterEvidence: false, before: null, value: clone(value) };
+  const version = { version: 1, date: state.today, author: founder, authorAt: snapshotPerson(rosterState, founder), reason: 'People added when the workspace was set up.', afterEvidence: false, before: null, value: clone(value) };
   const riskNames = rows.filter((p) => p.riskApprover).map((p) => p.name);
   const event = {
     id: `ACT-${Date.now()}-w`,
@@ -76,7 +76,7 @@ export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = 
     kind: 'milestone',
     surfaced: true,
     title: 'Workspace set up',
-    body: `Set up by ${value[founder].name}. ${ws.name}, workflow ${wf.name}. Founding roster of ${rows.length}: workspace admins ${admins.map((p) => p.name).join(', ')}; Risk approvers ${riskNames.length ? riskNames.join(', ') : 'none yet'}. From here, every rights change is a proposal approved by a different admin.`,
+    body: `${value[founder].name} set up ${ws.name} for the ${wf.name} workflow with ${rows.length} people. Workspace admins: ${admins.map((p) => p.name).join(', ')}. Risk approvers: ${riskNames.length ? riskNames.join(', ') : 'none yet'}. From now on, changing anyone's rights needs a second admin's approval.`,
     capabilityId: null,
     link: '#/people',
   };
@@ -112,7 +112,7 @@ export function renameWorkspace(state, { workspace = {}, workflow = {}, by, reas
   if (state.setupPending) throw new Error('Set up the workspace first.');
   requireAdmin(state, by);
   const why = String(reason || '').trim();
-  if (why.length < 10) throw new Error('A rename needs a reason (a sentence).');
+  if (why.length < 10) throw new Error('Add a reason for the change (a sentence).');
   const before = { workspace: { ...workspaceOf(state) }, workflow: { ...workflowOf(state) } };
   const next = {
     workspace: { ...before.workspace, name: String(workspace.name ?? before.workspace.name).trim(), description: String(workspace.description ?? before.workspace.description).trim() },
@@ -121,7 +121,7 @@ export function renameWorkspace(state, { workspace = {}, workflow = {}, by, reas
   if (next.workspace.name.length < 2) throw new Error('Name the workspace.');
   if (next.workflow.name.length < 2) throw new Error('Name the workflow.');
   const same = (a, b) => a.name === b.name && a.description === b.description;
-  if (same(before.workspace, next.workspace) && same(before.workflow, next.workflow)) throw new Error('Nothing changed.');
+  if (same(before.workspace, next.workspace) && same(before.workflow, next.workflow)) throw new Error('Nothing to save: the names and descriptions are unchanged.');
   const history = state.workspaceHistory || [];
   const entry = {
     version: history.length + 2,
@@ -140,9 +140,13 @@ export function renameWorkspace(state, { workspace = {}, workflow = {}, by, reas
     before.workspace.description !== next.workspace.description ? 'workspace description' : null,
     before.workflow.description !== next.workflow.description ? 'workflow description' : null,
   ].filter(Boolean);
-  const event = { id: `ACT-${Date.now()}-n`, date: state.today, kind: 'workspace', surfaced: true, title: 'Workspace renamed', body: `${people(state)[by].name} changed the ${changed.join(', ')}. Reason: ${why} Records written before keep the names in force then.`, capabilityId: null, link: '#/people' };
+  const event = { id: `ACT-${Date.now()}-n`, date: state.today, kind: 'workspace', surfaced: true, title: 'Workspace details changed', body: `${people(state)[by].name} changed the ${changed.join(', ')}. Reason: ${endSentence(why)} Older records keep the names they were made under.`, capabilityId: null, link: '#/people?focus=workspace' };
   return { ...state, workspace: next.workspace, workflow: next.workflow, workspaceHistory: [...history, entry], activity: [event, ...state.activity] };
 }
+
+// A reason typed without a final full stop still ends its sentence, so the
+// next sentence doesn't run into it.
+const endSentence = (text) => (/[.!?]$/.test(text) ? text : `${text}.`);
 
 // The workspace and workflow names in force when a decision record was
 // written: the "before" of the first rename made after it, else the current.
