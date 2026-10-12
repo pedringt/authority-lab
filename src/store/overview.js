@@ -57,7 +57,7 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
     if (review.restriction && auto) {
       out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
         title: `Review why ${cap.name} was moved back to ${levelName(auto.next.level)}`,
-        why: `On ${fmt(auto.date)} it crossed a safety limit (${capData(state, cap.id).monitoring.reading}) and went back to ${levelName(auto.next.level)} automatically. It can't get more authority until someone records what happened and what changes.`,
+        why: `On ${fmt(auto.date)} it crossed a safety limit: ${capData(state, cap.id).monitoring.reading}. It went back to ${levelName(auto.next.level)} automatically. It can't get more authority until someone records what happened and what changes.`,
         who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitoring') });
     } else if (review.incidents.length) {
       out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
@@ -187,9 +187,11 @@ export function importantResults(state, { fmt = (d) => d } = {}) {
         text: `${s.name}: ${s.accuracy}% accurate, on only ${s.cases} cases.`,
         so: 'These cases stay with a person. Any move to more authority would leave them out.' });
     }
-    for (const e of d.evidence.filter((x) => x.source === 'Incident' && x.status === 'fail' && x.risk === 'High')) {
+    // A safety limit that moved the AI back is already the result above; one
+    // that opened an incident without moving it is its own result.
+    for (const e of d.evidence.filter((x) => x.source === 'Incident' && x.status === 'fail' && x.risk === 'High' && !(x.safetyLimit && auto && d.reviewRequired))) {
       const sentences = (String(e.detail || '').replace(/^Scenario [A-Z]-\d+:\s*/, '').match(/[^.!?]+[.!?]+/g) || [e.detail || '']).map((x) => x.trim());
-      out.push({ tone: 'fail', label: 'Severe failure', capabilityId: cap.id, cap: cap.name,
+      out.push({ tone: 'fail', label: e.safetyLimit ? 'Safety limit crossed' : 'Severe failure', capabilityId: cap.id, cap: cap.name,
         text: e.metric.replace(/^[A-Z]+-\d+:\s*/, '').replace(/^./, (c) => c.toUpperCase()) + '.',
         so: sentences.slice(0, 2).join(' ').replace(/^./, (c) => c.toUpperCase()) });
     }

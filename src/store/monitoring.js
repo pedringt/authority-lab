@@ -134,7 +134,7 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
   const ruleReadings = { ...(d.ruleReadings || {}), [rule.text]: value };
 
   if (rule.kind === 'incident') {
-    const evidence = [{ id: evidenceId, source: 'Incident', metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `A safety limit was crossed: "${rule.text}". ${errors.join(' ')} This limit opens an incident; authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
+    const evidence = [{ id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `A safety limit was crossed: "${rule.text}". ${errors.join(' ')} This limit opens an incident; authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
     const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed: incident opened', body: `${cap.name}: ${errors.join(' ')} Authority didn't change.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
     const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `A safety limit was crossed: ${cap.name}`, body: `${incidentId}: ${errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` };
     const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: errors }] });
@@ -183,7 +183,7 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
     ...state.activity,
   ];
   const evidence = [
-    { id: evidenceId, source: 'Incident', metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} The AI was moved back to ${levelName(next.level)} automatically.`, link: `#/decisions/${id}` },
+    { id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} The AI was moved back to ${levelName(next.level)} automatically.`, link: `#/decisions/${id}` },
     ...d.evidence,
   ];
   const capabilities = state.capabilities.map((c) => (c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c));

@@ -4138,6 +4138,11 @@ test('Overview after an automatic restriction: the review comes first, the resul
   assert.match(todo, />Record the review</);
   assert.doesNotMatch(todo, /Decide whether Refund recommendation/);
   assert.match(out, /Moved back automatically<\/span>/);
+  // The crossing shows once: not again as a severe failure, and with no doubled brackets.
+  const results = out.slice(out.indexOf('id="results"'), out.indexOf('id="authority"'));
+  assert.equal((results.match(/safety limit/gi) || []).length, 1, 'one result for the crossing');
+  assert.doesNotMatch(results, /Safety limit crossed<\/span>|Severe failure<\/span>[^<]*<div class="ov-text"><strong>Safety limit/);
+  assert.match(todo, /it crossed a safety limit: [^()]*\(limit 5%\)\. It went back to Draft automatically\./);
   assert.match(out, /Review needed before it can get more authority/);
   assert.match(out, /Moved back<\/span><div class="ov-plain">/);
 });
