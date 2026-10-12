@@ -16,7 +16,7 @@ export function defaultCriteria(risk = {}) {
     { id: 'speed', name: 'Speed', target: '50% faster average resolution', source: 'Default for every capability', note: 'Compared with the same cases handled without the AI.' },
     { id: 'cost', name: 'Cost', target: 'AI operating cost < $0.20 per case', source: 'Default for every capability', note: 'Model and retrieval cost only. Reviewer time is review burden.' },
     { id: 'adoption', name: 'Adoption', target: '≥ 70% recommendation acceptance', source: 'Default for every capability', note: 'Acceptance is not correctness. Sample accepted recommendations against an independent reviewer.' },
-    { id: 'confidence', name: 'Stakeholder confidence', target: 'Key stakeholders agree the proposed authority is appropriate', source: 'Default for every capability', note: 'Kept qualitative. Positions are recorded at decision time, not averaged.' },
+    { id: 'confidence', name: 'Stakeholder confidence', target: 'Key stakeholders agree the proposed authority is appropriate', source: 'Default for every capability', note: 'Not scored. Each stakeholder\'s view is recorded with the decision.' },
   ];
   if (risk.exposure === 'Customer-facing') {
     items.splice(2, 0, { id: 'customer-harm', name: 'Customer-visible errors', target: '0 customer-visible errors that a person would have caught', source: 'Default for customer-facing exposure', note: 'Any wrong output that reached a customer.' });

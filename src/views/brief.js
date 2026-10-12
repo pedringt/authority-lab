@@ -16,7 +16,7 @@ function disagreement(state, rec) {
   const list = v && Array.isArray(v.value) ? v.value.filter((s) => s.position) : [];
   if (!list.length) return none('No stakeholder positions were recorded.');
   const stances = [...new Set(list.map((s) => s.position))];
-  return html`<p>${stances.length > 1 ? `Not unanimous: ${stances.length} different positions among ${list.length} people.` : `Unanimous: ${list.length} ${list.length === 1 ? 'person' : 'people'}.`}</p>
+  return html`<p>${stances.length > 1 ? `People disagreed: ${stances.length} different positions among ${list.length} people.` : `Everyone agreed (${list.length} ${list.length === 1 ? 'person' : 'people'}).`}</p>
     <ul class="brief-list">${list.map((s) => html`<li><strong>${s.team}</strong> (${personAt(null, s.person).name}): ${s.position}</li>`)}</ul>`;
 }
 
@@ -24,15 +24,15 @@ function disagreement(state, rec) {
 function pullBack(state, rec) {
   const c = recordVersion(state, rec, 'contract');
   const lines = c && c.value && Array.isArray(c.value.autoRestriction) ? c.value.autoRestriction : [];
-  if (!lines.length) return none('The contract in force had no automatic restriction lines.');
-  return html`<ul class="brief-list">${lines.map((l) => html`<li>${l}</li>`)}</ul><p class="muted">Software applies these on its own. After one fires, a person records a post-incident review before authority can expand again.</p>`;
+  if (!lines.length) return none('The rules at the time didn\'t say when authority is reduced automatically.');
+  return html`<ul class="brief-list">${lines.map((l) => html`<li>${l}</li>`)}</ul><p class="muted">If one of these happens, the AI is moved back a level automatically. Someone must then record what happened (the post-incident review) before it can get more authority again.</p>`;
 }
 
 function watch(rec) {
   const p = rec.rolloutPlan;
   const items = [];
   if (p) items.push(html`<li><strong>Rollout:</strong> ${p.ownerAt ? p.ownerAt.name : p.owner} owns it, from ${fmtDate(p.startDate)}; review on <strong>${fmtDate(p.reviewDate)}</strong>.</li>`, html`<li><strong>Feedback:</strong> ${p.feedbackChannel}</li>`);
-  if (rec.openCondition) items.push(html`<li><strong>Open condition:</strong> ${rec.openCondition}</li>`);
+  if (rec.openCondition) items.push(html`<li><strong>Still to resolve:</strong> ${rec.openCondition}</li>`);
   return items.length ? html`<ul class="brief-list">${items}</ul>` : none('No rollout plan was recorded.');
 }
 
@@ -49,19 +49,19 @@ export function decisionBriefView(state, recordId) {
     <header class="brief-head">
       <p class="eyebrow">Decision brief · ${rec.id}</p>
       <h1>${cap ? cap.name : rec.capabilityId}: ${rec.previous ? `Level ${rec.previous.level}` : 'new'} → Level ${rec.next.level}</h1>
-      <p class="brief-meta">${fmtDate(rec.date)} · ${auto ? 'Applied automatically by a contract rule' : html`Authorized by <strong>${who.name}</strong>, ${who.role}`} · ${levelText(rec.previous)} → <strong>${levelText(rec.next)}</strong></p>
+      <p class="brief-meta">${fmtDate(rec.date)} · ${auto ? `The AI was moved back to ${levelName(rec.next.level)} after crossing a safety limit (automatic restriction)` : html`Authorized by <strong>${who.name}</strong>, ${who.role}`} · ${levelText(rec.previous)} → <strong>${levelText(rec.next)}</strong></p>
     </header>
     <div class="brief-grid">
-      ${block('What changed', html`<p>${rec.scope}</p>${c ? html`<p class="muted">Limits: up to $${c.maxValue}${c.maxDailyTotal != null ? `, $${c.maxDailyTotal} a day in all` : ''}${c.noFraudFlag ? ', no fraud flag' : ''}${c.noChargeback ? ', no chargeback' : ''}${c.policyClear ? ', clear policy' : ''}, model-reported confidence at least ${c.minConfidence}%.</p>` : ''}`)}
+      ${block('What changed', html`<p>${rec.scope}</p>${c ? html`<p class="muted">Limits: up to $${c.maxValue}${c.maxDailyTotal != null ? `, $${c.maxDailyTotal} a day in all` : ''}${c.maxDailyCount != null ? `, ${c.maxDailyCount} ${(cap && cap.actionNoun) || 'actions'} a day in all` : ''}${c.noFraudFlag ? ', no fraud flag' : ''}${c.noChargeback ? ', no chargeback' : ''}${c.policyClear ? ', clear policy' : ''}, confidence at least ${c.minConfidence}% (model-reported, not verified).</p>` : ''}`)}
       ${block('Why', html`<p>${rec.rationale}</p>`)}
       ${block('The evidence', ev.length ? html`<ul class="brief-list">${ev.map((e) => html`<li>${e}</li>`)}</ul>` : none('No evidence snapshot was recorded.'))}
-      ${block('The disagreement', auto ? none('Not applicable: no person decided this.') : disagreement(state, rec))}
+      ${block('Where people stood', auto ? none('Not applicable: no person decided this.') : disagreement(state, rec))}
       ${block('Expected impact', rec.expectedOutcomes && rec.expectedOutcomes.length
         ? html`<ul class="brief-list">${rec.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>`
-        : none(auto || !(rec.previous && rec.next.level > rec.previous.level) ? 'Not applicable: authority did not expand.' : 'Not recorded: this decision predates expected outcomes.'))}
+        : none(auto || !(rec.previous && rec.next.level > rec.previous.level) ? 'Not applicable: authority did not expand.' : 'Not recorded: this decision was made before expected outcomes were required.'))}
       ${block('What we\'ll watch', watch(rec))}
       ${block('When it gets pulled back', pullBack(state, rec))}
     </div>
-    <p class="brief-foot muted">Built only from decision record ${rec.id} and the contract and stakeholder versions in force when it was written. Authority Lab · fictional demo data.</p>
+    <p class="brief-foot muted">Built only from decision record ${rec.id} and the rules and stakeholders in place on that date, so it reads the same later. Authority Lab · fictional demo data.</p>
   </article>`;
 }

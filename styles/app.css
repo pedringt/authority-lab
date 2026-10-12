@@ -709,3 +709,49 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .ladder i.on { background: var(--accent); border-color: var(--accent); }
 .ladder i.next { border-style: dashed; border-color: var(--decide); background: var(--decide-bg); }
 @media (max-width: 720px) { .ov-item { grid-template-columns: 1fr; } .ov-item .btn { justify-self: start; } .ov-result { grid-template-columns: 1fr; } }
+
+/* Capability Summary (simplification pass): the authority dominates */
+.sum-authority { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0; padding: 24px; }
+.sum-now { padding-right: 24px; min-width: 0; }
+.sum-level { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.sum-level .ladder i { width: 18px; height: 18px; }
+.sum-means { font-size: 16px; color: var(--text-2); margin: 10px 0 0; max-width: 52ch; }
+.sum-note { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--radius); background: var(--restr-bg); border: 1px solid var(--restr-bd); font-size: 14px; }
+.sum-facts { border-left: 1px solid var(--border); padding-left: 24px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.sum-fact .fact-label { margin-bottom: 3px; }
+.sum-fact p { margin: 2px 0 0; color: var(--text-2); font-size: 14px; }
+.sum-fact .btn { margin-top: 8px; }
+.sum-below { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.sum-below .card + .card { margin-top: 0; }
+.sum-small h2 { font-size: 15px; margin-bottom: 10px; }
+.sum-people, .sum-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 14px; }
+.sum-people li, .sum-tasks li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sum-pos { color: var(--text-2); text-align: right; }
+.sum-pos-hold, .sum-pos-restrict { color: var(--watch); }
+.sum-links { margin: 10px 0 0; }
+.sum-all { margin-top: 6px; font-size: 14px; }
+.sum-all > summary { cursor: pointer; color: var(--link); font-size: 13px; }
+.sum-all[open] > summary { margin-bottom: 10px; }
+.sum-tasks li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.tab-panel > .run-proof-intro { margin-bottom: 14px; }
+.cap-level a { color: var(--text-2); font-weight: 600; font-size: 14px; white-space: nowrap; }
+.contract-wide { grid-column: 1 / -1; }
+.contract-wide .two-col { margin-top: 4px; }
+.decision-entry h2 { margin: 2px 0 8px; }
+.mon-rollout { margin: 8px 0 0; }
+.tests-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .sum-authority { grid-template-columns: 1fr; padding: 18px; }
+  .sum-now { padding-right: 0; }
+  .sum-facts { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 16px; margin-top: 18px; }
+  .sum-below { grid-template-columns: 1fr; }
+}
+
+/* Phone width: grid children never push the page wider than the screen. */
+.evidence-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.decision-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+@media (max-width: 960px) { .decision-grid { grid-template-columns: minmax(0, 1fr); } .level-scale, .level-legend { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .evidence-grid { grid-template-columns: minmax(0, 1fr); } }
+.evidence-item, .decision-main, .decision-side { min-width: 0; }
+.evidence-item { overflow-wrap: anywhere; }
+.evidence-head > div { min-width: 0; } .evidence-head .badge { flex-shrink: 0; }

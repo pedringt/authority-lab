@@ -9,6 +9,10 @@ import { initialState } from './state.js';
 import { selectDecision, authorize } from './decisions.js';
 import { callTool, fileTicket } from './tools.js';
 import { ticketDefinition } from './agentruns.js';
+import { verdictLabel, ruleKindLabel, claimsText } from './gate.js';
+
+// A verdict and its rule kind in words, for showing; the ids stay as recorded.
+const labelsOf = (g) => (g ? { verdict: verdictLabel(g.verdict), rule: g.rule ? ruleKindLabel(g.rule.kind) : '' } : null);
 
 // The starting state a recording names: the seed, optionally after the
 // capability's pending decision is authorized with the given option.
@@ -42,12 +46,12 @@ export function replayTicket(run, ticket, from = null) {
   if (sender) state = fileTicket(state, { id: ticket.ticketId, sender });
   const ticketId = sender ? ticket.ticketId : undefined;
   const steps = ticket.steps.map((step) => {
-    if (step.refusedBySchema) return { ...step, replay: null, same: true };
+    if (step.refusedBySchema) return { ...step, replay: null, same: true, labels: { gate: null, replay: null, claims: '' } };
     const out = callTool(state, run.start.capabilityId, { ...toolCall(step.tool, step.input), ...(ticketId ? { ticketId } : {}) }, { source });
     state = out.state;
     const replay = { verdict: out.check.verdict, rule: { kind: out.check.rule.kind, text: out.check.rule.text }, reason: out.check.reason };
     const same = Boolean(step.gate) && step.gate.verdict === replay.verdict && step.gate.rule.kind === replay.rule.kind;
-    return { ...step, replay, same };
+    return { ...step, replay, same, labels: { gate: labelsOf(step.gate), replay: labelsOf(replay), claims: claimsText((step.input || {}).claims) } };
   });
   return { ticketId: ticket.ticketId, steps, state, changed: steps.filter((s) => !s.same).length };
 }

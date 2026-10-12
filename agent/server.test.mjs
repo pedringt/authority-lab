@@ -131,8 +131,8 @@ test('a capability argument from the model is ignored; an unknown tool is refuse
 test('the full gate verdict is recorded for the operator, never sent to the model', async () => {
   const conn = await connect(expanded());
   const { raw } = await conn.call('issue_refund', { orderId: 'ORD-5003', amount: 20, confidence: 95, claims: { fraudFlag: false } });
-  assert.match(conn.checks.at(-1).check.reason, /contradicts the system of record \(true\)/);
-  assert.equal(JSON.stringify(raw).includes('contradicts the system of record'), false);
+  assert.match(conn.checks.at(-1).check.reason, /the record shows a fraud flag on the account/);
+  assert.equal(JSON.stringify(raw).includes('the record shows'), false);
 });
 
 test('built-in object names are refused through the MCP server, at every level', async () => {

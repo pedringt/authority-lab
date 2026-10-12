@@ -120,7 +120,7 @@ export function initialState() {
     gateLog: [],
     // The people roster, versioned (#22). Version 1 is the seed. People are
     // never deleted; they are deactivated.
-    roster: { versions: [{ version: 1, date: seed.TODAY, author: null, authorAt: null, reason: 'Seed roster.', afterEvidence: false, before: null, value: clone(seed.people) }] },
+    roster: { versions: [{ version: 1, date: seed.TODAY, author: null, authorAt: null, reason: 'Demo starting list.', afterEvidence: false, before: null, value: clone(seed.people) }] },
     // Governed roster changes (#23): rights grants and removals, and the
     // deactivation of anyone holding a right. Never removed.
     rosterProposals: [],
@@ -170,7 +170,7 @@ export function closeOpenProposal(state, capabilityId, previous, next) {
   if (!p || !(next.level < previous.level)) return state;
   const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false, rollout: {}, rolloutPrefilled: false } }));
   const cap = getCapability(state, capabilityId);
-  return logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: the open proposal to move to Level ${p.level} was made at Level ${previous.level}. Authority is now Level ${next.level}, so the proposal is closed. Any expansion needs a new proposal, one level up from Level ${next.level}.`, capabilityId, link: `#/capabilities/${capabilityId}/decision` });
+  return logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name} dropped from Level ${previous.level} to Level ${next.level}, so the proposed move to Level ${p.level} no longer applies. To expand again, propose a move to Level ${next.level + 1}.`, capabilityId, link: `#/capabilities/${capabilityId}/decision` });
 }
 
 export function reset() {
