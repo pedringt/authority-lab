@@ -57,7 +57,7 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
     if (review.restriction && auto) {
       out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
         title: `Review why ${cap.name} was moved back to ${levelName(auto.next.level)}`,
-        why: `On ${fmt(auto.date)} it crossed a safety limit (${capData(state, cap.id).monitoring.reading}) and went back to ${levelName(auto.next.level)} automatically. It can't get more authority until someone records what happened and what changes.`,
+        why: `On ${fmt(auto.date)} it crossed a safety limit: ${capData(state, cap.id).monitoring.reading}. It went back to ${levelName(auto.next.level)} automatically. It can't get more authority until someone records what happened and what changes.`,
         who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitoring') });
     } else if (review.incidents.length) {
       out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
@@ -140,7 +140,7 @@ export function overviewApprovals(state, { fmt = (d) => d } = {}) {
         title: `${waiting.length} ${noun} a person to decide`,
         why: `${waiting.slice(0, 3).map((x) => describe(x).replace(/^a /, '')).join(', ')}${waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''}. ${cap.authority.level <= 2 ? `The AI is at ${levelName(cap.authority.level)}, so every action needs a person.` : 'They fell outside the AI\'s approved limits, so they weren\'t processed automatically.'}`,
         who: `Who can approve: ${list(queueApprovers(state, cap.id).map((k) => nameOf(state, k)))}.`,
-        since: `Waiting since ${fmt(oldest)}`, action: refunds ? 'Review the refunds' : 'Review the actions', href: `#/capabilities/${cap.id}?tab=decisions&show=waiting` });
+        since: `Waiting since ${fmt(oldest)}`, action: refunds ? 'Review the refunds' : 'Review the actions', href: `#/capabilities/${cap.id}?tab=decision&show=approvals` });
     }
     for (const p of capData(state, cap.id).proposals.filter((x) => x.status === 'open')) {
       out.push({ kind: 'change', capabilityId: cap.id, cap: cap.name,
@@ -183,13 +183,15 @@ export function importantResults(state, { fmt = (d) => d } = {}) {
     }
     for (const s of (d.pilot && d.pilot.segments) || []) {
       if (s.status !== 'insufficient') continue;
-      out.push({ tone: 'insufficient', label: 'Thin evidence', capabilityId: cap.id, cap: cap.name,
+      out.push({ tone: 'insufficient', label: 'Not enough data yet', capabilityId: cap.id, cap: cap.name,
         text: `${s.name}: ${s.accuracy}% accurate, on only ${s.cases} cases.`,
-        so: 'These cases stay with a person. Any expansion would leave them out.' });
+        so: 'These cases stay with a person. Any move to more authority would leave them out.' });
     }
-    for (const e of d.evidence.filter((x) => x.source === 'Incident' && x.status === 'fail' && x.risk === 'High')) {
+    // A safety limit that moved the AI back is already the result above; one
+    // that opened an incident without moving it is its own result.
+    for (const e of d.evidence.filter((x) => x.source === 'Incident' && x.status === 'fail' && x.risk === 'High' && !(x.safetyLimit && auto && d.reviewRequired))) {
       const sentences = (String(e.detail || '').replace(/^Scenario [A-Z]-\d+:\s*/, '').match(/[^.!?]+[.!?]+/g) || [e.detail || '']).map((x) => x.trim());
-      out.push({ tone: 'fail', label: 'Severe failure', capabilityId: cap.id, cap: cap.name,
+      out.push({ tone: 'fail', label: e.safetyLimit ? 'Safety limit crossed' : 'Severe failure', capabilityId: cap.id, cap: cap.name,
         text: e.metric.replace(/^[A-Z]+-\d+:\s*/, '').replace(/^./, (c) => c.toUpperCase()) + '.',
         so: sentences.slice(0, 2).join(' ').replace(/^./, (c) => c.toUpperCase()) });
     }
@@ -209,7 +211,7 @@ export function authorityRows(state) {
     const review = reviewNeeded(state, cap.id);
     const held = personRestriction(state, cap.id);
     let next;
-    if (review.restriction) next = { tone: 'restricted', text: 'Review needed before it can expand again' };
+    if (review.restriction) next = { tone: 'restricted', text: 'Review needed before it can get more authority' };
     else if (decisionRequired(state, cap.id)) { const p = proposedAuthority(state, cap.id); next = { tone: 'decision', text: 'Ready for a decision', detail: `Proposed: Level ${p.level}, ${levelName(p.level)}${p.limited ? ', with limits' : ''}` }; }
     else if (cap.status === 'not-delegated') next = { tone: 'neutral', text: 'Not delegated, by design' };
     else if (held && cap.status === 'restricted') next = { tone: 'restricted', text: 'Held until a condition is met' };

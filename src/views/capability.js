@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
-import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote, lede, subNav, tabIntro } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, LEVEL_PLAIN, readinessText, overviewTodos, overviewApprovals } from '../store/index.js';
+import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote, lede, subNav, tabIntro, SWITCH_PERSON } from '../ui.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, TOOLS, toolLabel, LEVEL_PLAIN, readinessText, overviewTodos, overviewApprovals } from '../store/index.js';
 import { scenarioTable, testsView } from './tests.js';
 import { evidenceView } from './evidence.js';
 import { agentRunsView } from './agentruns.js';
@@ -28,7 +28,7 @@ const EVIDENCE_VIEWS = [['results', 'Results'], ['all', 'All evidence'], ['requi
 
 export function capabilityView(state, id, query, { runs = null } = {}) {
   const cap = getCapability(state, id);
-  if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
+  if (!cap) return html`<div class="page-head"><h1>We couldn't find that capability.</h1></div>`;
   const d = capData(state, id);
   const requested = query.get('tab') || 'summary';
   const tab = TABS.some(([k]) => k === requested) ? requested : 'summary';
@@ -72,10 +72,10 @@ export function capabilityView(state, id, query, { runs = null } = {}) {
       <h1>${cap.name}</h1>
       ${lede(cap.summary)}
     </div>
-    ${tab === 'summary' ? '' : html`<div class="page-actions cap-level"><a href="${base}" title="${levelName(cap.authority.level)}">${ladder(cap.authority.level)} Level ${cap.authority.level}, ${levelName(cap.authority.level)}${cap.authority.limited ? ' (limited)' : ''}</a></div>`}
+    ${tab === 'summary' ? '' : html`<div class="page-actions cap-level"><a href="${base}" title="${levelName(cap.authority.level)}">${ladder(cap.authority.level)} Level ${cap.authority.level}, ${levelName(cap.authority.level)}${cap.authority.limited ? ', with limits' : ''}</a></div>`}
   </div>
-  ${query.get('error') ? notice('fail', 'Could not complete that action', query.get('error')) : ''}
-  ${query.get('tightened') ? notice('pass', 'Targets tightened', 'Every change only made a target stricter, so it applied straight away. Changes are kept in history.', { link: `#/capabilities/${cap.id}/versions?kind=criteria`, linkText: 'History' }) : ''}
+  ${query.get('error') ? notice('fail', 'That didn\'t work', query.get('error')) : ''}
+  ${query.get('tightened') ? notice('pass', 'Targets tightened', 'Every change only made a target stricter, so it applied straight away. Changes are kept in history.', { link: `#/capabilities/${cap.id}/versions?kind=criteria`, linkText: 'See history' }) : ''}
   ${tabs}
   <div class="tab-panel">${body}</div>`;
 }
@@ -109,7 +109,7 @@ function summaryTab(state, cap, d) {
     : pending
       ? html`<p>${badge('decision', r.met === r.total ? 'Ready' : r.total - r.met === 1 ? 'Almost' : 'Not yet')} ${readinessText(r)}</p><a class="btn btn-primary" href="#/capabilities/${cap.id}/decision">Open the decision</a>`
       : canPropose
-        ? html`<p>${badge('decision', 'Ready to propose')} The test suite has run.</p><button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button>`
+        ? html`<p>${badge('decision', 'Ready to propose')} The tests have run.</p><button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button>`
         : cap.status === 'not-delegated'
           ? html`<p>${badge('neutral', 'Not delegated, by design')}</p>`
           : held
@@ -119,7 +119,7 @@ function summaryTab(state, cap, d) {
   const authority = html`<section class="card sum-authority">
     <div class="sum-now">
       <p class="fact-label">Current authority</p>
-      <p class="sum-level">${ladder(cap.authority.level, pending && proposed ? proposed.level : null)}<span>Level ${cap.authority.level} · ${levelName(cap.authority.level)}${cap.authority.limited ? ' (limited)' : ''}</span></p>
+      <p class="sum-level">${ladder(cap.authority.level, pending && proposed ? proposed.level : null)}<span>Level ${cap.authority.level} · ${levelName(cap.authority.level)}${cap.authority.limited ? ', with limits' : ''}</span></p>
       <p class="sum-means">${LEVEL_PLAIN[cap.authority.level]}</p>
       ${auto ? html`<p class="sum-note">The AI was moved back to ${levelName(auto.next.level)} on ${fmtDate(auto.date)} after crossing a safety limit. It was at Level ${auto.previous.level} before. <span class="muted">(Automatic restriction)</span></p>` : ''}
       ${held ? html`<p class="sum-note">Moved back to ${levelName(held.next.level)} on ${fmtDate(held.date)} by ${personAt(held.authorizedByAt, held.authorizedBy).name}.</p>` : ''}
@@ -156,7 +156,7 @@ function summaryTab(state, cap, d) {
   </section>`;
 
   const setup = !versionList(state, cap.id, 'contract').length || !criteriaSaved(state, cap.id) ? nextStep(state, cap.id) : null;
-  return html`${setup ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Setup: ${setup.title}</strong><p>${setup.text}</p></div><a class="notice-link" href="#/capabilities/${cap.id}/setup">Continue setup</a></div>` : ''}
+  return html`${setup ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Next setup step: ${setup.title}</strong><p>${setup.text}</p></div><a class="notice-link" href="#/capabilities/${cap.id}/setup">Continue setup</a></div>` : ''}
     ${authority}
     <div class="sum-below">${peopleCard}${tasksCard}</div>`;
 }
@@ -179,9 +179,9 @@ function decisionTab(state, cap) {
   const canPropose = cap.status !== 'not-delegated' && cap.authority.level < 2 && d.testRun.lastRun && !review.any;
   const last = state.decisionRecords.filter((x) => x.capabilityId === cap.id).at(-1);
   return html`${review.any ? notice('restricted', 'A review comes first', 'No decision can open until someone records a review of what happened.', { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' }) : ''}
-    ${canPropose ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Ready for the first authority change</strong><p>The test suite has run. Propose a move to Level ${cap.authority.level + 1}, ${levelName(cap.authority.level + 1)}; a person then decides.</p></div><button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button></div>` : ''}
+    ${canPropose ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Ready for the first authority change</strong><p>The tests have run. You can now propose moving to Level ${cap.authority.level + 1}, ${levelName(cap.authority.level + 1)}. A person has to approve it, and the decision is recorded.</p></div><button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button></div>` : ''}
     ${!review.any && !canPropose ? html`<p class="empty">No decision is open.</p>` : ''}
-    ${last ? html`<p class="muted small">Last decision: <a href="#/decisions/${last.id}">${optionLabel(last.option)}, ${fmtDate(last.date)}</a>. Every decision is in <a href="#/capabilities/${cap.id}?tab=history">History</a>.</p>` : ''}`;
+    ${last ? html`<p class="muted small">Last decision: <a href="#/records/${last.id}">${optionLabel(last.option)}, ${fmtDate(last.date)}</a>. Every decision is in <a href="#/capabilities/${cap.id}?tab=history">History</a>.</p>` : ''}`;
 }
 
 // History: where the formal record lives. Decisions, changes, versions and
@@ -201,19 +201,19 @@ function contractTab(state, cap, d) {
   const risk = current(state, cap.id, 'risk');
   const list = (items) => html`<ul class="contract-list">${items.map((i) => html`<li>${i}</li>`)}</ul>`;
   const riskBlock = section('Risk profile', kv([
-    ['Impact', risk.impact],
-    ['Reversibility', risk.reversibility],
-    ['Exposure', risk.exposure],
-    ['Failure types watched', (risk.failureTypes || []).join(', ') || 'None listed'],
+    ['How serious would a bad decision be?', risk.impact],
+    ['Can it be undone?', risk.reversibility],
+    ['Who or what is affected?', risk.exposure],
+    ['Mistakes we watch for', (risk.failureTypes || []).join(', ') || 'None listed'],
     ...(risk.note ? [['Note', risk.note]] : []),
-  ]), { subtitle: 'The risk profile sets how much evidence an authority increase needs.' });
+  ]), { subtitle: 'The higher the risk, the more evidence we need before giving the AI more authority.' });
   const contractVersions = versionList(state, cap.id, 'contract');
   if (!contractVersions.length) {
-    return html`${emptyState(state, cap.id, d.contractDraft ? 'The contract draft is not finalized yet.' : 'No delegation contract yet.', 'contract')}${riskBlock}`;
+    return html`${emptyState(state, cap.id, d.contractDraft ? 'The rules are still a draft.' : 'No rules yet.', 'contract')}${riskBlock}`;
   }
   const latest = contractVersions[contractVersions.length - 1];
   return html`
-    ${tabIntro('What the AI may do on its own, what needs a person, and what it must never do.', 'The contract is enforced by software, not by the model\'s judgment.', html`<span class="muted">Version ${latest.version}, ${personAt(latest.authorAt, latest.author).name}, <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}`)}
+    ${tabIntro('What the AI may do on its own, what needs a person, and what it must never do.', 'Software checks every action against these rules. The AI\'s own judgment can\'t override them.', html`<span class="muted">Last changed by ${personAt(latest.authorAt, latest.author).name}. Changes are kept in <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}`)}
     ${proposalsList(state, cap.id, 'contract')}
     ${contractReviewView(contractVersions[0].review)}
     <div class="contract-grid">
@@ -221,7 +221,7 @@ function contractTab(state, cap, d) {
       <div class="card contract-block contract-never"><h3>The AI must never</h3>${list(c.mustNever)}</div>
       <div class="card contract-block contract-ask contract-wide"><h3>Ask a person when</h3>
         <div class="two-col"><div><p class="fact-label">For these cases</p>${list(c.mustAsk)}</div>
-        <div><p class="fact-label">Whenever this comes up</p>${list(c.escalation)}${c.escalation.some((l) => /confidence/i.test(l)) ? html`<p class="muted small">Confidence is reported by the model, not verified. Software checks it but can't confirm it, and never treats it as a reason to allow.</p>` : ''}</div></div>
+        <div><p class="fact-label">Whenever this comes up</p>${list(c.escalation)}${c.escalation.some((l) => /confidence/i.test(l)) ? html`<p class="muted small">The AI reports its own confidence. We can't verify it, so low confidence can send a case to a person, but high confidence never lets an action through on its own.</p>` : ''}</div></div>
       </div>
     </div>
     <div class="card contract-block contract-auto">
@@ -233,29 +233,34 @@ function contractTab(state, cap, d) {
     ${riskBlock}`;
 }
 
-// Gate activity (A5): what the gate decided for this capability, rolled up,
-// with the latest events and where they came from.
+// Tool ids in words, from the one list in the gate. Ids stay in model-run
+// detail and records. A tool the gate doesn't know is never shown by id.
+const toolWords = (tool) => (Object.hasOwn(TOOLS, tool) ? toolLabel(tool) : 'Unknown tool');
+
+// What the AI tried (A5): what the rules allowed, sent to a person or blocked
+// for this capability, rolled up, with the latest actions and where they came
+// from. Event and queue ids stay out of the main columns.
 function gateActivityCard(state, cap) {
   const g = gateSummary(state, cap.id);
-  if (!g.events) return section('Gate activity', html`<p class="empty">No gate events yet. Every action the AI asks for, and every decision on a waiting action, will show here.</p>`);
+  if (!g.events) return section('What the AI tried', html`<p class="empty">Nothing yet. Every action the AI asks for, and every approval decision, will show here.</p>`);
   const pct = (v) => (v == null ? '—' : `${v}%`);
   const recent = gateEvents(state, cap.id).slice(-10).reverse();
   const who = (e) => (e.actor === 'ai' ? 'AI' : person(e.actor).name);
-  const verdictBadge = { allow: badge('pass', 'Allowed'), 'needs-person': badge('decision', 'Needs a person'), block: badge('fail', 'Blocked'), approved: badge('pass', 'Approved'), rejected: badge('neutral', 'Rejected') };
-  return section('Gate activity', html`<div class="metric-grid metric-grid-4">
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Allowed automatically</span></div><div class="metric-value">${g.counts.allowed}</div><div class="metric-note">${pct(g.rates.automation)} of actions</div></div>
+  const verdictBadge = { allow: badge('pass', 'Allowed'), 'needs-person': badge('decision', 'Sent to a person'), block: badge('fail', 'Blocked'), approved: badge('pass', 'Approved'), rejected: badge('neutral', 'Rejected') };
+  return section('What the AI tried', html`<div class="metric-grid metric-grid-4">
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Done automatically</span></div><div class="metric-value">${g.counts.allowed}</div><div class="metric-note">${pct(g.rates.automation)} of actions</div></div>
       <div class="metric card"><div class="metric-top"><span class="metric-label">Sent to a person</span></div><div class="metric-value">${g.counts.escalated}</div><div class="metric-note">${g.counts.approved} approved, ${g.counts.overridden} rejected</div></div>
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Blocked</span></div><div class="metric-value">${g.counts.blocked}</div><div class="metric-note">${pct(g.rates.block)} of actions · <span class="${g.mustNeverAttempts ? 'text-fail' : ''}">${g.mustNeverAttempts} must-never attempt${g.mustNeverAttempts === 1 ? '' : 's'}</span> · <span class="${g.falseClaims ? 'text-fail' : ''}">${g.falseClaims} false claim${g.falseClaims === 1 ? '' : 's'}</span></div></div>
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Refused at execution</span></div><div class="metric-value">${g.counts.refused}</div><div class="metric-note">approved, then re-checked</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Blocked</span></div><div class="metric-value">${g.counts.blocked}</div><div class="metric-note">${pct(g.rates.block)} of actions · <span class="${g.mustNeverAttempts ? 'text-fail' : ''}">tried something never allowed ${g.mustNeverAttempts} time${g.mustNeverAttempts === 1 ? '' : 's'}</span> · <span class="${g.falseClaims ? 'text-fail' : ''}">${g.falseClaims} claim${g.falseClaims === 1 ? '' : 's'} that didn't match the records</span></div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Stopped after approval</span></div><div class="metric-value">${g.counts.refused}</div><div class="metric-note">approved, but things had changed by the time it ran</div></div>
     </div>
-    <div class="card table-card"><table class="table"><thead><tr><th>Event</th><th>Who</th><th>What</th><th>Verdict</th><th>Rule</th><th>Source</th></tr></thead>
-      <tbody>${recent.map((e) => html`<tr><td class="muted small">${e.id} · ${fmtDate(e.date)}</td><td>${who(e)}</td><td>${e.tool}${e.orderId ? ` ${e.orderId}` : ''}${e.queueId ? html` <span class="muted small">(${e.queueId})</span>` : ''}</td><td>${verdictBadge[e.verdict] || e.verdict}</td><td class="small">${e.rule ? e.rule.text : ''}</td><td class="muted small">${GATE_SOURCES[e.source] || e.source}</td></tr>`)}</tbody>
-    </table></div>`, { subtitle: `${g.events} events, from: ${g.sources.map((x) => GATE_SOURCES[x] || x).join(', ')}. Every check the gate makes is logged; these counts feed the Evidence page and the restriction rules the gate can measure.` });
+    <div class="card table-card"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Result</th><th>Why</th><th>Data</th></tr></thead>
+      <tbody>${recent.map((e) => html`<tr><td class="muted small" title="${e.id}${e.queueId ? ` · ${e.queueId}` : ''}">${fmtDate(e.date)}</td><td>${who(e)}</td><td>${toolWords(e.tool)}${e.orderId ? ` on ${e.orderId}` : ''}</td><td>${verdictBadge[e.verdict] || badge('neutral', 'Other')}</td><td class="small">${e.rule ? e.rule.text : ''}</td><td class="muted small">${GATE_SOURCES[e.source] || e.source}</td></tr>`)}</tbody>
+    </table></div>`, { subtitle: `${g.events} actions, from: ${g.sources.map((x) => GATE_SOURCES[x] || x).join(', ')}. Every action is checked against the rules and logged. These numbers feed the results and the safety limits.` });
 }
 
-// "Waiting for a person" (A4): actions the gate sent to a person. A named,
-// active stakeholder approves or rejects with a reason; approval re-runs the
-// gate and executes only if nothing new appeared since it was queued.
+// Approvals (A4): actions that need a person to decide. A named, active
+// stakeholder approves or rejects with a reason; approval re-checks the rules
+// and runs only if nothing new appeared since the AI asked.
 function waitingTab(state, cap, query) {
   const all = (state.actionQueue || []).filter((x) => x.capabilityId === cap.id);
   const waiting = all.filter((x) => x.status === 'waiting');
@@ -264,35 +269,42 @@ function waitingTab(state, cap, query) {
   const who = person(by);
   const approvers = queueApprovers(state, cap.id).map((k) => person(k).name);
   const error = query.get('error');
-  const statusBadge = { executed: badge('pass', 'Approved and executed'), rejected: badge('neutral', 'Rejected'), refused: badge('fail', 'Approved, refused at execution') };
+  const statusBadge = { executed: badge('pass', 'Approved and done'), rejected: badge('neutral', 'Rejected'), refused: badge('fail', 'Approved, but not carried out') };
   const card = (x) => {
     const e = queueEligibility(state, x.id, by);
     return html`<article class="card waiting-item" id="${x.id}">
-      <div class="version-head"><div><span class="eyebrow">${x.id} · requested by the AI · ${fmtDate(x.date)} · at Level ${x.levelAtRequest}${x.follows ? html` · follows <a href="#${x.follows}">${x.follows}</a>` : ''}</span><h3>${describeAction(x)}</h3></div>${x.status === 'waiting' ? badge('decision', 'Waiting') : statusBadge[x.status]}</div>
-      <p class="fact-label">Needs a person because</p>
+      <div class="version-head"><div><span class="eyebrow">AI request · ${fmtDate(x.date)} · at Level ${x.levelAtRequest}${x.follows ? html` · <a href="#${x.follows}">asked again after an earlier request</a>` : ''} <span class="muted">(${x.id})</span></span><h3>${describeAction(x)}</h3></div>${x.status === 'waiting' ? badge('decision', 'Needs approval') : statusBadge[x.status]}</div>
+      <p class="fact-label">Why it needs a person</p>
       <ul class="plain-list">${x.findings.map((f) => html`<li>${f.rule.text}</li>`)}</ul>
       ${x.status === 'waiting'
         ? e.ok
           ? html`<form class="line-add decide-form" data-form="decide-action" data-id="${x.id}">
-              <input type="text" name="reason" maxlength="240" placeholder="Reason (required)" aria-label="Reason">
-              <button class="btn btn-sm btn-primary" type="submit" name="decision" value="approve">Approve as ${who.name}</button>
+              <input type="text" name="reason" maxlength="240" placeholder="Why? (required)" aria-label="Reason">
+              <button class="btn btn-sm btn-primary" type="submit" name="decision" value="approve">Approve</button>
               <button class="btn btn-sm btn-danger" type="submit" name="decision" value="reject">Reject</button>
             </form>
-            <p class="muted small">Approving re-runs the gate at that moment. If anything changed since it was queued (the capability was restricted, a cap was crossed, the order is now blocked), it won't execute and the reason is recorded.</p>`
-          : html`<p class="muted small">${e.reason} Switch who is acting in the header.</p>`
-        : html`${kv([['Decided by', html`${x.decision.byAt ? x.decision.byAt.name : x.decision.by}, ${fmtDate(x.decision.date)}`], ['Reason', x.decision.reason], ...(x.decision.refusal ? [['Not executed', x.decision.refusal]] : []), ...(x.decision.refundId ? [['Refund', x.decision.refundId]] : [])])}`}
+            <p class="muted small">Deciding as <strong>${who.name}</strong>. A reason is required either way. When you approve, the action is checked against the rules again before it runs. If anything has changed since the AI asked (for example, authority was reduced, a limit was reached or the order is now blocked), it won't run, and the reason is saved.</p>`
+          : html`<p class="muted small">${e.reason} ${SWITCH_PERSON}</p>`
+        : html`${kv([['Decided by', html`${x.decision.byAt ? x.decision.byAt.name : x.decision.by}, ${fmtDate(x.decision.date)}`], ['Reason', x.decision.reason], ...(x.decision.refusal ? [['Why it didn\'t run', x.decision.refusal]] : []), ...(x.decision.refundId ? [['Refund', x.decision.refundId]] : [])])}`}
     </article>`;
   };
+  const n = waiting.length;
+  const why = cap.authority.level <= 2
+    ? `At ${levelName(cap.authority.level)}, every action needs a person to approve it.`
+    : 'They fell outside the AI\'s approved limits, so they weren\'t carried out automatically.';
+  const intro = n
+    ? `${n} ${n === 1 ? 'action needs' : 'actions need'} a person to decide. ${why}`
+    : 'Actions the AI isn\'t allowed to take on its own wait here for a person to approve or reject.';
   return html`
-    ${error ? notice('fail', 'Could not record that decision', error) : ''}
-    ${tabIntro('When the gate says an action needs a person, it waits here instead of running.', `${approvers.length ? `Who can decide: ${approvers.join(', ')} (the owner and the named stakeholders, active only).` : 'Nobody can decide: the capability has no active owner or stakeholders.'} The AI can ask; it can never approve. At most one action waits per order, and at most ${QUEUE_LIMIT} per capability; past that, new requests are blocked and an incident is opened.`)}
-    ${section(`Waiting (${waiting.length})`, waiting.length ? html`${waiting.map(card)}` : html`<p class="empty">Nothing is waiting for a person.</p>`)}
+    ${error ? notice('fail', 'Couldn\'t save your decision', error) : ''}
+    ${tabIntro(intro, `${approvers.length ? `Who can approve: ${approvers.join(', ')} (the owner and named stakeholders who are active).` : `Nobody can approve yet: ${cap.name} has no active owner or stakeholders. Add one under Manage stakeholders.`} The AI can ask but can never approve its own request. Only one request per order can wait at a time, and at most ${QUEUE_LIMIT} for this capability. Past that, new requests are blocked and an incident is opened.`)}
+    ${section(`Needs approval (${n})`, n ? html`${waiting.map(card)}` : html`<p class="empty">Nothing needs approval.</p>`)}
     ${decided.length ? section('Decided', html`${decided.map(card)}`) : ''}`;
 }
 
 function describeAction(x) {
   const a = x.call.args || {};
-  return x.call.tool === 'issue_refund' ? `Refund $${a.amount} on ${a.orderId}` : `${x.call.tool}${a.orderId ? ` on ${a.orderId}` : ''}`;
+  return x.call.tool === 'issue_refund' ? `Refund $${a.amount} on ${a.orderId}` : `${toolWords(x.call.tool)}${a.orderId ? ` on ${a.orderId}` : ''}`;
 }
 
 // The contract's data boundary (A2): what tool results may show the AI.
@@ -303,12 +315,17 @@ function dataBoundaryCard(c) {
   return html`<div class="card contract-block contract-data">
     <h3>The AI can access</h3>
     ${Array.isArray(c.dataSeen)
-      ? html`<div class="two-col data-columns"><div><p class="fact-label">Shown to the AI</p>${shown.length ? html`<ul class="contract-list">${shown.map((f) => html`<li>${f.label}</li>`)}</ul>` : html`<p class="muted">Nothing.</p>`}</div>
-        <div><p class="fact-label">Never shown to the AI</p><ul class="contract-list">${hidden.map((f) => html`<li>${f.label}${f.restricted ? html` <span class="muted small">(restricted)</span>` : ''}</li>`)}</ul></div></div>`
-      : html`<p class="muted">This contract has no data section, so tool results show the AI nothing from the systems of record.</p>`}
-    <p class="muted small">Software filters every tool result to these fields before the model sees it. Card numbers and full addresses are restricted: no contract can list them. A refusal tells the model the rule, never the record.</p>
+      ? html`<div class="two-col data-columns"><div><p class="fact-label">Can access</p>${shown.length ? html`<ul class="contract-list">${shown.map((f) => html`<li>${f.label}</li>`)}</ul>` : html`<p class="muted">Nothing.</p>`}</div>
+        <div><p class="fact-label">Can't access</p><ul class="contract-list">${hidden.map((f) => html`<li>${f.label}${f.restricted ? html` <span class="muted small">(never allowed)</span>` : ''}</li>`)}</ul></div></div>`
+      : html`<p class="muted">No data access is set in the rules, so the AI sees nothing from your systems.</p>`}
+    <p class="muted small">The AI only ever sees these fields. Card numbers and full addresses are never shared, whatever the rules say. When something is withheld, the AI is told which rule applied, not what the record says.</p>
   </div>`;
 }
+
+// Status words at the call site: a target is met or not; a segment with too
+// few cases says so.
+const TARGET_WORDS = { pass: 'Met', watch: 'Not met yet', fail: 'Not met', insufficient: 'Not enough data yet' };
+const SEGMENT_WORDS = { pass: 'Looks good', watch: 'Watch', fail: 'Problem', insufficient: 'Not enough data yet' };
 
 function criteriaTab(state, cap) {
   const criteria = current(state, cap.id, 'criteria');
@@ -318,21 +335,20 @@ function criteriaTab(state, cap) {
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
     <td>${c.current}</td>
-    <td>${c.status === 'pending' ? badge('neutral', 'Not yet measured') : badge(c.status)}</td>
+    <td>${c.status === 'pending' ? badge('neutral', 'Not measured yet') : badge(c.status, TARGET_WORDS[c.status])}</td>
     <td class="muted">${c.note}</td>
   </tr>`);
   const defining = state.decisionRecords.find((x) => x.capabilityId === cap.id && x.number === 2);
-  const v = versionList(state, cap.id, 'criteria');
   return html`
     ${locked
-      ? html`<div class="notice notice-watch"><div class="notice-body"><strong>Locked since the first performance results</strong><p>Criteria v${v.length} and requirements v${versionList(state, cap.id, 'requirements').length}. Changing the bar after seeing results needs a proposed amendment with sign-off.</p></div>${amendLink(state, cap.id, 'criteria')}</div>
+      ? html`<div class="notice notice-watch"><div class="notice-body"><strong>These targets can't be changed directly now that results exist.</strong><p>To change them, propose a target change. It needs approval, so the bar can't move quietly after the results are in.</p></div>${amendLink(state, cap.id, 'criteria')}</div>
         ${proposalsList(state, cap.id, 'criteria')}`
-      : html`<div class="notice notice-neutral"><div class="notice-body"><strong>Open until the first test run</strong><p>Criteria v${v.length} and requirements v${versionList(state, cap.id, 'requirements').length}. Every save writes a new version; the first test run locks them.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/criteria/edit">Edit</a></div>`}
-    <p class="muted">${defining ? html`Defined before the pilot started, as part of authority change <a href="#/decisions/${defining.id}">${defining.id}</a>. ` : ''}These are the thresholds the decision is measured against, not a score.</p>
+      : html`<div class="notice notice-neutral"><div class="notice-body"><strong>You can still edit these targets</strong><p>They lock once the first tests run, so the bar can't move after results come in. Changes are kept in history.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/criteria/edit">Edit</a></div>`}
+    <p class="muted">${defining ? html`These targets were set before the pilot started (in <a href="#/records/${defining.id}">${defining.id}</a>), so the bar didn't move after the results came in. ` : ''}The decision is judged against them; they aren't a score.</p>
     ${rows.length ? html`<div class="card table-card"><table class="table table-criteria">
-      <thead><tr><th>Criterion</th><th>Target</th><th>Current</th><th>Status</th><th>Note</th></tr></thead>
+      <thead><tr><th>Measure</th><th>Target</th><th>Now</th><th>Status</th><th>Note</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table></div>` : empty('No success criteria defined.')}
+    </table></div>` : empty('No targets set.')}
 `;
 }
 
@@ -351,65 +367,67 @@ export function proposedChangeLabel(cap, state) {
 export function requirementsList(state, capabilityId) {
   const r = readiness(state, capabilityId);
   const reqs = current(state, capabilityId, 'requirements');
-  if (!reqs.length) return empty('No evidence requirements defined.');
+  if (!reqs.length) return empty('No decision requirements set.');
   return html`<div class="card">
     <ul class="req-list">${reqs.map((q) => html`<li class="${q.met ? 'is-met' : 'is-unmet'}">
       <span class="req-mark" aria-hidden="true">${q.met ? '✓' : '⚠'}</span>
       <span class="req-text"><strong>${q.text}</strong><span class="muted"> · ${q.met ? 'Met' : 'Not met'}: ${q.current}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
     </li>`)}</ul>
-    <p class="muted small"><strong>${r.met} of ${r.total}</strong> requirements met.</p>
+    <p class="muted small"><strong>${r.met} of ${r.total}</strong> checks met.</p>
   </div>`;
 }
 
 function testingTab(state, cap) {
   const t = testSummary(state, cap.id);
-  if (!t.total) return emptyState(state, cap.id, 'No scenarios yet.', 'scenarios');
+  if (!t.total) return emptyState(state, cap.id, 'No tests yet.', 'scenarios');
   return html`
-    <p class="muted">${t.total} scenarios. ${t.status === 'complete'
-      ? html`Run today: ${t.passed} of ${t.total} passed, ${t.highSeverity} high-severity failure${t.highSeverity === 1 ? '' : 's'}.`
-      : t.lastRun ? html`Last run ${fmtDate(t.lastRun)}: ${t.recorded.passed} of ${t.total} passed, ${t.recorded.highSeverity} high-severity failure${t.recorded.highSeverity === 1 ? '' : 's'}.` : 'Not yet run.'} <a href="#/tests?capability=${cap.id}">Open the testing ground</a> to run the suite and filter results.</p>
+    <p class="muted">${t.total} tests. ${t.status === 'complete'
+      ? html`Today's run: ${t.passed} of ${t.total} passed, ${t.highSeverity} serious failure${t.highSeverity === 1 ? '' : 's'}.`
+      : t.lastRun ? html`Last run ${fmtDate(t.lastRun)}: ${t.recorded.passed} of ${t.total} passed, ${t.recorded.highSeverity} serious failure${t.recorded.highSeverity === 1 ? '' : 's'}.` : 'Not run yet.'} <a href="#/capabilities/${cap.id}?tab=evidence&show=tests">Run the tests or see all results</a>.</p>
     ${scenarioTable(state, cap.id, { filter: 'failed', compact: true })}`;
 }
 
 function evidenceTab(state, cap, d) {
   const p = d.pilot;
-  if (!p) return html`${emptyState(state, cap.id, d.evidence.length ? 'No pilot has been run for this capability.' : 'No evidence yet.', 'tests')}${d.evidence.length ? html`<p class="muted small">Other evidence is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>` : ''}${evidenceSourcesCard()}`;
+  if (!p) return html`${emptyState(state, cap.id, d.evidence.length ? 'No pilot results yet.' : 'No evidence yet.', 'tests')}${d.evidence.length ? html`<p class="muted small">Other evidence is under <a href="#/capabilities/${cap.id}?tab=evidence&show=all">All evidence</a>.</p>` : ''}${evidenceSourcesCard()}`;
   const rows = p.segments.map((s) => html`<tr class="${s.status === 'insufficient' ? 'row-insufficient' : ''}">
     <td><strong>${s.name}</strong></td>
     <td class="num">${s.cases}</td>
     <td class="num">${s.accuracy}%</td>
     <td class="num">${s.overrideRate}%</td>
     <td class="num">${s.severeErrors}</td>
-    <td>${badge(s.status)}</td>
+    <td>${badge(s.status, SEGMENT_WORDS[s.status])}</td>
   </tr>`);
   const weak = p.segments.filter((s) => s.status === 'insufficient');
   const unmetReq = readiness(state, cap.id).unmet[0];
   return html`
     <div class="pilot-head">
-      <div><p class="eyebrow">Limited pilot · ${fmtDate(p.started)} to ${p.ended ? fmtDate(p.ended) : 'Oct 6'}</p><p class="readiness-big">${p.cases}<span> real cases observed, every one reviewed by an agent</span></p></div>
+      <div><p class="eyebrow">Limited pilot · ${p.ended ? `${fmtDate(p.started)} to ${fmtDate(p.ended)}` : `since ${fmtDate(p.started)}`}</p><p class="readiness-big">${p.cases}<span> real cases, each checked by a support agent</span></p></div>
       <div class="pilot-stats">
         <div><span class="fact-label">Overall accuracy</span><strong>${p.accuracy}%</strong></div>
-        <div><span class="fact-label">Overridden</span><strong>${p.overrides} (${p.overrideRate}%)</strong></div>
-        <div><span class="fact-label">Edited</span><strong>${p.edits} (${p.editRate}%)</strong></div>
+        <div><span class="fact-label">Replaced by a person</span><strong>${p.overrides} (${p.overrideRate}%)</strong></div>
+        <div><span class="fact-label">Edited by a person</span><strong>${p.edits} (${p.editRate}%)</strong></div>
         <div><span class="fact-label">Severe errors</span><strong>${p.severeErrors} (${p.severeErrorRate}%)</strong></div>
       </div>
     </div>
     <div class="card table-card"><table class="table">
-      <thead><tr><th>Segment</th><th class="num">Cases</th><th class="num">Accuracy</th><th class="num">Override rate</th><th class="num">Severe errors</th><th>Status</th></tr></thead>
+      <thead><tr><th>Type of case</th><th class="num">Cases</th><th class="num">Accuracy</th><th class="num">Replaced by a person</th><th class="num">Severe errors</th><th>Status</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    ${weak.map((s) => notice('insufficient', 'Overall performance looks good. One segment does not.', `${s.name} have ${s.cases} cases at ${s.accuracy}% accuracy and a ${s.overrideRate}% override rate. That is too few cases to conclude anything, and the aggregate ${p.accuracy}% hides it.${unmetReq ? ` The evidence requirement for this segment is ${unmetReq.text.toLowerCase().replace(/^minimum /, '')}.` : ''}`))}
-    ${p.severeErrorList && p.severeErrorList.length ? section('Severe errors in the pilot', html`<div class="card"><ul class="plain-list">${p.severeErrorList.map((e) => html`<li><span class="muted">${fmtDate(e.date)} · ${p.segments.find((s) => s.id === e.segment).name}</span><br>${e.text}</li>`)}</ul><p class="muted small">All ${p.severeErrors} were caught in review before any action. That is what Draft authority is for; it is also why the override rate matters more than the raw error count.</p></div>`) : ''}
-    ${current(state, cap.id, 'requirements').length ? section('Evidence requirements', requirementsList(state, cap.id)) : ''}
-    <p class="muted small">All evidence for this capability is in the <a href="#/evidence?capability=${cap.id}">evidence repository</a>.</p>`;
+    ${weak.map((s) => notice('insufficient', 'Overall performance looks good. One segment does not.', `${s.name}: only ${s.cases} cases so far, at ${s.accuracy}% accuracy, and people replaced ${s.overrideRate}% of the AI's work. That's too few to draw a conclusion, and the overall ${p.accuracy}% hides it.${unmetReq ? ` Before expanding, we need ${unmetReq.text.toLowerCase().replace(/^minimum /, 'at least ')}.` : ''}`))}
+    ${p.severeErrorList && p.severeErrorList.length ? section('Severe errors in the pilot', html`<div class="card"><ul class="plain-list">${p.severeErrorList.map((e) => html`<li><span class="muted">${fmtDate(e.date)} · ${p.segments.find((s) => s.id === e.segment).name}</span><br>${e.text}</li>`)}</ul><p class="muted small">A person caught all ${p.severeErrors} before anything happened. That's what Draft authority is for, and why how often people replace the AI's work matters more than the raw error count.</p></div>`) : ''}
+    ${current(state, cap.id, 'requirements').length ? section('What we need before expanding', requirementsList(state, cap.id)) : ''}`;
 }
+
+// The latest date anyone recorded a position, or none: never a made-up date.
+const positionsDate = (stakeholders) => stakeholders.map((s) => s.date).filter(Boolean).sort().at(-1) || null;
 
 function stakeholdersTab(state, cap, d) {
   const tone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient', 'restrict': 'restricted', 'undecided': 'neutral' };
   const stakeholders = current(state, cap.id, 'stakeholders');
   if (!stakeholders.length) return emptyState(state, cap.id, 'No stakeholders named yet.', 'stakeholders');
   const gated = needsSignoff(state, cap.id, 'stakeholders');
-  const editLink = html`<p class="muted small"><a href="#/capabilities/${cap.id}/stakeholders/edit">Edit stakeholders</a> · every save is a new version${gated ? '; after performance results, adding or removing people or changing a team label needs sign-off' : ''}.</p>${proposalsList(state, cap.id, 'stakeholders')}`;
+  const editLink = html`<p class="muted small"><a href="#/capabilities/${cap.id}/stakeholders/edit">Edit stakeholders</a>. ${gated ? 'Now that results are in, adding or removing people or changing a team label needs approval. ' : ''}Changes are kept in history.</p>${proposalsList(state, cap.id, 'stakeholders')}`;
   const cards = stakeholders.map((s) => {
     const who = person(s.person);
     return html`<div class="card stakeholder">
@@ -419,22 +437,22 @@ function stakeholdersTab(state, cap, d) {
   });
   const sum = d.stakeholderSummary;
   return html`
-    <p class="muted">Positions recorded ${stakeholders[0] && stakeholders[0].date ? fmtDate(stakeholders[0].date) : 'Oct 6'}. They are kept as positions, not averaged into a score.</p>
+    <p class="muted">${positionsDate(stakeholders) ? `Positions as of ${fmtDate(positionsDate(stakeholders))}. ` : ''}Each view is shown as it was given, not averaged into a score.</p>
     ${editLink}
     <div class="stakeholder-grid">${cards}</div>
     ${sum ? html`<div class="two-col">
-      <div class="card"><p class="eyebrow">Consensus</p><p>${sum.consensus}</p></div>
-      <div class="card card-watch"><p class="eyebrow">Unresolved disagreement</p><p>${sum.disagreement}</p></div>
+      <div class="card"><p class="eyebrow">Where people agree</p><p>${sum.consensus}</p></div>
+      <div class="card card-watch"><p class="eyebrow">Where people still disagree</p><p>${sum.disagreement}</p></div>
     </div>` : ''}`;
 }
 
 function decisionsTab(state, cap) {
   const records = state.decisionRecords.filter((x) => x.capabilityId === cap.id).slice().reverse();
-  if (!records.length) return empty('No authority decisions have been recorded for this capability.');
+  if (!records.length) return empty('No authority decisions yet.');
   return html`<div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Date</th><th>Change</th><th>Decision</th><th>Authorized by</th></tr></thead>
     <tbody>${records.map((x) => html`<tr>
-      <td><a href="#/decisions/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
+      <td><a href="#/records/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
       <td>${fmtDate(x.date)}</td>
       <td>${x.previous ? html`${authorityText(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityText(x.next, { short: true })}</td>
       <td>${optionLabel(x.option)}</td>
@@ -451,36 +469,35 @@ export function optionLabel(option) {
   return o ? o.name : option;
 }
 
-// The restriction rules, read from the contract's "Automatic restriction"
-// lines, with their latest readings. A rule applies while the capability is
-// above its fallback level.
+// Safety limits: the rules' "Authority is reduced automatically when" lines,
+// with their latest readings. A limit applies while the capability is above
+// its fallback level.
 function rulesCard(state, cap) {
   const { rules } = monitoringStatus(state, cap.id);
-  const version = rules[0] && rules[0].contractVersion;
   const unit = (r) => (r.threshold && r.threshold.type === 'pct' ? '%' : '');
   const windowText = (r) => (!r.window ? '' : r.window.cases ? ` across the last ${r.window.cases} cases` : ` over the last ${r.window.days} days`);
   const status = (r) => {
     if (!r.active) return badge('neutral', `Applies above ${levelName(r.fallback)}`);
-    if (!r.measured) return badge('neutral', 'No measurements yet');
+    if (!r.measured) return badge('neutral', 'No data yet');
     if (r.crossed) return badge('fail', r.kind === 'incident' ? 'Incident' : 'Over the limit');
     return badge('pass', 'Within limit');
   };
   const effect = (r) => r.kind === 'incident'
-    ? 'Opens an incident; authority stays where it is.'
-    : `Returns ${cap.name} to ${levelName(r.fallback)}${r.defaulted ? ' (one level down; the line names no level)' : ''}.`;
+    ? 'If crossed: an incident is opened; authority doesn\'t change.'
+    : `If crossed: ${cap.name} goes back to ${levelName(r.fallback)}${r.defaulted ? ' (one level down, because the rule names no level)' : ''}.`;
   const reading = (r) => {
     if (!r.active || !r.measured || !r.threshold) return '';
     const limit = r.threshold.type === 'pct' ? `limit ${r.threshold.value}%` : `limit ${r.threshold.value}`;
     const fill = Math.min(100, (r.value / r.threshold.value) * 80);
-    return html`<div class="rule-reading ${r.crossed ? 'is-crossed' : ''}" role="img" aria-label="Reading ${r.value}${unit(r)}${windowText(r)}, ${limit}">
+    return html`<div class="rule-reading ${r.crossed ? 'is-crossed' : ''}" role="img" aria-label="Now ${r.value}${unit(r)}${windowText(r)}, ${limit}">
       <div class="rule-reading-bar"><span style="width:${fill}%"></span><i></i></div>
-      <span class="small">Reading <strong>${r.value}${unit(r)}</strong>${windowText(r)} · ${limit} <span class="muted">(${r.fromGate ? 'measured from the gate log' : 'simulated'})</span></span>
+      <span class="small">Now <strong>${r.value}${unit(r)}</strong>${windowText(r)} · ${limit} <span class="muted">(${r.fromGate ? 'counted from logged actions' : 'simulated'})</span></span>
     </div>`;
   };
-  return section('Restriction rules', rules.length
-    ? html`<div class="card"><ul class="rule-list">${rules.map((r) => html`<li><div class="rule-list-head"><span>${r.text}</span>${status(r)}</div>${reading(r)}<p class="muted small">${effect(r)}${r.threshold && r.window ? '' : ' The line has no number or window, so software cannot check it.'}</p></li>`)}</ul></div>`
-    : html`<p class="empty">The contract has no automatic restriction lines.</p>`,
-    { subtitle: `From the contract's automatic restriction conditions${version ? `, contract v${version}` : ''}. Software applies these; nobody has to notice a problem for them to fire.` });
+  return section('Safety limits', rules.length
+    ? html`<div class="card"><ul class="rule-list">${rules.map((r) => html`<li><div class="rule-list-head"><span>${r.text}</span>${status(r)}</div>${reading(r)}<p class="muted small">${effect(r)}${r.threshold && r.window ? '' : ' This one can\'t be checked automatically: it has no number or time window. Add one in the rules.'}</p></li>`)}</ul></div>`
+    : html`<p class="empty">No safety limits in the rules yet.</p>`,
+    { subtitle: 'From the rules, under "Authority is reduced automatically when". These are checked automatically, so a problem is caught even if nobody is watching.' });
 }
 
 // Post-incident review (#54): the form while a restriction or rule incident is
@@ -490,22 +507,22 @@ function reviewCard(state, cap, d) {
   const need = reviewNeeded(state, cap.id);
   const done = (d.reviews || []).slice().reverse();
   const recorded = done.map((rv) => html`<div class="card review-record"><p class="eyebrow">${rv.id} · Post-incident review · ${fmtDate(rv.date)}</p>
-    ${kv([['Reviewed by', html`${personAt(rv.byAt, rv.by).name}${rightsNote(rv.byAt)}`], ['Covers', [rv.restrictionRecordId ? html`<a href="#/decisions/${rv.restrictionRecordId}">${rv.restrictionRecordId}</a>` : null, ...rv.incidentIds].filter(Boolean).map((x, i) => html`${i ? ', ' : ''}${x}`)], ['What happened', rv.whatHappened], ['Cause', rv.cause], ['What changed', rv.changes], ['Authority', html`Stayed at ${authorityLabel(rv.authorityAt)}. Expanding again needs a proposal and a named authorization.`]])}
+    ${kv([['Reviewed by', html`${personAt(rv.byAt, rv.by).name}${rightsNote(rv.byAt)}`], ['About', [rv.restrictionRecordId ? html`<a href="#/records/${rv.restrictionRecordId}">${rv.restrictionRecordId}</a>` : null, ...rv.incidentIds].filter(Boolean).map((x, i) => html`${i ? ', ' : ''}${x}`)], ['What happened', rv.whatHappened], ['Cause', rv.cause], ['What changed', rv.changes], ['Authority', html`Stayed at ${authorityLabel(rv.authorityAt)}. Giving it more authority again needs a proposed change and a named person's approval.`]])}
   </div>`);
   if (!need.any) return recorded.length ? html`${recorded}` : '';
   const by = actor(state, cap.id);
   const who = person(by);
   const e = reviewEligibility(state, cap.id, by);
-  const covers = [need.restriction ? `the automatic restriction (${d.monitoring && d.monitoring.breachRecordId})` : null, need.incidents.length ? need.incidents.map((x) => x.incidentId).join(', ') : null].filter(Boolean).join(' and ');
+  const covers = [need.restriction ? `the automatic move back to ${levelName(cap.authority.level)} (${d.monitoring && d.monitoring.breachRecordId})` : null, need.incidents.length ? need.incidents.map((x) => x.incidentId).join(', ') : null].filter(Boolean).join(' and ');
   return html`<form class="card review-form" data-form="record-review" data-capability="${cap.id}">
-    <p class="eyebrow">Record the post-incident review</p>
-    <p>Covers ${covers}. Recording it clears the review lock and the alert. ${need.restriction ? html`${cap.name} stays at ${authorityLabel(cap.authority)}; expanding again needs a proposal and a named authorization.` : 'Authority is unchanged.'}</p>
+    <p class="eyebrow">Review what happened</p>
+    <p>About ${covers}. Saving this review clears the alert and lets anyone propose more authority again. ${need.restriction ? html`${cap.name} stays at ${authorityLabel(cap.authority)} until a change is approved.` : 'Authority doesn\'t change.'}</p>
     <label class="field field-stack"><span>What happened</span><textarea name="whatHappened" rows="2" required></textarea></label>
     <label class="field field-stack"><span>Cause</span><textarea name="cause" rows="2" required></textarea></label>
     <label class="field field-stack"><span>What changed as a result</span><textarea name="changes" rows="2" required></textarea></label>
-    <p class="muted small">Recording as <strong>${who.name}</strong>, ${who.role}. The owner or a Risk approver records the review${isHighOrFinancial(state, cap.id) ? '; for this High-impact or Financial capability, a Risk approver' : ''}, but not whoever authorized the expansion that was restricted.</p>
-    ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} Switch who is acting in the header.</p>`}
-    <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Record review</button>
+    <p class="muted small">Recording as <strong>${who.name}</strong>, ${who.role}. Who can do this: ${isHighOrFinancial(state, cap.id) ? 'a Risk approver, because this capability is High impact or Financial' : 'the owner or a Risk approver'}, but not the person who approved the authority being reviewed. <span class="muted">(Formally: post-incident review.)</span></p>
+    ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} ${SWITCH_PERSON}</p>`}
+    <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Save review</button>
   </form>${recorded}`;
 }
 
@@ -518,33 +535,34 @@ function monitoringTab(state, cap, d, show = null) {
   const applying = st.rules.filter((r) => r.active).length;
   const demo = breachRule(state, cap.id);
   const head = m && m.breached && m.reviewId
-    ? notice('watch', 'Restricted by a contract rule, reviewed', `${cap.name} stays at ${authorityLabel(cap.authority)} after the contract rule was crossed: ${m.reading}. The review is recorded below; expanding again needs a proposal and a named authorization.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Restriction record' })
+    ? notice('watch', `The AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Review done.`, `It stays at ${authorityLabel(cap.authority)}. The limit it crossed: ${m.reading}. To give it more authority again, propose a change and get it approved. The review is below.`, { link: `#/records/${m.breachRecordId}`, linkText: 'Decision record' })
     : m && m.breached
-    ? notice('fail', 'Authority automatically restricted', `${cap.name} returned to ${authorityLabel(cap.authority)}. The contract rule was crossed: ${m.reading}. A human review is required before authority can expand again.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Restriction record' })
+    ? notice('fail', `The AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit.`, `It crossed this limit: ${m.reading}. Before it can get more authority again, someone has to review what happened (form below). Formally: automatic restriction.`, { link: `#/records/${m.breachRecordId}`, linkText: 'Decision record' })
     : m && m.recordId
-      ? notice('pass', `Expanded ${m.windowDays} days ago (simulated)`, `Authority change ${m.recordId} is in its monitoring period. The restriction rules below are enforced by software; nobody has to notice a problem for them to fire.`, { link: `#/decisions/${m.recordId}`, linkText: 'Decision record' })
+      ? notice('pass', `Given more authority ${m.windowDays} days ago (simulated)`, 'We\'re watching closely for the first weeks. If any safety limit below is crossed, the AI\'s authority is reduced automatically, without waiting for someone to notice.', { link: `#/records/${m.recordId}`, linkText: 'Decision record' })
       : !st.rules.length
-        ? notice('neutral', 'Nothing to monitor', `${cap.name}'s contract has no automatic restriction lines.`)
+        ? notice('neutral', 'No safety limits set', `${cap.name}'s rules don't say when to reduce its authority, so nothing is checked automatically. Add a line under "Authority is reduced automatically when".`)
         : st.running
-          ? notice('pass', 'Monitoring is running', `${applying} of ${st.rules.length} restriction rule${st.rules.length === 1 ? '' : 's'} appl${applying === 1 ? 'ies' : 'y'} to ${cap.name} at ${authorityLabel(cap.authority)}. Software checks ${applying === 1 ? 'it' : 'them'} against the readings below.`)
-          : notice('neutral', 'No restriction rule applies yet', `${cap.name} is at ${authorityLabel(cap.authority)}. Its rules apply once it is above the level they return it to.`);
-  const metrics = m && m.autonomousActions != null ? html`<div class="metric-grid metric-grid-4">
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Autonomous actions</span></div><div class="metric-value">${m.autonomousActions}</div></div>
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Escalated to a human</span></div><div class="metric-value">${m.escalated}</div></div>
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Human reversals</span></div><div class="metric-value">${m.reversals}</div></div>
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Incidents</span>${m.incidents ? badge('fail') : badge('pass')}</div><div class="metric-value">${m.incidents}</div></div>
-    </div>` : '';
+          ? notice('pass', 'Being watched', `${applying} of ${st.rules.length} safety limit${st.rules.length === 1 ? '' : 's'} appl${applying === 1 ? 'ies' : 'y'} at ${authorityLabel(cap.authority)}. Each is checked automatically against the latest numbers below.`)
+          : notice('neutral', 'No safety limits apply yet', `${cap.name} is at ${authorityLabel(cap.authority)}. Its safety limits start applying once it has more authority than they would take it back to.`);
+  // Outcomes first: one grid, with its time frame in the title.
+  const metrics = m && m.autonomousActions != null ? section('Since the AI was given more authority', html`<div class="metric-grid metric-grid-4">
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Completed automatically</span></div><div class="metric-value">${m.autonomousActions}</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Sent to a person</span></div><div class="metric-value">${m.escalated}</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Reversed by a reviewer</span></div><div class="metric-value">${m.reversals}</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Incidents</span>${m.incidents ? badge('fail', 'Needs a look') : badge('pass', 'None')}</div><div class="metric-value">${m.incidents}</div></div>
+    </div>`) : '';
   const incidents = d.ruleIncidents || [];
   const fired = m && m.breached
-    ? html`<div class="card rule-card is-breached"><p class="eyebrow">What fired</p><p>${m.rule}</p><ul class="plain-list"><li class="muted small">What went wrong:</li>${m.errors.map((e) => html`<li>${e}</li>`)}</ul>
-        <p class="muted small">What happened when the rule fired: the reading crossed the contract's limit, ${cap.name} moved to ${levelName(cap.authority.level)}, a system event and a restriction record were created, the Overview shows an alert, and the Activity history records why.</p></div>`
+    ? html`<div class="card rule-card is-breached"><p class="eyebrow">The limit it crossed</p><p>${m.rule}</p><ul class="plain-list"><li class="muted small">What went wrong:</li>${m.errors.map((e) => html`<li>${e}</li>`)}</ul>
+        <p class="muted small">What happened next: ${cap.name} moved back to ${levelName(cap.authority.level)} straight away, a decision record was written, and an alert appeared on the Overview. History shows why.</p></div>`
     : '';
   const opened = incidents.length
-    ? html`<div class="card rule-card is-breached"><p class="eyebrow">Incidents opened by a contract rule</p>${incidents.map((x) => html`<p><strong>${x.incidentId}</strong>, ${fmtDate(x.date)}: ${x.errors.join(' ')} <span class="muted small">Authority unchanged.</span></p>`)}</div>`
+    ? html`<div class="card rule-card is-breached"><p class="eyebrow">Incidents from a safety limit</p>${incidents.map((x) => html`<p><strong>${x.incidentId}</strong>, ${fmtDate(x.date)}: ${x.errors.join(' ')} <span class="muted small">Authority didn't change.</span></p>`)}</div>`
     : '';
   const control = demo
-    ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">This simulates a reading that crosses the rule "${demo.text}", to show what software does on its own.</p>
-        <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a rule incident' : 'Simulate threshold breach'}</button></div>`
+    ? html`<div class="card rule-card"><p class="eyebrow">Demo control</p><p class="muted small">Pretend the AI crosses "${demo.text}" to see what happens automatically.</p>
+        <button class="btn btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate an incident' : 'Simulate crossing the limit'}</button></div>`
     : '';
   const base = `#/capabilities/${cap.id}?tab=monitoring`;
   const missed = expectedVsActual(state, cap.id).rows.filter((r) => r.status === 'not-met').length;
@@ -553,47 +571,47 @@ function monitoringTab(state, cap, d, show = null) {
   const views = subNav([{ href: base, label: 'Still safe?', active: !value }, { href: `${base}&show=value`, label: 'Delivering value?', active: value, count: missed + warnings }], 'Monitoring views');
   if (value) {
     const parts = html`${expectedCard(state, cap)}${roiCard(state, cap)}${adoptionCard(state, cap)}`;
-    return html`${views}${String(parts).trim() ? parts : html`<p class="empty">Nothing to show yet: value appears once an expansion is authorized with expected outcomes.</p>`}`;
+    return html`${views}${String(parts).trim() ? parts : html`<p class="empty">Nothing to show yet. This fills in once the AI is given more authority with an expected impact.</p>`}`;
   }
   // C1: the rollout plan of the decision in force, if it has one.
   const g = grantingRecord(state, cap.id);
-  const rollout = g && g.rolloutPlan ? html`<p class="small muted mon-rollout">Rollout: ${g.rolloutPlan.ownerAt ? g.rolloutPlan.ownerAt.name : g.rolloutPlan.owner} · from ${fmtDate(g.rolloutPlan.startDate)} · review ${fmtDate(g.rolloutPlan.reviewDate)} · <a href="#/decisions/${g.id}">Plan</a></p>` : '';
+  const rollout = g && g.rolloutPlan ? html`<p class="small muted mon-rollout">Rollout plan: ${g.rolloutPlan.ownerAt ? g.rolloutPlan.ownerAt.name : g.rolloutPlan.owner} · starts ${fmtDate(g.rolloutPlan.startDate)} · review on ${fmtDate(g.rolloutPlan.reviewDate)} · <a href="#/records/${g.id}">See plan</a></p>` : '';
   return html`${views}${head}${rollout}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${fired}${opened}${control}`;
 }
 
-// Where a number came from, always shown (B2): seeded demo data, or the gate log with its sources.
-const sourceTag = (source, seeded) => html`<span class="muted small">${source}</span>${seeded ? html` ${badge('neutral', 'Seeded')}` : ''}`;
+// Where a number came from, always shown (B2): demo data, or the logged actions with their sources.
+const sourceTag = (source, seeded) => html`<span class="muted small">${source}</span>${seeded ? html` ${badge('neutral', 'Demo data')}` : ''}`;
 const money = (v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 // Adoption signals (C2): warnings, never blocking, each with what it saw,
 // why it matters and where the data came from.
 function adoptionCard(state, cap) {
   const signals = adoptionSignals(state, cap.id);
-  const checked = 'Rubber-stamping, rising overrides, escalations left waiting and work-arounds outside the agent.';
+  const checked = 'Approvals made without real review, more and more reversals, approvals left waiting, and work done outside the AI.';
   const body = signals.length
     ? signals.map((x) => html`<div class="notice notice-watch adoption-signal" role="status"><div class="notice-body"><strong>${x.title}</strong>${x.simulated ? html` ${badge('neutral', 'Simulated')}` : ''}
-        <p>${x.what}</p><p class="muted small">Why it matters: ${x.why}</p><p class="muted small">Source: ${x.source}.</p></div></div>`)
-    : notice('pass', 'No adoption warnings', `Checked: ${checked}`);
-  return section('Adoption signals', body, { subtitle: `Warnings only: they never block an action or a decision. ${signals.length ? `Checked: ${checked}` : ''}` });
+        <p>${x.what}</p><p class="muted small">Why it matters: ${x.why}</p><p class="muted small">Data: ${x.source}.</p></div></div>`)
+    : notice('pass', 'Nothing looks off', `Checked: ${checked}`);
+  return section('How people are using it', body, { subtitle: `Early warnings only. They never block anything. ${signals.length ? `Checked: ${checked}` : ''}` });
 }
 
 // Expected vs actual (B2): each expected outcome on the record in force.
 function expectedCard(state, cap) {
   const { record, rows } = expectedVsActual(state, cap.id);
   if (!record) return '';
-  if (!rows.length) return section('Expected vs actual', html`<p class="empty">${record.id} was authorized before expected outcomes were required, so there is nothing to compare yet. The next expansion will carry them.</p>`);
+  if (!rows.length) return section('Expected impact vs actual', html`<p class="empty">${record.id} was approved before expected impact was recorded, so there's nothing to compare yet. The next authority change will include it.</p>`);
   const tone = { met: 'pass', 'not-met': 'fail', 'not-measured': 'neutral' };
   const word = { met: 'Met', 'not-met': 'Not met', 'not-measured': 'Not measured' };
-  return section('Expected vs actual', html`<div class="card table-card"><table class="table">
-    <thead><tr><th>Expected outcome</th><th>Target</th><th>Actual</th><th>Status</th><th>Source</th></tr></thead>
+  return section('Expected impact vs actual', html`<div class="card table-card"><table class="table">
+    <thead><tr><th>Expected</th><th>Target</th><th>Actual</th><th>Status</th><th>Data</th></tr></thead>
     <tbody>${rows.map((r) => html`<tr>
-      <td><strong>${r.metric}</strong>${r.measuredAs ? html`<div class="muted small">Compared with: ${r.measuredAs}</div>` : ''}</td>
+      <td><strong>${r.metric}</strong>${r.measuredAs ? html`<div class="muted small">Measured as: ${r.measuredAs}</div>` : ''}</td>
       <td>${r.target}</td>
       <td>${r.actualText || html`<span class="muted">—</span>`}</td>
       <td>${badge(tone[r.status], word[r.status])}${r.status === 'not-met' ? html`<div class="muted small">${r.gapText}</div>` : r.note ? html`<div class="muted small">${r.note}</div>` : ''}</td>
       <td>${r.source ? sourceTag(r.source, r.seeded) : html`<span class="muted small">—</span>`}</td>
     </tr>`)}</tbody>
-  </table></div>`, { subtitle: html`From <a href="#/decisions/${record.id}">${record.id}</a>, the decision in force. Each outcome is matched to a measured metric by its wording; one that doesn't match is shown as not measured, never guessed.` });
+  </table></div>`, { subtitle: html`From <a href="#/records/${record.id}">${record.id}</a>, the current decision. If we can't find a measured number for an outcome, it shows as "Not measured". We never guess.` });
 }
 
 // A simple ROI (B2), every assumption visible, versioned with author and reason.
@@ -606,26 +624,26 @@ function roiCard(state, cap) {
   const by = personAt(a.byAt, a.by);
   const versions = roiVersions(state, cap.id);
   const result = r ? html`<div class="metric-grid metric-grid-4">
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Cases handled by the AI</span></div><div class="metric-value">${r.automated.toLocaleString('en-US')}</div><div class="metric-note">a month, at ${r.inputs.automationRate.value}% automation</div></div>
-      <div class="metric card"><div class="metric-top"><span class="metric-label">Human hours saved</span></div><div class="metric-value">${Math.round(r.hoursSaved)}</div><div class="metric-note">${money(r.laborSaved)} a month</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Cases handled by the AI</span></div><div class="metric-value">${r.automated.toLocaleString('en-US')}</div><div class="metric-note">a month, with ${r.inputs.automationRate.value}% done automatically</div></div>
+      <div class="metric card"><div class="metric-top"><span class="metric-label">Staff hours saved</span></div><div class="metric-value">${Math.round(r.hoursSaved)}</div><div class="metric-note">${money(r.laborSaved)} a month</div></div>
       <div class="metric card"><div class="metric-top"><span class="metric-label">AI cost</span></div><div class="metric-value">${money(r.aiCost)}</div><div class="metric-note">a month, at $${r.inputs.aiCostPerCase.value.toFixed(2)} a case</div></div>
       <div class="metric card"><div class="metric-top"><span class="metric-label">Net a month</span>${badge(r.net >= 0 ? 'pass' : 'fail', r.roiPct != null ? `ROI ${r.roiPct}%` : '')}</div><div class="metric-value">${money(r.net)}</div><div class="metric-note">hours saved × hourly cost − AI cost</div></div>
-    </div>` : html`<p class="empty">The ROI appears once there is an automation rate to work from: after an expansion to automatic action, from the monitoring window or the gate log.</p>`;
-  const inputs = r ? html`<li><strong>Automation rate:</strong> ${r.inputs.automationRate.value}% · ${sourceTag(r.inputs.automationRate.source, r.inputs.automationRate.seeded)}</li>
+    </div>` : html`<p class="empty">ROI appears once the AI is completing some actions automatically, so we know how much work it takes on.</p>`;
+  const inputs = r ? html`<li><strong>Share done automatically:</strong> ${r.inputs.automationRate.value}% · ${sourceTag(r.inputs.automationRate.source, r.inputs.automationRate.seeded)}</li>
       <li><strong>AI cost per case:</strong> $${r.inputs.aiCostPerCase.value.toFixed(2)} · ${sourceTag(r.inputs.aiCostPerCase.source, r.inputs.aiCostPerCase.seeded)}</li>` : '';
-  const form = html`<details class="card"><summary>Change the assumptions (creates version ${a.version + 1})</summary>
+  const form = html`<details class="card"><summary>Change the assumptions</summary>
     <form class="roi-form" data-form="roi-assumptions" data-capability="${cap.id}">
       <div class="roi-fields">${ROI_FIELDS.map((f) => html`<label class="field field-stack"><span>${f.label} (${f.unit})</span><input type="number" name="${f.key}" step="any" min="${f.min}" max="${f.max}" value="${a.values[f.key]}" required></label>`)}</div>
-      <label class="field field-stack"><span>Why they changed</span><textarea name="reason" rows="2" required></textarea></label>
-      ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} Switch who is acting in the header.</p>`}
-      <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Save as version ${a.version + 1}</button>
-      <p class="muted small">Earlier versions never change. The owner or a named stakeholder can change them.</p>
+      <label class="field field-stack"><span>Why you're changing them</span><textarea name="reason" rows="2" required></textarea></label>
+      ${e.ok ? '' : html`<p class="form-error" role="status">${e.reason} ${SWITCH_PERSON}</p>`}
+      <button class="btn btn-primary" type="submit" ${e.ok ? '' : raw('disabled')}>Save</button>
+      <p class="muted small">Changes are kept in history. The owner or a named stakeholder can make them.</p>
     </form></details>`;
   return section('Return on investment', html`${result}
     <div class="card">
-      <p class="eyebrow">Assumptions, version ${a.version}${a.seeded ? html` ${badge('neutral', 'Seeded demo data')}` : ''}</p>
+      <p class="eyebrow">Assumptions${a.seeded ? html` ${badge('neutral', 'Demo data')}` : ''}</p>
       <ul class="plain-list">${ROI_FIELDS.map((f) => html`<li><strong>${f.label}:</strong> ${f.unit === '$' ? `$${a.values[f.key]}` : `${a.values[f.key].toLocaleString('en-US')} ${f.unit}`}</li>`)}${inputs}</ul>
       <p class="muted small">Set by ${by.name}, ${by.role}, on ${fmtDate(a.date)}. Reason: ${a.reason}</p>
-      ${versions.length > 1 ? html`<details><summary>Earlier versions (${versions.length - 1})</summary><ul class="plain-list">${versions.slice(0, -1).reverse().map((v) => html`<li><strong>v${v.version}</strong>, ${fmtDate(v.date)}, ${personAt(v.byAt, v.by).name}: ${ROI_FIELDS.map((f) => `${f.label.toLowerCase()} ${v.values[f.key]}`).join('; ')}. <span class="muted small">${v.reason}</span></li>`)}</ul></details>` : ''}
-    </div>${form}`, { subtitle: 'A simple monthly estimate: the human time saved on cases the AI handles on its own, less what the AI costs on every case. It leaves out review time on escalations and set-up costs.' });
+      ${versions.length > 1 ? html`<details><summary>History (${versions.length - 1})</summary><ul class="plain-list">${versions.slice(0, -1).reverse().map((v) => html`<li><strong>v${v.version}</strong>, ${fmtDate(v.date)}, ${personAt(v.byAt, v.by).name}: ${ROI_FIELDS.map((f) => `${f.label.toLowerCase()} ${v.values[f.key]}`).join('; ')}. <span class="muted small">${v.reason}</span></li>`)}</ul></details>` : ''}
+    </div>${form}`, { subtitle: 'A rough monthly estimate: staff time saved on cases the AI completes, minus what the AI costs on every case. It doesn\'t count time spent on approvals or set-up costs.' });
 }

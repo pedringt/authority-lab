@@ -34,20 +34,20 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 ## Demo story
 
-1. **Overview**: Refund recommendation needs an authority decision. 5 of 6 evidence requirements are met; high-value refunds are the gap.
-2. **Capability → Contract**: what the AI may do, must ask about, must never do, and when software pulls authority back.
-3. **Evidence → Tests → Run test suite**: 24 of 26 pass. H-04 (fraud flag present) is a high-severity miss.
-4. **Capability → Evidence**: 218 pilot cases at 94%, but 18 high-value cases at 83%.
-5. **Capability → Stakeholders**: Support Operations wants to expand; Risk wants high-value cases held.
-6. **Open decision** (from the Overview or the capability's summary): choose **Expand with limits**, check the conditions, the rollout plan and the expected impact (all prefilled for the demo), read the plain-English preview, write the rationale, authorize.
-7. **Decision record #04** is written with the evidence snapshot. The authority map updates.
-8. **Capability → Monitoring → Simulate threshold breach**: severe errors exceed 5% of the rolling 50; software returns the capability to Draft, creates an alert, an activity event and a restriction record, and locks expansion until a review is recorded.
-9. **Monitoring → Record the post-incident review**: Refund recommendation is High impact, so switch **Acting as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changed, and record it. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
-10. **Demo → Reset demo** (the menu at the top right) restores the seeded state.
+1. **Overview**: To do leads with the decision on Refund recommendation: 5 of 6 checks met, and high-value refunds are the gap. Approvals needed shows two refunds waiting for a person; Important results shows the thin high-value data (18 cases at 83%).
+2. **Capabilities → Refund recommendation → Rules**: what the AI may do, when it must ask a person, what it must never do, and when its authority is reduced automatically.
+3. **Evidence → Tests → Run tests**: 24 of 26 pass. H-04 (fraud flag present) is a high-severity miss.
+4. **Evidence → Results**: 218 pilot cases at 94%, but 18 high-value cases at 83%.
+5. **Summary → People involved**: Support Operations wants to expand; Risk wants high-value cases held.
+6. **Open the decision** (from the Overview, Summary or the Decision tab): choose **Expand with limits**, check the limits, the rollout plan and the expected impact (all prefilled for the demo), read what the option would mean, write why, and **Record decision**.
+7. **Decision record #04** is written with the evidence snapshot. Current authority on the Overview updates.
+8. **Monitoring → Still safe? → Simulate crossing the limit**: severe errors exceed 5% of the rolling 50; software moves the capability back to Draft ("The AI was moved back to Draft after crossing a safety limit."), creates an alert, an activity event and a restriction record, and locks expansion until a review is recorded.
+9. **Monitoring → Review what happened**: Refund recommendation is High impact, so switch **Acting as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changed, and **Save review**. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
+10. **Settings → Reset demo** (the gear at the top right) restores the seeded state.
 
 ## Where things are
 
-Five places across the top: **Overview**, **Capabilities**, **Evidence** (with the testing ground under Tests), **Records** (decision records and the Activity history) and **Agent runs**. **People** is in the header, and the **Demo** menu next to Acting as holds Start empty and Reset demo. A capability has five tabs: Contract, Evidence (with Success criteria and Testing), Stakeholders, Decisions (with Waiting for a person) and Monitoring. Old links (`#/tests`, `#/activity`, `#/decisions/…`, `?tab=criteria`, `?tab=testing`, `?tab=waiting`) still open the right page. Each page opens with one sentence; the rest is behind **How this works**.
+Three places across the top: **Overview** (To do, Approvals needed, Important results, Current authority), **Capabilities** and **Records** (decision records and the Activity history). **Acting as** stays in the header; **People**, **Workspace**, **Start empty** and **Reset demo** are in the **Settings** menu (the gear, top right). A capability has six tabs: **Summary**, **Rules**, **Evidence** (Results, All evidence, Decision requirements, Targets, Tests, Model runs), **Decision** (the decision and Approvals), **Monitoring** (Still safe? and Delivering value?) and **History**. Stakeholder positions show in Summary and on the decision; **Manage stakeholders** opens the editor. Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/…`, and old tabs such as `?tab=contract`, `?tab=criteria`, `?tab=testing`, `?tab=waiting`, `?tab=stakeholders`) still open the right place (`src/routes.js`). Each page opens with one sentence; the rest is behind **How this works**.
 
 ## Standards
 
@@ -59,26 +59,26 @@ Five places across the top: **Overview**, **Capabilities**, **Evidence** (with t
 
 ## Starting empty
 
-**Demo → Start empty** (the menu at the top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). Setup comes first: name the workspace and its one workflow, record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on), and say which founding admin is setting it up. Then add the first capability. **Reset demo** brings Northstar back.
+**Settings → Start empty** (the gear at the top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). Setup comes first: name the workspace and its one workflow, record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on), and say which founding admin is setting it up. Then add the first capability. **Reset demo** brings Northstar back.
 
 ## Adding a capability
 
-**Capabilities → Add capability** defines a new capability (name, summary, owner), its risk profile, and its starting authority: Level 0, Level 1, or "Not delegated, by design" with a rationale. It writes the capability's first decision record and lands on its **Setup** checklist. Every tab is always visible; empty tabs say what is missing and link to the next setup step. The **Demo: acting as** picker in the top bar (default: the capability owner) stands in for sign-in and is the author on records; only active people appear. Reset demo removes added capabilities.
+**Capabilities → Add capability** defines a new capability (name, summary, owner), its risk profile, and its starting authority: Level 0, Level 1, or "Not delegated, by design" with a rationale. It writes the capability's first decision record and lands on its **Setup** checklist. Every tab is always visible; empty tabs say what is missing and link to the next setup step. The **Acting as** picker in the header (default: the capability owner) stands in for sign-in and is the author on records; only active people appear. Reset demo removes added capabilities.
 
-## Building a contract
+## Building the rules (the delegation contract)
 
-For a new capability, **Setup → Open the contract builder** starts from a template picked by the risk profile plus seeded keyword suggestions labelled "Suggested by AI". Each suggestion is accepted, edited or rejected on its own (no accept-all; rejections stay in the record), all five sections are confirmed, software checks block empty hard limits above Low impact, contradictions, restriction rules without a number or window, and financial capabilities without a value limit in "may" or "must ask", and a named person finalizes contract v1. Templates and suggestion rules live in `src/data/contract-templates.js`.
+For a new capability, **Setup → Write the rules** starts from a template picked by the risk profile plus seeded keyword suggestions labelled "Suggested by AI". Each suggestion is accepted, edited or rejected on its own (no accept-all; rejections stay in the record), all five sections are confirmed (The AI may, Ask a person for these cases, The AI must never, Ask a person whenever this comes up, Authority is reduced automatically when), software checks block empty hard limits above Low impact, contradictions, restriction rules without a number or window, and financial capabilities without a value limit in "may" or "must ask", and a named person saves the rules (**Save rules**) as contract v1. Templates and suggestion rules live in `src/data/contract-templates.js`.
 
-## Success criteria and evidence requirements
+## Success criteria and evidence requirements (Targets and Decision requirements in the app)
 
-Setup step 3 opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Core rows (quality, severe errors, minimum cases) cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed amendment (#7). Defaults live in `src/data/criteria-defaults.js`.
+Setup step 3 (**Set targets**) opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Core rows (quality, severe errors, minimum cases) cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed change (**Propose a target change**, #7). Defaults live in `src/data/criteria-defaults.js`.
 
 ## Sign-off rules in one place
 
 | Object | Needs sign-off from | Approvers |
 |---|---|---|
-| Criteria and requirements | the first performance results | Low/Medium: 1 (the owner, or another named stakeholder if the owner proposed). High or Financial: 2 distinct, at least one from Risk |
-| Contract | a pilot start (setting on) | same |
+| Criteria and requirements (Targets, Decision requirements) | the first performance results | Low/Medium: 1 (the owner, or another named stakeholder if the owner proposed). High or Financial: 2 distinct, at least one from Risk |
+| Contract (Rules) | a pilot start (setting on) | same |
 | Stakeholder membership and team labels | the first performance results | same; positions and reasoning stay direct |
 
 **Tightening only skips sign-off.** A criteria/requirements change where every changed threshold only gets stricter (higher "at least", lower "at most", more required cases) and nothing is removed, added, renamed, reworded or loosened applies directly as a recorded amendment, if the owner or a named stakeholder makes it and no expansion decision is pending. Anything else, or any loosening anywhere, goes to sign-off.
@@ -91,15 +91,15 @@ Locked criteria, and the contract once a pilot has started, change through a pro
 
 ## A new capability, end to end
 
-Expanding authority needs a pending proposal; restricting, suspending or redesigning does not, but still needs a named person, a rationale and a record. Status follows authority decisions only: In setup until a person authorizes the move to Draft, then Pilot. Each step must be real before the next: a contract before criteria, criteria before tests, tests before a decision. The Setup page tracks them.
+Expanding authority needs a pending proposal; restricting, suspending or redesigning does not, but still needs a named person, a rationale and a record. Status follows authority decisions only: In setup until a person authorizes the move to Draft, then Pilot. Each step must be real before the next: rules before targets, targets before tests, tests before a decision. The Setup page tracks them.
 
 1. **Capabilities → Add capability**: name, summary, owner, risk profile, starting authority (Level 0 or 1). Writes the capability's first record.
-2. **Setup → Open the contract builder**: template plus suggestions, review each one, confirm the sections, finalize contract v1.
-3. **Setup → Open the editor**: success criteria and evidence requirements from the risk profile; save v1.
-4. **Setup → Open the editor** (stakeholders): name the people whose positions will be recorded.
-5. **Setup → Open the library**: add the starter set (20 scenarios, "Suggested by AI") or write your own; save.
-6. **Tests → Run test suite**: results are simulated deterministically; the first run locks the criteria.
-7. **Decision history → Propose a move to Level 2**, then **Authorize**: the capability's second record, status Pilot.
+2. **Setup → Write the rules**: template plus suggestions, review each one, confirm the sections, **Save rules** (contract v1).
+3. **Setup → Set targets**: targets and decision requirements from the risk profile; save v1.
+4. **Setup → Name stakeholders**: the people whose positions will be recorded.
+5. **Setup → Open the library**: **Add 20 suggested cases** ("Suggested by AI") or write your own; **Save test cases**.
+6. **Evidence → Tests → Run tests**: results are simulated deterministically; the first run locks the targets.
+7. **Summary or Decision → Propose a move to Level 2**, then **Open the decision** and **Record decision**: the capability's second record, status Pilot.
 
 ## People and rights
 
@@ -114,7 +114,7 @@ Warnings, never blocks: a High/Financial capability with fewer than two active R
 - `src/data/seed.js`: all seeded data (workspace, capabilities, contract, criteria, 26 scenarios, pilot segments, evidence, stakeholders, decision records, activity, monitoring rule).
 - `src/store/`: pure state transitions plus a small persisted store, split by responsibility (state shape, selectors, people, capabilities, contract, decisions, evidence, proposals, monitoring, coverage, persistence). `src/store/index.js` is the one public entry point. Everything that belongs to one capability (criteria, requirements, scenarios, pilot, evidence, stakeholders, test run, pending decision, monitoring) lives under `state.capabilityData[capabilityId]`, and every transition takes a capability id.
 - Every record, version, approval, proposal and roster change saves the person as they were (name, title, team, rights). Views show that snapshot, so later roster changes never rewrite history.
-- Records come in three tiers: **decision records** (authority changes only, by a named person or by a software rule), **amendments** (versioned edits to the contract, criteria, evidence requirements, risk profile and stakeholders, each with author, reason, before/after and an "after evidence" flag), and the **activity log** (every event, with a `kind` and a `surfaced` flag; Activity shows surfaced events by default and everything under "Full history"). Version lists live under `capabilityData[id].versions` and the latest version is the only copy: views read the contract, risk profile, criteria, requirements and stakeholders through `current(state, capabilityId, kind)`, and a test fails if a view reads them any other way. The capability object holds identity (id, name, summary, owner) and current authority/status. `amend()` writes a new version and never edits an old one.
+- Records come in three tiers: **decision records** (authority changes only, by a named person or by a software rule), **amendments** (versioned edits to the contract, criteria, evidence requirements, risk profile and stakeholders, each with author, reason, before/after and an "after evidence" flag), and the **activity log** (every event, with a `kind` and a `surfaced` flag; Activity shows surfaced events under "Important" and everything under "Everything"). Version lists live under `capabilityData[id].versions` and the latest version is the only copy: views read the contract, risk profile, criteria, requirements and stakeholders through `current(state, capabilityId, kind)`, and a test fails if a view reads them any other way. The capability object holds identity (id, name, summary, owner) and current authority/status. `amend()` writes a new version and never edits an old one.
 - `src/views/*.js`: one module per screen. Views render from state; they never mutate it.
 - `src/diff.js`: a small structural diff used for amendment before/after tables and the Versions page.
 - `src/ui.js`: escaping template tag and shared components (badges, authority labels, level scale, notices).

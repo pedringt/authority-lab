@@ -27,12 +27,14 @@ export function coverageWarning(state, capabilityId) {
     id: `coverage-${capabilityId}`,
     capabilityId,
     kind: 'coverage',
-    title: `${cap.name} has ${c.approvers.length === 0 ? 'no' : 'only one'} active Risk approver${c.approvers.length === 1 ? '' : 's'} among its possible approvers`,
-    body: `High-impact or financial changes need two approvers with at least one from Risk, and one of the two could be the proposer. ${names.length ? `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} the only Risk approver${names.length === 1 ? '' : 's'} on this capability's list.` : 'Nobody on this capability\u2019s list holds the Risk approver right.'} Usually the fix is adding an existing Risk approver to the stakeholders; otherwise grant the right to someone already listed.`,
-    link: `#/capabilities/${capabilityId}?tab=stakeholders`,
-    linkText: 'Stakeholders',
+    // The title is the fix. "Risk" means the Risk approver right on People,
+    // never a team name.
+    title: c.approvers.length === 0 ? `Add two Risk approvers to ${cap.name}` : `Add a second Risk approver to ${cap.name}`,
+    body: `Changes to high-impact or financial capabilities need a Risk approval, and whoever proposes a change can't approve it, so two Risk approvers are needed. ${names.length ? `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} the only Risk approver${names.length === 1 ? '' : 's'} on its stakeholder list.` : 'Nobody on its stakeholder list is a Risk approver.'} Add an existing Risk approver as a stakeholder, or make someone already listed a Risk approver on People.`,
+    link: `#/capabilities/${capabilityId}/stakeholders/edit`,
+    linkText: 'Manage stakeholders',
     links: [
-      { href: `#/capabilities/${capabilityId}?tab=stakeholders`, text: 'Stakeholders' },
+      { href: `#/capabilities/${capabilityId}/stakeholders/edit`, text: 'Manage stakeholders' },
       { href: '#/people', text: 'People' },
     ],
   };
@@ -50,11 +52,11 @@ export function proposalSatisfiable(state, capabilityId, proposal) {
   const left = req.approvers - done.length;
   if (left <= 0 && (!req.riskRequired || riskDone)) return { ok: true, reason: null };
   if (req.ownerOnly) {
-    if (!isActivePerson(state, cap.owner) || !eligible.includes(cap.owner)) return { ok: false, reason: `The owner (${people(state)[cap.owner].name}) must approve and can no longer do so.` };
+    if (!isActivePerson(state, cap.owner) || !eligible.includes(cap.owner)) return { ok: false, reason: `Only the owner, ${people(state)[cap.owner].name}, can approve this, and they no longer can.` };
     return { ok: true, reason: null };
   }
-  if (eligible.length < left) return { ok: false, reason: `${left} more approver${left === 1 ? '' : 's'} needed but only ${eligible.length} of the approvers frozen when it opened ${eligible.length === 1 ? 'is' : 'are'} still active.` };
-  if (req.riskRequired && !riskDone && !eligible.some((k) => isRiskApprover(state, k))) return { ok: false, reason: 'A Risk approval is still needed and none of the approvers frozen when it opened holds the Risk approver right now.' };
+  if (eligible.length < left) return { ok: false, reason: `It needs ${left} more approval${left === 1 ? '' : 's'}, but only ${eligible.length} of the people who could approve it ${eligible.length === 1 ? 'is' : 'are'} still active.` };
+  if (req.riskRequired && !riskDone && !eligible.some((k) => isRiskApprover(state, k))) return { ok: false, reason: 'Risk approval still needed, and none of the people who can approve it is a Risk approver any more.' };
   return { ok: true, reason: null };
 }
 
@@ -67,10 +69,10 @@ export function proposalWarning(state, capabilityId, proposal) {
     capabilityId,
     proposalId: proposal.id,
     kind: 'proposal',
-    title: `${proposal.id} on ${cap.name} can no longer be signed off as proposed`,
-    body: `${r.reason} The approvers were frozen when the proposal opened (${(proposal.eligible || []).map((k) => people(state)[k] ? people(state)[k].name : k).join(', ')}). The proposer can withdraw it and propose again, which freezes a fresh set.`,
+    title: `This change to ${cap.name} can no longer be approved`,
+    body: `${r.reason} Who can approve ${proposal.id} was set when it was proposed: ${(proposal.eligible || []).map((k) => people(state)[k] ? people(state)[k].name : k).join(', ')}. To go ahead, whoever proposed it withdraws it and proposes it again, so the current people can approve it.`,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
-    linkText: 'Open the proposal',
+    linkText: 'Open the proposed change',
   };
 }
 

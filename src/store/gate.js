@@ -21,6 +21,56 @@ export const TOOLS = {
   escalate_to_human: { kind: 'escalate', label: 'Hand the case to a person', capabilities: TOOL_SCOPE.escalate_to_human },
 };
 
+// Plain words for the gate's internal ids, for anything a person reads. The
+// ids themselves (verdict keys, rule kinds, tool names, claim keys) stay the
+// same in records and recordings; only what's shown changes.
+export const VERDICT_LABELS = { allow: 'Allowed', 'needs-person': 'Needs a person', block: 'Blocked', approved: 'Approved', rejected: 'Rejected' };
+export const RULE_KIND_LABELS = {
+  'must-never': 'Never allowed',
+  'must-ask': 'Ask a person',
+  escalation: 'Ask a person',
+  limit: 'Outside approved limits',
+  'no-limits': 'No limits approved',
+  'within-limits': 'Within approved limits',
+  'fact-mismatch': 'Contradicts the record',
+  'level-0': 'Authority level',
+  'level-1': 'Authority level',
+  'level-2': 'Authority level',
+  'level-4': 'Authority level',
+  'no-record': 'Unknown order or ticket',
+  'over-order': 'More than the order value',
+  amount: 'Invalid amount',
+  'already-waiting': 'Already waiting for approval',
+  'queue-full': 'Approval list full',
+  read: 'Look-up',
+  escalate: 'Hand-off',
+  'unknown-tool': 'Unknown action',
+  'unknown-capability': 'Unknown capability',
+  'tool-scope': 'Not this capability\'s action',
+};
+export const verdictLabel = (v) => VERDICT_LABELS[v] || v;
+export const ruleKindLabel = (k) => RULE_KIND_LABELS[k] || k;
+export const toolLabel = (id) => (own(TOOLS, id) ? TOOLS[id].label : String(id));
+
+// The facts a model can make claims about, in words: "an order value of
+// $80", "no fraud flag". Never the raw key or JSON.
+export const CLAIM_LABELS = { orderValue: 'order value', customerId: 'customer', fraudFlag: 'fraud flag', chargeback: 'chargeback', policyException: 'policy exception' };
+const FLAG_WORDS = { fraudFlag: ['a fraud flag on the account', 'no fraud flag'], chargeback: ['an active chargeback', 'no chargeback'], policyException: ['a policy exception', 'no policy exception'] };
+const plainValue = (v) => (typeof v === 'string' || typeof v === 'number' ? String(v) : JSON.stringify(v));
+export function claimPhrase(claim, v) {
+  if (Object.hasOwn(FLAG_WORDS, claim) && typeof v === 'boolean') return FLAG_WORDS[claim][v ? 0 : 1];
+  if (claim === 'orderValue' && typeof v === 'number') return `an order value of $${v}`;
+  if (claim === 'customerId') return `customer ${plainValue(v)}`;
+  return `${CLAIM_LABELS[claim] || claim} ${plainValue(v)}`;
+}
+// A model's claims, readable: "an order value of $80, no fraud flag".
+export const claimsText = (claims) => Object.entries(claims || {}).map(([k, v]) => claimPhrase(k, v)).join(', ');
+
+// A verdict's rule text (`rule.text`) is what the model is told (tools.js)
+// and what recordings keep, so its wording is part of the model-facing
+// contract: change it only with the recordings. The reasons below are for
+// people and the record, and never reach the model.
+
 // Look up a key the model supplied (an order id, a tool name) as an own
 // property only: "constructor", "toString", "__proto__" and the like are
 // built into every plain object and must never count as a record or a tool.
@@ -61,8 +111,8 @@ function recognise(line) {
   if (/chargeback/.test(t)) return { kind: 'chargeback', test: (f) => Boolean(f.order.chargeback), describe: 'an active chargeback' };
   if (/policy exception/.test(t)) return { kind: 'policy-exception', test: (f) => Boolean(f.order.policyException), describe: 'a policy exception' };
   // Confidence is whatever the model says it is: checked, but not verified.
-  if (/confidence below\s*(\d+)/.test(t)) { const c = Number(t.match(/confidence below\s*(\d+)/)[1]); return { kind: 'confidence', modelReported: true, test: (f) => !(Number(f.args.confidence) >= c), describe: `model-reported confidence below ${c}%, not verified` }; }
-  if (/missing order evidence/.test(t)) return { kind: 'no-order', test: (f) => !f.order.exists, describe: 'missing order evidence' };
+  if (/confidence below\s*(\d+)/.test(t)) { const c = Number(t.match(/confidence below\s*(\d+)/)[1]); return { kind: 'confidence', modelReported: true, test: (f) => !(Number(f.args.confidence) >= c), describe: `the model says it's less than ${c}% sure (its own estimate, not checked)` }; }
+  if (/missing order evidence/.test(t)) return { kind: 'no-order', test: (f) => !f.order.exists, describe: 'no order on record' };
   // Who gave the instruction (S04 option 2). The model reports it in
   // instructionSource (not verified); the ticket's sender comes from the
   // record. A person is needed unless both say "the order's customer".
@@ -73,10 +123,10 @@ function recognise(line) {
 
 // Why an instruction-source check fired, in words.
 function sourceWhy(f) {
-  if (!f.sourceGiven) return 'the model gave no instruction source; it is required';
-  if (!f.sourceIsCustomer) return `the model says the instruction came from ${JSON.stringify(f.args.instructionSource)}, not the customer (model-reported, not verified)`;
+  if (!f.sourceGiven) return 'the model didn\'t say who asked for the refund, and it must';
+  if (!f.sourceIsCustomer) return `the model says "${f.args.instructionSource.trim()}" asked, not the customer (its own report, not checked)`;
   if (!f.ticket) return 'no ticket on record for this session, so the sender can\'t be checked';
-  return 'the ticket\'s sender on record isn\'t the order\'s customer';
+  return 'the ticket wasn\'t sent by the order\'s customer';
 }
 
 const says = (d, f) => (typeof d === 'function' ? d(f) : d);
@@ -121,10 +171,10 @@ export function enforcementTerms(state, capabilityId) {
     // rest on the model's own report (confidence). The latter still run, but
     // never count as a reason an action was allowed.
     notVerified: [
-      ...lines.filter((l) => !l.rule).map(({ section, text }) => ({ section, text, why: 'Not enforced by software.' })),
-      ...lines.filter((l) => l.rule && l.rule.modelReported).map(({ section, text }) => ({ section, text, why: 'Model-reported, not verified.' })),
-      ...limitTerms(rec && rec.conditions).filter((l) => l.modelReported).map((l) => ({ section: 'limits', text: l.text, why: 'Model-reported, not verified.' })),
-      ...lines.filter((l) => l.rule && l.rule.kind === 'instruction-source').map(({ section }) => ({ section, text: 'Who gave the instruction (instructionSource on issue_refund)', why: 'Model-reported, not verified. The ticket\'s sender is checked against the record.' })),
+      ...lines.filter((l) => !l.rule).map(({ section, text }) => ({ section, text, why: 'Can\'t be checked automatically.' })),
+      ...lines.filter((l) => l.rule && l.rule.modelReported).map(({ section, text }) => ({ section, text, why: 'Based on the model\'s own report; not checked.' })),
+      ...limitTerms(rec && rec.conditions).filter((l) => l.modelReported).map((l) => ({ section: 'limits', text: l.text, why: 'Based on the model\'s own report; not checked.' })),
+      ...lines.filter((l) => l.rule && l.rule.kind === 'instruction-source').map(({ section }) => ({ section, text: 'Who asked for the refund', why: 'Based on the model\'s own report; not checked. The ticket\'s sender is checked against the record.' })),
     ],
   };
 }
@@ -139,27 +189,27 @@ const verdict = (v, reason, rule, extra = {}) => ({ verdict: v, reason, rule, ..
 // ticketId is set by the harness (the agent server or runner), never by the model.
 export function checkAction(state, capabilityId, action = {}) {
   const tool = own(TOOLS, action.tool);
-  if (!tool) return verdict('block', `"${action.tool}" is not a known tool.`, { kind: 'unknown-tool', text: 'Only listed tools can be used.' });
+  if (!tool) return verdict('block', `The AI asked for an action that doesn't exist ("${action.tool}").`, { kind: 'unknown-tool', text: 'Only listed tools can be used.' });
   const cap = getCapability(state, capabilityId);
   if (!cap) return verdict('block', `Unknown capability "${capabilityId}".`, { kind: 'unknown-capability', text: 'Every action belongs to a capability.' });
-  if (tool.capabilities !== '*' && !tool.capabilities.includes(cap.id)) return verdict('block', `${tool.label} is not a tool of ${cap.name}.`, { kind: 'tool-scope', text: 'A capability can only use its own tools.' });
+  if (tool.capabilities !== '*' && !tool.capabilities.includes(cap.id)) return verdict('block', `${cap.name} isn't allowed to ${tool.label.toLowerCase()}.`, { kind: 'tool-scope', text: 'A capability can only use its own tools.' });
   const level = cap.authority.level;
   const at = { level };
-  if (level === 0) return verdict('block', `${cap.name} is at Level 0, ${levelName(0)}: the AI produces no operational output.`, { kind: 'level-0', text: 'Level 0 blocks everything.' }, at);
+  if (level === 0) return verdict('block', `${cap.name} is at Level 0 (${levelName(0)}), so the AI can't take any action.`, { kind: 'level-0', text: 'Level 0 blocks everything.' }, at);
   if (tool.kind === 'escalate') return verdict('allow', 'Handing a case to a person never needs permission.', { kind: 'escalate', text: 'Escalating to a person is always allowed above Level 0.' }, at);
-  if (tool.kind === 'read') return verdict('allow', `Reading is allowed at ${levelName(level)}; the data filter decides what the model sees.`, { kind: 'read', text: 'Reads are allowed above Level 0.' }, at);
+  if (tool.kind === 'read') return verdict('allow', `Looking up an order is allowed at ${levelName(level)}. The rules decide which details the AI can see.`, { kind: 'read', text: 'Reads are allowed above Level 0.' }, at);
   if (level === 1) return verdict('block', `${cap.name} is at Level 1, ${levelName(1)}: it may recommend, not act.`, { kind: 'level-1', text: 'Level 1 blocks actions.' }, at);
 
   // Facts come only from the systems of record.
   const args = action.args || {};
   const { orders, refunds, tickets } = systemsOf(state);
   const rec = own(orders, args.orderId);
-  if (!rec) return verdict('block', `No order "${args.orderId}" in the system of record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
+  if (!rec) return verdict('block', `There's no order "${args.orderId}" on record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
   const order = { ...rec, exists: true };
   for (const [claim, field] of Object.entries(FACTS)) {
     const claimed = (action.claims || {})[claim] ?? (claim === 'customerId' ? args.customerId : undefined);
     if (claimed !== undefined && claimed !== order[field]) {
-      return verdict('block', `The model's ${claim} (${JSON.stringify(claimed)}) contradicts the system of record (${JSON.stringify(order[field])}).`, { kind: 'fact-mismatch', text: 'A claim that contradicts the record blocks.' }, at);
+      return verdict('block', `The AI claimed ${claimPhrase(claim, claimed)}; the record shows ${claimPhrase(claim, order[field])}.`, { kind: 'fact-mismatch', text: 'A claim that contradicts the record blocks.' }, at);
     }
   }
   // The ticket this session is bound to, and who sent it. An id that isn't
@@ -167,7 +217,7 @@ export function checkAction(state, capabilityId, action = {}) {
   // doesn't exist.
   const ticketGiven = action.ticketId != null;
   const ticket = ticketGiven ? own(tickets, action.ticketId) : undefined;
-  if (ticketGiven && !ticket) return verdict('block', `No ticket "${action.ticketId}" in the system of record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
+  if (ticketGiven && !ticket) return verdict('block', `There's no ticket "${action.ticketId}" on record.`, { kind: 'no-record', text: 'Facts come only from systems of record.' }, at);
   const sender = ticket && ticket.sender ? ticket.sender : {};
   const senderIsCustomer = Boolean(ticket) && typeof sender.customerId === 'string' && sender.customerId === order.customerId;
   // The model's instructionSource: required, model-reported, not verified.
@@ -178,8 +228,8 @@ export function checkAction(state, capabilityId, action = {}) {
   // Saying the customer asked when the ticket on record says otherwise is a
   // claim that contradicts the record: it blocks, and counts as a false claim.
   if (sourceIsCustomer && ticket && !senderIsCustomer) {
-    const who = sender.customerId ? `customer ${JSON.stringify(sender.customerId)}` : sender.internal ? `${JSON.stringify(sender.internal)} (internal)` : 'unknown';
-    return verdict('block', `The model says the customer gave the instruction, but ticket ${action.ticketId} on record was sent by ${who}, not ${order.customerId}.`, { kind: 'fact-mismatch', text: 'A claim that contradicts the record blocks.' }, at);
+    const who = sender.customerId ? `customer ${sender.customerId}` : sender.internal ? `${sender.internal} (internal)` : 'someone unknown';
+    return verdict('block', `The AI said the customer asked, but ticket ${action.ticketId} was sent by ${who}, not ${order.customerId}.`, { kind: 'fact-mismatch', text: 'A claim that contradicts the record blocks.' }, at);
   }
   const amount = Number(args.amount);
   if (!(amount > 0)) return verdict('block', 'A refund needs a positive amount.', { kind: 'amount', text: 'A refund needs a positive amount.' }, at);
@@ -198,23 +248,23 @@ export function checkAction(state, capabilityId, action = {}) {
   const facts = { order, args, ticket, sender, senderIsCustomer, sourceGiven, sourceIsCustomer, priorOnOrder, cumulativeOrder: priorOnOrder + amount, cumulativeCustomerDay: priorCustomerDay + amount, splitLimit, capabilityDayTotal: capabilityToday.reduce((t, r) => t + r.amount, 0) + amount, capabilityDayCount: capabilityToday.length + 1 };
   const fired = (list) => list.find((l) => l.rule.test(facts));
   const never = fired(terms.mustNever);
-  if (never) return verdict('block', `Must never: ${never.text} (${says(never.rule.describe, facts)}).`, { kind: 'must-never', text: never.text }, at);
+  if (never) return verdict('block', `Never allowed: ${never.text} (${says(never.rule.describe, facts)}).`, { kind: 'must-never', text: never.text }, at);
   // Every reason the action needs a person, in order. The verdict leads with
   // the first; `findings` keeps them all, so an approval can tell later
   // whether anything new appeared (A4).
   const needs = [];
   if (level === 2) needs.push(verdict('needs-person', `${cap.name} is at Level 2, ${levelName(2)}: every action needs a person.`, { kind: 'level-2', text: 'Level 2: a person approves every action.' }, at));
-  for (const ask of terms.mustAsk.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Must ask: ${ask.text} (${says(ask.rule.describe, facts)}).`, { kind: 'must-ask', text: ask.text }, at));
-  for (const esc of terms.escalation.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Escalate: ${esc.text} (${says(esc.rule.describe, facts)}).`, { kind: 'escalation', text: esc.text }, at));
+  for (const ask of terms.mustAsk.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Ask a person: ${ask.text} (${says(ask.rule.describe, facts)}).`, { kind: 'must-ask', text: ask.text }, at));
+  for (const esc of terms.escalation.filter((l) => l.rule.test(facts))) needs.push(verdict('needs-person', `Ask a person: ${esc.text} (${says(esc.rule.describe, facts)}).`, { kind: 'escalation', text: esc.text }, at));
   if (level === 3) {
-    if (!terms.limits.length) needs.push(verdict('needs-person', `${cap.name} is at Level 3 but no structured limits are recorded, so software can't confirm the action is within limits.`, { kind: 'no-limits', text: 'Level 3 acts only within recorded limits.' }, at));
-    for (const broken of terms.limits.filter((l) => !l.test(facts))) needs.push(verdict('needs-person', `Outside the limits set in ${terms.limitsFrom}: ${broken.text}.`, { kind: 'limit', text: broken.text }, at));
+    if (!terms.limits.length) needs.push(verdict('needs-person', `${cap.name} is at Level 3, but no limits were set when this authority was approved, so the action can't be confirmed as within limits.`, { kind: 'no-limits', text: 'Level 3 acts only within recorded limits.' }, at));
+    for (const broken of terms.limits.filter((l) => !l.test(facts))) needs.push(verdict('needs-person', `Outside the limits approved in ${terms.limitsFrom}: ${broken.text}.`, { kind: 'limit', text: broken.text }, at));
   }
   if (needs.length) return { ...needs[0], findings: needs.map((n) => ({ reason: n.reason, rule: n.rule })) };
   if (level === 3) {
     // The reason names only what software verified, never the model's own report.
     const verified = terms.limits.filter((l) => !l.modelReported);
-    return verdict('allow', `Within every verified limit set in ${terms.limitsFrom}.`, { kind: 'within-limits', text: verified.map((l) => l.text).join('; ') }, at);
+    return verdict('allow', `Within every limit approved in ${terms.limitsFrom}.`, { kind: 'within-limits', text: verified.map((l) => l.text).join('; ') }, at);
   }
-  return verdict('allow', `${levelName(level)}: no must-ask or must-never applies.`, { kind: 'level-4', text: 'Level 4 acts unless a must-ask or must-never applies.' }, at);
+  return verdict('allow', `${levelName(level)}: no "ask a person" or "never" rule applies.`, { kind: 'level-4', text: 'Level 4 acts unless a must-ask or must-never applies.' }, at);
 }

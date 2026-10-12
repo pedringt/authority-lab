@@ -746,3 +746,12 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
   .sum-facts { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 16px; margin-top: 18px; }
   .sum-below { grid-template-columns: 1fr; }
 }
+
+/* Phone width: grid children never push the page wider than the screen. */
+.evidence-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.decision-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+@media (max-width: 960px) { .decision-grid { grid-template-columns: minmax(0, 1fr); } .level-scale, .level-legend { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .evidence-grid { grid-template-columns: minmax(0, 1fr); } }
+.evidence-item, .decision-main, .decision-side { min-width: 0; }
+.evidence-item { overflow-wrap: anywhere; }
+.evidence-head > div { min-width: 0; } .evidence-head .badge { flex-shrink: 0; }

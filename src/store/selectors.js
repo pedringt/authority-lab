@@ -63,10 +63,13 @@ export function performanceResultsSeen(state, capabilityId) {
 // is surfaced only when it was made after performance results were seen.
 export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision', 'proposal', 'workspace']);
 
+// Activity badge text, in the agreed terms (Rules, Targets, Decision
+// requirements, Proposed change). The keys are stored on events; only the
+// words change. KIND_LABELS in capabilities.js uses the same terms.
 export const KIND_LABELS_ALL = {
-  authority: 'Authority', restriction: 'Automatic restriction', failure: 'Failure', mitigation: 'Mitigation', milestone: 'Milestone',
-  review: 'Review', workspace: 'Workspace', criteria: 'Criteria defined', 'criteria-locked': 'Criteria locked', 'contract-finalized': 'Contract finalized', 'contract-draft': 'Contract draft', 'criteria-saved': 'Criteria saved', 'scenarios-saved': 'Scenarios saved', proposal: 'Proposal', roster: 'Roster',
-  decision: 'Decision', test: 'Test run', amendment: 'Amendment',
+  authority: 'Authority', restriction: 'Authority reduced', failure: 'Failure', mitigation: 'Fix', milestone: 'Milestone',
+  review: 'Review', workspace: 'Workspace', criteria: 'Targets set', 'criteria-locked': 'Targets can no longer be edited directly', 'contract-finalized': 'Rules finalized', 'contract-draft': 'Rules drafted', 'criteria-saved': 'Targets saved', 'scenarios-saved': 'Test cases saved', proposal: 'Proposed change', roster: 'People',
+  decision: 'Decision', test: 'Test run', amendment: 'Change', 'roi-assumptions': 'ROI change',
 };
 
 // Activity events for the Activity screen. Default: surfaced events only.

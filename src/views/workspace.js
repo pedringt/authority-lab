@@ -22,13 +22,13 @@ function personRow(p) {
 export function founderOptions(people, chosen) {
   const admins = people.filter((p) => p.workspaceAdmin && String(p.name || '').trim());
   if (!admins.length) return html`<option value="">Mark at least two workspace admins first</option>`;
-  return html`<option value="" ${chosen ? '' : raw('selected')}>Choose a founding admin</option>${admins.map((p) => html`<option value="${p.name.trim()}" ${p.name.trim() === chosen ? raw('selected') : ''}>${p.name.trim()}</option>`)}`;
+  return html`<option value="" ${chosen ? '' : raw('selected')}>Choose a workspace admin</option>${admins.map((p) => html`<option value="${p.name.trim()}" ${p.name.trim() === chosen ? raw('selected') : ''}>${p.name.trim()}</option>`)}`;
 }
 
 // The non-blocking note when fewer than two Risk approvers are listed.
 export function riskGapNote(people) {
   const n = foundingRiskGap(people);
-  return n === null ? '' : `${n === 0 ? 'No Risk approvers are' : 'Only one Risk approver is'} listed. Setup can go ahead, but High-impact and Financial changes can't be signed off until two Risk approvers exist, and from here a right is granted only through a proposal that a second workspace admin approves.`;
+  return n === null ? '' : `Mark two Risk approvers now if you can. ${n === 0 ? 'None are' : 'Only one is'} marked. You can continue without them, but changes to high-impact or financial capabilities can't be approved until there are two. After setup, each new Risk approver needs another admin's approval.`;
 }
 
 // `draft` holds what was typed when a submit failed, so nothing is lost.
@@ -40,7 +40,7 @@ export function workspaceSetupView(state, query, draft = null) {
     <div>
       <p class="eyebrow">New workspace</p>
       <h1>Set up the workspace</h1>
-      ${lede('Before any capability: name the workspace and its workflow, and record who is in it.', 'Everything after this is governed by the same rules as the demo.')}
+      ${lede('Name the workspace and the workflow where AI might help, then add the people who will make decisions.', 'After this, the workspace works the same way as the demo.')}
     </div>
   </div>
   ${error ? notice('fail', 'Could not set up the workspace', error) : ''}
@@ -57,8 +57,8 @@ export function workspaceSetupView(state, query, draft = null) {
       <label class="field field-stack"><span>Description</span><input type="text" name="wf-description" value="${d.workflow.description}" maxlength="200" placeholder="Where work comes from and where AI might help"></label>
     </div>
     <div class="card">
-      <p class="eyebrow">Founding roster</p>
-      <p>The first people and their rights, recorded directly as roster version 1. After setup, every rights change is a proposal approved by a different workspace admin, so the founding roster needs <strong>at least ${MIN_FOUNDING_ADMINS} workspace admins</strong>. <strong>Risk approver</strong> is optional here; High-impact and Financial capabilities need it to sign off, and a warning explains any gap.</p>
+      <p class="eyebrow">People</p>
+      <p>Add <strong>at least ${MIN_FOUNDING_ADMINS} workspace admins</strong>. After setup, giving someone a right or removing one needs a second admin's approval, so one admin alone can't change anything. <strong>Risk approvers</strong> are optional now, but changes to high-impact or financial capabilities can't be approved without them.</p>
       <div class="table-card"><table class="table table-edit table-founders">
         <thead><tr><th>Name</th><th>Title</th><th>Team</th><th>Workspace admin</th><th>Risk approver</th><th><span class="sr-only">Remove</span></th></tr></thead>
         <tbody data-rows="founders">${d.people.map(personRow)}</tbody>
@@ -69,7 +69,7 @@ export function workspaceSetupView(state, query, draft = null) {
     <div class="card">
       <label class="field field-stack"><span>Who is setting this up?</span>
         <select name="ws-by" data-founders required>${founderOptions(d.people, d.by)}</select></label>
-      <p class="muted small">One of the founding workspace admins. They are recorded as the author of the founding roster and are acting when the workspace opens.</p>
+      <p class="muted small">Choose one of the workspace admins above. They're recorded as setting up the workspace, and you'll be acting as them when it opens.</p>
     </div>
     <button class="btn btn-primary" type="submit">Set up the workspace</button>
   </form>
@@ -85,7 +85,7 @@ export function noCapabilitiesView(state, title) {
     </div>
   </div>
   <div class="card empty-state">
-    <p><strong>No capabilities yet.</strong> A capability is one discrete thing the AI might be trusted to do in ${workflowOf(state).name}. Add the first one to define its owner, risk profile and starting authority; its contract, criteria, scenarios and tests follow from there.</p>
+    <p><strong>No capabilities yet.</strong> A capability is one thing the AI may eventually do on its own in ${workflowOf(state).name}, like "Recommend a refund". Add one to give it an owner, a risk profile and a starting authority. Rules, targets, scenarios and tests come next.</p>
     <p><a class="btn btn-primary" href="#/capabilities/new">Add the first capability</a></p>
   </div>`;
 }
