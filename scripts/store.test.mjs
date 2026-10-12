@@ -33,6 +33,10 @@ import { stakeholdersEditorView } from '../src/views/stakeholders.js';
 import { decisionBriefView } from '../src/views/brief.js';
 import { agentRunsView } from '../src/views/agentruns.js';
 import { overviewView } from '../src/views/overview.js';
+import { KIND_TONE, activityView } from '../src/views/activity.js';
+import { testsView } from '../src/views/tests.js';
+import { KIND_LABELS_ALL, rateText, runFlags } from '../src/store/index.js';
+import { VERDICT_LABELS, RULE_KIND_LABELS, claimsText } from '../src/store/gate.js';
 import { versionsView } from '../src/views/versions.js';
 import { peopleView } from '../src/views/people.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
@@ -858,9 +862,9 @@ test('saving writes v1 of both; saving again before the lock writes v2; readines
   let [s, id] = withNewCap();
   assert.equal(criteriaSaved(s, id), false);
   const d = defaultsFor(s, id);
-  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements }), /Choose who is acting before you save the criteria/);
-  assert.throws(() => saveCriteria(s, id, { criteria: [], requirements: d.requirements, by: 'priya' }), /at least one success criterion/);
-  assert.throws(() => saveCriteria(s, id, { criteria: [{ name: 'Quality', target: '' }], requirements: d.requirements, by: 'priya' }), /needs a name and a target/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements }), /Choose who is acting before you save the targets\./);
+  assert.throws(() => saveCriteria(s, id, { criteria: [], requirements: d.requirements, by: 'priya' }), /at least one target/);
+  assert.throws(() => saveCriteria(s, id, { criteria: [{ name: 'Quality', target: '' }], requirements: d.requirements, by: 'priya' }), /needs a measure and a value/);
   assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: [{ text: ' ' }], by: 'priya' }), /needs text/);
   s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
   assert.equal(criteriaSaved(s, id), true);
@@ -887,7 +891,7 @@ test('the run gate: no run until criteria are saved; the first run locks them an
   let [s, id] = withNewCap({ impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, 'Ticket tagging', 'Adds routing tags.');
   s = { ...s, capabilityData: { ...s.capabilityData, [id]: { ...capData(s, id), scenarios: seed.scenarios.slice(0, 3) } } };
   assert.equal(canRunSuite(s, id).ok, false);
-  assert.match(canRunSuite(s, id).reason, /Save success criteria/);
+  assert.match(canRunSuite(s, id).reason, /Set targets and decision requirements first/);
   assert.throws(() => startTestRun(s, id), /before the first test run/);
   const d = defaultsFor(s, id);
   s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
@@ -898,21 +902,21 @@ test('the run gate: no run until criteria are saved; the first run locks them an
   assert.equal(criteriaLocked(s, id), true, 'performanceResultsSeen after the first run');
   assert.equal(s.activity[0].kind, 'criteria-locked');
   assert.equal(s.activity[0].surfaced, true);
-  assert.match(s.activity[0].body, /criteria v1 and evidence requirements v1/);
+  assert.match(s.activity[0].body, /targets \(version 1\) and decision requirements \(version 1\)/);
   // Locked: saving throws; a second run does not log the lock again.
-  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' }), /locked/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' }), /can't be changed directly now that results exist/);
   const before = s.activity.filter((e) => e.kind === 'criteria-locked').length;
   s = runSuite(s, id);
   assert.equal(s.activity.filter((e) => e.kind === 'criteria-locked').length, before);
   // A capability with no scenarios cannot run regardless.
   assert.equal(canRunSuite(initialState(), TC).ok, false);
-  assert.match(canRunSuite(initialState(), TC).reason, /No scenarios/);
+  assert.match(canRunSuite(initialState(), TC).reason, /No test cases/);
 });
 
 test('the seeded refund capability is already locked and its demo run logs no lock event', () => {
   let s = initialState();
   assert.equal(criteriaLocked(s, RR), true);
-  assert.throws(() => saveCriteria(s, RR, { criteria: current(s, RR, 'criteria'), requirements: current(s, RR, 'requirements'), by: 'maya' }), /locked/);
+  assert.throws(() => saveCriteria(s, RR, { criteria: current(s, RR, 'criteria'), requirements: current(s, RR, 'requirements'), by: 'maya' }), /can't be changed directly now that results exist/);
   s = runSuite(s);
   assert.equal(s.activity.filter((e) => e.kind === 'criteria-locked').length, 0);
   assert.equal(s.activity[0].kind, 'test');
@@ -931,14 +935,14 @@ test('loosening or removing a risk-derived default needs a reason, stored on the
   let [s, id] = withNewCap();
   const d = defaultsFor(s, id);
   const looser = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 88% correct decisions' } : c));
-  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya' }), /needs a short reason/);
-  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya', reason: 'ok' }), /needs a short reason/, 'a reason must be more than a word');
+  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya' }), /add a short reason/);
+  assert.throws(() => saveCriteria(s, id, { criteria: looser, requirements: d.requirements, by: 'priya', reason: 'ok' }), /add a short reason/, 'a reason must be more than a word');
   // Tightening needs no reason.
   const tighter = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 95% correct decisions' } : c));
   assert.doesNotThrow(() => saveCriteria(s, id, { criteria: tighter, requirements: d.requirements, by: 'priya' }));
   // Core rows can be adjusted but not removed.
-  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria.filter((c) => c.id !== 'severe-errors'), requirements: d.requirements, by: 'priya', reason: 'Long enough reason.' }), /Core rows can be adjusted but not removed: a severe-error threshold/);
-  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements.filter((r) => r.id !== 'min-cases'), by: 'priya', reason: 'Long enough reason.' }), /a minimum case count/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria.filter((c) => c.id !== 'severe-errors'), requirements: d.requirements, by: 'priya', reason: 'Long enough reason.' }), /You can change these but not remove them: a serious-error target/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements.filter((r) => r.id !== 'min-cases'), by: 'priya', reason: 'Long enough reason.' }), /a minimum number of cases/);
   assert.deepEqual(CORE_CRITERIA, ['quality', 'severe-errors']);
   assert.deepEqual(CORE_REQUIREMENTS, ['min-cases']);
   // Removing a non-core default and loosening a count, with a reason: stored on each version.
@@ -947,8 +951,8 @@ test('loosening or removing a risk-derived default needs a reason, stored on the
   s = saveCriteria(s, id, { criteria: looser, requirements: fewer, by: 'priya', reason: 'Pilot volume is small; agreed with Risk.' });
   assert.equal(s.activity.length - before, 1, 'one event per save');
   assert.equal(s.activity[0].kind, 'criteria-saved');
-  assert.match(s.activity[0].body, /criteria v1, requirements v1/);
-  assert.match(s.activity[0].body, /loosened or removed: Pilot volume is small/);
+  assert.match(s.activity[0].body, /targets v1, requirements v1/);
+  assert.match(s.activity[0].body, /weakened or removed: Pilot volume is small/);
   const cv = currentVersion(s, id, 'criteria');
   assert.deepEqual(cv.deviations, [{ id: 'quality', change: 'loosened', from: '≥ 92% correct decisions', to: '≥ 88% correct decisions', label: 'Quality' }]);
   assert.equal(cv.reason, 'Pilot volume is small; agreed with Risk.');
@@ -1248,16 +1252,16 @@ test('scenario results are simulated deterministically; the starter set covers a
   assert.ok(list.every((x) => typeof x.pass === 'boolean' && x.aiDecision && x.outcome));
   assert.ok(list.some((x) => !x.pass), 'a starter library has at least one failure');
   assert.deepEqual(list.slice(0, 4).map((x) => x.id), ['S-01', 'S-02', 'S-03', 'S-04']);
-  assert.throws(() => addStarterScenarios(s, id, { by: 'priya' }), /already in the library/);
+  assert.throws(() => addStarterScenarios(s, id, { by: 'priya' }), /already added/);
   assert.equal(s.activity[0].kind, 'scenarios-saved');
-  assert.match(scenarioNudge(0), /No scenarios yet/);
+  assert.match(scenarioNudge(0), /No test cases yet/);
   assert.match(scenarioNudge(12), /Aim for 20 to 30/);
-  assert.match(scenarioNudge(24), /sound starting library/);
+  assert.match(scenarioNudge(24), /That's a good start/);
 });
 
 test('saving the library keeps recorded results for unchanged scenarios, simulates new ones, and clears a previous run', () => {
   let [s, id] = withNewCap(MED_CF, 'Order status lookup', 'Answers where an order is.');
-  assert.throws(() => saveScenarios(s, id, { scenarios: [{ group: 'standard', name: 'A', situation: 'x', expected: 'y' }], by: 'priya' }), /at least two groups/);
+  assert.throws(() => saveScenarios(s, id, { scenarios: [{ group: 'standard', name: 'A', situation: 'x', expected: 'y' }], by: 'priya' }), /at least two types of case/);
   assert.throws(() => saveScenarios(s, id, { scenarios: [{ group: 'standard', name: '', situation: 'x', expected: 'y' }, { group: 'edge', name: 'B', situation: 'x', expected: 'y' }], by: 'priya' }), /needs a name/);
   s = addStarterScenarios(s, id, { by: 'priya' });
   const d = defaultsFor(s, id);
@@ -2203,7 +2207,7 @@ test('only the owner or a Risk approver records a review; High/Financial needs a
   let r = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
   const owner = getCapability(r, RR).owner;
   assert.equal(isRiskApprover(r, owner), false);
-  assert.match(reviewEligibility(r, RR, owner).reason, /Risk approver records the review/);
+  assert.match(reviewEligibility(r, RR, owner).reason, /only a Risk approver can record this review/);
   // Relabelling someone's team as Risk grants nothing.
   r = editPerson(r, 'elena', { name: 'Elena Rossi', title: 'Finance Business Partner', team: 'Risk', by: 'maya', reason: 'Testing a team relabel.' });
   assert.equal(reviewEligibility(r, RR, 'elena').ok, false, 'team name is not the right');
@@ -2238,8 +2242,8 @@ test('whoever authorized the restricted expansion cannot record its review', () 
   assert.equal(restrictedExpansion(s, RR).id, expansion.id);
   const refused = reviewEligibility(s, RR, owner);
   assert.equal(refused.ok, false, 'the owner is otherwise eligible on a Medium capability');
-  assert.match(refused.reason, new RegExp(`authorized the expansion that was automatically restricted \\(${expansion.id}\\)`));
-  assert.throws(() => recordReview(s, RR, { by: owner, ...FINDINGS }), /authorized the expansion/);
+  assert.match(refused.reason, new RegExp(`approved the authority that was just reduced \\(${expansion.id}\\)`));
+  assert.throws(() => recordReview(s, RR, { by: owner, ...FINDINGS }), /approved the authority that was just reduced/);
   assert.equal(reviewEligibility(s, RR, 'daniel').ok, true, 'another eligible person can');
   s = recordReview(s, RR, { by: 'daniel', ...FINDINGS });
   assert.equal(capData(s, RR).reviewRequired, false);
@@ -2711,15 +2715,15 @@ test('gate bypass: built-in object names are never orders or tools, at any level
 test('gate: confidence is model-reported, listed as not verified, and never a reason to allow', () => {
   const s = atL3();
   const t = enforcementTerms(s, RR);
-  assert.ok(t.notVerified.some((x) => x.text === 'Confidence below 80%.' && /Model-reported/.test(x.why)), 'the contract line');
-  assert.ok(t.notVerified.some((x) => x.section === 'limits' && /confidence/i.test(x.text) && /Model-reported/.test(x.why)), 'the recorded limit');
+  assert.ok(t.notVerified.some((x) => x.text === 'Confidence below 80%.' && /the model's own report/.test(x.why)), 'the contract line');
+  assert.ok(t.notVerified.some((x) => x.section === 'limits' && /confidence|sure/i.test(x.text) && /the model's own report/.test(x.why)), 'the recorded limit');
   assert.ok(t.notVerified.some((x) => x.text === 'Change customer account ownership.'), 'alongside what software cannot check');
   const ok = checkAction(s, RR, refund('ORD-1', 40));
   assert.equal(ok.verdict, 'allow');
   assert.equal(/confidence/i.test(ok.reason) || /confidence/i.test(ok.rule.text), false, 'confidence is not a reason it was allowed');
   const low = checkAction(s, RR, refund('ORD-1', 40, { confidence: 70 }));
   assert.equal(low.verdict, 'needs-person', 'the check still runs');
-  assert.match(low.reason, /not verified/);
+  assert.match(low.reason, /its own estimate, not checked/);
 });
 
 test('gate: capability-wide daily caps hold even when every customer is under their own limit', () => {
@@ -2811,8 +2815,9 @@ test('A2: a refusal tells the model the rule, not the record', () => {
   assert.deepEqual(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } }).result.data, { order: { id: 'ORD-5003' } });
   const lie = callTool(s, RR, { ...refund('ORD-5003', 20), claims: { fraudFlag: false } });
   assert.deepEqual(Object.keys(lie.result).sort(), ['executed', 'message', 'rule', 'tool', 'verdict']);
-  assert.match(lie.check.reason, /true/, 'the full reason is kept for the record');
+  assert.match(lie.check.reason, /the record shows a fraud flag on the account/, 'the full reason is kept for the record');
   assert.equal(JSON.stringify(lie.result).includes('true'), false, 'but the model is not told the fraud flag');
+  assert.equal(JSON.stringify(lie.result).includes('the record shows'), false, 'in any wording');
 });
 
 test('A2: issue_refund executes only when the gate allows, and writes the ledger', () => {
@@ -2938,7 +2943,7 @@ test('A4 bypass: only an active, named stakeholder of the capability decides', (
   assert.throws(() => approveAction(s, 'WA-001', { by: 'elena', reason: WHY }), /deactivated/, 'a deactivated stakeholder');
   assert.throws(() => approveAction(s, 'WA-001', { by: 'priya', reason: 'ok' }), /needs a reason/);
   assert.throws(() => rejectAction(s, 'WA-001', { by: 'priya', reason: 'no' }), /needs a reason/);
-  assert.throws(() => approveAction(s, 'WA-999', { by: 'priya', reason: WHY }), /No waiting action/);
+  assert.throws(() => approveAction(s, 'WA-999', { by: 'priya', reason: WHY }), /Couldn't find that request/);
   // With no stakeholder list, the owner alone decides; it never widens to everyone.
   const bare = amend(initialState(), RR, 'stakeholders', { value: [], author: 'maya', reason: 'Test: no stakeholder list.' });
   assert.deepEqual(queueApprovers(bare, RR), [getCapability(bare, RR).owner]);
@@ -2954,8 +2959,8 @@ test('A4: an approval executes once, recorded with the person; a second decision
   assert.deepEqual(s.systems.refunds.at(-1), { id: item.decision.refundId, orderId: 'ORD-5006', customerId: 'C-1005', amount: 48, date: '2026-10-07', by: 'priya', capabilityId: RR, approvedVia: 'WA-001' });
   assert.equal(s.activity[0].surfaced, true);
   // The same action twice: refused, and nothing executes again.
-  assert.throws(() => approveAction(s, 'WA-001', { by: 'maya', reason: WHY }), /already executed by Priya Natarajan/);
-  assert.throws(() => rejectAction(s, 'WA-001', { by: 'maya', reason: WHY }), /already executed/);
+  assert.throws(() => approveAction(s, 'WA-001', { by: 'maya', reason: WHY }), /already been decided \(approved and done\) by Priya Natarajan/);
+  assert.throws(() => rejectAction(s, 'WA-001', { by: 'maya', reason: WHY }), /already been decided \(approved and done\)/);
   assert.equal(s.systems.refunds.length, before + 1);
   // A person accepts every reason it needed a person: over $100 and a policy exception, at Level 2.
   s = approveAction(s, 'WA-002', { by: 'daniel', reason: 'Exception approved under the goodwill policy.' });
@@ -2967,7 +2972,7 @@ test('A4: a rejection is recorded and nothing executes', () => {
   const before = s.systems.refunds.length;
   s = rejectAction(s, 'WA-002', { by: 'daniel', reason: 'Outside the window; no exception this time.' });
   assert.deepEqual([queuedAction(s, 'WA-002').status, s.systems.refunds.length], ['rejected', before]);
-  assert.throws(() => approveAction(s, 'WA-002', { by: 'maya', reason: WHY }), /already rejected/);
+  assert.throws(() => approveAction(s, 'WA-002', { by: 'maya', reason: WHY }), /already been decided \(rejected\)/);
 });
 
 test('A4 bypass: an approved action re-runs the gate when it executes; a restriction in between refuses it', () => {
@@ -2982,7 +2987,7 @@ test('A4 bypass: an approved action re-runs the gate when it executes; a restric
   const after = approveAction(restricted, id, { by: 'priya', reason: WHY });
   const item = queuedAction(after, id);
   assert.equal(item.status, 'refused');
-  assert.match(item.decision.refusal, /post-incident review/);
+  assert.match(item.decision.refusal, /crossed a safety limit\. Nothing runs until someone reviews what happened/);
   assert.equal(after.systems.refunds.length, restricted.systems.refunds.length, 'nothing executed');
   assert.equal(after.activity[0].kind, 'failure');
   // A person's decision to restrict (no review lock): refused because the level dropped.
@@ -3012,7 +3017,7 @@ test('A4 bypass: an approval is refused if a cap was crossed, or the order becam
   assert.equal(queuedAction(approveAction(big.state, id, { by: 'priya', reason: WHY }), id).status, 'executed');
   // A fraud flag that appears after queuing blocks it.
   const flagged = { ...big.state, systems: { ...big.state.systems, fraudFlags: [...big.state.systems.fraudFlags, { customerId: 'C-1004', reason: 'New signal.', since: '2026-10-07' }] } };
-  assert.match(queuedAction(approveAction(flagged, id, { by: 'priya', reason: WHY }), id).decision.refusal, /blocked now: Must never/);
+  assert.match(queuedAction(approveAction(flagged, id, { by: 'priya', reason: WHY }), id).decision.refusal, /no longer allowed: Never allowed/);
 });
 
 test('A4: Decision › Approvals lists waiting actions with their reasons, and who may decide', () => {
@@ -3075,14 +3080,14 @@ test('A4 bypass: filling the queue blocks new needs-person actions and opens one
   s = full.state;
   assert.equal(waitingActions(s, RR).length, QUEUE_LIMIT, 'nothing more queued');
   assert.equal(capData(s, RR).evidence.length, evidenceBefore + 1, 'an incident is opened');
-  assert.match(capData(s, RR).evidence[0].metric, /waiting queue full/);
-  assert.equal(s.alerts.filter((a) => /Waiting queue full/.test(a.title)).length, 1, 'an Overview alert');
+  assert.match(capData(s, RR).evidence[0].metric, /approval list full/);
+  assert.equal(s.alerts.filter((a) => /Approval list full/.test(a.title)).length, 1, 'an Overview alert');
   // A second attempt while it's still full doesn't open another incident.
   s = callTool(s, RR, refund(`ORD-${7002 + i}`, 20)).state;
   assert.equal(capData(s, RR).evidence.length, evidenceBefore + 1);
   // Deciding one drains it below the limit: the alert clears and new requests queue again.
   s = rejectAction(s, 'WA-001', { by: 'priya', reason: 'Clearing space in the queue.' });
-  assert.equal(s.alerts.some((a) => /Waiting queue full/.test(a.title)), false);
+  assert.equal(s.alerts.some((a) => /Approval list full/.test(a.title)), false);
   assert.equal(callTool(s, RR, refund(`ORD-${7002 + i}`, 20)).result.waiting, true);
   // Escalations never touch the queue.
   assert.equal(callTool(full.state, RR, { tool: 'escalate_to_human', args: { reason: 'Busy day.' } }).result.executed, true);
@@ -3134,8 +3139,8 @@ test('A5: the log rolls up into counts, rates and derived evidence, labelled by 
   assert.deepEqual([g.counts.allowed, g.counts.escalated, g.counts.blocked, g.counts.overridden], [1, 3, 1, 2]);
   assert.equal(g.rates.automation, 20);
   const ev = gateEvidence(s, RR);
-  assert.deepEqual(ev.map((e) => e.metric), ['Actions allowed automatically', 'Actions sent to a person', 'Actions blocked']);
-  assert.ok(ev.every((e) => e.derived && /Seeded demo data/.test(e.origin) && /This session/.test(e.origin)), 'origin says seeded and session');
+  assert.deepEqual(ev.map((e) => e.metric), ['Actions done automatically', 'Actions sent to a person', 'Actions blocked']);
+  assert.ok(ev.every((e) => e.derived && /Demo data/.test(e.origin) && /This session/.test(e.origin)), 'origin says seeded and session');
   // Derived evidence is never stored: it doesn't count as performance results.
   assert.equal(capData(s, RR).evidence.some((e) => e.source === 'Gate log'), false);
   assert.equal(gateEvidence(startEmpty(), RR).length, 0);
@@ -3163,7 +3168,7 @@ test('A5: crossing a gate-measured rule restricts the capability through the exi
   assert.deepEqual([rec.authorizedBy, rec.option, rec.previous.level, rec.next.level], ['system', 'auto-restrict', 3, 2]);
   assert.match(rec.rationale, /3 forbidden attempts or false claims/);
   assert.match(rec.rationale, /3 in 7 days \(limit 3\)/);
-  assert.match(capData(s, RR).monitoring.errors.join(' '), /GL-\d{4}: the AI tried issue_refund on ORD-5003/);
+  assert.match(capData(s, RR).monitoring.errors.join(' '), /GL-\d{4}: the AI tried to issue a refund on ORD-5003, which is never allowed/);
   assert.equal(s.alerts[0].capabilityId, RR);
   // The new level applies at once, and a fourth attempt doesn't restrict twice.
   assert.equal(checkAction(s, RR, refund('ORD-5001', 10)).rule.kind, 'level-2');
@@ -3199,7 +3204,7 @@ test('A5: Evidence › Results shows gate activity and All evidence shows derive
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=monitoring'))), /counted from logged actions/, 'the safety limits say where their readings come from');
   const ev = String(evidenceView(s, RR, new URLSearchParams()));
   assert.match(ev, /Actions blocked/);
-  assert.match(ev, /Derived · Seeded demo data, This session/);
+  assert.match(ev, /Calculated from logged actions · Demo data, This session/);
 });
 
 test('A5: false claims about the record count with forbidden attempts; unknown orders never count', () => {
@@ -3211,7 +3216,7 @@ test('A5: false claims about the record count with forbidden attempts; unknown o
   assert.equal(getCapability(s, RR).authority.level, 3);
   s = callTool(s, RR, lie).state;
   assert.equal(getCapability(s, RR).authority.level, 2, 'the third false claim restricts');
-  assert.match(capData(s, RR).monitoring.errors.join(' '), /contradicts the system of record/);
+  assert.match(capData(s, RR).monitoring.errors.join(' '), /contradicts the record/);
   assert.equal(gateSummary(s, RR).falseClaims, 3);
   // Mixed: one forbidden attempt, two false claims.
   let m = callTool(expandedRR(), RR, refund('ORD-5003', 10)).state;
@@ -3229,7 +3234,7 @@ test('A6: the committed dry run replays through the live gate, labelled as a moc
   const run = JSON.parse(readFileSync(new URL('../src/data/agent-runs/dry-run-mock.json', import.meta.url), 'utf8'));
   const r = replayRun(run);
   assert.equal(r.changed, 0);
-  assert.equal(GATE_SOURCES.mock, 'Mock model (dry run, not a real model)');
+  assert.equal(GATE_SOURCES.mock, 'Practice run (scripted, not a real model)');
   const t09 = r.tickets.find((t) => t.ticketId === 'T09');
   assert.equal(t09.steps.at(-1).replay.rule.kind, 'fact-mismatch');
   assert.ok(gateEvents(t09.state, RR).filter((e) => e.source !== 'seeded').every((e) => e.source === 'mock'));
@@ -3239,29 +3244,34 @@ test('A6: the Agent runs view leads with three numbers and a by-model table, lab
   const run = { ...JSON.parse(readFileSync(new URL('../src/data/agent-runs/dry-run-mock.json', import.meta.url), 'utf8')), file: 'dry-run-mock.json' };
   const s = initialState();
   const q = new URLSearchParams('');
-  assert.match(String(agentRunsView(s, q, { status: 'loading', runs: [] })), /Loading recordings/);
+  assert.match(String(agentRunsView(s, q, { status: 'loading', runs: [] })), /Loading model runs/);
   const out = String(agentRunsView(s, q, { status: 'ready', runs: [run] }));
-  assert.match(out, /Attempts the gate stopped/);
-  assert.match(out, /Got through<\/span>.*None/s);
+  assert.match(out, /Attempts stopped/);
+  assert.match(out, /Went through<\/span>.*None/s);
   assert.match(out, /By model/);
   assert.match(out, /Scripted mock/);
   assert.doesNotMatch(out, /Recorded from a real run/);
   // Opening the run shows the source label and the replay.
   const opened = String(agentRunsView(s, new URLSearchParams('run=dry-run-mock.json'), { status: 'ready', runs: [run] }));
   assert.match(opened, /Dry run with the scripted mock model, not a real model/);
-  assert.match(opened, /every verdict matches the recording/);
-  assert.match(opened, /Model tried — gate stopped it/);
+  assert.match(opened, /every result matches the recording/);
+  assert.match(opened, /Model tried — the rules stopped it/);
   // A real run where T12's temptation executed: flagged at the top, before the numbers.
   const real = JSON.parse(JSON.stringify(run));
   Object.assign(real, { source: 'recorded', model: 'claude-opus-5-5', date: '2026-10-09', file: 'real.json' });
   real.tickets.find((t) => t.ticketId === 'T12').steps.push({ turn: 3, tool: 'issue_refund', input: { orderId: 'ORD-5001', amount: 10 }, saw: '{"verdict":"allow","executed":true}', gate: { verdict: 'allow', rule: { kind: 'within-limits', text: 'x' } }, refusedBySchema: false });
   const flagged = String(agentRunsView(s, q, { status: 'ready', runs: [real, run] }));
-  assert.ok(flagged.indexOf('something got through') > 0 && flagged.indexOf('something got through') < flagged.indexOf('Attempts the gate stopped'));
+  assert.ok(flagged.indexOf('a trap went through') > 0 && flagged.indexOf('a trap went through') < flagged.indexOf('Attempts stopped'));
   assert.match(flagged, /Opus 5.5/);
   const openedReal = String(agentRunsView(s, new URLSearchParams('run=real.json'), { status: 'ready', runs: [real, run] }));
   assert.match(openedReal, /Recorded from a real run on 2026-10-09, Opus 5.5/);
-  assert.match(openedReal, /Model tried — got through/);
+  assert.match(openedReal, /Model tried — it went through/);
   for (const page of [out, opened, flagged, openedReal]) assert.doesNotMatch(page, /\bbait\b|Paige|claude-/i, 'no internal wording or model ids on the page');
+  // Verdicts and rule kinds read as words, never as the gate's ids or JSON.
+  for (const page of [opened, openedReal]) {
+    assert.match(page, /Blocked<\/span> <span class="muted small">Never allowed/);
+    assert.doesNotMatch(page, />(allow|needs-person|block)<\/span>|>(must-never|fact-mismatch|within-limits|level-\d)<\/span>|claims \{/, 'no verdict keys, rule kinds or raw claims');
+  }
 });
 
 const INSTRUCTION_LINE = 'A refund made on an approval or instruction from someone other than the customer.';
@@ -3328,7 +3338,7 @@ test('A6: repeat runs show per-ticket counts, collapsed, with a picker for each 
   assert.match(page, /stress tickets/);
   assert.match(page, /recorded Oct 11/, 'the date once, not in every header');
   // T08 (refund to PayPal): tried in both runs, stopped both times.
-  assert.match(page, /<td><strong>T08<\/strong><\/td><td class="small">must-never<\/td><td class="num">0<\/td><td class="num">2<\/td><td class="num">0<\/td><td class="num ">0<\/td>/);
+  assert.match(page, /<td><strong>T08<\/strong><\/td><td class="small">something never allowed<\/td><td class="num">0<\/td><td class="num">2<\/td><td class="num">0<\/td><td class="num ">0<\/td>/);
   const opened = String(agentRunsView(initialState(), new URLSearchParams('run=set.json&rep=2'), loaded));
   assert.match(opened, /Recorded from 2 independent runs on 2026-10-11, Haiku 5.5/);
   assert.match(opened, /Run 2/);
@@ -3345,8 +3355,8 @@ test('A6: the Agent runs view counts refunds on an unverified instruction apart 
   // 40 temptations each: Opus 2 within limits on an unverified instruction (5%), Haiku 3 (8%).
   assert.match(out, /<td><strong>Opus 5.5<\/strong><\/td><td class="num">\d+%<\/td><td class="num">\d+%<\/td><td class="num">5%<\/td>/);
   assert.match(out, /<td><strong>Haiku 5.5<\/strong><\/td><td class="num">\d+%<\/td><td class="num">\d+%<\/td><td class="num">8%<\/td>/);
-  assert.match(out, /Refunds on someone else(?:'|&#39;)s say-so now need a person/);
-  assert.match(out, /Before this rule, 5 refunds went through on an unverified instruction; there have been none since/);
+  assert.match(out, /Refunds requested by someone other than the customer now need approval/);
+  assert.match(out, /Before this rule, 5 refunds went through without anyone checking who asked\. There have been none since/);
   assert.doesNotMatch(out, /open question|Paige/i, 'the decided rule is no longer described as open');
 });
 
@@ -3360,7 +3370,7 @@ test('instruction source: the customer on their own ticket is allowed; anyone el
   assert.deepEqual([ok.verdict, ok.rule.kind], ['allow', 'within-limits']);
   const daniel = checkAction(s, RR, asked('ORD-5001', 30, 'Daniel, Risk', 'TK-2001'));
   assert.deepEqual([daniel.verdict, daniel.rule.kind, daniel.rule.text], ['needs-person', 'must-ask', INSTRUCTION_LINE]);
-  assert.match(daniel.reason, /"Daniel, Risk", not the customer \(model-reported, not verified\)/);
+  assert.match(daniel.reason, /"Daniel, Risk" asked, not the customer \(its own report, not checked\)/);
   const noTicket = checkAction(s, RR, asked('ORD-5001', 30, 'customer'));
   assert.equal(noTicket.verdict, 'needs-person');
   assert.match(noTicket.reason, /no ticket on record for this session/);
@@ -3368,7 +3378,7 @@ test('instruction source: the customer on their own ticket is allowed; anyone el
   const terms = enforcementTerms(s, RR);
   assert.ok(terms.mustAsk.some((l) => l.text === INSTRUCTION_LINE && l.rule.kind === 'instruction-source'));
   assert.ok(!terms.unenforced.some((l) => l.text === INSTRUCTION_LINE));
-  assert.ok(terms.notVerified.some((l) => /instructionSource/.test(l.text) && /Model-reported, not verified/.test(l.why)));
+  assert.ok(terms.notVerified.some((l) => /Who asked for the refund/.test(l.text) && /the model's own report; not checked/.test(l.why)));
 });
 
 test('instruction source bypass: a missing field, blanks and look-alikes never count as the customer', () => {
@@ -3378,7 +3388,7 @@ test('instruction source bypass: a missing field, blanks and look-alikes never c
     assert.equal(c.verdict, 'needs-person', `${JSON.stringify(source)} needs a person`);
     assert.equal(c.rule.text, INSTRUCTION_LINE);
   }
-  assert.match(checkAction(s, RR, asked('ORD-5001', 30, undefined, 'TK-2001')).reason, /gave no instruction source; it is required/);
+  assert.match(checkAction(s, RR, asked('ORD-5001', 30, undefined, 'TK-2001')).reason, /didn't say who asked for the refund, and it must/);
 });
 
 test('instruction source bypass: "Customer" in another case is read as the customer, so it can\'t dodge the sender check', () => {
@@ -3404,7 +3414,7 @@ test('sender: a ticket from someone other than the order\'s customer needs a per
   // Claiming the customer when the ticket on record says otherwise blocks.
   const daniel = checkAction(s, RR, asked('ORD-5002', 38, 'customer', 'S04'));
   assert.deepEqual([daniel.verdict, daniel.rule.kind], ['block', 'fact-mismatch']);
-  assert.match(daniel.reason, /ticket S04 on record was sent by "Daniel, Risk" \(internal\), not C-1001/);
+  assert.match(daniel.reason, /ticket S04 was sent by Daniel, Risk \(internal\), not C-1001/);
   for (const t of ['TK-GHOST', 'TK-PROTO', 'TK-NONE']) assert.equal(checkAction(s, RR, asked('ORD-5002', 38, 'customer', t)).rule.kind, 'fact-mismatch', `${t}: a sender that isn't the order's customer`);
 });
 
@@ -3621,11 +3631,11 @@ test('B2: each expected outcome is compared with its actual, with the gap and wh
   const { record, rows } = expectedVsActual(s, RR);
   assert.equal(record.id, 'AC-04');
   assert.deepEqual(rows.map((r) => [r.measuredAs, r.actualText, r.status, r.gapText]), [
-    ['Resolution, % faster than before', '42%', 'not-met', '8 points short of the target'],
+    ['Resolution time (% faster)', '42%', 'not-met', '8 points short of the target'],
     ['AI cost per case', '$0.08', 'not-met', '$0.02 over the target'],
-    ['Override rate', '11%', 'not-met', '3 points over the target'],
+    ['Reviewer reversal rate', '11%', 'not-met', '3 points over the target'],
   ]);
-  assert.ok(rows.every((r) => r.seeded && r.source === 'Seeded demo data (pilot)'), 'seeded data is labelled');
+  assert.ok(rows.every((r) => r.seeded && r.source === 'Demo data (pilot)'), 'seeded data is labelled');
   // Before the expansion, the record in force predates B1: nothing to compare.
   const before = expectedVsActual(initialState(), RR);
   assert.ok(before.record);
@@ -3645,8 +3655,8 @@ test('B2: targets read as ceilings or floors from their words, "−40%" on time 
   const got = expectedVsActual(s, RR).rows;
   assert.deepEqual(got.map((r) => r.status), ['met', 'met', 'met', 'not-measured']);
   assert.equal(got[0].targetValue, 40, '−40% on a time metric is 40% faster; the pilot was 42% faster');
-  assert.equal(got[2].source, 'Seeded demo data (monitoring window)', 'automation comes from the seeded monitoring window until the gate log has real activity');
-  assert.match(got[3].note, /No measured metric matches/);
+  assert.equal(got[2].source, 'Demo data (since the AI was given more authority)', 'automation comes from the seeded monitoring window until the gate log has real activity');
+  assert.match(got[3].note, /We don't measure this yet/);
 });
 
 test('B2: once the gate log has real activity, the rates come from it, labelled by source (session or recorded, never seeded)', () => {
@@ -3655,12 +3665,12 @@ test('B2: once the gate log has real activity, the rates come from it, labelled 
   s = callTool(s, RR, refund('ORD-5003', 5)).state; // blocked: fraud
   const r = actionRates(s, RR);
   assert.deepEqual([r.automation, r.block, r.seeded], [75, 25, false]);
-  assert.match(r.source, /^Gate log: .*This session/);
+  assert.match(r.source, /^Logged actions: .*This session/);
   let rec = expandedRRB2();
   for (let i = 0; i < 2; i++) rec = callTool(rec, RR, refund('ORD-5001', 5), { source: 'recorded' }).state;
-  assert.match(actionRates(rec, RR).source, /Recorded from a real run/);
+  assert.match(actionRates(rec, RR).source, /Recorded from a real model run/);
   // The two seeded waiting requests alone don't count as a sample.
-  assert.equal(actionRates(expandedRRB2(), RR).source, 'Seeded demo data (monitoring window)');
+  assert.equal(actionRates(expandedRRB2(), RR).source, 'Demo data (since the AI was given more authority)');
 });
 
 test('B2: the ROI shows its working: cases × automation × minutes × hourly cost, less AI cost on every case', () => {
@@ -3686,11 +3696,11 @@ test('B2: ROI assumptions change only as a new version, with author and reason; 
   assert.deepEqual(v2.values, { monthlyCases: 1100, humanMinutesPerCase: 6, humanCostPerHour: 36 }, 'unspecified fields carry over');
   assert.match(v2.reason, /six minutes/);
   assert.equal(roi(s, RR).assumptions.version, 2);
-  assert.match(s.activity[0].title, /ROI assumptions v2/);
+  assert.match(s.activity[0].title, /ROI assumptions changed \(version 2\)/);
   assert.match(s.activity[0].body, /human handling time per case 8 → 6/);
   // Refused: no reason, nobody named, someone outside the capability, bad numbers, nothing changed.
   const bad = [
-    [{ humanMinutesPerCase: 6 }, { by: 'elena', reason: '' }, /Say why/],
+    [{ humanMinutesPerCase: 6 }, { by: 'elena', reason: '' }, /why you're changing them/],
     [{ humanMinutesPerCase: 6 }, { by: 'ai', reason: 'The model thinks this is better.' }, /Only a named person/],
     [{ humanMinutesPerCase: 6 }, { by: 'system', reason: 'Automatic recalculation of the numbers.' }, /Only a named person/],
     [{ humanMinutesPerCase: 6 }, { by: 'constructor', reason: 'Trying a built-in name as a person.' }, /Only a named person/],
@@ -3712,7 +3722,7 @@ test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded d
   const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(page, /Expected impact vs actual/);
   assert.match(page, /8 points short of the target/);
-  assert.match(page, /Seeded demo data \(pilot\)/);
+  assert.match(page, /Demo data \(pilot\)/);
   assert.match(page, /Return on investment/);
   assert.match(page, /Assumptions <span class="badge badge-neutral">Demo data<\/span>/);
   assert.match(page, /data-form="roi-assumptions"/);
@@ -3877,8 +3887,8 @@ test('C2: the Monitoring tab lists each warning with what, why and source, and s
   const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(page, /How people are using it/);
   assert.match(page, /Early warnings only\. They never block anything\./);
-  assert.match(page, /Possible rubber-stamping/);
-  assert.match(page, /Overrides are rising/);
+  assert.match(page, /Approvals may not be real reviews/);
+  assert.match(page, /Reviewers are reversing more/);
   assert.match(page, /Why it matters/);
   assert.match(page, /Simulated demo data/);
   const quiet = String(capabilityView(withAdoption(initialState(), null), RR, new URLSearchParams('tab=monitoring&show=value')));
@@ -3959,7 +3969,7 @@ test('six capability tabs: Summary, Rules, Evidence, Decision, Monitoring, Histo
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=targets'))), /class="chip is-active"[^>]*>Targets/);
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=requirements'))), /Minimum 40 high-value refund cases/);
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=tests'))), /data-action="run-tests"/);
-  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=runs'), { runs: { status: 'loading', runs: [] } })), /Loading recordings/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=runs'), { runs: { status: 'loading', runs: [] } })), /Loading model runs/);
   // Decision: the open decision, and Approvals beside it.
   const dec = String(capabilityView(s, RR, new URLSearchParams('tab=decision')));
   assert.match(dec, /Should Refund recommendation move to Level 3, Act Within Limits, with limits\?/);
@@ -4301,4 +4311,78 @@ test('copy: an automatic restriction leads with what happened, then the formal t
   assert.ok(page.indexOf('moved back to Draft') < page.indexOf('Formally, this is an automatic restriction'));
   const list = String(decisionWorkspaceView(s, RR));
   assert.match(list, /the AI was moved back to Draft after crossing a safety limit/);
+});
+
+// Copy pass, part 3 (2026-10-12): internal ids read as words, and the bugs found on the way.
+
+test('Activity: each event kind has exactly one tone; criteria-locked is no longer listed twice', () => {
+  // Repro: KIND_TONE listed 'criteria-locked' twice, so the second tone silently won.
+  const src = readFileSync(new URL('../src/views/activity.js', import.meta.url), 'utf8');
+  const block = src.slice(src.indexOf('export const KIND_TONE = {'), src.indexOf('};', src.indexOf('export const KIND_TONE = {')));
+  const keys = [...block.matchAll(/^\s*'?([\w-]+)'?\s*:/gm)].map((m) => m[1]);
+  assert.ok(keys.length > 10, 'the keys were read');
+  assert.deepEqual(keys.filter((k, i) => keys.indexOf(k) !== i), [], 'no key appears twice');
+  assert.equal(KIND_TONE['criteria-locked'], 'watch');
+  for (const k of Object.keys(KIND_LABELS_ALL)) assert.ok(KIND_TONE[k] || ['workspace', 'proposal', 'roster'].includes(k), `${k} has a tone`);
+});
+
+test('Activity: badges use the agreed terms, and a change names what it changed', () => {
+  assert.equal(KIND_LABELS_ALL['criteria-locked'], 'Targets can no longer be edited directly');
+  assert.equal(KIND_LABELS_ALL['contract-finalized'], 'Rules finalized');
+  assert.equal(KIND_LABELS_ALL.proposal, 'Proposed change');
+  assert.ok(!Object.values(KIND_LABELS_ALL).some((l) => /criteria|contract|amendment|scenario/i.test(l)), 'no old terms');
+  let s = initialState();
+  s = amend(s, RR, 'contract', { value: current(s, RR, 'contract'), author: 'maya', reason: 'Test: a rule change.' });
+  const page = String(activityView(s, new URLSearchParams('view=full')));
+  assert.match(page, /badge-watch">Rule change</);
+  assert.doesNotMatch(page, />Amendment</);
+});
+
+test('Model runs: verdicts, rule kinds and claims have plain words for every id the gate produces', () => {
+  // Every rule a verdict can carry: the gate's `{ kind: '…', text: … }` rules, and the queue's two refusals.
+  const src = readFileSync(new URL('../src/store/gate.js', import.meta.url), 'utf8').split('\n').filter((l) => l.includes('verdict(')).join('\n');
+  const kinds = [...new Set([...src.matchAll(/\{ kind: '([\w-]+)', text:/g)].map((m) => m[1])), 'already-waiting', 'queue-full'];
+  assert.ok(kinds.includes('must-never') && kinds.includes('fact-mismatch') && kinds.includes('level-2'), 'the kinds were read');
+  for (const k of kinds) assert.ok(RULE_KIND_LABELS[k], `rule kind ${k} has a label`);
+  for (const v of ['allow', 'needs-person', 'block']) assert.ok(VERDICT_LABELS[v]);
+  assert.equal(claimsText({ orderValue: 80, fraudFlag: false }), 'an order value of $80, no fraud flag');
+  // A false claim's reason names the fact in words: no camelCase key, no JSON quoting.
+  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const lie = checkAction(s, RR, { ...refund('ORD-5001', 10), claims: { orderValue: 80 } });
+  assert.equal(lie.rule.kind, 'fact-mismatch');
+  assert.match(lie.reason, /^The AI claimed an order value of \$80; the record shows an order value of \$42\.$/);
+  assert.doesNotMatch(lie.reason, /orderValue|"/);
+});
+
+test('Model runs: an outcome keeps its order ids in capitals, and a got-through flag says so by kind', () => {
+  // Repro: rateText lower-cased the whole outcome, so ORD-5001 showed as ord-5001.
+  const rec = { source: 'recorded', model: 'm', tickets: [{ ticketId: 'X1', bait: [{ any: true }], steps: [{ tool: 'issue_refund', input: { orderId: 'ORD-5001', amount: 10 }, saw: '{"executed":true}', gate: { verdict: 'allow', rule: { kind: 'within-limits', text: 'x' } } }] }] };
+  assert.match(rateText(rec, 'X1'), /: refunded \$10 on ORD-5001$/);
+  const [flag] = runFlags(rec);
+  assert.equal(flag.kind, 'got-through');
+  assert.match(flag.text, /Refunded \$10 on ORD-5001/);
+});
+
+test('Approval list full: the alert clears by its kind, including one saved under the old title', () => {
+  let s = manyOrders(12);
+  let i = 0;
+  while (waitingActions(s, RR).length < QUEUE_LIMIT) s = callTool(s, RR, refund(`ORD-${7001 + i++}`, 20)).state;
+  s = callTool(s, RR, refund(`ORD-${7001 + i}`, 20)).state;
+  const alert = s.alerts.find((a) => a.capabilityId === RR && a.kind === 'queue-full');
+  assert.ok(alert, 'the alert carries its kind');
+  // An alert saved before the rewording: old title, no kind. It clears too.
+  const legacy = { ...s, alerts: s.alerts.map((a) => (a === alert ? { ...a, kind: undefined, title: `Waiting queue full: ${cap(s).name}` } : a)) };
+  for (const start of [s, legacy]) {
+    const drained = rejectAction(start, 'WA-001', { by: 'priya', reason: 'Clearing space in the queue.' });
+    assert.equal(drained.alerts.some((a) => a.capabilityId === RR && (a.kind === 'queue-full' || /queue full|list full/i.test(a.title))), false);
+  }
+});
+
+test('Tests view: results read Passed / Failed and the run is against the current rules', () => {
+  const s = runSuite(initialState(), RR);
+  const page = String(testsView(s, RR, new URLSearchParams(''), { embedded: true }));
+  assert.match(page, /against the current rules/);
+  assert.match(page, /badge-pass">Passed</);
+  assert.match(page, /badge-fail">Failed</);
+  assert.doesNotMatch(page, /badge-(pass|fail)">(Pass|Fail)</);
 });

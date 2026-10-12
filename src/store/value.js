@@ -16,8 +16,8 @@ import { people, snapshotPerson, isActivePerson } from './people.js';
 import { gateEvents, categoryOf, GATE_SOURCES } from './gatelog.js';
 import { parseTarget } from './decisions.js';
 
-const SEEDED_PILOT = 'Seeded demo data (pilot)';
-const SEEDED_MONITORING = 'Seeded demo data (monitoring window)';
+const SEEDED_PILOT = 'Demo data (pilot)';
+const SEEDED_MONITORING = 'Demo data (since the AI was given more authority)';
 
 // The decision record that granted the capability's current authority.
 export function grantingRecord(state, capabilityId) {
@@ -41,7 +41,7 @@ export function actionRates(state, capabilityId) {
   if (actions) {
     const pct = (n) => Math.round((n / actions) * 1000) / 10;
     const sources = [...new Set(live.map((e) => e.source))];
-    return { automation: pct(allowed), escalation: pct(escalated), block: pct(blocked), actions, automated: allowed, source: `Gate log: ${sources.map((x) => GATE_SOURCES[x] || x).join(', ')}`, seeded: false };
+    return { automation: pct(allowed), escalation: pct(escalated), block: pct(blocked), actions, automated: allowed, source: `Logged actions: ${sources.map((x) => GATE_SOURCES[x] || x).join(', ')}`, seeded: false };
   }
   const m = capData(state, capabilityId).monitoring;
   if (m && (m.autonomousActions || m.escalated)) {
@@ -55,14 +55,14 @@ export function actionRates(state, capabilityId) {
 // The measured metrics, each with its unit, which direction is better, and
 // the recogniser that matches an expected outcome's wording to it.
 export const METRICS = [
-  { id: 'override-rate', label: 'Override rate', unit: '%', better: 'lower', match: /override/i, actual: (s, c) => pilotValue(s, c, 'overrideRate') },
-  { id: 'resolution', label: 'Resolution, % faster than before', unit: '%', better: 'higher', match: /resolution|resolve|handling time|time to/i, actual: (s, c) => { const p = capData(s, c).pilot; return p && p.resolutionChange != null ? { value: -p.resolutionChange, source: SEEDED_PILOT, seeded: true } : null; } },
+  { id: 'override-rate', label: 'Reviewer reversal rate', unit: '%', better: 'lower', match: /override/i, actual: (s, c) => pilotValue(s, c, 'overrideRate') },
+  { id: 'resolution', label: 'Resolution time (% faster)', unit: '%', better: 'higher', match: /resolution|resolve|handling time|time to/i, actual: (s, c) => { const p = capData(s, c).pilot; return p && p.resolutionChange != null ? { value: -p.resolutionChange, source: SEEDED_PILOT, seeded: true } : null; } },
   { id: 'ai-cost', label: 'AI cost per case', unit: '$', better: 'lower', match: /cost/i, actual: (s, c) => pilotValue(s, c, 'costPerCase') },
-  { id: 'severe-error', label: 'Severe error rate', unit: '%', better: 'lower', match: /severe|error/i, actual: (s, c) => pilotValue(s, c, 'severeErrorRate') },
-  { id: 'escalation', label: 'Escalation rate', unit: '%', better: 'lower', match: /escalat/i, actual: (s, c) => rateValue(s, c, 'escalation') },
-  { id: 'block', label: 'Block rate', unit: '%', better: 'lower', match: /block/i, actual: (s, c) => rateValue(s, c, 'block') },
-  { id: 'automation', label: 'Automation rate', unit: '%', better: 'higher', match: /automat/i, actual: (s, c) => rateValue(s, c, 'automation') },
-  { id: 'hours-saved', label: 'Human hours saved a month', unit: 'h', better: 'higher', match: /hours? saved|time saved/i, actual: (s, c) => { const r = roi(s, c); return r ? { value: r.hoursSaved, source: `Estimate from ROI assumptions v${r.assumptions.version}`, seeded: r.seeded } : null; } },
+  { id: 'severe-error', label: 'Serious error rate', unit: '%', better: 'lower', match: /severe|error/i, actual: (s, c) => pilotValue(s, c, 'severeErrorRate') },
+  { id: 'escalation', label: 'Share sent to a person', unit: '%', better: 'lower', match: /escalat/i, actual: (s, c) => rateValue(s, c, 'escalation') },
+  { id: 'block', label: 'Share blocked', unit: '%', better: 'lower', match: /block/i, actual: (s, c) => rateValue(s, c, 'block') },
+  { id: 'automation', label: 'Share done automatically', unit: '%', better: 'higher', match: /automat/i, actual: (s, c) => rateValue(s, c, 'automation') },
+  { id: 'hours-saved', label: 'Staff hours saved a month', unit: 'h', better: 'higher', match: /hours? saved|time saved/i, actual: (s, c) => { const r = roi(s, c); return r ? { value: r.hoursSaved, source: `Estimate (ROI assumptions, version ${r.assumptions.version})`, seeded: r.seeded } : null; } },
 ];
 
 function pilotValue(state, capabilityId, key) {
@@ -95,7 +95,7 @@ export function expectedVsActual(state, capabilityId) {
   if (!rec) return { record: null, rows: [] };
   const rows = (rec.expectedOutcomes || []).map((o) => {
     const metric = recogniseMetric(o.metric);
-    if (!metric) return { ...o, metric: o.metric, measured: null, status: 'not-measured', note: 'No measured metric matches this outcome yet.' };
+    if (!metric) return { ...o, metric: o.metric, measured: null, status: 'not-measured', note: 'We don\'t measure this yet.' };
     const actual = metric.actual(state, capabilityId);
     if (!actual) return { ...o, measuredAs: metric.label, status: 'not-measured', note: `No data yet for ${metric.label.toLowerCase()}.` };
     const t = parseTarget(o.target);
@@ -139,7 +139,7 @@ export function roiEditEligibility(state, capabilityId, by) {
   if (!cap) return { ok: false, reason: 'Unknown capability.' };
   const roster = people(state);
   if (!by || by === 'ai' || by === 'system' || !Object.hasOwn(roster, by)) return { ok: false, reason: 'Only a named person can change the ROI assumptions.' };
-  if (!isActivePerson(state, by)) return { ok: false, reason: `${roster[by].name} is deactivated.` };
+  if (!isActivePerson(state, by)) return { ok: false, reason: `${roster[by].name} is deactivated, so can\'t change these.` };
   const listed = current(state, capabilityId, 'stakeholders').map((s) => s.person);
   if (by !== cap.owner && !listed.includes(by)) return { ok: false, reason: `${roster[by].name} isn't the owner or a named stakeholder of ${cap.name}.` };
   return { ok: true, reason: null };
@@ -150,7 +150,7 @@ export function setRoiAssumptions(state, capabilityId, values, { by, reason } = 
   const e = roiEditEligibility(state, capabilityId, by);
   if (!e.ok) throw new Error(e.reason);
   const why = String(reason || '').trim();
-  if (why.length < 10) throw new Error('Say why the assumptions changed (a sentence).');
+  if (why.length < 10) throw new Error('Add a sentence on why you\'re changing them.');
   const prev = currentRoiAssumptions(state, capabilityId);
   const next = {};
   for (const f of ROI_FIELDS) {
@@ -159,11 +159,12 @@ export function setRoiAssumptions(state, capabilityId, values, { by, reason } = 
     if (!Number.isFinite(n) || n < f.min || n > f.max) throw new Error(`${f.label} must be a number from ${f.min} to ${f.max}.`);
     next[f.key] = n;
   }
-  if (prev && ROI_FIELDS.every((f) => prev.values[f.key] === next[f.key])) throw new Error('Nothing changed: the assumptions are the same as the current version.');
+  if (prev && ROI_FIELDS.every((f) => prev.values[f.key] === next[f.key])) throw new Error('Nothing changed: these are the same as the current assumptions.');
   const version = { version: (prev ? prev.version : 0) + 1, values: next, by, byAt: snapshotPerson(state, by), reason: why, date: state.today, seeded: false };
   const cap = getCapability(state, capabilityId);
   const s = updateCap(state, capabilityId, (d) => ({ ...d, roiAssumptions: [...(d.roiAssumptions || []), version] }));
-  return logEvent(s, { kind: 'amendment', surfaced: true, title: `ROI assumptions v${version.version}: ${cap.name}`, body: `${people(state)[by].name} changed the ROI assumptions: ${ROI_FIELDS.filter((f) => !prev || prev.values[f.key] !== next[f.key]).map((f) => `${f.label.toLowerCase()} ${prev ? `${prev.values[f.key]} → ` : ''}${next[f.key]}`).join('; ')}. Reason: ${why}`, capabilityId, link: `#/capabilities/${capabilityId}?tab=monitoring&show=value` });
+  // Its own kind, so Activity doesn't show it as a change to the bar.
+  return logEvent(s, { kind: 'roi-assumptions', surfaced: true, title: `ROI assumptions changed (version ${version.version}): ${cap.name}`, body: `${people(state)[by].name} changed the ROI assumptions: ${ROI_FIELDS.filter((f) => !prev || prev.values[f.key] !== next[f.key]).map((f) => `${f.label.toLowerCase()} ${prev ? `${prev.values[f.key]} → ` : ''}${next[f.key]}`).join('; ')}. Reason: ${why}`, capabilityId, link: `#/capabilities/${capabilityId}?tab=monitoring&show=value` });
 }
 
 // The ROI, a month at a time. AI cost applies to every case; the human time
