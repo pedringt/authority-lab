@@ -103,8 +103,8 @@ export const AUTHORITY_LEVELS = [
   { level: 0, name: 'Observe', description: 'AI sees the input but produces no operational output.' },
   { level: 1, name: 'Recommend', description: 'AI produces a recommendation for a human.' },
   { level: 2, name: 'Draft', description: 'AI prepares an action or response. A human must approve it before anything happens.' },
-  { level: 3, name: 'Act Within Limits', description: 'AI acts automatically when predefined conditions are satisfied. Everything else goes to a human.' },
-  { level: 4, name: 'Broad Delegation', description: 'AI handles most cases independently, with monitoring and exception handling.' },
+  { level: 3, name: 'Act Within Limits', description: 'The AI acts on its own inside its approved limits. Everything else goes to a person.' },
+  { level: 4, name: 'Broad Delegation', description: 'The AI handles most cases on its own. People monitor it and handle exceptions.' },
 ];
 
 // The seed roster: version 1 of the people roster in state. `role` is the
@@ -262,10 +262,10 @@ export const STATUS_LABELS = {
   setup: 'In setup',
   stable: 'Stable',
   pilot: 'Pilot',
-  'decision-required': 'Decision required',
-  monitoring: 'Newly expanded',
+  'decision-required': 'Decision needed',
+  monitoring: 'New authority',
   restricted: 'Restricted',
-  'review-required': 'Review required',
+  'review-required': 'Review needed',
   'not-delegated': 'Not delegated',
 };
 
@@ -767,8 +767,8 @@ export const activity = [
     body: 'Refund execution > $50 moved from Draft to Recommend after a duplicate execution incident. Authorized by Daniel Okafor.', capabilityId: 'refund-execution-high-value', link: '#/decisions/AC-03' },
   { id: 'ACT-04', date: '2026-09-02', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Refund recommendation moved from Recommend to Draft. Authorized by Maya Chen.', capabilityId: 'refund-recommendation', link: '#/decisions/AC-02' },
-  { id: 'ACT-03', date: '2026-09-02', kind: 'criteria', surfaced: false, title: 'Success criteria defined',
-    body: 'Seven criteria and six evidence requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=criteria' },
+  { id: 'ACT-03', date: '2026-09-02', kind: 'criteria', surfaced: false, title: 'Targets set',
+    body: 'Seven targets and six decision requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=evidence&show=targets' },
   { id: 'ACT-02', date: '2026-08-19', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Ticket classification moved from Draft to Act Within Limits. Authorized by Priya Natarajan.', capabilityId: 'ticket-classification', link: '#/decisions/AC-01' },
   { id: 'ACT-01', date: '2026-08-12', kind: 'decision', surfaced: true, title: 'Account closure kept at Observe',
@@ -780,12 +780,12 @@ export const activity = [
 // ---------------------------------------------------------------------------
 
 export const DECISION_OPTIONS = [
-  { id: 'expand', name: 'Expand', description: 'Move the entire capability to Level 3.' },
-  { id: 'expand-limits', name: 'Expand with limits', description: 'Allow automatic action only under specified conditions.' },
-  { id: 'hold', name: 'Hold', description: 'Keep current authority while gathering more evidence.' },
-  { id: 'restrict', name: 'Restrict', description: 'Reduce authority.' },
-  { id: 'suspend', name: 'Suspend', description: 'Disable the capability.' },
-  { id: 'redesign', name: 'Redesign', description: 'Return the capability to development and testing.' },
+  { id: 'expand', name: 'Expand', description: 'Move the whole capability up one level.' },
+  { id: 'expand-limits', name: 'Expand with limits', description: 'Let the AI act on its own only within limits you set.' },
+  { id: 'hold', name: 'Hold', description: 'Keep the current level while you gather more evidence.' },
+  { id: 'restrict', name: 'Restrict', description: 'Give the AI less authority.' },
+  { id: 'suspend', name: 'Suspend', description: 'Turn the AI off for this work.' },
+  { id: 'redesign', name: 'Redesign', description: 'Send it back for changes and new testing.' },
 ];
 
 export const systemRecommendation = {

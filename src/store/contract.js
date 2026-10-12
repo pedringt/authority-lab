@@ -1,4 +1,5 @@
-// Contract builder (#5).
+// Rules builder (#5). In code these are still "the contract"; on screen they
+// are "Rules".
 
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from '../data/contract-templates.js';
 import { DATA_FIELDS } from '../data/seed.js';
@@ -14,7 +15,7 @@ export const norm = (t) => t.toLowerCase().replace(/[^a-z0-9$% ]+/g, ' ').replac
 export function startContractDraft(state, capabilityId, { by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (versionList(state, capabilityId, 'contract').length) throw new Error('This capability already has a finalized contract. Changes to it are amendments.');
+  if (versionList(state, capabilityId, 'contract').length) throw new Error('These rules are already set. To change them, propose a change.');
   const d = capData(state, capabilityId);
   if (d.contractDraft && !d.contractDraft.finalizedAt) return state;
   const risk = current(state, capabilityId, 'risk');
@@ -41,8 +42,8 @@ export function startContractDraft(state, capabilityId, { by } = {}) {
   const s = updateCap(state, capabilityId, { contractDraft: draft });
   return logEvent(s, {
     kind: 'contract-draft',
-    title: 'Contract draft started',
-    body: `${cap.name}: template "${template.name}" picked from the risk profile, with ${lines.filter((l) => l.source === 'ai').length} suggestions to review.`,
+    title: 'Rules draft started',
+    body: `${cap.name}: started from the "${template.name}" starter rules (chosen from its risk profile), with ${lines.filter((l) => l.source === 'ai').length} AI suggestions to review.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/contract/build`,
   });
@@ -50,8 +51,8 @@ export function startContractDraft(state, capabilityId, { by } = {}) {
 
 export function withDraft(state, capabilityId, fn) {
   const d = capData(state, capabilityId);
-  if (!d.contractDraft) throw new Error('No contract draft. Start one first.');
-  if (d.contractDraft.finalizedAt) throw new Error('This contract is finalized. Changes to it are amendments.');
+  if (!d.contractDraft) throw new Error('Start a rules draft first.');
+  if (d.contractDraft.finalizedAt) throw new Error('These rules are already set. To change them, propose a change.');
   return updateCap(state, capabilityId, { contractDraft: fn(d.contractDraft) });
 }
 
@@ -72,7 +73,7 @@ export function reviewSuggestion(state, capabilityId, lineId, { decision, text }
     if (decision === 'reject') next = { ...line, status: 'rejected' };
     if (decision === 'edit') {
       const t = (text || '').trim();
-      if (!t) throw new Error('An edited suggestion needs text.');
+      if (!t) throw new Error('Type the rule, or reject the suggestion.');
       next = { ...line, status: t === line.original ? 'accepted' : 'edited', text: t };
     }
     return unconfirm({ ...draft, lines: draft.lines.map((l) => (l.id === lineId ? next : l)) }, line.section);
@@ -83,7 +84,7 @@ export function addContractLine(state, capabilityId, section, text) {
   return withDraft(state, capabilityId, (draft) => {
     if (!SECTION_KEYS.includes(section)) throw new Error(`Unknown section: ${section}`);
     const t = (text || '').trim();
-    if (!t) throw new Error('A line needs text.');
+    if (!t) throw new Error('Type the rule first.');
     const line = { id: `L${draft.nextId}`, section, text: t, source: 'person', status: 'accepted', original: t };
     return unconfirm({ ...draft, lines: [...draft.lines, line], nextId: draft.nextId + 1 }, section);
   });
@@ -95,14 +96,14 @@ export function editContractLine(state, capabilityId, lineId, text) {
     if (!line) throw new Error(`Unknown line: ${lineId}`);
     if (line.source === 'ai') return reviewSuggestionDraft(draft, line, text);
     const t = (text || '').trim();
-    if (!t) throw new Error('A line needs text.');
+    if (!t) throw new Error('Type the rule first.');
     const next = { ...line, text: t, status: line.source === 'template' && t !== line.original ? 'edited' : line.status };
     return unconfirm({ ...draft, lines: draft.lines.map((l) => (l.id === lineId ? next : l)) }, line.section);
   });
 }
 export function reviewSuggestionDraft(draft, line, text) {
   const t = (text || '').trim();
-  if (!t) throw new Error('An edited suggestion needs text.');
+  if (!t) throw new Error('Type the rule, or reject the suggestion.');
   const next = { ...line, status: t === line.original ? 'accepted' : 'edited', text: t };
   return unconfirm({ ...draft, lines: draft.lines.map((l) => (l.id === line.id ? next : l)) }, line.section);
 }
@@ -112,7 +113,7 @@ export function removeContractLine(state, capabilityId, lineId) {
   return withDraft(state, capabilityId, (draft) => {
     const line = draft.lines.find((l) => l.id === lineId);
     if (!line) throw new Error(`Unknown line: ${lineId}`);
-    if (line.source === 'ai') throw new Error('Reject a suggestion instead of removing it.');
+    if (line.source === 'ai') throw new Error('Reject this suggestion instead, so the decision is kept.');
     return unconfirm({ ...draft, lines: draft.lines.map((l) => (l.id === lineId ? { ...l, status: 'removed' } : l)) }, line.section);
   });
 }
@@ -121,7 +122,7 @@ export function confirmSection(state, capabilityId, section, confirmed = true) {
   return withDraft(state, capabilityId, (draft) => {
     if (!SECTION_KEYS.includes(section)) throw new Error(`Unknown section: ${section}`);
     if (confirmed && draft.lines.some((l) => l.section === section && l.status === 'pending')) {
-      throw new Error('Review every suggestion in this section before confirming it.');
+      throw new Error('Accept, edit or reject every suggestion in this section first.');
     }
     return { ...draft, confirmed: { ...draft.confirmed, [section]: Boolean(confirmed) } };
   });
@@ -144,28 +145,28 @@ export function contractValueChecks(state, capabilityId, value) {
   const risk = current(state, capabilityId, 'risk');
   const out = [];
   const aboveLow = risk.impact && risk.impact !== 'Low';
-  if (aboveLow && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `"AI must never" cannot be empty for a ${risk.impact.toLowerCase()}-impact capability.` });
-  if (aboveLow && !value.autoRestriction.length) out.push({ id: 'empty-auto', level: 'block', section: 'autoRestriction', text: `"Automatic restriction conditions" cannot be empty for a ${risk.impact.toLowerCase()}-impact capability. Software needs a rule to enforce.` });
+  if (aboveLow && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `Add at least one "${SECTION_LABELS.mustNever}" rule. ${risk.impact}-impact capabilities need one.` });
+  if (aboveLow && !value.autoRestriction.length) out.push({ id: 'empty-auto', level: 'block', section: 'autoRestriction', text: `Add at least one rule under "${SECTION_LABELS.autoRestriction}". For a ${risk.impact.toLowerCase()}-impact capability, software needs a limit it can enforce.` });
   // The data section lists known fields only, never a restricted one (A2).
   for (const f of value.dataSeen || []) {
     const known = DATA_FIELDS.find((x) => x.id === f);
-    if (!known) out.push({ id: `data-unknown-${f}`, level: 'block', section: 'dataSeen', text: `"${f}" is not a field any tool returns.` });
-    else if (known.restricted) out.push({ id: `data-restricted-${f}`, level: 'block', section: 'dataSeen', text: `${known.label} is restricted: it never reaches the model, so a contract can't list it.` });
+    if (!known) out.push({ id: `data-unknown-${f}`, level: 'block', section: 'dataSeen', text: `"${f}" isn't data any connected tool provides.` });
+    else if (known.restricted) out.push({ id: `data-restricted-${f}`, level: 'block', section: 'dataSeen', text: `${known.label} is restricted and never reaches the AI, so the rules can't include it.` });
   }
   // Contradictions: the same line in "may" and in "must never" or "must ask".
   const may = value.may.map(norm);
-  for (const t of value.mustNever) if (may.includes(norm(t))) out.push({ id: `contra-${norm(t).slice(0, 20)}`, level: 'block', section: 'mustNever', text: `"${t}" appears under both "AI may" and "AI must never".` });
-  for (const t of value.mustAsk) if (may.includes(norm(t))) out.push({ id: `contra-ask-${norm(t).slice(0, 20)}`, level: 'block', section: 'mustAsk', text: `"${t}" appears under both "AI may" and "AI must ask".` });
+  for (const t of value.mustNever) if (may.includes(norm(t))) out.push({ id: `contra-${norm(t).slice(0, 20)}`, level: 'block', section: 'mustNever', text: `"${t}" is under both "${SECTION_LABELS.may}" and "${SECTION_LABELS.mustNever}". Keep it in one.` });
+  for (const t of value.mustAsk) if (may.includes(norm(t))) out.push({ id: `contra-ask-${norm(t).slice(0, 20)}`, level: 'block', section: 'mustAsk', text: `"${t}" is under both "${SECTION_LABELS.may}" and "${SECTION_LABELS.mustAsk}". Keep it in one.` });
   for (const t of value.autoRestriction) {
-    if (!hasNumber(t) || !hasWindow(t)) out.push({ id: `rule-${norm(t).slice(0, 20)}`, level: 'block', section: 'autoRestriction', text: `"${t}" has no ${!hasNumber(t) ? 'number' : 'time or case window'}. A restriction rule needs a threshold and a window so software can apply it.` });
+    if (!hasNumber(t) || !hasWindow(t)) out.push({ id: `rule-${norm(t).slice(0, 20)}`, level: 'block', section: 'autoRestriction', text: `"${t}" has no ${!hasNumber(t) ? 'number' : 'time or case window'}. It needs a number and a time or case window, e.g. "above 5% over 7 days", so software can check it.` });
   }
   if (risk.exposure === 'Financial / consequential') {
     // A ceiling in "may" or a threshold in "must ask" counts. A limit that
     // only appears under "must never" is not an operating limit.
     const limited = [...value.may, ...value.mustAsk].some(hasValueLimit);
-    if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: 'This is a financial capability and the contract sets no value limit. Add a ceiling under "AI may" or a threshold such as "Refunds over $100" under "AI must ask". A limit that only appears under "AI must never" does not count.' });
+    if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: `Set a money limit: these rules set no value limit for a financial capability. Add a ceiling under "${SECTION_LABELS.may}", or a threshold like "Refunds over $100" under "${SECTION_LABELS.mustAsk}". A limit that appears only under "${SECTION_LABELS.mustNever}" doesn't count.` });
   }
-  for (const k of ['may', 'escalation']) if (!value[k].length) out.push({ id: `empty-${k}`, level: 'warn', section: k, text: `"${SECTION_LABELS[k]}" is empty.` });
+  for (const k of ['may', 'escalation']) if (!value[k].length) out.push({ id: `empty-${k}`, level: 'warn', section: k, text: `"${SECTION_LABELS[k]}" has no rules yet.` });
   return out;
 }
 
@@ -178,7 +179,7 @@ export function contractChecks(state, capabilityId) {
   const pending = draft.lines.filter((l) => l.status === 'pending').length;
   if (pending) out.push({ id: 'pending', level: 'block', section: null, text: `${pending} suggestion${pending === 1 ? '' : 's'} still to accept, edit or reject.` });
   const unconfirmed = SECTION_KEYS.filter((k) => !draft.confirmed[k]);
-  if (unconfirmed.length) out.push({ id: 'unconfirmed', level: 'block', section: null, text: `${unconfirmed.length} section${unconfirmed.length === 1 ? '' : 's'} not yet confirmed: ${unconfirmed.map((k) => SECTION_LABELS[k]).join(', ')}.` });
+  if (unconfirmed.length) out.push({ id: 'unconfirmed', level: 'block', section: null, text: `Confirm ${unconfirmed.length} section${unconfirmed.length === 1 ? '' : 's'}: ${unconfirmed.map((k) => SECTION_LABELS[k]).join(', ')}.` });
   return out;
 }
 
@@ -195,7 +196,7 @@ export function contractSummary(value, cap) {
   if (value.mustAsk.length) parts.push(`It must ask a person before: ${list(value.mustAsk)}.`);
   if (value.mustNever.length) parts.push(`It must never: ${list(value.mustNever)}.`);
   if (value.escalation.length) parts.push(`It hands the case to a person when: ${list(value.escalation)}.`);
-  if (value.autoRestriction.length) parts.push(`Software pulls authority back when: ${list(value.autoRestriction)}.`);
+  if (value.autoRestriction.length) parts.push(`Its authority is reduced automatically when: ${list(value.autoRestriction)}.`);
   return parts.join(' ');
 }
 
@@ -204,11 +205,11 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
   const cap = getCapability(state, capabilityId);
   const d = capData(state, capabilityId);
   const draft = d.contractDraft;
-  if (!draft) throw new Error('No contract draft to finalize.');
-  if (draft.finalizedAt) throw new Error('This contract is already finalized.');
-  requireActive(state, by, 'finalize the contract');
+  if (!draft) throw new Error('There\'s no rules draft to save.');
+  if (draft.finalizedAt) throw new Error('These rules are already saved.');
+  requireActive(state, by, 'save the rules');
   const check = canFinalizeContract(state, capabilityId);
-  if (!check.ok) throw new Error(`Cannot finalize: ${check.blocks.map((b) => b.text).join(' ')}`);
+  if (!check.ok) throw new Error(`Can't save the rules yet: ${check.blocks.map((b) => b.text).join(' ')}`);
   const value = draftValue(draft);
   const ai = draft.lines.filter((l) => l.source === 'ai');
   const review = {
@@ -227,7 +228,7 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
     date: state.today,
     author: by,
     authorAt: snapshotPerson(state, by),
-    reason: `Finalized from template "${draft.templateName}". ${review.suggestions} AI suggestion${review.suggestions === 1 ? '' : 's'}: ${review.accepted} accepted, ${review.edited} edited, ${review.rejected.length} rejected. ${review.added} line${review.added === 1 ? '' : 's'} added by hand.`,
+    reason: `Started from the "${draft.templateName}" starter rules. ${review.suggestions} AI suggestion${review.suggestions === 1 ? '' : 's'}: ${review.accepted} accepted, ${review.edited} edited, ${review.rejected.length} rejected. ${review.added} rule${review.added === 1 ? '' : 's'} added by hand.`,
     afterEvidence: performanceResultsSeen(state, capabilityId),
     before: null,
     value,
@@ -239,10 +240,10 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
   });
   s = logEvent(s, {
     kind: 'contract-finalized',
-    title: 'Contract finalized',
-    body: `${cap.name} contract v1 finalized by ${people(state)[by].name}. ${version.reason}`,
+    title: 'Rules saved',
+    body: `${cap.name} rules saved by ${people(state)[by].name}. ${version.reason}`,
     capabilityId,
-    link: `#/capabilities/${capabilityId}?tab=contract`,
+    link: `#/capabilities/${capabilityId}?tab=rules`,
   });
   return s;
 }
