@@ -1,13 +1,19 @@
 import * as seed from '../data/seed.js';
-import { html, badge, section, fmtDate, evidenceDetail, lede } from '../ui.js';
+import { html, badge, section, fmtDate, evidenceDetail, lede, tabIntro } from '../ui.js';
 import { capData, getCapability, current, workspaceOf, gateEvidence } from '../store/index.js';
 import { requirementsList, proposedChangeLabel } from './capability.js';
 import { capabilityHeading, filterBar } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';
 
-const STATUSES = [['all', 'All statuses'], ['pass', 'Pass'], ['watch', 'Watch'], ['insufficient', 'Insufficient'], ['fail', 'Fail']];
+const STATUSES = [['all', 'All statuses'], ['pass', 'Pass'], ['watch', 'Needs attention'], ['insufficient', 'Not enough data'], ['fail', 'Fail']];
+// The same words on the filter and on each item's badge.
+const STATUS_LABEL = Object.fromEntries(STATUSES);
 
-export function evidenceView(state, capabilityId, query) {
+// The test-run item keeps its stored metric name (code and seed data find it
+// by that name); it reads as plain words here.
+const metricText = (e) => (e.source === 'Automated tests' && e.metric === 'Scenario pass rate' ? 'Tests passed' : e.metric);
+
+export function evidenceView(state, capabilityId, query, { embedded = false } = {}) {
   const cap = getCapability(state, capabilityId);
   const d = capData(state, capabilityId);
   const source = query.get('source') || 'all';
@@ -28,8 +34,8 @@ export function evidenceView(state, capabilityId, query) {
   if (risk !== 'all') items = items.filter((e) => e.risk === risk);
 
   const link = (over) => {
-    const q = new URLSearchParams({ capability: cap.id, source, status, segment, risk, ...over });
-    return `#/evidence?${q.toString()}`;
+    const q = new URLSearchParams({ source, status, segment, risk, ...over });
+    return `#/capabilities/${cap.id}?tab=evidence&show=all&${q.toString()}`;
   };
 
   const counts = Object.fromEntries(STATUSES.map(([k]) => [k, all.filter((e) => e.status === k).length]));
@@ -41,7 +47,7 @@ export function evidenceView(state, capabilityId, query) {
       { label: 'Segment', value: segment, options: [['all', 'All segments'], ...segments.map((s) => [s, s])], hrefFor: (s) => link({ segment: s }) },
       { label: 'Risk', value: risk, options: [['all', 'Any risk'], ...risks.map((s) => [s, `${s} risk`])], hrefFor: (s) => link({ risk: s }) },
     ],
-    clearHref: `#/evidence?capability=${cap.id}`,
+    clearHref: `#/capabilities/${cap.id}?tab=evidence&show=all`,
     active: [source, status, segment, risk].some((v) => v !== 'all'),
     showing: items.length,
     total: all.length,
@@ -50,23 +56,26 @@ export function evidenceView(state, capabilityId, query) {
 
   const cards = items.map((e) => html`<article class="card evidence-item evidence-${e.status}">
     <div class="evidence-head">
-      <div><span class="eyebrow">${e.source} · ${e.id}</span><h3>${e.metric}</h3>${e.derived ? html`<span class="badge badge-neutral" title="Computed from the gate log, not stored as evidence">Derived · ${e.origin}</span>` : ''}</div>
-      ${badge(e.status)}
+      <div><span class="eyebrow">${e.source}</span><h3>${metricText(e)}</h3>${e.derived ? html`<span class="badge badge-neutral" title="Counted from every action the AI asked for. It updates as new actions happen and isn't a stored result.">Calculated from logged actions · ${e.origin}</span>` : ''}</div>
+      ${badge(e.status, STATUS_LABEL[e.status])}
     </div>
     <p class="evidence-value">${e.value}</p>
     <p class="muted">${evidenceDetail(e)}</p>
-    <div class="evidence-meta"><span>${fmtDate(e.date)}</span><span>${e.segment === 'All' ? 'All segments' : e.segment}</span><span>${e.risk} risk</span><a href="${e.link}">Source</a></div>
+    <div class="evidence-meta"><span>${e.id}</span><span>${fmtDate(e.date)}</span><span>${e.segment === 'All' ? 'All segments' : e.segment}</span><span>${e.risk} risk</span><a href="${e.link}">View source</a></div>
   </article>`);
 
-  return html`<div class="page-head">
+  const head = embedded
+    ? tabIntro(`What we know so far about how ${cap.name} performs.`, 'Evidence comes from tests, the pilot, reviewer decisions, day-to-day operations, cost, incidents, user feedback and stakeholder reviews. Each item links back to where it came from.')
+    : html`<div class="page-head">
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>${capabilityHeading(state, cap, 'Evidence for', (id) => `#/evidence?capability=${id}`)}</h1>
-      ${lede('Everything the authority decision rests on.', 'Evidence comes from automated tests, the pilot, human review, operations, cost, incidents, user feedback and stakeholder assessment. Each item links back to where it came from.')}
+      <h1>${capabilityHeading(state, cap, 'Evidence for', (id) => `#/capabilities/${id}?tab=evidence&show=all`)}</h1>
+      ${lede(`What we know so far about how ${cap.name} performs.`, 'Evidence comes from tests, the pilot, reviewer decisions, day-to-day operations, cost, incidents, user feedback and stakeholder reviews. Each item links back to where it came from.')}
     </div>
-  </div>
+  </div>`;
+  return html`${head}
   ${all.length ? filters : ''}
-  ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${all.length ? 'No evidence matches these filters.' : `No evidence has been recorded for ${cap.name}.`}</p>`}
+  ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${all.length ? 'No evidence matches these filters.' : `No evidence yet for ${cap.name}. Run the tests or start a pilot to collect some.`}</p>`}
   ${d.evidence.length ? '' : evidenceSourcesCard()}
-  ${current(state, cap.id, 'requirements').length ? section(`Evidence requirements for ${proposedChangeLabel(cap, state)}`, requirementsList(state, cap.id), { subtitle: 'What has to be true before the proposed change can be authorized.' }) : ''}`;
+`;
 }

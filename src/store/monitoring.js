@@ -82,11 +82,14 @@ export function readingText(rule, value) {
 }
 
 const FALLBACK_SCOPE = {
-  0: 'Observe. The AI produces no operational output until a review is recorded.',
-  1: 'Recommend. The AI only recommends; a person decides every case until a review is recorded.',
-  2: 'Draft. Every decision requires human approval until a review is recorded.',
-  3: 'Act Within Limits. Automatic action only inside the recorded conditions until a review is recorded.',
+  0: 'Observe. The AI does nothing that affects customers until someone reviews what happened.',
+  1: 'Recommend. The AI only recommends; a person decides every case until someone reviews what happened.',
+  2: 'Draft. A person approves every action until someone reviews what happened.',
+  3: 'Act Within Limits. The AI only acts on its own inside the approved limits until someone reviews what happened.',
 };
+
+// The plain-words lead for every message about an automatic restriction.
+const movedBack = (level) => `The AI was moved back to ${levelName(level)} after crossing a safety limit`;
 
 // The demo breach for a seeded capability: the seeded breach names the
 // contract rule it crosses and the reading that crosses it (#50). Capabilities
@@ -124,16 +127,16 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
   const m = d.monitoring;
   const windowed = severeErrorsInWindow != null && m;
   const reading = readingText(rule, value);
-  const contractV = rule.contractVersion ? `contract v${rule.contractVersion}` : 'the contract';
+  const contractV = rule.contractVersion ? `the rules (version ${rule.contractVersion})` : 'the rules';
   const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
   const incidentId = `INC-${String(incidentNumber).padStart(2, '0')}`;
   const evidenceId = `EV-${String(d.evidence.length + 1).padStart(2, '0')}`;
   const ruleReadings = { ...(d.ruleReadings || {}), [rule.text]: value };
 
   if (rule.kind === 'incident') {
-    const evidence = [{ id: evidenceId, source: 'Incident', metric: `${incidentId}: contract rule triggered`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `${errors.join(' ')} The contract rule "${rule.text}" opened this incident. Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
-    const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'Incident opened by a contract rule', body: `${cap.name}: ${errors.join(' ')} Authority unchanged.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
-    const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `Incident opened by a contract rule: ${cap.name}`, body: `${incidentId}: ${errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` };
+    const evidence = [{ id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `A safety limit was crossed: "${rule.text}". ${errors.join(' ')} This limit opens an incident; authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
+    const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed: incident opened', body: `${cap.name}: ${errors.join(' ')} Authority didn't change.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
+    const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `A safety limit was crossed: ${cap.name}`, body: `${incidentId}: ${errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` };
     const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: errors }] });
     return { ...s, activity, alerts: [alert, ...state.alerts] };
   }
@@ -157,12 +160,12 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
     authorizedByAt: null,
     versions: versionsInForce(state, capabilityId),
     scope: FALLBACK_SCOPE[next.level],
-    rationale: `Automatic restriction. The contract rule "${rule.text}" was crossed: ${reading}. The rule was agreed in ${contractV}${m && m.recordId ? ` and in force since authority change ${m.recordId}` : ''}. No human authorized this change; the rule was authorized in advance.`,
+    rationale: `${movedBack(next.level)}: "${rule.text}" (${reading}). The limit was agreed in advance in ${contractV}${m && m.recordId ? `, in force since decision ${m.recordId}` : ''}, so the change happened automatically, without anyone approving it at the time. Formally: automatic restriction.`,
     evidenceSnapshot: [
-      ...(windowed ? [`${severeErrorsInWindow} severe errors in the last ${m.rollingWindow} autonomous cases (${value}%)`, `${m.autonomousActions + 7} autonomous actions since expansion`] : [`Reading: ${reading}`]),
-      `Rule: ${rule.text}`,
+      ...(windowed ? [`${severeErrorsInWindow} serious errors in the last ${m.rollingWindow} cases the AI completed on its own (${value}%)`, `${m.autonomousActions + 7} actions completed automatically since the AI was given more authority`] : [`Measured: ${reading}`]),
+      `Limit: ${rule.text}`,
     ],
-    openCondition: 'Human review required before authority can expand again.',
+    openCondition: 'Someone must review what happened before the AI can get more authority again.',
     conditions: null,
   };
   const alert = {
@@ -170,17 +173,17 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
     date: state.today,
     severity: 'high',
     capabilityId: cap.id,
-    title: 'Authority automatically restricted',
-    body: `${cap.name} returned to ${levelName(next.level)}. Reading ${reading}. A human review is required before authority can expand again.`,
+    title: movedBack(next.level),
+    body: `${cap.name} crossed a safety limit (${reading}). Someone needs to review what happened before it can get more authority again.`,
     link: `#/capabilities/${cap.id}?tab=monitoring`,
   };
   const activity = [
-    { id: `ACT-${Date.now()}-b`, date: state.today, kind: 'restriction', surfaced: true, title: 'Authority automatically restricted', body: `The contract rule was crossed: ${reading}. ${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)} by rule. Review item opened.`, capabilityId: cap.id, link: `#/decisions/${id}` },
-    { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'Monitoring threshold breached', body: `${cap.name}: ${reading}. ${errors.length} error${errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` },
+    { id: `ACT-${Date.now()}-b`, date: state.today, kind: 'restriction', surfaced: true, title: movedBack(next.level), body: `${cap.name} crossed a safety limit (${reading}) and moved from ${authorityLabel(previous)} to ${authorityLabel(next)} automatically. Someone needs to review what happened before it can get more authority again.`, capabilityId: cap.id, link: `#/records/${id}` },
+    { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed', body: `${cap.name}: ${reading}. ${errors.length} error${errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` },
     ...state.activity,
   ];
   const evidence = [
-    { id: evidenceId, source: 'Incident', metric: `${incidentId}: monitoring threshold breached`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} Authority was returned to ${levelName(next.level)} automatically.`, link: `#/decisions/${id}` },
+    { id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} The AI was moved back to ${levelName(next.level)} automatically.`, link: `#/records/${id}` },
     ...d.evidence,
   ];
   const capabilities = state.capabilities.map((c) => (c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c));
@@ -237,12 +240,12 @@ export function reviewEligibility(state, capabilityId, personKey) {
   const cap = getCapability(state, capabilityId);
   const p = people(state)[personKey];
   if (!p) return { ok: false, reason: 'Choose who is acting.' };
-  if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and cannot record a review.` };
+  if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and can't record a review.` };
   const risk = isRiskApprover(state, personKey);
-  if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so a Risk approver records the review. ${p.name} does not hold the Risk approver right.` };
-  if (personKey !== cap.owner && !risk) return { ok: false, reason: `The owner (${people(state)[cap.owner].name}) or a Risk approver records the review.` };
+  if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so only a Risk approver can record this review. ${p.name} isn't a Risk approver.` };
+  if (personKey !== cap.owner && !risk) return { ok: false, reason: `Only the owner (${people(state)[cap.owner].name}) or a Risk approver can record this review.` };
   const expansion = restrictedExpansion(state, capabilityId);
-  if (expansion && expansion.authorizedBy === personKey) return { ok: false, reason: `${p.name} authorized the expansion that was automatically restricted (${expansion.id}), so someone else records the review.` };
+  if (expansion && expansion.authorizedBy === personKey) return { ok: false, reason: `${p.name} approved the authority that was just reduced (${expansion.id}), so someone else needs to review it.` };
   return { ok: true, reason: null };
 }
 
@@ -252,7 +255,7 @@ export function reviewEligibility(state, capabilityId, personKey) {
 // record: authority does not change.
 export function recordReview(state, capabilityId, { by, whatHappened, cause, changes } = {}) {
   const need = reviewNeeded(state, capabilityId);
-  if (!need.any) throw new Error('There is nothing to review: no automatic restriction or open rule incident.');
+  if (!need.any) throw new Error('There\'s nothing to review right now: no safety limit has been crossed since the last review.');
   const e = reviewEligibility(state, capabilityId, by);
   if (!e.ok) throw new Error(e.reason);
   const fields = { whatHappened: String(whatHappened || '').trim(), cause: String(cause || '').trim(), changes: String(changes || '').trim() };
@@ -286,8 +289,8 @@ export function recordReview(state, capabilityId, { by, whatHappened, cause, cha
     date: state.today,
     kind: 'review',
     surfaced: true,
-    title: 'Post-incident review recorded',
-    body: `${who.name} reviewed ${[review.restrictionRecordId ? `the automatic restriction (${review.restrictionRecordId})` : null, review.incidentIds.length ? review.incidentIds.join(', ') : null].filter(Boolean).join(' and ')} on ${cap.name}. Cause: ${fields.cause} ${cap.name} stays at ${authorityLabel(cap.authority)}; expanding again needs a proposal and a named authorization.`,
+    title: 'Review recorded',
+    body: `${who.name} reviewed ${[review.restrictionRecordId ? `the move back to ${levelName(cap.authority.level)} (${review.restrictionRecordId})` : null, review.incidentIds.length ? review.incidentIds.join(', ') : null].filter(Boolean).join(' and ')} on ${cap.name}. Cause: ${fields.cause} ${cap.name} stays at ${authorityLabel(cap.authority)} until a proposed change is approved.`,
     capabilityId: cap.id,
     link: `#/capabilities/${cap.id}?tab=monitoring`,
   }, ...s.activity];

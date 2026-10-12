@@ -51,13 +51,13 @@ export function snapshotPerson(state, key) {
 export const withSnap = (state, list) => list.map((a) => (a && a.by && !a.byAt ? { ...a, byAt: snapshotPerson(state, a.by) } : a));
 
 export function requireActive(state, key, what = 'act') {
-  if (!key || !personRecord(state, key)) throw new Error(`A named person must ${what}.`);
+  if (!key || !personRecord(state, key)) throw new Error(`Choose who is acting before you ${what}.`);
   if (!isActivePerson(state, key)) throw new Error(`${personRecord(state, key).name} is deactivated and cannot ${what}.`);
 }
 
 export function requireAdmin(state, key) {
-  requireActive(state, key, 'change the roster');
-  if (!isWorkspaceAdmin(state, key)) throw new Error(`${personRecord(state, key).name} is not a workspace admin. Only a workspace admin changes the roster.`);
+  requireActive(state, key, 'change people or rights');
+  if (!isWorkspaceAdmin(state, key)) throw new Error(`${personRecord(state, key).name} isn't a workspace admin. Switch "Acting as" to a workspace admin to change people or rights.`);
 }
 
 export function writeRoster(state, value, { author, reason, title, body, surfaced = false, meta = null }) {
@@ -75,7 +75,7 @@ export function addPerson(state, { name, title, team, by, reason } = {}) {
   const n = (name || '').trim(); const t = (title || '').trim(); const tm = (team || '').trim();
   if (!n || !t || !tm) throw new Error('A person needs a name, a title and a team.');
   const why = (reason || '').trim();
-  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  if (why.length < 5) throw new Error('Add a reason (a few words).');
   let key = personKey(n) || 'person';
   const roster = people(state);
   if (roster[key]) { let i = 2; while (roster[`${key}-${i}`]) i += 1; key = `${key}-${i}`; }
@@ -87,12 +87,12 @@ export function editPerson(state, key, { name, title, team, by, reason } = {}) {
   requireAdmin(state, by);
   const roster = people(state);
   const p = roster[key];
-  if (!p) throw new Error(`Unknown person: ${key}`);
+  if (!p) throw new Error('That person wasn\'t found. Reload and try again.');
   const next = { ...p, name: (name || p.name).trim(), role: (title || p.role).trim(), team: (team || p.team).trim() };
   if (!next.name || !next.role || !next.team) throw new Error('A person needs a name, a title and a team.');
-  if (next.name === p.name && next.role === p.role && next.team === p.team) throw new Error('Nothing changed.');
+  if (next.name === p.name && next.role === p.role && next.team === p.team) throw new Error('Nothing to save: the name, title and team are unchanged.');
   const why = (reason || '').trim();
-  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  if (why.length < 5) throw new Error('Add a reason (a few words).');
   return writeRoster(state, { ...roster, [key]: next }, { author: by, reason: why, title: `Person updated: ${next.name}`, body: `${roster[by].name} updated ${p.name}${next.name !== p.name ? ` (now ${next.name})` : ''}: ${[next.role !== p.role ? `title ${p.role} → ${next.role}` : null, next.team !== p.team ? `team ${p.team} → ${next.team}` : null].filter(Boolean).join(', ') || 'name'}. ${why}`, meta: { change: { kind: 'edit', key } } });
 }
 
@@ -102,10 +102,10 @@ export function deactivatePerson(state, key, { by, reason } = {}) {
   requireAdmin(state, by);
   const roster = people(state);
   const p = roster[key];
-  if (!p) throw new Error(`Unknown person: ${key}`);
+  if (!p) throw new Error('That person wasn\'t found. Reload and try again.');
   if (p.active === false) throw new Error(`${p.name} is already deactivated.`);
   const why = (reason || '').trim();
-  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  if (why.length < 5) throw new Error('Add a reason (a few words).');
   // Anyone holding a right is deactivated through a proposal with a different
   // admin's sign-off (#23).
   if (p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover)) {
@@ -119,7 +119,7 @@ export function applyDeactivation(state, key, { by, reason, meta = null } = {}) 
   const p = roster[key];
   if (!p || p.active === false) throw new Error(`${p ? p.name : key} is not an active person.`);
   const adminsLeft = Object.entries(roster).filter(([k, x]) => k !== key && x.active !== false && x.rights && x.rights.workspaceAdmin).length;
-  if (p.rights && p.rights.workspaceAdmin && adminsLeft === 0) throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+  if (p.rights && p.rights.workspaceAdmin && adminsLeft === 0) throw new Error('Make someone else a workspace admin first. The workspace always needs at least one.');
   const why = reason;
   const value = { ...roster, [key]: { ...p, active: false } };
   let s = writeRoster(state, value, { author: by, reason: why, title: `Person deactivated: ${p.name}`, body: `${roster[by].name} deactivated ${p.name}. ${why}`, surfaced: true, meta: { change: { kind: 'deactivate', key }, ...(meta || {}) } });
@@ -130,6 +130,8 @@ export function applyDeactivation(state, key, { by, reason, meta = null } = {}) 
 
 export const RIGHTS = [['riskApprover', 'Risk approver'], ['workspaceAdmin', 'Workspace admin']];
 export const RIGHT_LABELS = Object.fromEntries(RIGHTS);
+// The right as it reads mid-sentence: "Make Jonas a Risk approver".
+export const RIGHT_NOUNS = { riskApprover: 'Risk approver', workspaceAdmin: 'workspace admin' };
 
 export function activeAdmins(state) {
   return Object.keys(activePeople(state)).filter((k) => isWorkspaceAdmin(state, k));
@@ -146,7 +148,7 @@ export function getRosterProposal(state, id) {
 export function describeRosterChange(state, pr) {
   const name = people(state)[pr.person] ? people(state)[pr.person].name : pr.person;
   if (pr.kind === 'deactivate') return `Deactivate ${name}`;
-  return `${pr.grant ? 'Grant' : 'Remove'} ${RIGHT_LABELS[pr.right]}: ${name}`;
+  return pr.grant ? `Make ${name} a ${RIGHT_NOUNS[pr.right]}` : `Remove ${name} as ${RIGHT_NOUNS[pr.right]}`;
 }
 
 // A rights grant or removal, or the deactivation of a rights holder: proposed
@@ -156,23 +158,23 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
   requireAdmin(state, by);
   const roster = people(state);
   const target = roster[person];
-  if (!target) throw new Error(`Unknown person: ${person}`);
-  if (target.active === false) throw new Error(`${target.name} is deactivated.`);
+  if (!target) throw new Error('That person wasn\'t found. Reload and try again.');
+  if (target.active === false) throw new Error(`${target.name} is deactivated, so their rights can't be changed.`);
   const why = (reason || '').trim();
-  if (why.length < 5) throw new Error('A roster change needs a reason.');
+  if (why.length < 5) throw new Error('Add a reason (a few words).');
   if (!['rights', 'deactivate'].includes(kind)) throw new Error(`Unknown roster change: ${kind}`);
   if (kind === 'rights') {
     if (!RIGHT_LABELS[right]) throw new Error(`Unknown right: ${right}`);
     const has = Boolean(target.rights && target.rights[right]);
-    if (grant && person === by) throw new Error('Nobody grants a right to themselves. Ask another workspace admin to propose it.');
-    if (grant && has) throw new Error(`${target.name} already holds the ${RIGHT_LABELS[right]} right.`);
-    if (!grant && !has) throw new Error(`${target.name} does not hold the ${RIGHT_LABELS[right]} right.`);
-    if (!grant && right === 'workspaceAdmin' && activeAdmins(state).filter((k) => k !== person).length === 0) throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+    if (grant && person === by) throw new Error('You can\'t grant a right to yourself. Ask another workspace admin to propose it.');
+    if (grant && has) throw new Error(`${target.name} is already a ${RIGHT_NOUNS[right]}.`);
+    if (!grant && !has) throw new Error(`${target.name} isn't a ${RIGHT_NOUNS[right]}.`);
+    if (!grant && right === 'workspaceAdmin' && activeAdmins(state).filter((k) => k !== person).length === 0) throw new Error('Make someone else a workspace admin first. The workspace always needs at least one.');
   }
   if (kind === 'deactivate' && target.rights && target.rights.workspaceAdmin && activeAdmins(state).filter((k) => k !== person).length === 0) {
-    throw new Error('This would leave no workspace admin. Grant the right to someone else first.');
+    throw new Error('Make someone else a workspace admin first. The workspace always needs at least one.');
   }
-  if (openRosterProposal(state, person)) throw new Error(`A change for ${target.name} is already awaiting sign-off.`);
+  if (openRosterProposal(state, person)) throw new Error(`A change for ${target.name} is already waiting for approval. Approve, reject or withdraw it first.`);
   // Who can approve: a different workspace admin. For a grant, never the
   // person receiving the right. A Risk approver grant can also be approved by
   // an existing Risk approver, so a grant to an admin still has an approver.
@@ -180,7 +182,7 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
   let eligible = activeAdmins(state).filter((k) => k !== by);
   if (isGrant && right === 'riskApprover') eligible = [...new Set([...eligible, ...Object.keys(activePeople(state)).filter((k) => isRiskApprover(state, k) && k !== by)])];
   if (isGrant) eligible = eligible.filter((k) => k !== person);
-  if (!eligible.length) throw new Error(isGrant && right === 'riskApprover' ? 'No other workspace admin or Risk approver can sign this off.' : 'No other workspace admin can sign this off. Grant the Workspace admin right to someone else first.');
+  if (!eligible.length) throw new Error(isGrant && right === 'riskApprover' ? 'Nobody else can approve this. It needs another workspace admin or a Risk approver.' : 'Nobody else can approve this. Make someone else a workspace admin first.');
   const impact = rosterChangeImpact(state, { kind, person, right, grant });
   const pr = {
     id: `RP-${state.rosterProposals.length + 1}`,
@@ -205,15 +207,15 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
   return logEvent(s, {
     kind: 'roster',
     surfaced: true,
-    title: `Roster change proposed: ${describeRosterChange(s, pr)}`,
-    body: `${roster[by].name} proposed ${describeRosterChange(s, pr).toLowerCase()}. Needs a different workspace admin to approve. ${why}`,
+    title: `Proposed: ${describeRosterChange(s, pr)}`,
+    body: `${roster[by].name} proposed: ${describeRosterChange(s, pr)}. Waiting for approval from ${eligible.map((k) => roster[k].name).join(', ')}. ${why}`,
     capabilityId: null,
     link: `#/people?proposal=${pr.id}`,
   });
 }
 
 export function rosterApprovalEligibility(state, pr, personKey) {
-  if (!pr || pr.status !== 'open') return { ok: false, reason: 'This change is closed.' };
+  if (!pr || pr.status !== 'open') return { ok: false, reason: 'This change has already been approved, rejected or withdrawn.' };
   const p = people(state)[personKey];
   if (!p) return { ok: false, reason: 'Choose who is acting.' };
   const isGrant = pr.kind === 'rights' && pr.grant;
@@ -223,8 +225,8 @@ export function rosterApprovalEligibility(state, pr, personKey) {
   if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and cannot approve.` };
   const admin = isWorkspaceAdmin(state, personKey);
   const risk = riskGrant && isRiskApprover(state, personKey);
-  if (!admin && !risk) return { ok: false, reason: riskGrant ? `${p.name} is neither a workspace admin nor a Risk approver.` : `${p.name} is not an active workspace admin.` };
-  if (!pr.eligible.includes(personKey)) return { ok: false, reason: `${p.name} was not an eligible approver when this change was proposed.` };
+  if (!admin && !risk) return { ok: false, reason: riskGrant ? `${p.name} is neither a workspace admin nor a Risk approver.` : `${p.name} isn't a workspace admin.` };
+  if (!pr.eligible.includes(personKey)) return { ok: false, reason: `${p.name} can't approve this. Only the people listed under "Who can approve" can.` };
   return { ok: true, reason: null };
 }
 
@@ -243,7 +245,7 @@ export function approveRosterChange(state, proposalId, { by } = {}) {
   } else {
     if (!pr.grant && pr.right === 'workspaceAdmin' && activeAdmins(s).filter((k) => k !== pr.person).length === 0) throw new Error('This would leave no workspace admin.');
     const value = { ...roster, [pr.person]: { ...target, rights: { ...target.rights, [pr.right]: pr.grant } } };
-    s = writeRoster(s, value, { author: pr.proposedBy, reason: pr.reason, surfaced: true, title: `${pr.grant ? 'Right granted' : 'Right removed'}: ${RIGHT_LABELS[pr.right]}, ${target.name}`, body: `Proposed by ${roster[pr.proposedBy].name}, approved by ${roster[by].name}${isWorkspaceAdmin(state, by) ? '' : ' (as a Risk approver)'}. ${pr.reason}`, meta: { change: { kind: pr.grant ? 'grant' : 'remove', key: pr.person, right: pr.right }, ...meta } });
+    s = writeRoster(s, value, { author: pr.proposedBy, reason: pr.reason, surfaced: true, title: pr.grant ? `${target.name} is now a ${RIGHT_NOUNS[pr.right]}` : `${target.name} is no longer a ${RIGHT_NOUNS[pr.right]}`, body: `Proposed by ${roster[pr.proposedBy].name}, approved by ${roster[by].name}${isWorkspaceAdmin(state, by) ? '' : ' (as a Risk approver)'}. ${pr.reason}`, meta: { change: { kind: pr.grant ? 'grant' : 'remove', key: pr.person, right: pr.right }, ...meta } });
     if (!pr.grant && pr.right === 'workspaceAdmin' && s.actingAs === pr.person) s = s; // acting stays; they just lost the admin controls
   }
   const applied = rosterVersions(s).length;
@@ -257,21 +259,21 @@ export function rejectRosterChange(state, proposalId, { by, reason } = {}) {
   const e = rosterApprovalEligibility(state, pr, by);
   if (!e.ok) throw new Error(e.reason);
   const why = (reason || '').trim();
-  if (why.length < 5) throw new Error('A rejection needs a reason.');
+  if (why.length < 5) throw new Error('Add a reason for rejecting.');
   const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'rejected', rejection: { by, byAt: snapshotPerson(state, by), date: state.today, reason: why }, closedAt: state.today } : x)) };
-  return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change rejected: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} rejected the change proposed by ${people(s)[pr.proposedBy].name}. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
+  return logEvent(s, { kind: 'roster', surfaced: true, title: `Rejected: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} rejected the change proposed by ${people(s)[pr.proposedBy].name}. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
 }
 
 export function withdrawRosterChange(state, proposalId, { by, reason } = {}) {
   const pr = getRosterProposal(state, proposalId);
   if (!pr) throw new Error(`Unknown roster change: ${proposalId}`);
-  if (pr.status !== 'open') throw new Error('This change is closed.');
-  if (by !== pr.proposedBy) throw new Error('Only the proposer withdraws; others reject.');
-  requireActive(state, by, 'withdraw a roster change');
+  if (pr.status !== 'open') throw new Error('This change has already been approved, rejected or withdrawn.');
+  if (by !== pr.proposedBy) throw new Error('Only the person who proposed this can withdraw it. Others can reject it.');
+  requireActive(state, by, 'withdraw this change');
   const why = (reason || '').trim();
-  if (why.length < 5) throw new Error('A withdrawal needs a reason.');
+  if (why.length < 5) throw new Error('Add a reason for withdrawing.');
   const s = { ...state, rosterProposals: state.rosterProposals.map((x) => (x.id === proposalId ? { ...x, status: 'withdrawn', withdrawal: { by, byAt: snapshotPerson(state, by), date: state.today, reason: why }, closedAt: state.today } : x)) };
-  return logEvent(s, { kind: 'roster', surfaced: true, title: `Roster change withdrawn: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} withdrew their proposal. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
+  return logEvent(s, { kind: 'roster', surfaced: true, title: `Withdrawn: ${describeRosterChange(s, pr)}`, body: `${people(s)[by].name} withdrew it. ${why}`, capabilityId: null, link: `#/people?proposal=${proposalId}` });
 }
 
 // The person acting right now: the picked person, else the capability's owner,
