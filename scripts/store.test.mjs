@@ -28,6 +28,7 @@ import { capabilityView } from '../src/views/capability.js';
 import { evidenceView } from '../src/views/evidence.js';
 import { proposalView } from '../src/views/proposals.js';
 import { agentRunsView } from '../src/views/agentruns.js';
+import { overviewView } from '../src/views/overview.js';
 import { versionsView } from '../src/views/versions.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
@@ -3981,4 +3982,77 @@ test('Agent runs: the site never calls a model, and each real recording links it
   assert.match(opened, /actions\/runs\/38063334929/);
   const fresh = { ...runs.find((r) => r.file === '2026-10-10-claude-haiku-5-5-shared.json'), file: 'new.json', proof: { via: 'github-actions', actionsRun: 5, approvedBy: 'pedringt', ledgerLine: 12 } };
   assert.match(String(agentRunsView(s, new URLSearchParams('run=new.json'), { status: 'ready', runs: [fresh] })), /href="https:\/\/github\.com\/pedringt\/authority-lab\/commits\/main\/src\/data\/agent-runs\/new\.json">the commit that added it<\/a>/);
+});
+
+test('Overview: To do, Approvals needed, Important results, Current authority, in that order, each naming its capability and person', () => {
+  const s = initialState();
+  setPeople(people(s));
+  const out = String(overviewView(s));
+  const at = (id) => out.indexOf(`id="${id}"`);
+  assert.ok(at('todo') > 0 && at('todo') < at('approvals') && at('approvals') < at('results') && at('results') < at('authority'), 'the four sections, in order');
+  // To do: the pending decision leads, with how ready it is and who owns it.
+  assert.match(out, /Decide whether Refund recommendation can move to Level 3, Act Within Limits, with limits/);
+  assert.match(out, /Almost ready for a decision: 5 of 6 checks met\. Still open: High-value refund performance needs more evidence\./);
+  assert.match(out, /Owner: Maya Chen/);
+  assert.match(out, /href="#\/capabilities\/refund-recommendation\/decision">Open the decision/);
+  assert.match(out, /Meet the condition to move Refund execution &gt; \$50 back to Draft/);
+  assert.match(out, /Meet the open check: overall accuracy ≥ 90%/);
+  // Approvals: the waiting refunds, with who can approve.
+  assert.match(out, /2 refunds need a person to decide/);
+  assert.match(out, /Who can approve: Maya Chen, Priya Natarajan, Daniel Okafor, Sofia Alvarez or Elena Rossi\./);
+  // Important results: only what changes authority.
+  assert.match(out, /Thin evidence<\/span>/);
+  assert.match(out, /High-value refunds \(&gt; \$100\): 83% accurate, on only 18 cases\./);
+  assert.match(out, /Severe failure<\/span>/);
+  assert.match(out, /Moved back to Recommend on Sep 24 by Daniel Okafor\./);
+  // Current authority: every capability, in plain words, with what's next.
+  for (const c of s.capabilities) assert.ok(out.includes(`href="#/capabilities/${c.id}"><strong>`), c.name);
+  assert.match(out, /Ready for a decision<\/span><div class="ov-plain">Proposed: Level 3, Act Within Limits, with limits/);
+  assert.match(out, /Not delegated, by design/);
+  assert.match(out, /Drafts\. A person approves every action\./);
+  // Gone from Overview: the metric grid, monitoring stats, the recommendation,
+  // the disagreement, coverage explanations and the readiness breakdown.
+  for (const gone of [/metric-grid/, /System recommendation/, /Stakeholder disagreement/, /evidence requirements satisfied/, /autonomous actions/, /Risk coverage/]) assert.doesNotMatch(out, gone);
+});
+
+test('Overview after an automatic restriction: the review comes first, the result explains it, the decision has gone', () => {
+  let s = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  setPeople(people(s));
+  const out = String(overviewView(s));
+  const todo = out.slice(out.indexOf('id="todo"'), out.indexOf('id="approvals"'));
+  assert.match(todo, /^[\s\S]*?Review why Refund recommendation was moved back to Draft/, 'the review is the first to-do');
+  assert.ok(todo.indexOf('Review why Refund recommendation') < todo.indexOf('Meet the'), 'before the evidence to-dos');
+  assert.match(todo, /It can&#39;t get more authority until someone records what happened and what changes\./);
+  assert.match(todo, />Record the review</);
+  assert.doesNotMatch(todo, /Decide whether Refund recommendation/);
+  assert.match(out, /Moved back automatically<\/span>/);
+  assert.match(out, /Review needed before it can expand again/);
+  assert.match(out, /Moved back<\/span><div class="ov-plain">/);
+});
+
+test('Overview approvals: a proposed change shows its kind, progress and the Risk approval it still needs', () => {
+  let s = proposeAmendment(initialState(), RR, 'criteria', { value: { criteria: current(initialState(), RR, 'criteria'), requirements: loosenedRequirements(initialState()) }, by: 'priya', reason: REASON });
+  setPeople(people(s));
+  let out = String(overviewView(s));
+  assert.match(out, /Target change: Refund recommendation/);
+  assert.match(out, /0 of 2 approvals\.<\/strong> Risk approval still needed: Daniel Okafor or Sofia Alvarez\./);
+  assert.match(out, /Priya Natarajan proposed a change\./);
+  // A non-Risk approval first: Risk is still named as what's missing.
+  s = approveProposal(s, RR, openProposal(s, RR, 'criteria').id, { by: 'maya' });
+  out = String(overviewView(s));
+  assert.match(out, /1 of 2 approvals\.<\/strong> Risk approval still needed: Daniel Okafor or Sofia Alvarez\./);
+  // Once Risk has approved, the change is done and leaves the list.
+  s = approveProposal(s, RR, openProposal(s, RR, 'criteria').id, { by: 'daniel' });
+  assert.doesNotMatch(String(overviewView(s)), /Target change: Refund recommendation/);
+});
+
+test('Overview with nothing outstanding says so in each section', () => {
+  let s = initialState();
+  s = { ...s, capabilities: s.capabilities.filter((c) => c.id === TC) };
+  setPeople(people(s));
+  const out = String(overviewView(s));
+  assert.match(out, /Nothing to do right now\./);
+  assert.match(out, /Nothing is waiting for approval\./);
+  assert.match(out, /No results are changing what the AI may do\./);
+  assert.match(out, /No change planned/);
 });

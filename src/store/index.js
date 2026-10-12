@@ -28,3 +28,4 @@ export { CAUGHT, isBait, stepOutcome, classifyTicket, outcomeText, runFlags, run
 export { replayRecording } from './replay.js';
 export { grantingRecord, actionRates, METRICS, recogniseMetric, expectedVsActual, ROI_FIELDS, roiVersions, currentRoiAssumptions, roiEditEligibility, setRoiAssumptions, roi } from './value.js';
 export { ADOPTION_THRESHOLDS, adoptionSignals } from './adoption.js';
+export { LEVEL_PLAIN, readinessText, overviewTodos, stillNeeded, overviewApprovals, importantResults, authorityRows } from './overview.js';

@@ -29,14 +29,13 @@ const demoDate = document.getElementById('demo-date');
 const brandWs = document.getElementById('brand-ws');
 const footData = document.getElementById('foot-data');
 
-// Five top-level places (#93). Tests live under Evidence, Activity under
-// Records, and People in the header.
+// Three top-level places (simplification pass). Evidence, tests and model
+// runs live inside each capability; People and the workspace are in the
+// Settings menu.
 const NAV = [
   ['overview', 'Overview'],
   ['capabilities', 'Capabilities'],
-  ['evidence', 'Evidence'],
   ['records', 'Records'],
-  ['agent-runs', 'Agent runs'],
 ];
 
 
@@ -188,6 +187,8 @@ function render() {
   }
   for (const id of opened) { const el = document.getElementById(id); if (el) el.open = true; }
   if (lastRoute === location.hash) window.scrollTo(0, y); else window.scrollTo(0, 0);
+  // Settings → Workspace opens People at the workspace section.
+  if (lastRoute !== location.hash && root === 'people' && query.get('focus') === 'workspace') { const ws = document.getElementById('workspace'); if (ws) ws.scrollIntoView(); }
   lastRoute = location.hash;
 }
 let lastRoute = null;
