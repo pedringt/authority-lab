@@ -5,10 +5,12 @@ import { testSummary, capData, getCapability, canRunSuite, workspaceOf } from '.
 const FILTERS = [
   ['all', 'All results'],
   ['failed', 'Failed'],
-  ['high', 'High severity'],
-  ['escalated', 'Escalated'],
+  ['high', 'Serious failures'],
+  ['escalated', 'Sent to a person'],
   ['passed', 'Passed'],
 ];
+
+const SEVERITY_WORDS = { High: 'Serious', Medium: 'Moderate', Low: 'Minor' };
 
 export function testsView(state, capabilityId, query, { embedded = false } = {}) {
   const cap = getCapability(state, capabilityId);
@@ -20,17 +22,17 @@ export function testsView(state, capabilityId, query, { embedded = false } = {})
   const gate = canRunSuite(state, capabilityId);
   const runControl = t.status === 'running'
     ? html`<button class="btn btn-primary" disabled>Running… ${t.completed} of ${t.total}</button>`
-    : html`<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${gate.ok ? '' : raw('disabled')} title="${gate.ok ? '' : gate.reason}">${t.status === 'complete' ? 'Run test suite again' : 'Run test suite'}</button>${gate.ok || !t.total ? '' : html`<p class="muted small">${gate.reason} <a href="#/capabilities/${cap.id}/criteria/edit">Open the editor</a></p>`}`;
+    : html`<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${gate.ok ? '' : raw('disabled')} title="${gate.ok ? '' : gate.reason}">${t.status === 'complete' ? 'Run tests again' : 'Run tests'}</button>${gate.ok || !t.total ? '' : html`<p class="muted small">${gate.reason} <a href="#/capabilities/${cap.id}/criteria/edit">Set targets and decision requirements</a></p>`}`;
 
   const summaryLine = !t.total
-    ? html`No scenarios have been written for ${cap.name} yet.`
+    ? html`No test cases for ${cap.name} yet. Add some to start testing.`
     : t.status === 'complete'
-      ? html`<strong>${t.passed} of ${t.total} passed</strong> on today's run.${d.scenarios.some((x) => x.simulated) ? ' Results are simulated (seeded, deterministic).' : ''} ${t.failed} failed, ${t.highSeverity} high severity. Results were recorded as evidence <a href="#/evidence?capability=${cap.id}&source=Automated%20tests">${d.evidence.find((e) => e.source === 'Automated tests' && e.metric === 'Scenario pass rate')?.id || ''}</a>.`
+      ? html`<strong>${t.passed} of ${t.total} passed</strong> on today's run.${d.scenarios.some((x) => x.simulated) ? ' These are simulated results: the same test always gives the same answer.' : ''} ${t.failed} failed, ${t.highSeverity} of them serious. Saved to evidence as <a href="#/evidence?capability=${cap.id}&source=Automated%20tests">${d.evidence.find((e) => e.source === 'Automated tests' && e.metric === 'Scenario pass rate')?.id || ''}</a>.`
       : t.status === 'running'
-        ? html`Running ${t.completed} of ${t.total} scenarios against the current contract.`
+        ? html`Running ${t.completed} of ${t.total} tests against the current rules.`
         : t.lastRun
-          ? html`Last run ${fmtDate(t.lastRun)}: <strong>${t.recorded.passed} of ${t.total} passed</strong>, ${t.recorded.highSeverity} high-severity failure${t.recorded.highSeverity === 1 ? '' : 's'}. Run the suite to see per-scenario results from this session.`
-          : html`Not yet run. Run the suite to see per-scenario results.`;
+          ? html`Last run ${fmtDate(t.lastRun)}: <strong>${t.recorded.passed} of ${t.total} passed</strong>, ${t.recorded.highSeverity} serious failure${t.recorded.highSeverity === 1 ? '' : 's'}. Run the tests to see each result.`
+          : html`Not run yet. Run the tests to see how ${cap.name} does on each case.`;
 
   const progress = t.status !== 'not-run'
     ? html`<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="${t.total}" aria-valuenow="${t.completed}"><span style="width:${(t.completed / t.total) * 100}%"></span></div>`
@@ -38,24 +40,24 @@ export function testsView(state, capabilityId, query, { embedded = false } = {})
 
   const highFailures = d.scenarios.filter((s) => !s.pass && s.severity === 'High');
   const failureCallout = t.status === 'complete' && highFailures.length
-    ? notice('fail', `${highFailures.length === 1 ? 'One high-severity failure' : `${highFailures.length} high-severity failures`}`, highFailures.map((s) => `${s.id}: ${s.name}. ${s.explanation.split('. ')[0]}.`).join(' ') + ' Linked from Evidence and from the authority decision.', { link: `#/tests?capability=${cap.id}&filter=high`, linkText: 'Show' })
+    ? notice('fail', `${highFailures.length === 1 ? 'One serious failure' : `${highFailures.length} serious failures`}`, highFailures.map((s) => `${s.id}: ${s.name}. ${s.explanation.split('. ')[0]}.`).join(' ') + ' These count against giving the AI more authority.', { link: `#/tests?capability=${cap.id}&filter=high`, linkText: 'Show failures' })
     : '';
 
   const groupNames = seed.SCENARIO_GROUPS.map((g) => g.name.toLowerCase()).join(', ');
 
   const head = embedded
-    ? html`<div class="tests-head">${tabIntro(html`${t.total} scenarios run against the current rules.`, html`They come in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}). No real model is called; results replay recorded decisions so the demo is repeatable.`)}${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}</div>`
+    ? html`<div class="tests-head">${tabIntro(html`${t.total} test cases that check ${cap.name} against the current rules.`, html`They're grouped by type (${groupNames}). No AI model is called here: each test replays a saved answer, so a run always gives the same result.`)}${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}</div>`
     : html`<div class="page-head">
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/capabilities/${id}?tab=evidence&show=tests`)}</h1>
-      ${lede(html`${t.total} seeded scenarios run against the capability's current contract.`, html`They come in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}). No real model call is made; results replay the recorded decisions so the demo is repeatable.`)}
+      ${lede(html`${t.total} test cases that check ${cap.name} against the current rules.`, html`They're grouped by type (${groupNames}). No AI model is called here: each test replays a saved answer, so a run always gives the same result.`)}
     </div>
     ${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}
   </div>`;
   return html`${head}
-  ${query.get('error') ? notice('fail', 'Could not run the test suite', query.get('error')) : ''}
-  ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit the scenario library</a></p>` : ''}
+  ${query.get('error') ? notice('fail', 'Couldn\'t run the tests', query.get('error')) : ''}
+  ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit test cases</a></p>` : ''}
   <div class="card run-summary ${t.status === 'not-run' && t.total ? 'is-cta' : ''}"><p>${summaryLine}</p>${t.status === 'not-run' && t.total ? html`<div class="run-cta">${runControl}</div>` : ''}${progress}</div>
   ${failureCallout}
   ${scenarioTable(state, cap.id, { filter, group })}`;
@@ -103,14 +105,14 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
   const base = `#/capabilities/${capabilityId}?tab=evidence&show=tests`;
   const filters = compact || !d.scenarios.length ? '' : filterBar({
     selects: [
-      { label: 'Result', value: hasResults ? filter : 'all', options: FILTERS.map(([k, label]) => [k, hasResults && k !== 'all' ? `${label} (${countFor(k)})` : label]), hrefFor: (k) => `${base}&filter=${k}&group=${group}`, disabled: hasResults ? '' : 'Result filters apply after the suite has run.' },
-      { label: 'Group', value: group, options: [['all', 'All groups'], ...seed.SCENARIO_GROUPS.map((g) => [g.id, g.name])], hrefFor: (g) => `${base}&filter=${filter}&group=${g}` },
+      { label: 'Result', value: hasResults ? filter : 'all', options: FILTERS.map(([k, label]) => [k, hasResults && k !== 'all' ? `${label} (${countFor(k)})` : label]), hrefFor: (k) => `${base}&filter=${k}&group=${group}`, disabled: hasResults ? '' : 'Run the tests to filter by result.' },
+      { label: 'Type', value: group, options: [['all', 'All types'], ...seed.SCENARIO_GROUPS.map((g) => [g.id, g.name])], hrefFor: (g) => `${base}&filter=${filter}&group=${g}` },
     ],
     clearHref: base,
     active: group !== 'all' || (hasResults && filter !== 'all'),
     showing: rows.length,
     total: d.scenarios.length,
-    noun: 'scenarios',
+    noun: 'test cases',
   });
 
   function countFor(k) {
@@ -138,29 +140,29 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
         <span class="scenario-id">${s.id}</span>
         <span class="scenario-name"><strong>${s.name}</strong><span class="muted small"> · ${groupName(s.group)}</span>${s.source === 'ai' ? html` <span class="badge badge-insufficient">Suggested by AI</span>` : ''}</span>
         <span class="scenario-status">
-          ${showResult ? badge(s.pass ? 'pass' : 'fail') : pendingRun ? html`<span class="badge badge-neutral">Running</span>` : html`<span class="badge badge-neutral">Not run</span>`}
-          ${showResult && s.severity !== 'None' ? html`<span class="badge badge-${s.severity === 'High' ? 'fail' : 'watch'}">${s.severity} severity</span>` : ''}
-          ${showResult && s.escalated ? html`<span class="badge badge-neutral">Escalated</span>` : ''}
-          ${showResult && s.simulated ? html`<span class="badge badge-neutral" title="Seeded, deterministic result; no model was called">Simulated</span>` : ''}
+          ${showResult ? badge(s.pass ? 'pass' : 'fail', s.pass ? 'Passed' : 'Failed') : pendingRun ? html`<span class="badge badge-neutral">Running</span>` : html`<span class="badge badge-neutral">Not run</span>`}
+          ${showResult && s.severity !== 'None' ? html`<span class="badge badge-${s.severity === 'High' ? 'fail' : 'watch'}">${SEVERITY_WORDS[s.severity] || `${s.severity} severity`}</span>` : ''}
+          ${showResult && s.escalated ? html`<span class="badge badge-neutral">Sent to a person</span>` : ''}
+          ${showResult && s.simulated ? html`<span class="badge badge-neutral" title="A made-up result for a case you wrote. No AI model was called.">Simulated</span>` : ''}
         </span>
       </summary>
       <div class="scenario-body">
         <dl class="kv kv-stack">
-          <div><dt>Scenario</dt><dd>${s.situation}</dd></div>
-          <div><dt>Expected behavior</dt><dd>${s.expected}</dd></div>
+          <div><dt>Situation</dt><dd>${s.situation}</dd></div>
+          <div><dt>What it should do</dt><dd>${s.expected}</dd></div>
           ${showResult ? html`
-            <div><dt>AI decision</dt><dd>${s.aiDecision}${s.simulated ? html` <span class="muted small">(simulated)</span>` : ''}</dd></div>
-            <div><dt>Outcome</dt><dd>${s.outcome}${s.failureType ? html` <span class="muted">(${s.failureType})</span>` : ''}</dd></div>
-            <div><dt>Explanation</dt><dd>${s.explanation}</dd></div>
-            <div><dt>Human reviewer</dt><dd>${s.reviewer}</dd></div>
-            ${s.incident ? html`<div><dt>Incident</dt><dd><a href="#/evidence?capability=${capabilityId}&status=fail">${s.incident}</a> · linked from Evidence and the authority decision</dd></div>` : ''}`
-            : html`<div><dt>AI decision</dt><dd class="muted">Run the suite to see the result.</dd></div>`}
+            <div><dt>What the AI did</dt><dd>${s.aiDecision}${s.simulated ? html` <span class="muted small">(simulated)</span>` : ''}</dd></div>
+            <div><dt>Result</dt><dd>${s.outcome}${s.failureType ? html` <span class="muted">(${s.failureType})</span>` : ''}</dd></div>
+            <div><dt>Why</dt><dd>${s.explanation}</dd></div>
+            <div><dt>What the reviewer did</dt><dd>${s.reviewer}</dd></div>
+            ${s.incident ? html`<div><dt>Incident</dt><dd><a href="#/evidence?capability=${capabilityId}&status=fail">${s.incident}</a> · counts against giving the AI more authority</dd></div>` : ''}`
+            : html`<div><dt>What the AI did</dt><dd class="muted">Run the tests to see what the AI does.</dd></div>`}
         </dl>
       </div>
     </details>`;
   };
 
-  const empty = html`<p class="empty">${d.scenarios.length ? 'No scenarios match this filter.' : 'No scenarios yet.'}</p>`;
+  const empty = html`<p class="empty">${d.scenarios.length ? 'No test cases match this filter.' : 'No test cases yet.'}</p>`;
   if (compact) return html`${filters}${rows.length ? html`<div class="scenario-list">${rows.map(item)}</div>` : empty}`;
   if (!rows.length) return html`${filters}${empty}`;
 
@@ -178,13 +180,13 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
   const groupCount = (x) => {
     if (t.status === 'complete') return `${x.run.length - x.failed.length} of ${x.all.length} passed`;
     if (t.status === 'running') return `${x.run.length} of ${x.all.length} run`;
-    return `${x.all.length} scenario${x.all.length === 1 ? '' : 's'}`;
+    return `${x.all.length} test case${x.all.length === 1 ? '' : 's'}`;
   };
   const sections = groups.map((x) => html`<details class="scenario-group ${x.failed.length ? 'has-fail' : ''}" id="scenario-group-${x.id}" ${filtering || x.failed.length ? raw('open') : ''}>
     <summary>
       <span class="scenario-group-name">${groupName(x.id)}</span>
       <span class="scenario-group-count">${groupCount(x)}${filtering && x.shown.length !== x.all.length ? ` · ${x.shown.length} shown` : ''}</span>
-      <span class="scenario-status">${x.failed.length ? html`<span class="badge badge-fail">${x.failed.length} failed</span>` : hasResults && t.status === 'complete' ? badge('pass') : !hasResults ? html`<span class="badge badge-neutral">Not run</span>` : ''}</span>
+      <span class="scenario-status">${x.failed.length ? html`<span class="badge badge-fail">${x.failed.length} failed</span>` : hasResults && t.status === 'complete' ? badge('pass', 'All passed') : !hasResults ? html`<span class="badge badge-neutral">Not run</span>` : ''}</span>
     </summary>
     <div class="scenario-list">${x.shown.map(item)}</div>
   </details>`);

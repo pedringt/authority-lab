@@ -11,8 +11,9 @@
 
 import { getCapability, capData } from './state.js';
 import { restrictionRules, ruleCrossed, applyBreach } from './monitoring.js';
+import { toolLabel } from './gate.js';
 
-export const GATE_SOURCES = { seeded: 'Seeded demo data', session: 'This session', recorded: 'Recorded from a real run', mock: 'Mock model (dry run, not a real model)' };
+export const GATE_SOURCES = { seeded: 'Demo data', session: 'This session', recorded: 'Recorded from a real model run', mock: 'Practice run (scripted, not a real model)' };
 
 const log = (state) => state.gateLog || [];
 
@@ -76,12 +77,12 @@ export function gateEvidence(state, capabilityId) {
   const g = gateSummary(state, capabilityId);
   if (!g.actions) return [];
   const origin = g.sources.map((s) => GATE_SOURCES[s] || s).join(', ');
-  const base = { source: 'Gate log', segment: 'All', date: state.today, risk: 'High', link: `#/capabilities/${capabilityId}?tab=monitoring`, derived: true, origin };
+  const base = { source: 'Logged actions', segment: 'All', date: state.today, risk: 'High', link: `#/capabilities/${capabilityId}?tab=monitoring`, derived: true, origin };
   const pct = (v) => (v == null ? 'n/a' : `${v}%`);
   return [
-    { ...base, id: 'GATE-1', metric: 'Actions allowed automatically', value: `${g.counts.allowed} of ${g.actions} (${pct(g.rates.automation)})`, status: 'pass', detail: `Actions the gate allowed without a person. From the gate log: ${origin}.` },
-    { ...base, id: 'GATE-2', metric: 'Actions sent to a person', value: `${g.counts.escalated} of ${g.actions} (${pct(g.rates.escalation)})`, status: 'watch', detail: `Needs-person verdicts and hand-offs to a person. ${g.counts.approved} approved, ${g.counts.overridden} rejected (overridden), ${g.counts.refused} refused at execution. From the gate log: ${origin}.` },
-    { ...base, id: 'GATE-3', metric: 'Actions blocked', value: `${g.counts.blocked} of ${g.actions} (${pct(g.rates.block)})`, status: g.mustNeverAttempts || g.falseClaims ? 'fail' : g.counts.blocked ? 'watch' : 'pass', detail: `Actions the gate refused: ${g.mustNeverAttempts} must-never attempts and ${g.falseClaims} false claims about the record among them. From the gate log: ${origin}.` },
+    { ...base, id: 'GATE-1', metric: 'Actions done automatically', value: `${g.counts.allowed} of ${g.actions} (${pct(g.rates.automation)})`, status: 'pass', detail: `Done without asking a person, because they were within the rules. From logged actions: ${origin}.` },
+    { ...base, id: 'GATE-2', metric: 'Actions sent to a person', value: `${g.counts.escalated} of ${g.actions} (${pct(g.rates.escalation)})`, status: 'watch', detail: `Actions that needed approval, plus cases the AI handed to a person. ${g.counts.approved} approved, ${g.counts.overridden} rejected, ${g.counts.refused} stopped after approval because things had changed. From logged actions: ${origin}.` },
+    { ...base, id: 'GATE-3', metric: 'Actions blocked', value: `${g.counts.blocked} of ${g.actions} (${pct(g.rates.block)})`, status: g.mustNeverAttempts || g.falseClaims ? 'fail' : g.counts.blocked ? 'watch' : 'pass', detail: `Blocked by the rules, including ${g.mustNeverAttempts} attempt${g.mustNeverAttempts === 1 ? '' : 's'} at something never allowed and ${g.falseClaims} claim${g.falseClaims === 1 ? '' : 's'} that didn't match the record. From logged actions: ${origin}.` },
   ];
 }
 
@@ -122,8 +123,8 @@ export function enforceGateRules(state, capabilityId) {
     const metric = gateMetricOf(rule);
     const attempts = gateEvents(state, capabilityId).filter((e) => counts(metric, e)).slice(-value);
     const errors = attempts.map((e) => e.rule.kind === 'fact-mismatch'
-      ? `${e.id}: the AI made a claim about ${e.orderId || 'the order'} that contradicts the system of record; the gate blocked ${e.tool}.`
-      : `${e.id}: the AI tried ${e.tool}${e.orderId ? ` on ${e.orderId}` : ''} and the gate blocked it (${e.rule.text}).`);
+      ? `${e.id}: the AI said something about ${e.orderId || 'the order'} that contradicts the record, so "${toolLabel(e.tool)}" was blocked.`
+      : `${e.id}: the AI tried to ${toolLabel(e.tool).toLowerCase()}${e.orderId ? ` on ${e.orderId}` : ''}, which is never allowed, and was blocked (${e.rule.text}).`);
     return applyBreach(state, capabilityId, rule, { value, errors });
   }
   return state;
