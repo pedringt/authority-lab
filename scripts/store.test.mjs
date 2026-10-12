@@ -1188,7 +1188,7 @@ test('a proposed contract must pass the builder checks before it can be submitte
   // Empty hard limits on a High-impact capability.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [], autoRestriction: [] }, by: 'priya', reason: 'Trying to drop the hard limits.' }), /fails 2 checks/);
   // A contradiction.
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "AI may" and "AI must never". Keep it in one/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "The AI may" and "The AI must never". Keep it in one/);
   // An unmeasurable restriction rule.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, autoRestriction: ['Too many errors returns the capability to Draft.'] }, by: 'priya', reason: 'A vague rule.' }), /has no number/);
   // Value limit only under "must never" on a financial capability.
