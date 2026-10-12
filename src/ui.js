@@ -86,7 +86,7 @@ const STATUS_WORDS = {
   fail: 'Fail',
   insufficient: 'Insufficient evidence',
   restricted: 'Restricted',
-  decision: 'Decision required',
+  decision: 'Decision needed',
   neutral: '',
 };
 

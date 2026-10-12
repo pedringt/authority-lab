@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { html, raw, section, badge, capStatusBadge, authorityBadge, levelScale, kv, fmtDate, person, personAt, notice, empty, warningNotice, authorityText, rightsNote, lede, subNav, tabIntro, SWITCH_PERSON } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, LEVEL_PLAIN, readinessText, overviewTodos, overviewApprovals } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, testSummary, current, versionList, criteriaLocked, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, lastEvaluated, lastDecisionId, coverageWarnings, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, actor, isHighOrFinancial, workflowOf, waitingActions, queueApprovers, queueEligibility, QUEUE_LIMIT, gateSummary, gateEvents, GATE_SOURCES, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, TOOLS, toolLabel, LEVEL_PLAIN, readinessText, overviewTodos, overviewApprovals } from '../store/index.js';
 import { scenarioTable, testsView } from './tests.js';
 import { evidenceView } from './evidence.js';
 import { agentRunsView } from './agentruns.js';
@@ -233,9 +233,9 @@ function contractTab(state, cap, d) {
     ${riskBlock}`;
 }
 
-// Tool ids in words, for normal UI. Ids stay in model-run detail and records.
-const TOOL_WORDS = { issue_refund: 'Refund', lookup_order: 'Look up order', escalate_to_human: 'Escalate' };
-const toolWords = (tool) => (Object.hasOwn(TOOL_WORDS, tool) ? TOOL_WORDS[tool] : 'Unknown tool');
+// Tool ids in words, from the one list in the gate. Ids stay in model-run
+// detail and records. A tool the gate doesn't know is never shown by id.
+const toolWords = (tool) => (Object.hasOwn(TOOLS, tool) ? toolLabel(tool) : 'Unknown tool');
 
 // What the AI tried (A5): what the rules allowed, sent to a person or blocked
 // for this capability, rolled up, with the latest actions and where they came
@@ -254,7 +254,7 @@ function gateActivityCard(state, cap) {
       <div class="metric card"><div class="metric-top"><span class="metric-label">Stopped after approval</span></div><div class="metric-value">${g.counts.refused}</div><div class="metric-note">approved, but things had changed by the time it ran</div></div>
     </div>
     <div class="card table-card"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Result</th><th>Why</th><th>Data</th></tr></thead>
-      <tbody>${recent.map((e) => html`<tr><td class="muted small" title="${e.id}${e.queueId ? ` · ${e.queueId}` : ''}">${fmtDate(e.date)}</td><td>${who(e)}</td><td>${toolWords(e.tool)}${e.orderId ? ` ${e.orderId}` : ''}</td><td>${verdictBadge[e.verdict] || badge('neutral', 'Other')}</td><td class="small">${e.rule ? e.rule.text : ''}</td><td class="muted small">${GATE_SOURCES[e.source] || e.source}</td></tr>`)}</tbody>
+      <tbody>${recent.map((e) => html`<tr><td class="muted small" title="${e.id}${e.queueId ? ` · ${e.queueId}` : ''}">${fmtDate(e.date)}</td><td>${who(e)}</td><td>${toolWords(e.tool)}${e.orderId ? ` on ${e.orderId}` : ''}</td><td>${verdictBadge[e.verdict] || badge('neutral', 'Other')}</td><td class="small">${e.rule ? e.rule.text : ''}</td><td class="muted small">${GATE_SOURCES[e.source] || e.source}</td></tr>`)}</tbody>
     </table></div>`, { subtitle: `${g.events} actions, from: ${g.sources.map((x) => GATE_SOURCES[x] || x).join(', ')}. Every action is checked against the rules and logged. These numbers feed the results and the safety limits.` });
 }
 

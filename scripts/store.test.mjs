@@ -3199,7 +3199,7 @@ test('A5: Evidence › Results shows gate activity and All evidence shows derive
   assert.match(mon, /tried something never allowed 1 time\b/);
   assert.match(mon, /0 claims that didn't match the records/);
   // Tool ids, verdict keys and event ids stay out of the main columns.
-  assert.match(mon, /<td>Refund ORD-5003<\/td>/);
+  assert.match(mon, /<td>Issue a refund on ORD-5003<\/td>/);
   assert.doesNotMatch(mon.replace(/title="[^"]*"/g, ''), /issue_refund|lookup_order|needs-person|>GL-\d|>WA-\d/);
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=monitoring'))), /counted from logged actions/, 'the safety limits say where their readings come from');
   const ev = String(evidenceView(s, RR, new URLSearchParams()));
