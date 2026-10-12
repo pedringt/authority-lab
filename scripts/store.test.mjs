@@ -20,13 +20,16 @@ import {
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
   parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
+  requirementLabel, roleLabel,
   setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, setRolloutField, rolloutChecks, ROLLOUT_FIELDS, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility, adoptionSignals,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView, decisionWorkspaceView } from '../src/views/decisions.js';
 import { capabilityView } from '../src/views/capability.js';
 import { evidenceView } from '../src/views/evidence.js';
-import { proposalView } from '../src/views/proposals.js';
+import { proposalView, proposeView } from '../src/views/proposals.js';
+import { stakeholdersEditorView } from '../src/views/stakeholders.js';
+import { decisionBriefView } from '../src/views/brief.js';
 import { agentRunsView } from '../src/views/agentruns.js';
 import { overviewView } from '../src/views/overview.js';
 import { versionsView } from '../src/views/versions.js';
@@ -134,7 +137,7 @@ test('authorize requires an option and a rationale', () => {
   assert.equal(canAuthorize(s, RR).ok, true);
   s = setRationale(s, RR, '');
   assert.equal(canAuthorize(s, RR).ok, false);
-  assert.throws(() => authorize(s, RR), /rationale/i);
+  assert.throws(() => authorize(s, RR), /Say why you're making this decision/);
 });
 
 test('expand with limits: authority changes, record is written with snapshot and conditions', () => {
@@ -152,9 +155,9 @@ test('expand with limits: authority changes, record is written with snapshot and
   assert.deepEqual(rec.previous, { level: 2, limited: false });
   assert.deepEqual(rec.next, { level: 3, limited: true });
   assert.ok(rec.evidenceSnapshot.includes('218 pilot cases'));
-  assert.ok(rec.evidenceSnapshot.includes('18 high-value refund cases (requirement: 40)'));
+  assert.ok(rec.evidenceSnapshot.includes('18 high-value refund cases (needed: 40)'));
   assert.equal(rec.conditions.maxValue, 50);
-  assert.match(rec.scope, /Automatic refunds ≤ \$50/);
+  assert.match(rec.scope, /The AI handles refunds of \$50 or less on its own/);
   assert.match(rec.openCondition, /currently 18/);
   const d = capData(s, RR);
   assert.ok(d.monitoring && d.monitoring.breached === false);
@@ -251,7 +254,7 @@ test('conditions preview reads as plain English', () => {
   const text = conditionsPreview(seed.defaultConditions, seed.capabilities.find((c) => c.id === RR));
   assert.match(text, /standard refunds of \$50 or less/);
   assert.match(text, /at least 90%/);
-  assert.match(text, /Fraud-signaled, ambiguous, high-value, policy-exception and chargeback cases continue to require human review\./);
+  assert.match(text, /A person would still review fraud-flagged, unclear-policy, high-value, policy-exception and chargeback cases\./);
   assert.match(conditionsPreview(seed.defaultConditions, seed.capabilities.find((c) => c.id === TC)), /standard actions of \$50/);
 });
 
@@ -993,8 +996,8 @@ test('who must sign off follows the risk profile; the gate follows the lock and 
 
 test('a proposal on locked criteria is recorded, shows readiness under both versions, and does not change anything yet', () => {
   let s = initialState();
-  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: 'short' }), /needs a reason/);
-  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria').filter((c) => c.id !== 'quality'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON }), /Core rows/);
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: 'short' }), /Say why you're making this change/);
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria').filter((c) => c.id !== 'quality'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON }), /These rows are required. You can change their numbers but not remove them/);
   const before = versionsInForce(s, RR);
   s = proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON });
   const p = openProposal(s, RR, 'criteria');
@@ -1010,7 +1013,7 @@ test('a proposal on locked criteria is recorded, shows readiness under both vers
   assert.equal(`${r.proposed.met} of ${r.proposed.total}`, '6 of 6');
   assert.equal(s.activity[0].kind, 'proposal');
   assert.equal(s.activity[0].surfaced, true);
-  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'maya', reason: REASON }), /already awaiting sign-off/);
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'maya', reason: REASON }), /already needs approval/);
   // evaluateRequirement only moves "met" when the threshold changed and the value is numeric.
   assert.equal(evaluateRequirement({ text: 'Minimum 15 cases', current: '18', met: false }, { text: 'Minimum 40 cases' }), true);
   assert.equal(evaluateRequirement({ text: 'Minimum 40 cases', current: '18', met: false }, { text: 'Minimum 40 cases' }), false);
@@ -1020,14 +1023,14 @@ test('a proposal on locked criteria is recorded, shows readiness under both vers
 
 test('the proposer cannot approve; the owner alone is not enough for High impact; a Risk stakeholder completes it and the versions are written', () => {
   let s = proposeAmendment(initialState(), RR, 'criteria', { value: { criteria: current(initialState(), RR, 'criteria'), requirements: loosenedRequirements(initialState()) }, by: 'priya', reason: REASON });
-  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /the proposer never approves/);
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /proposed this change, so they can.t approve it/);
   s = approveProposal(s, RR, 'P-1', { by: 'maya' });
   assert.equal(getProposal(s, RR, 'P-1').status, 'open', 'owner alone is not enough');
   assert.deepEqual(getProposal(s, RR, 'P-1').approvals.map((a) => [a.by, a.role]), [['maya', 'owner']]);
   assert.equal(versionsInForce(s, RR).requirements, 1);
   assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'maya' }), /already approved/);
   // The last slot must be Risk when no Risk approval exists yet.
-  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'elena' }), /at least one approver must be from Risk/);
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'elena' }), /Risk approval still needed\. The last approval must come from someone with the Risk approver right/);
   assert.match(approvalEligibility(s, RR, getProposal(s, RR, 'P-1'), 'elena').reason, /Daniel Okafor/);
   s = approveProposal(s, RR, 'P-1', { by: 'daniel' });
   const p = getProposal(s, RR, 'P-1');
@@ -1043,7 +1046,7 @@ test('the proposer cannot approve; the owner alone is not enough for High impact
   assert.deepEqual(v.deviations.map((x) => [x.id, x.change]), [['high-value', 'loosened']]);
   assert.equal(s.activity[0].kind, 'amendment');
   assert.equal(s.activity[0].surfaced, true);
-  assert.match(s.activity[0].body, /approved by Maya Chen \(the owner\) and Daniel Okafor \(a Risk stakeholder\)/);
+  assert.match(s.activity[0].body, /approved by Maya Chen \(the owner\) and Daniel Okafor \(a Risk approver\)/);
   // A later decision is flagged as relying on criteria amended after evidence.
   s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
@@ -1064,9 +1067,9 @@ test('low impact: the owner alone approves; a rejection is recorded with its rea
   s = proposeAmendment(s, TC, 'criteria', { value, by: 'maya', reason: 'Classification volume is high; 30 cases is a week.' });
   assert.deepEqual(openProposal(s, TC, 'criteria').required, { approvers: 1, riskRequired: false, ownerOnly: true });
   // Reject path first, by the owner (priya), with a reason.
-  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'maya', reason: 'Changed my mind about it.' }), /withdraws rather than rejects/);
-  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'elena', reason: 'Not my area, but no.' }), /not eligible to reject/);
-  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'priya', reason: 'no' }), /needs a reason/);
+  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'maya', reason: 'Changed my mind about it.' }), /you can withdraw it instead of rejecting it/);
+  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'elena', reason: 'Not my area, but no.' }), /can't reject this change\. Only the people who can approve it can reject it/);
+  assert.throws(() => rejectProposal(s, TC, 'P-1', { by: 'priya', reason: 'no' }), /Say why you.re rejecting it/);
   const beforeReject = versionsInForce(s, TC).requirements;
   const t = rejectProposal(s, TC, 'P-1', { by: 'priya', reason: 'Keep the default until the queue change settles.' });
   assert.equal(getProposal(t, TC, 'P-1').status, 'rejected');
@@ -1138,10 +1141,10 @@ test('sign-off rule, the four requested cases', () => {
   let s = proposeAmendment(initialState(), RR, 'criteria', { value: { criteria: current(initialState(), RR, 'criteria'), requirements: loosenedRequirements(initialState()) }, by: 'maya', reason: RSN });
   let p = openProposal(s, RR, 'criteria');
   assert.deepEqual(p.required, { approvers: 2, riskRequired: true, ownerOnly: false });
-  assert.throws(() => approveProposal(s, RR, p.id, { by: 'maya' }), /the proposer never approves/);
+  assert.throws(() => approveProposal(s, RR, p.id, { by: 'maya' }), /proposed this change, so they can.t approve it/);
   s = approveProposal(s, RR, p.id, { by: 'elena' });
   assert.equal(getProposal(s, RR, p.id).status, 'open');
-  assert.throws(() => approveProposal(s, RR, p.id, { by: 'priya' }), /from Risk/, 'the second must be Risk');
+  assert.throws(() => approveProposal(s, RR, p.id, { by: 'priya' }), /Risk approval still needed/, 'the second must be Risk');
   s = approveProposal(s, RR, p.id, { by: 'daniel' });
   assert.equal(getProposal(s, RR, p.id).status, 'approved');
   assert.equal(approvalsComplete(getProposal(s, RR, p.id)), true);
@@ -1161,7 +1164,7 @@ test('sign-off rule, the four requested cases', () => {
   const value = { criteria: current(u, TC, 'criteria'), requirements: current(u, TC, 'requirements').map((r) => (r.id === 'min-cases' ? { ...r, text: 'Minimum 30 pilot cases' } : r)) };
   u = proposeAmendment(u, TC, 'criteria', { value, by: 'priya', reason: 'Owner proposing on a low-impact capability.' });
   assert.deepEqual(openProposal(u, TC, 'criteria').required, { approvers: 1, riskRequired: false, ownerOnly: false });
-  assert.throws(() => approveProposal(u, TC, 'P-1', { by: 'priya' }), /the proposer never approves/);
+  assert.throws(() => approveProposal(u, TC, 'P-1', { by: 'priya' }), /proposed this change, so they can.t approve it/);
   u = approveProposal(u, TC, 'P-1', { by: 'elena' });
   assert.equal(getProposal(u, TC, 'P-1').status, 'approved');
   assert.deepEqual(getProposal(u, TC, 'P-1').approvals.map((a) => [a.by, a.role]), [['elena', 'stakeholder']]);
@@ -1172,8 +1175,8 @@ test('sign-off rule, the four requested cases', () => {
   v = runSuite(v, TC);
   v = proposeAmendment(v, TC, 'criteria', { value, by: 'maya', reason: 'Non-owner proposing on a low-impact capability.' });
   assert.deepEqual(openProposal(v, TC, 'criteria').required, { approvers: 1, riskRequired: false, ownerOnly: true });
-  assert.throws(() => approveProposal(v, TC, 'P-1', { by: 'maya' }), /the proposer never approves/);
-  assert.throws(() => approveProposal(v, TC, 'P-1', { by: 'daniel' }), /Needed: the owner/);
+  assert.throws(() => approveProposal(v, TC, 'P-1', { by: 'maya' }), /proposed this change, so they can.t approve it/);
+  assert.throws(() => approveProposal(v, TC, 'P-1', { by: 'daniel' }), /Only the owner, Priya Natarajan, can/);
   v = approveProposal(v, TC, 'P-1', { by: 'priya' });
   assert.equal(getProposal(v, TC, 'P-1').status, 'approved');
 });
@@ -1182,7 +1185,7 @@ test('a proposed contract must pass the builder checks before it can be submitte
   const s = initialState();
   const c = current(s, RR, 'contract');
   // Empty hard limits on a High-impact capability.
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [], autoRestriction: [] }, by: 'priya', reason: 'Trying to drop the hard limits.' }), /fails 2 checks/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [], autoRestriction: [] }, by: 'priya', reason: 'Trying to drop the hard limits.' }), /can't be submitted yet\. Fix 2 problems/);
   // A contradiction.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /appears under both/);
   // An unmeasurable restriction rule.
@@ -1365,7 +1368,7 @@ test('loophole: relabelling a stakeholder as Risk after proposing cannot satisfy
   assert.equal(openProposal(s, RR, 'stakeholders').id, 'P-2');
   // Even if it had applied, Elena is not Risk: her team in people is Finance.
   s = approveProposal(s, RR, 'P-1', { by: 'elena' });
-  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /at least one approver must be from Risk/);
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /Risk approval still needed\. The last approval must come from someone with the Risk approver right/);
   assert.equal(getProposal(s, RR, 'P-1').status, 'open', 'P-1 does not apply without Daniel');
   assert.equal(versionsInForce(s, RR).requirements, 1);
   s = approveProposal(s, RR, 'P-1', { by: 'daniel' });
@@ -1385,14 +1388,14 @@ test('eligible approvers are frozen when a proposal opens', () => {
   const p = openProposal(s, TC, 'criteria');
   assert.deepEqual(p.eligible.sort(), ['maya'], 'listed stakeholders minus the proposer, at open time');
   // Adding Elena afterwards (itself a proposal now) does not make her eligible on P-1.
-  assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /not an eligible approver when this proposal opened/);
+  assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /isn.t on the list of who can approve this change\. That list was fixed when it was proposed/);
   // Nor does an applied membership change: approve the membership proposal first, then retry.
   s = saveStakeholders(s, TC, { stakeholders: [...current(s, TC, 'stakeholders'), { team: 'Finance', person: 'elena' }], by: 'priya', reason: 'Add Finance.' });
   const sp = openProposal(s, TC, 'stakeholders');
   s = approveProposal(s, TC, sp.id, { by: 'maya' });
   assert.equal(getProposal(s, TC, sp.id).status, 'approved');
   assert.ok(current(s, TC, 'stakeholders').some((x) => x.person === 'elena'), 'Elena is now listed');
-  assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /not an eligible approver when this proposal opened/, 'P-1 keeps its frozen set');
+  assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /isn.t on the list of who can approve this change\. That list was fixed when it was proposed/, 'P-1 keeps its frozen set');
   s = approveProposal(s, TC, 'P-1', { by: 'maya' });
   assert.equal(getProposal(s, TC, 'P-1').status, 'approved');
 });
@@ -1486,7 +1489,7 @@ test('a proposal is refused when its eligible approvers can never satisfy the ru
   assert.deepEqual(openProposal(ok, RR, 'criteria').eligible.sort(), ['elena', 'maya', 'priya', 'sofia']);
   // Remove Sofia from the list (direct amend in the test): Daniel's proposal could never complete, so it is refused.
   const noSofia = amend(s, RR, 'stakeholders', { value: current(s, RR, 'stakeholders').filter((x) => x.person !== 'sofia'), author: 'maya', reason: 'Test setup.' });
-  assert.throws(() => proposeAmendment(noSofia, RR, 'criteria', { value, by: 'daniel', reason: REASON }), /No Risk approver other than Daniel Okafor. Add another Risk person to the stakeholders or ask someone else to propose/);
+  assert.throws(() => proposeAmendment(noSofia, RR, 'criteria', { value, by: 'daniel', reason: REASON }), /no stakeholder other than Daniel Okafor holds the Risk approver right\. Add a stakeholder who holds it \(rights are set on People\), or ask someone else to propose it/);
   assert.equal(capData(noSofia, RR).proposals.length, 0, 'nothing recorded');
   // Someone else proposing on the same list is fine: Daniel is the Risk approver.
   assert.ok(openProposal(proposeAmendment(noSofia, RR, 'criteria', { value, by: 'priya', reason: REASON }), RR, 'criteria'));
@@ -1497,18 +1500,18 @@ test('a proposal is refused when its eligible approvers can never satisfy the ru
   const d = defaultsFor(t, id);
   t = saveCriteria(t, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
   t = runSuite(t, id);
-  assert.throws(() => proposeAmendment(t, id, 'criteria', { value: { criteria: current(t, id, 'criteria'), requirements: current(t, id, 'requirements') }, by: 'priya', reason: 'Owner proposing with only one other person listed.' }), /needs 2 approvers other than Priya Natarajan, and only 1 named stakeholder is eligible/);
+  assert.throws(() => proposeAmendment(t, id, 'criteria', { value: { criteria: current(t, id, 'criteria'), requirements: current(t, id, 'requirements') }, by: 'priya', reason: 'Owner proposing with only one other person listed.' }), /needs 2 approvers other than Priya Natarajan, but only 1 stakeholder can approve/);
   // Direct check of the helper.
   assert.equal(signoffFeasibility(t, id, { approvers: 2, riskRequired: true, ownerOnly: false }, ['daniel', 'maya'], 'priya').ok, true);
-  assert.match(signoffFeasibility(t, id, { approvers: 2, riskRequired: true, ownerOnly: false }, ['maya', 'elena'], 'priya').reason, /No Risk approver/);
+  assert.match(signoffFeasibility(t, id, { approvers: 2, riskRequired: true, ownerOnly: false }, ['maya', 'elena'], 'priya').reason, /holds the Risk approver right/);
 });
 
 test('the proposer can withdraw an open proposal; it is recorded with a reason and a new proposal can follow', () => {
   let s = initialState();
   const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
   s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
-  assert.throws(() => withdrawProposal(s, RR, 'P-1', { by: 'maya', reason: 'Not mine to withdraw.' }), /Only the proposer can withdraw/);
-  assert.throws(() => withdrawProposal(s, RR, 'P-1', { by: 'priya', reason: 'no' }), /needs a reason/);
+  assert.throws(() => withdrawProposal(s, RR, 'P-1', { by: 'maya', reason: 'Not mine to withdraw.' }), /Only the person who proposed this change can withdraw it/);
+  assert.throws(() => withdrawProposal(s, RR, 'P-1', { by: 'priya', reason: 'no' }), /Say why you.re withdrawing it/);
   const before = s.activity.length;
   s = withdrawProposal(s, RR, 'P-1', { by: 'priya', reason: 'Waiting for the next twenty cases instead.' });
   const p = getProposal(s, RR, 'P-1');
@@ -1565,7 +1568,7 @@ test('decisionRequired, proposed, lastDecisionId and lastEvaluated are derived, 
   assert.equal(lastDecisionId(s, RR), 'AC-05');
   assert.equal(lastEvaluated(s, RR), seed.TODAY);
   // Nothing proposed: cannot authorize.
-  assert.match(canAuthorize(selectDecision(s, RR, 'expand'), RR).reason, /No authority change is proposed/);
+  assert.match(canAuthorize(selectDecision(s, RR, 'expand'), RR).reason, /No one has proposed more authority/);
   assert.equal(canAuthorize(selectDecision(s, RR, 'restrict'), RR).ok, true, 'restricting needs no proposed expansion');
   // A test run alone moves lastEvaluated.
   let [b, bid] = blankCap();
@@ -1655,14 +1658,14 @@ test('a deactivated person cannot act, propose, approve, author or be a stakehol
   s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
   const p = openProposal(s, RR, 'criteria');
   assert.ok(!p.eligible.includes('elena'), 'not eligible when frozen');
-  assert.throws(() => approveProposal(s, RR, p.id, { by: 'elena' }), /deactivated and cannot approve/);
+  assert.throws(() => approveProposal(s, RR, p.id, { by: 'elena' }), /deactivated, so they can't approve/);
   assert.throws(() => rejectProposal(s, RR, p.id, { by: 'elena', reason: 'Not from here.' }), /deactivated/);
   assert.throws(() => amend(s, RR, 'risk', { value: current(s, RR, 'risk'), author: 'elena', reason: 'Trying anyway.' }), /deactivated and cannot author/);
-  assert.throws(() => authorize(selectDecision(s, RR, 'hold'), RR, { by: 'elena' }), /deactivated and cannot authorize/);
+  assert.throws(() => authorize(selectDecision(s, RR, 'hold'), RR, { by: 'elena' }), /deactivated and cannot make this decision/);
   assert.throws(() => addCapability(s, { name: 'X', owner: 'elena', risk: LOW_RISK, startingLevel: 0 }), /deactivated and cannot own/);
   // Stakeholder lists: cannot add; existing entries stop counting as named stakeholders.
   const [t, id] = withNewCap();
-  assert.throws(() => saveStakeholders(deactivatePerson(t, 'elena', { by: 'maya', reason: 'Left the company.' }), id, { stakeholders: [{ team: 'Finance', person: 'elena' }], by: 'priya' }), /deactivated and cannot be a stakeholder/);
+  assert.throws(() => saveStakeholders(deactivatePerson(t, 'elena', { by: 'maya', reason: 'Left the company.' }), id, { stakeholders: [{ team: 'Finance', person: 'elena' }], by: 'priya' }), /deactivated, so they can.t be a stakeholder/);
   assert.ok(!namedStakeholders(s, RR).includes('elena'));
   // The seeded positions on record still name her; history is not rewritten.
   assert.ok(current(s, RR, 'stakeholders').some((x) => x.person === 'elena'));
@@ -1697,7 +1700,7 @@ test('repro: relabelling a team cannot create a Risk approver; the loosening doe
   const value = { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) };
   s = proposeAmendment(s, RR, 'criteria', { value, by: 'maya', reason: REASON });
   s = approveProposal(s, RR, 'P-1', { by: 'elena' });
-  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /at least one approver must be from Risk/);
+  assert.throws(() => approveProposal(s, RR, 'P-1', { by: 'priya' }), /Risk approval still needed\. The last approval must come from someone with the Risk approver right/);
   assert.equal(getProposal(s, RR, 'P-1').status, 'open');
   assert.equal(versionsInForce(s, RR).requirements, 1, 'nothing applied');
   // Only a recorded right counts: Daniel completes it.
@@ -2421,7 +2424,7 @@ test('a tightening-only change applies straight away as a recorded amendment, su
   assert.equal(current(s, RR, 'criteria').find((x) => x.id === 'quality').target, '≥ 95% correct decisions');
   const e = s.activity[0];
   assert.deepEqual([e.kind, e.afterEvidence, isSurfaced(e)], ['amendment', true, true]);
-  assert.match(e.body, /Tightening only, so no sign-off/);
+  assert.match(e.body, /No approval was needed because every change only made a target stricter/);
 });
 
 test('tightening-only is decided by software; every way around it goes to sign-off', () => {
@@ -2434,11 +2437,11 @@ test('tightening-only is decided by software; every way around it goes to sign-o
     return tighteningOnly({ criteria: current(s, RR, 'criteria'), requirements: current(s, RR, 'requirements') }, value).reason;
   };
   // Mixed: tighten one, loosen another.
-  assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, requirements: { override: 'Override rate < 25%' } }), 'mixed'), /loosened/);
+  assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, requirements: { override: 'Override rate < 25%' } }), 'mixed'), /made easier to meet/);
   // Removing a row while tightening another.
   assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, drop: ['adoption'] }), 'removal'), /removes "Agent adoption"/);
   // Equal value, rewritten: not stricter.
-  assert.match(opens(bar(s, { criteria: { quality: '≥ 92.0% correct decisions' } }), 'equal'), /not stricter/);
+  assert.match(opens(bar(s, { criteria: { quality: '≥ 92.0% correct decisions' } }), 'equal'), /isn't any stricter/);
   // A renamed row, even with a stricter number.
   assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, rename: { quality: 'Quality (sampled)' } }), 'rename'), /changes the name/);
   // A changed unit.
@@ -2451,12 +2454,12 @@ test('tightening-only is decided by software; every way around it goes to sign-o
   // A changed note alongside a tightened number.
   assert.match(opens(bar(s, { criteria: { quality: '≥ 95% correct decisions' }, note: { quality: 'Now measured differently.' } }), 'note'), /changes the note/);
   // A row with no comparable threshold.
-  assert.match(opens(bar(s, { criteria: { speed: '60% faster average resolution' } }), 'no threshold'), /no threshold/);
+  assert.match(opens(bar(s, { criteria: { speed: '60% faster average resolution' } }), 'no threshold'), /doesn.t have a number we can compare/);
 });
 
 test('an open criteria proposal blocks a tightening-only change until it closes', () => {
   let s = proposeAmendment(initialState(), RR, 'criteria', { value: bar(initialState(), { requirements: { override: 'Override rate < 25%' } }), by: 'priya', reason: REASON });
-  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: bar(s, TIGHTEN), by: 'priya', reason: REASON }), /already awaiting sign-off/);
+  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: bar(s, TIGHTEN), by: 'priya', reason: REASON }), /already needs approval/);
 });
 
 test('threshold parts compare only the number', () => {
@@ -2474,7 +2477,7 @@ test('repro: a non-stakeholder raising the case minimum while a decision is pend
   assert.equal(capData(s, RR).proposals.length, n + 1, 'a proposal opens');
   assert.deepEqual([readiness(s, RR).met, readiness(s, RR).total], [before.met, before.total], 'readiness unchanged: 5 of 6');
   const p = capData(s, RR).proposals[n];
-  assert.match(p.shortcutDeclined, /Only the owner or a named stakeholder/);
+  assert.match(p.shortcutDeclined, /Only the owner or a listed stakeholder/);
 });
 
 test('a named stakeholder tightening with no decision pending applies directly', () => {
@@ -2497,7 +2500,7 @@ test('a stakeholder tightening while a decision is pending goes to sign-off, and
   s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'priya', reason: 'A stricter quality bar for this expansion.' });
   const p = capData(s, RR).proposals[n];
   assert.ok(p, 'a proposal opens');
-  assert.match(p.shortcutDeclined, /expansion decision is pending/);
+  assert.match(p.shortcutDeclined, /decision about more authority is open/);
   assert.deepEqual(barChangesSinceDecisionOpened(s, RR), [], 'nothing applied yet');
   for (const by of ['daniel', 'maya', 'sofia']) {
     if (getProposal(s, RR, p.id).status !== 'open') break;
@@ -3450,7 +3453,7 @@ test('B1 bypass: expected outcomes can\'t be edited after authorization', () => 
   const s = authorize(pendingRR(), RR);
   const rec = s.decisionRecords.at(-1);
   // The open decision is closed, so there is nothing to edit through.
-  assert.throws(() => setOutcome(s, RR, 0, 'target', 'at least 90% faster'), /can't be edited after authorization/);
+  assert.throws(() => setOutcome(s, RR, 0, 'target', 'at least 90% faster'), /already been made, so its targets can't be changed/);
   // And the record itself is frozen in place.
   assert.ok(Object.isFrozen(rec.expectedOutcomes) && Object.isFrozen(rec.expectedOutcomes[0]));
   assert.throws(() => { rec.expectedOutcomes[0].target = 'at least 90% faster'; }, TypeError);
@@ -3519,11 +3522,11 @@ test('#89 loophole: an automatic restriction closes an open proposal, so L2 → 
   s = recordReview(s, RR, { by: 'daniel', whatHappened: 'Severe error rate crossed the threshold.', cause: 'Idempotency check failed on retries.', changes: 'Added a duplicate guard and a test.' });
   // The probe: select Expand, rationale, two outcomes, authorize. Entering
   // outcomes is already refused (no open decision)...
-  assert.throws(() => setOutcome(selectDecision(s, RR, 'expand'), RR, 0, 'metric', 'Resolution time'), /No decision is open/);
+  assert.throws(() => setOutcome(selectDecision(s, RR, 'expand'), RR, 0, 'metric', 'Resolution time'), /already been made/);
   // ...and with them forced into the state, authorizing is refused too.
   const probe = tryExpand(s);
   assert.equal(canAuthorize(probe, RR).ok, false);
-  assert.match(canAuthorize(probe, RR).reason, /No authority change is proposed/);
+  assert.match(canAuthorize(probe, RR).reason, /No one has proposed more authority/);
   assert.throws(() => authorize(probe, RR));
   assert.equal(getCapability(probe, RR).authority.level, 2);
   // A new proposal can only be one level up from the new level.
@@ -3558,7 +3561,7 @@ test('#89 loophole: a stale proposal (equal, below, or more than one level up) n
     const s = tryExpand(withProposal(base, level));
     const c = canAuthorize(s, RR);
     assert.equal(c.ok, false, `proposal for Level ${level} at Level 3`);
-    assert.match(c.reason, /Propose the next level, Level 4, again/);
+    assert.match(c.reason, /Propose Level 4 instead/);
     assert.throws(() => authorize(s, RR));
   }
   // nextAuthority moves exactly one level, to the proposal, or not at all.
@@ -3712,9 +3715,9 @@ test('C1 bypass: the owner must be an active person, and the dates must make sen
     [{ owner: 'ai' }, /active person/],
     [{ scope: 'short' }, /Scope/],
     [{ reviewerNotes: 'Be careful.' }, /what reviewers need to know/],
-    [{ startDate: '2026-10-06' }, /can't start before the decision/],
-    [{ startDate: '2026-02-30' }, /Start date: a date is needed/],
-    [{ startDate: 'next week' }, /Start date: a date is needed/],
+    [{ startDate: '2026-10-06' }, /start date can't be before the decision/],
+    [{ startDate: '2026-02-30' }, /Add a start date/],
+    [{ startDate: 'next week' }, /Add a start date/],
     [{ reviewDate: '2026-10-08' }, /after the start date/],
     [{ reviewDate: '2026-10-01' }, /after the start date/],
     [{ reviewDate: '2027-02-01' }, /within 90 days/],
@@ -3731,7 +3734,7 @@ test('C1 bypass: the owner must be an active person, and the dates must make sen
 
 test('C1 bypass: the rollout plan can\'t be edited after authorization', () => {
   const s = authorize(pendingRR(), RR);
-  assert.throws(() => setRolloutField(s, RR, 'reviewDate', '2026-12-31'), /can't be edited after authorization/);
+  assert.throws(() => setRolloutField(s, RR, 'reviewDate', '2026-12-31'), /already been made, so its rollout plan can't be changed/);
   const rec = s.decisionRecords.at(-1);
   assert.throws(() => { rec.rolloutPlan.reviewDate = '2026-12-31'; }, TypeError);
   assert.throws(() => { rec.rolloutPlan.ownerAt.name = 'Someone else'; }, TypeError);
@@ -3947,32 +3950,32 @@ test('#96: the decision page numbers its steps and the checklist says exactly wh
   const marks = (page) => [...page.matchAll(/<li class="check-item (is-done|is-blocked)">.*?<a href="#[a-z-]+">([A-Za-z ]+)<\/a>/g)].map((m) => `${m[2]}:${m[1] === 'is-done' ? '✓' : '✗'}`);
   // No option yet: only the option and the rationale are asked for.
   const none = String(decisionWorkspaceView(initialState(), RR));
-  assert.deepEqual(marks(none), ['Option:✗', 'Rationale:✓']);
+  assert.deepEqual(marks(none), ['Option:✗', 'Your reason:✓']);
   assert.match(none, /Step 1:<\/strong> choose an option/);
   assert.match(none, /data-action="authorize"[^>]*disabled/);
   // The seeded expansion: every step done, Authorize enabled.
   const ready = String(decisionWorkspaceView(pendingRR(), RR));
-  assert.deepEqual(marks(ready), ['Option:✓', 'Conditions:✓', 'Rollout plan:✓', 'Expected impact:✓', 'Rationale:✓']);
-  assert.match(ready, /Step 2 · Conditions/);
+  assert.deepEqual(marks(ready), ['Option:✓', 'Limits:✓', 'Rollout plan:✓', 'Expected impact:✓', 'Your reason:✓']);
+  assert.match(ready, /Step 2 · Limits/);
   assert.match(ready, /Step 3 · Rollout plan/);
   assert.match(ready, /Step 4 · Expected impact/);
-  assert.match(ready, /Step 5 · Decision rationale/);
+  assert.match(ready, /Step 5 · Why are you making this decision\?/);
   assert.match(ready, /<details class="context" open>/);
   assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);
   // Each blocker shows against its own step, with its first problem.
   const noPlan = String(decisionWorkspaceView(setRolloutField(pendingRR(), RR, 'reviewDate', ''), RR));
-  assert.match(noPlan, /is-blocked">.*?Rollout plan<\/a><span class="muted small">: Review date: a date is needed\./s);
+  assert.match(noPlan, /is-blocked">.*?Rollout plan<\/a><span class="muted small">: Add a review date\./s);
   assert.match(noPlan, /data-action="authorize"[^>]*disabled/);
   const noImpact = String(decisionWorkspaceView(setOutcome(pendingRR(), RR, 1, 'target', 'cheaper'), RR));
-  assert.match(noImpact, /Expected impact<\/a><span class="muted small">: Outcome 2 needs a target with a number\./);
+  assert.match(noImpact, /Expected impact<\/a><span class="muted small">: Target 2 needs a number\./);
   const noWhy = String(decisionWorkspaceView(setRationale(pendingRR(), RR, 'ok'), RR));
-  assert.match(noWhy, /Rationale<\/a><span class="muted small">: Write a decision rationale/);
+  assert.match(noWhy, /Your reason<\/a><span class="muted small">: Say why you&#39;re making this decision/);
   // Something canAuthorize refuses that no step explains is listed too: here,
   // a review lock after an automatic restriction, forced onto an open decision.
   let locked = pendingRR();
   locked = { ...locked, capabilityData: { ...locked.capabilityData, [RR]: { ...capData(locked, RR), reviewRequired: true } } };
   const lockedPage = String(decisionWorkspaceView(locked, RR));
-  assert.match(lockedPage, /is-blocked"><span class="check-mark" aria-hidden="true">✗<\/span> A post-incident review must be recorded/);
+  assert.match(lockedPage, /is-blocked"><span class="check-mark" aria-hidden="true">✗<\/span> The AI was moved back after crossing a safety limit\. Record what happened \(the post-incident review\)/);
   assert.match(lockedPage, /data-action="authorize"[^>]*disabled/);
 });
 
@@ -3984,10 +3987,10 @@ test('D1: a one-page brief for seeded, new and automatic decisions, from recorde
   // Seeded records.
   for (const id of ['AC-01', 'AC-02', 'AC-03']) {
     const t = text(initialState(), id);
-    for (const h of ['What changed', 'Why', 'The evidence', 'The disagreement', 'Expected impact', 'When it gets pulled back']) assert.ok(t.includes(h), `${id}: ${h}`);
+    for (const h of ['What changed', 'Why', 'The evidence', 'Where people stood', 'Expected impact', 'When it gets pulled back']) assert.ok(t.includes(h), `${id}: ${h}`);
     assert.match(t, /Built only from decision record/);
   }
-  assert.match(text(initialState(), 'AC-02'), /predates expected outcomes/);
+  assert.match(text(initialState(), 'AC-02'), /made before expected outcomes were required/);
   // A new expansion carries its expected impact, rollout and the positions as recorded.
   let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
   const t4 = text(s, 'AC-04');
@@ -3995,7 +3998,7 @@ test('D1: a one-page brief for seeded, new and automatic decisions, from recorde
   assert.match(t4, /Authorized by Maya Chen/);
   assert.match(t4, /AI cost per case: ≤ \$0.06/);
   assert.match(t4, /review on Oct 22/);
-  assert.match(t4, /Not unanimous: 4 different positions among 5 people/);
+  assert.match(t4, /People disagreed: 4 different positions among 5 people/);
   assert.match(t4, /Risk \(Daniel Okafor\): Hold high-value cases/);
   assert.match(t4, /3 forbidden attempts or false claims within 7 days/);
   // Later changes to the live contract don't change the brief: it reads the version in force.
@@ -4005,7 +4008,7 @@ test('D1: a one-page brief for seeded, new and automatic decisions, from recorde
   // An automatic restriction says no person decided it.
   s = simulateBreach(s, RR);
   const t5 = text(s, s.decisionRecords.at(-1).id);
-  assert.match(t5, /Applied automatically by a contract rule/);
+  assert.match(t5, /The AI was moved back to Draft after crossing a safety limit \(automatic restriction\)/);
   assert.match(t5, /Not applicable: no person decided this/);
   assert.match(t5, /Not applicable: authority did not expand/);
   // Linked from the record; the old address still resolves.
@@ -4110,4 +4113,113 @@ test('Overview with nothing outstanding says so in each section', () => {
   assert.match(out, /Nothing is waiting for approval\./);
   assert.match(out, /No results are changing what the AI may do\./);
   assert.match(out, /No change planned/);
+});
+
+// Copy pass, part 2: bugs found while rewording.
+test('copy: the decision preview says what WOULD happen; the record says what is in force', () => {
+  const s = pendingRR();
+  const preview = conditionsPreview(seed.defaultConditions, cap(s));
+  assert.match(preview, /^The AI would approve standard refunds/);
+  assert.doesNotMatch(preview, /can now|continue to/);
+  const page = String(decisionWorkspaceView(s, RR));
+  assert.match(page, /The AI would approve standard refunds of \$50 or less/);
+  assert.doesNotMatch(page, /The AI can now/);
+  // Other options preview the level they would move to, from the open proposal.
+  const hold = String(decisionWorkspaceView(selectDecision(initialState(), RR, 'hold'), RR));
+  assert.match(hold, /No change\. The AI stays at Draft while more evidence comes in\./);
+  const expand = String(decisionWorkspaceView(selectDecision(initialState(), RR, 'expand'), RR));
+  assert.match(expand, /would move from Level 2 — Draft to Level 3 — Act Within Limits\./);
+  // Once authorized, the stored scope is present tense, and the record and the brief show it.
+  const after = authorize(s, RR);
+  const rec = after.decisionRecords.at(-1);
+  assert.match(rec.scope, /^The AI handles refunds of \$50 or less on its own/);
+  assert.doesNotMatch(rec.scope, /would/);
+  assert.ok(String(decisionRecordView(after, rec.id)).includes(rec.scope));
+  assert.ok(String(decisionBriefView(after, rec.id)).includes(rec.scope));
+});
+
+test('copy: Risk guidance names the Risk approver right on People, never a team or the list', () => {
+  // The refusal when no other stakeholder can give the Risk approval.
+  const s = initialState();
+  const reason = signoffFeasibility(s, RR, { approvers: 2, riskRequired: true, ownerOnly: false }, ['maya', 'elena'], 'priya').reason;
+  assert.match(reason, /Risk approver right/);
+  assert.match(reason, /set on People/);
+  assert.doesNotMatch(reason, /Risk person to the stakeholders/);
+  // The stakeholder editor, before and after results.
+  const fresh = addCapability(s, { name: 'Copy check', owner: 'priya', risk: { impact: 'High', exposure: 'Financial / consequential', reversibility: 'Difficult to reverse' }, startingLevel: 0 });
+  const id = fresh.capabilities.at(-1).id;
+  const editor = String(stakeholdersEditorView(fresh, id, new URLSearchParams('')));
+  assert.match(editor, /Risk approver right/);
+  assert.match(editor, /set on People/);
+  const locked = String(stakeholdersEditorView(s, RR, new URLSearchParams('')));
+  assert.match(locked, /Who counts as Risk comes from the Risk approver right on People, not from the team in this list\./);
+  assert.doesNotMatch(locked, /own team/);
+  // The proposal screen says the same, and roles read as the right, not a team.
+  const p = proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON });
+  assert.match(String(proposalView(p, RR, 'P-1', new URLSearchParams(''))), /Risk approval comes from someone with the Risk approver right \(set on People\)/);
+  assert.equal(roleLabel('risk'), 'a Risk approver');
+});
+
+test('copy: the approval rule reads as a sentence and as progress, and assembled sentences are grammatical', () => {
+  assert.equal(requirementLabel({ approvers: 1, ownerOnly: true }), 'The owner must approve it.');
+  assert.equal(requirementLabel({ approvers: 1, ownerOnly: false }), 'One other stakeholder must approve it, because the owner proposed it.');
+  assert.equal(requirementLabel({ approvers: 2, riskRequired: true }), 'Two people must approve it, including someone with the Risk approver right.');
+  assert.equal(requirementLabel({ approvers: 2, riskRequired: true }, []), '0 of 2 approvals · Risk approval still needed');
+  assert.equal(requirementLabel({ approvers: 2, riskRequired: true }, [{ by: 'maya', role: 'owner' }]), '1 of 2 approvals · Risk approval still needed');
+  assert.equal(requirementLabel({ approvers: 2, riskRequired: true }, [{ by: 'maya', role: 'owner' }, { by: 'daniel', role: 'risk' }]), '2 of 2 approvals');
+  assert.equal(requirementLabel({ approvers: 1, ownerOnly: true }, []), '0 of 1 approval');
+  // Every screen and message built from it.
+  let s = proposeAmendment(initialState(), RR, 'criteria', { value: { criteria: current(initialState(), RR, 'criteria'), requirements: loosenedRequirements(initialState()) }, by: 'priya', reason: REASON });
+  const texts = [
+    String(proposeView(s, TC, 'criteria', new URLSearchParams(''))),
+    String(proposeView(s, RR, 'contract', new URLSearchParams(''))),
+    String(proposalView(s, RR, 'P-1', new URLSearchParams(''))),
+    s.activity[0].title, s.activity[0].body,
+  ];
+  s = approveProposal(s, RR, 'P-1', { by: 'maya' });
+  texts.push(s.activity[0].title, s.activity[0].body);
+  assert.match(s.activity[0].title, /Maya Chen approved a target change \(1 of 2 approvals · Risk approval still needed\)/);
+  assert.match(s.activity[0].body, /1 more approval needed: Risk approval still needed\./);
+  for (const t of texts) {
+    assert.doesNotMatch(t, /the owner approve\b|the owner decide\b|approvers?, at least one from Risk approve|never the proposer|named stakeholder \(the owner proposed\)/, t.slice(0, 80));
+    assert.doesNotMatch(t, /P-1 after evidence|Amendment/);
+  }
+});
+
+test('copy: an activity message names the decision option, never its id', () => {
+  let s = atL3WithL4Proposal();
+  s = authorize(setRationale(selectDecision(s, RR, 'restrict'), RR, 'Pulling back while the new limits settle in.'), RR, { by: 'maya' });
+  const note = closedNote(s);
+  assert.match(note.body, /Maya Chen decided Restrict \(AC-05\), which moved it to Level 2, so the proposal to move to Level 4 was closed\. To give it more authority later, propose Level 3\./);
+  for (const a of s.activity.slice(0, 3)) for (const o of seed.DECISION_OPTIONS) assert.doesNotMatch(`${a.title} ${a.body}`, new RegExp(`\\b${o.id} decision\\b`));
+});
+
+test('copy: a first version shows its contents readably, not as JSON', () => {
+  for (const kind of ['contract', 'criteria', 'stakeholders', 'risk']) {
+    const page = String(versionsView(initialState(), RR, new URLSearchParams(`kind=${kind}`)));
+    assert.match(page, /<summary>Full contents<\/summary>/, kind);
+    assert.doesNotMatch(page, /<pre|version-raw|"\w+":/, kind);
+  }
+  const contract = String(versionsView(initialState(), RR, new URLSearchParams('kind=contract')));
+  assert.match(contract, /<dt>The AI can access<\/dt>|<dt>AI may<\/dt>|<dt>The AI may<\/dt>/);
+});
+
+test('copy: the before/after readiness warning does not ask approvers for a reason the form cannot take', () => {
+  const s = proposeAmendment(initialState(), RR, 'criteria', { value: { criteria: current(initialState(), RR, 'criteria'), requirements: loosenedRequirements(initialState()) }, by: 'priya', reason: REASON });
+  const page = String(proposalView(s, RR, 'P-1', new URLSearchParams('')));
+  assert.match(page, /This change makes the AI look more ready, with no new evidence\./);
+  assert.doesNotMatch(page, /say which/i);
+  // Approving has no reason field, so the warning points to rejecting with a reason instead.
+  assert.doesNotMatch(page, /data-action="proposal-approve"[^>]*>[^<]*<\/button>\s*<input/);
+  assert.match(page, /otherwise reject it and say why/);
+});
+
+test('copy: an automatic restriction leads with what happened, then the formal term', () => {
+  const s = simulateBreach(authorize(pendingRR(), RR), RR);
+  const rec = s.decisionRecords.at(-1);
+  const page = String(decisionRecordView(s, rec.id));
+  assert.match(page, /<strong>The AI was moved back to Draft after crossing a safety limit\.<\/strong>/);
+  assert.ok(page.indexOf('moved back to Draft') < page.indexOf('Formally, this is an automatic restriction'));
+  const list = String(decisionWorkspaceView(s, RR));
+  assert.match(list, /the AI was moved back to Draft after crossing a safety limit/);
 });

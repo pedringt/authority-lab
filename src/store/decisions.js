@@ -4,23 +4,26 @@
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { versionsInForce, proposedAuthority, decisionRequired, levelName, authorityLabel, readiness, testSummary } from './selectors.js';
 import { people, snapshotPerson, requireActive, isActivePerson } from './people.js';
+import { DECISION_OPTIONS } from '../data/seed.js';
 
 export function actionNoun(cap) {
   return (cap && cap.actionNoun) || 'actions';
 }
 
+// What Expand with limits would allow, shown before anyone has decided. It
+// says what WOULD happen; the record's scope (scopeText) says what is in force.
 export function conditionsPreview(conditions, cap) {
   const noun = actionNoun(cap);
   const gated = [];
-  if (conditions.noFraudFlag) gated.push('fraud-signaled');
-  if (conditions.policyClear) gated.push('ambiguous');
+  if (conditions.noFraudFlag) gated.push('fraud-flagged');
+  if (conditions.policyClear) gated.push('unclear-policy');
   gated.push('high-value');
   if (conditions.policyClear) gated.push('policy-exception');
   if (conditions.noChargeback) gated.push('chargeback');
   return (
-    `The AI can now automatically approve standard ${noun} of $${conditions.maxValue} or less when its own reported confidence is at least ${conditions.minConfidence}% (model-reported, not verified)` +
+    `The AI would approve standard ${noun} of $${conditions.maxValue} or less on its own when its confidence is at least ${conditions.minConfidence}% (model-reported, not verified)` +
     (conditions.maxDailyTotal != null || conditions.maxDailyCount != null ? `, up to ${[conditions.maxDailyTotal != null ? `$${conditions.maxDailyTotal}` : null, conditions.maxDailyCount != null ? `${conditions.maxDailyCount} ${noun}` : null].filter(Boolean).join(' and ')} a day across all customers. ` : '. ') +
-    `${capitalize(joinList(gated))} cases continue to require human review.`
+    `A person would still review ${joinList(gated)} cases.`
   );
 }
 
@@ -32,30 +35,39 @@ export function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// The scope written on a decision record: what is in force once decided.
+// `next` is the authority after the decision; without it the level-specific
+// lines fall back to the capability's current level.
 export function scopeText(option, conditions, cap, next = null) {
   const noun = actionNoun(cap);
   if (next && next.level === 2 && (option === 'expand' || option === 'expand-limits')) {
-    return `Draft. The AI prepares ${noun} for a person to approve on every case; nothing happens without that approval. Limited pilot.`;
+    return `The AI drafts ${noun} and a person approves every one before anything happens (Draft, limited pilot).`;
   }
+  const level = (next || (cap && cap.authority) || { level: 0 }).level;
   switch (option) {
     case 'expand':
-      return `Automatic ${noun} on all eligible cases under approved policy conditions.`;
+      return `The AI handles all eligible ${noun} on its own, within policy.`;
     case 'expand-limits':
-      return `Automatic ${noun} ≤ $${conditions.maxValue} under approved policy conditions` +
-        `${conditions.noFraudFlag ? ', no fraud flag' : ''}` +
-        `${conditions.noChargeback ? ', no active chargeback' : ''}` +
-        `, confidence ≥ ${conditions.minConfidence}%. Everything else requires human approval.`;
+      return `The AI handles ${noun} of $${conditions.maxValue} or less on its own, within policy` +
+        `${conditions.noFraudFlag ? ', with no fraud flag' : ''}` +
+        `${conditions.noChargeback ? ', with no active chargeback' : ''}` +
+        `, when its confidence is at least ${conditions.minConfidence}% (model-reported, not verified). Everything else goes to a person.`;
     case 'hold':
-      return 'Authority unchanged. Draft with human approval on every case while more evidence is gathered.';
+      return `No change. The AI stays at ${levelName(level)} while more evidence comes in.`;
     case 'restrict':
-      return `Recommend only. A human prepares and approves every decision.`;
+      return level === 1 ? 'The AI only makes suggestions. A person prepares and approves every case.' : `Authority reduced. The AI moves down to ${levelName(level)}.`;
     case 'suspend':
-      return `Capability disabled. The AI observes requests but produces no output.`;
+      return 'The AI is switched off for this work. It sees requests but does nothing with them.';
     case 'redesign':
-      return 'Capability returned to development. No operational output until a new test cycle completes.';
+      return 'Sent back for changes. The AI does nothing for customers until it passes new tests.';
     default:
       return '';
   }
+}
+
+// An option's name for people ("Expand with limits"), never its id.
+export function optionName(option) {
+  return (DECISION_OPTIONS.find((o) => o.id === option) || { name: option }).name;
 }
 
 // An expansion moves exactly one level, to the open proposal. Without a
@@ -95,7 +107,7 @@ export function evidenceSnapshot(state, capabilityId) {
   }
   readiness(state, capabilityId).unmet.forEach((u) => {
     const n = u.text.match(/\d+/);
-    out.push(n ? `${u.current} ${u.text.replace(/^Minimum \d+ /, '').toLowerCase()} (requirement: ${n[0]})` : `${u.text}: ${u.current}`);
+    out.push(n ? `${u.current} ${u.text.replace(/^Minimum \d+ /, '').toLowerCase()} (needed: ${n[0]})` : `${u.text}: ${u.current}`);
   });
   return out;
 }
@@ -133,15 +145,15 @@ export function outcomeChecks(outcomes) {
   const rows = (Array.isArray(outcomes) ? outcomes : []).map((o) => ({ metric: String((o && o.metric) || '').trim(), target: String((o && o.target) || '').trim() }));
   const filled = rows.filter((o) => o.metric || o.target);
   const errors = [];
-  if (filled.length < OUTCOMES_MIN) errors.push(`Add at least ${OUTCOMES_MIN} expected outcomes, each with a number (for example "Resolution time: at least 35% faster").`);
-  if (filled.length > OUTCOMES_MAX) errors.push(`At most ${OUTCOMES_MAX} expected outcomes.`);
+  if (filled.length < OUTCOMES_MIN) errors.push(`Add at least ${OUTCOMES_MIN} targets, each with a number (for example "Resolution time: at least 35% faster").`);
+  if (filled.length > OUTCOMES_MAX) errors.push(`Use at most ${OUTCOMES_MAX} targets.`);
   filled.forEach((o, i) => {
-    if (o.metric.length < 3) errors.push(`Outcome ${i + 1} needs a metric.`);
-    if (o.metric.length > 80 || o.target.length > 60) errors.push(`Outcome ${i + 1} is too long.`);
-    if (!parseTarget(o.target)) errors.push(`Outcome ${i + 1} needs a target with a number.`);
+    if (o.metric.length < 3) errors.push(`Target ${i + 1}: say what should improve.`);
+    if (o.metric.length > 80 || o.target.length > 60) errors.push(`Target ${i + 1} is too long.`);
+    if (!parseTarget(o.target)) errors.push(`Target ${i + 1} needs a number.`);
   });
   const metrics = filled.map((o) => o.metric.toLowerCase());
-  if (new Set(metrics).size !== metrics.length) errors.push('Each expected outcome needs a different metric.');
+  if (new Set(metrics).size !== metrics.length) errors.push('Each target needs to measure something different.');
   return { ok: !errors.length, errors, outcomes: filled.map((o) => ({ ...o, ...parseTarget(o.target) })) };
 }
 
@@ -155,7 +167,7 @@ export function isExpansion(state, capabilityId, option) {
 // Edit one expected-outcome row on the open decision. Refused once the
 // decision is recorded: the outcomes are part of the record from then on.
 export function setOutcome(state, capabilityId, index, field, value) {
-  if (!decisionRequired(state, capabilityId)) throw new Error('No decision is open. Expected outcomes are part of the decision record and can\'t be edited after authorization.');
+  if (!decisionRequired(state, capabilityId)) throw new Error('This decision has already been made, so its targets can\'t be changed.');
   const i = Number(index);
   if (!(Number.isInteger(i) && i >= 0 && i < OUTCOMES_MAX)) throw new Error(`An expected outcome is row 1 to ${OUTCOMES_MAX}.`);
   if (field !== 'metric' && field !== 'target') throw new Error('An expected outcome has a metric and a target.');
@@ -187,23 +199,23 @@ const days = (a, b) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00
 export function rolloutChecks(state, plan) {
   const p = Object.fromEntries(ROLLOUT_FIELDS.map((f) => [f.key, String((plan && plan[f.key]) || '').trim()]));
   const errors = [];
-  if (!p.owner || !Object.hasOwn(people(state), p.owner) || !isActivePerson(state, p.owner)) errors.push('Choose an active person as the rollout owner.');
+  if (!p.owner || !Object.hasOwn(people(state), p.owner) || !isActivePerson(state, p.owner)) errors.push('Choose a rollout owner (an active person).');
   for (const f of ROLLOUT_FIELDS.filter((x) => x.min)) {
     if (p[f.key].length < f.min) errors.push(`${f.label}: ${f.key === 'reviewerNotes' ? 'say what reviewers need to know (a sentence or two)' : 'fill this in'}.`);
     if (p[f.key].length > f.max) errors.push(`${f.label} is too long.`);
   }
-  if (!isDate(p.startDate)) errors.push('Start date: a date is needed.');
-  else if (p.startDate < state.today) errors.push('Start date: a rollout can\'t start before the decision.');
-  if (!isDate(p.reviewDate)) errors.push('Review date: a date is needed.');
-  else if (isDate(p.startDate) && !(p.reviewDate > p.startDate)) errors.push('Review date: after the start date.');
-  else if (isDate(p.startDate) && days(p.startDate, p.reviewDate) > ROLLOUT_REVIEW_WITHIN_DAYS) errors.push(`Review date: within ${ROLLOUT_REVIEW_WITHIN_DAYS} days of the start.`);
+  if (!isDate(p.startDate)) errors.push('Add a start date.');
+  else if (p.startDate < state.today) errors.push('The start date can\'t be before the decision.');
+  if (!isDate(p.reviewDate)) errors.push('Add a review date.');
+  else if (isDate(p.startDate) && !(p.reviewDate > p.startDate)) errors.push('The review date must be after the start date.');
+  else if (isDate(p.startDate) && days(p.startDate, p.reviewDate) > ROLLOUT_REVIEW_WITHIN_DAYS) errors.push(`The review date must be within ${ROLLOUT_REVIEW_WITHIN_DAYS} days of the start.`);
   return { ok: !errors.length, errors, plan: p };
 }
 
 // Edit one field of the rollout plan on the open decision. Refused once the
 // decision is recorded: the plan is part of the record from then on.
 export function setRolloutField(state, capabilityId, field, value) {
-  if (!decisionRequired(state, capabilityId)) throw new Error('No decision is open. The rollout plan is part of the decision record and can\'t be edited after authorization.');
+  if (!decisionRequired(state, capabilityId)) throw new Error('This decision has already been made, so its rollout plan can\'t be changed.');
   if (!ROLLOUT_FIELDS.some((f) => f.key === field)) throw new Error('Not a field of the rollout plan.');
   return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rollout: { ...(d.decision.rollout || {}), [field]: String(value ?? '') }, rolloutPrefilled: false } }));
 }
@@ -214,17 +226,18 @@ const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v 
 // page's checklist shows it (#96).
 export const RATIONALE_MIN = 20;
 export const rationaleOk = (text) => Boolean(text) && String(text).trim().length >= RATIONALE_MIN;
+const RATIONALE_HINT = 'Say why you\'re making this decision (a sentence or more).';
 
 export function canAuthorize(state, capabilityId) {
   const d = capData(state, capabilityId).decision;
-  if (!d.option) return { ok: false, reason: 'Choose a decision option first.' };
-  if ((d.option === 'expand' || d.option === 'expand-limits') && !d.proposed) return { ok: false, reason: 'No authority change is proposed for this capability. Propose the next level first.' };
+  if (!d.option) return { ok: false, reason: 'Choose an option first.' };
+  if ((d.option === 'expand' || d.option === 'expand-limits') && !d.proposed) return { ok: false, reason: 'No one has proposed more authority for this AI yet. Propose the next level first.' };
   // Belt and braces: the proposal must be for exactly one level up from now.
   if (d.option === 'expand' || d.option === 'expand-limits') {
     const cap = getCapability(state, capabilityId);
-    if (d.proposed.level !== cap.authority.level + 1) return { ok: false, reason: `The open proposal is for Level ${d.proposed.level}, but ${cap.name} is at Level ${cap.authority.level}. Propose the next level, Level ${cap.authority.level + 1}, again.` };
+    if (d.proposed.level !== cap.authority.level + 1) return { ok: false, reason: `This decision was opened for Level ${d.proposed.level}, but ${cap.name} is now at Level ${cap.authority.level}. Propose Level ${cap.authority.level + 1} instead.` };
   }
-  if (!rationaleOk(d.rationale)) return { ok: false, reason: 'Write a decision rationale (at least a sentence).' };
+  if (!rationaleOk(d.rationale)) return { ok: false, reason: RATIONALE_HINT };
   if (isExpansion(state, capabilityId, d.option)) {
     const oc = outcomeChecks(d.outcomes);
     if (!oc.ok) return { ok: false, reason: `Expected impact: ${oc.errors[0]}` };
@@ -233,7 +246,7 @@ export function canAuthorize(state, capabilityId) {
   }
   const expanding = d.option === 'expand' || d.option === 'expand-limits';
   if (expanding && capData(state, capabilityId).reviewRequired) {
-    return { ok: false, reason: 'A post-incident review must be recorded before authority can expand again.' };
+    return { ok: false, reason: 'The AI was moved back after crossing a safety limit. Record what happened (the post-incident review) before giving it more authority.' };
   }
   return { ok: true };
 }
@@ -253,13 +266,13 @@ export function openConditionText(option, state, capabilityId) {
     case 'expand':
     case 'expand-limits':
       return unmet.length
-        ? `${unmet.map((u) => `${u.text} not met (currently ${u.current})`).join('; ')}. Affected cases remain approval-required pending additional evidence.`
-        : 'All evidence requirements were met at the time of the decision.';
+        ? `${unmet.map((u) => `${u.text} not met yet (currently ${u.current})`).join('; ')}. A person still approves those cases until there is more evidence.`
+        : 'All checks were met when this decision was made.';
     case 'hold':
-      return unmet.length ? `Re-evaluate when: ${unmet.map((u) => u.text.toLowerCase()).join('; ')}.` : 'Re-evaluate on new evidence.';
-    case 'restrict': return 'Return to the previous level requires a new decision with fresh evidence.';
-    case 'suspend': return 'Re-enabling requires a new decision.';
-    case 'redesign': return 'A new test cycle must complete before any authority is restored.';
+      return unmet.length ? `Decide again when: ${unmet.map((u) => u.text.toLowerCase()).join('; ')}.` : 'Decide again when there is new evidence.';
+    case 'restrict': return 'Going back to the previous level needs a new decision with new evidence.';
+    case 'suspend': return 'Turning it back on needs a new decision.';
+    case 'redesign': return 'It needs to pass new tests before it gets any authority back.';
     default: return '';
   }
 }
@@ -267,7 +280,7 @@ export function openConditionText(option, state, capabilityId) {
 export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const check = canAuthorize(state, capabilityId);
   if (!check.ok) throw new Error(check.reason);
-  requireActive(state, by, 'authorize an authority change');
+  requireActive(state, by, 'make this decision');
   const cap = getCapability(state, capabilityId);
   const d = capData(state, capabilityId);
   const option = d.decision.option;
@@ -318,8 +331,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   );
 
   const who = people(state)[by];
-  const verb = {
-    'expand': 'expanded', 'expand-limits': 'expanded', 'hold': 'held', 'restrict': 'restricted', 'suspend': 'suspended', 'redesign': 'returned to redesign',
+  const title = {
+    'expand': 'More authority given', 'expand-limits': 'More authority given, with limits', 'hold': 'Authority kept the same', 'restrict': 'Authority reduced', 'suspend': 'AI switched off', 'redesign': 'Sent back for changes',
   }[option];
   const activity = [
     {
@@ -327,10 +340,10 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
       date: state.today,
       kind: 'authority',
       surfaced: true,
-      title: `Authority ${verb}`,
+      title,
       body: option === 'hold'
-        ? `${cap.name} stays at ${authorityLabel(previous)}. Authorized by ${who.name}.`
-        : `${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)}. Authorized by ${who.name}.`,
+        ? `${cap.name} stays at ${authorityLabel(previous)}. Decided by ${who.name}.`
+        : `${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)}. Decided by ${who.name}.`,
       capabilityId: cap.id,
       link: `#/decisions/${id}`,
     },
@@ -340,7 +353,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   // Monitoring applies to autonomous authority (Level 3 and above). A move to
   // Draft starts a pilot, which is human-approved on every case.
   const expanding = (option === 'expand' || option === 'expand-limits') && next.level >= 3;
-  const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'Authority automatically returns to Draft if the severe error rate exceeds 5% across the rolling 50-case window.' };
+  const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'If more than 5% of the last 50 cases have a severe error, the AI is moved back to Draft automatically.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
   let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null }, monitoring });
@@ -348,7 +361,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   // A restrict, suspend or redesign decided while a proposal to expand was
   // open closes that proposal too, and says so.
   if (d.decision.proposed && next.level < previous.level) {
-    s = logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: the open proposal to move to Level ${d.decision.proposed.level} was closed by this ${option} decision (${id}). Any expansion needs a new proposal, one level up from Level ${next.level}.`, capabilityId: cap.id, link: `#/decisions/${id}` });
+    s = logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: ${who.name} decided ${optionName(option)} (${id}), which moved it to Level ${next.level}, so the proposal to move to Level ${d.decision.proposed.level} was closed. To give it more authority later, propose Level ${next.level + 1}.`, capabilityId: cap.id, link: `#/decisions/${id}` });
   }
   return s;
 }
@@ -357,20 +370,20 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
 // a recorded test run. Used to take a new capability to Draft (its second record).
 export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   const cap = getCapability(state, capabilityId);
-  if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  requireActive(state, by, 'propose an authority change');
-  if (decisionRequired(state, capabilityId)) throw new Error('A decision is already open for this capability.');
-  if (cap.status === 'not-delegated') throw new Error('This capability is not delegated by design. Start with a new decision record if that should change.');
+  if (!cap) throw new Error('This capability no longer exists.');
+  requireActive(state, by, 'propose more authority');
+  if (decisionRequired(state, capabilityId)) throw new Error('A decision is already open for this AI. Finish it first.');
+  if (cap.status === 'not-delegated') throw new Error('This work is not delegated by design: it was deliberately kept with people, so the AI has no authority here.');
   const target = Number(level);
   if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
-  if (!capData(state, capabilityId).testRun.lastRun) throw new Error('Run the test suite before proposing an authority change.');
-  if (target >= 3 && !capData(state, capabilityId).pilot) throw new Error('Level 3 needs pilot evidence. Run a pilot at Draft first.');
+  if (!capData(state, capabilityId).testRun.lastRun) throw new Error('Run the test suite before proposing more authority.');
+  if (target >= 3 && !capData(state, capabilityId).pilot) throw new Error('Level 3 needs pilot evidence. Run a pilot at Draft first, so there are real results to look at.');
   const d = capData(state, capabilityId);
   let s = updateCap(state, capabilityId, { decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
   return logEvent(s, {
     kind: 'decision',
-    title: `Authority decision opened: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,
-    body: `${cap.name}: ${people(state)[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. The system can recommend; a person authorizes.`,
+    title: `More authority proposed: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,
+    body: `${cap.name}: ${people(state)[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. A person makes the decision.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/decision`,
   });
