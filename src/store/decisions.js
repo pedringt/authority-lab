@@ -345,7 +345,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
         ? `${cap.name} stays at ${authorityLabel(previous)}. Decided by ${who.name}.`
         : `${cap.name} moved from ${authorityLabel(previous)} to ${authorityLabel(next)}. Decided by ${who.name}.`,
       capabilityId: cap.id,
-      link: `#/decisions/${id}`,
+      link: `#/records/${id}`,
     },
     ...state.activity,
   ];
@@ -361,7 +361,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   // A restrict, suspend or redesign decided while a proposal to expand was
   // open closes that proposal too, and says so.
   if (d.decision.proposed && next.level < previous.level) {
-    s = logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: ${who.name} decided ${optionName(option)} (${id}), which moved it to Level ${next.level}, so the proposal to move to Level ${d.decision.proposed.level} was closed. To give it more authority later, propose Level ${next.level + 1}.`, capabilityId: cap.id, link: `#/decisions/${id}` });
+    s = logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name}: ${who.name} decided ${optionName(option)} (${id}), which moved it to Level ${next.level}, so the proposal to move to Level ${d.decision.proposed.level} was closed. To give it more authority later, propose Level ${next.level + 1}.`, capabilityId: cap.id, link: `#/records/${id}` });
   }
   return s;
 }

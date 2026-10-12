@@ -181,7 +181,7 @@ function decisionTab(state, cap) {
   return html`${review.any ? notice('restricted', 'A review comes first', 'No decision can open until someone records a review of what happened.', { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' }) : ''}
     ${canPropose ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Ready for the first authority change</strong><p>The tests have run. You can now propose moving to Level ${cap.authority.level + 1}, ${levelName(cap.authority.level + 1)}. A person has to approve it, and the decision is recorded.</p></div><button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button></div>` : ''}
     ${!review.any && !canPropose ? html`<p class="empty">No decision is open.</p>` : ''}
-    ${last ? html`<p class="muted small">Last decision: <a href="#/decisions/${last.id}">${optionLabel(last.option)}, ${fmtDate(last.date)}</a>. Every decision is in <a href="#/capabilities/${cap.id}?tab=history">History</a>.</p>` : ''}`;
+    ${last ? html`<p class="muted small">Last decision: <a href="#/records/${last.id}">${optionLabel(last.option)}, ${fmtDate(last.date)}</a>. Every decision is in <a href="#/capabilities/${cap.id}?tab=history">History</a>.</p>` : ''}`;
 }
 
 // History: where the formal record lives. Decisions, changes, versions and
@@ -344,7 +344,7 @@ function criteriaTab(state, cap) {
       ? html`<div class="notice notice-watch"><div class="notice-body"><strong>These targets can't be changed directly now that results exist.</strong><p>To change them, propose a target change. It needs approval, so the bar can't move quietly after the results are in.</p></div>${amendLink(state, cap.id, 'criteria')}</div>
         ${proposalsList(state, cap.id, 'criteria')}`
       : html`<div class="notice notice-neutral"><div class="notice-body"><strong>You can still edit these targets</strong><p>They lock once the first tests run, so the bar can't move after results come in. Changes are kept in history.</p></div><a class="notice-link" href="#/capabilities/${cap.id}/criteria/edit">Edit</a></div>`}
-    <p class="muted">${defining ? html`These targets were set before the pilot started (in <a href="#/decisions/${defining.id}">${defining.id}</a>), so the bar didn't move after the results came in. ` : ''}The decision is judged against them; they aren't a score.</p>
+    <p class="muted">${defining ? html`These targets were set before the pilot started (in <a href="#/records/${defining.id}">${defining.id}</a>), so the bar didn't move after the results came in. ` : ''}The decision is judged against them; they aren't a score.</p>
     ${rows.length ? html`<div class="card table-card"><table class="table table-criteria">
       <thead><tr><th>Measure</th><th>Target</th><th>Now</th><th>Status</th><th>Note</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -452,7 +452,7 @@ function decisionsTab(state, cap) {
   return html`<div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Date</th><th>Change</th><th>Decision</th><th>Authorized by</th></tr></thead>
     <tbody>${records.map((x) => html`<tr>
-      <td><a href="#/decisions/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
+      <td><a href="#/records/${x.id}">Authority change #${String(x.number).padStart(2, '0')}</a></td>
       <td>${fmtDate(x.date)}</td>
       <td>${x.previous ? html`${authorityText(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityText(x.next, { short: true })}</td>
       <td>${optionLabel(x.option)}</td>
@@ -507,7 +507,7 @@ function reviewCard(state, cap, d) {
   const need = reviewNeeded(state, cap.id);
   const done = (d.reviews || []).slice().reverse();
   const recorded = done.map((rv) => html`<div class="card review-record"><p class="eyebrow">${rv.id} · Post-incident review · ${fmtDate(rv.date)}</p>
-    ${kv([['Reviewed by', html`${personAt(rv.byAt, rv.by).name}${rightsNote(rv.byAt)}`], ['About', [rv.restrictionRecordId ? html`<a href="#/decisions/${rv.restrictionRecordId}">${rv.restrictionRecordId}</a>` : null, ...rv.incidentIds].filter(Boolean).map((x, i) => html`${i ? ', ' : ''}${x}`)], ['What happened', rv.whatHappened], ['Cause', rv.cause], ['What changed', rv.changes], ['Authority', html`Stayed at ${authorityLabel(rv.authorityAt)}. Giving it more authority again needs a proposed change and a named person's approval.`]])}
+    ${kv([['Reviewed by', html`${personAt(rv.byAt, rv.by).name}${rightsNote(rv.byAt)}`], ['About', [rv.restrictionRecordId ? html`<a href="#/records/${rv.restrictionRecordId}">${rv.restrictionRecordId}</a>` : null, ...rv.incidentIds].filter(Boolean).map((x, i) => html`${i ? ', ' : ''}${x}`)], ['What happened', rv.whatHappened], ['Cause', rv.cause], ['What changed', rv.changes], ['Authority', html`Stayed at ${authorityLabel(rv.authorityAt)}. Giving it more authority again needs a proposed change and a named person's approval.`]])}
   </div>`);
   if (!need.any) return recorded.length ? html`${recorded}` : '';
   const by = actor(state, cap.id);
@@ -535,11 +535,11 @@ function monitoringTab(state, cap, d, show = null) {
   const applying = st.rules.filter((r) => r.active).length;
   const demo = breachRule(state, cap.id);
   const head = m && m.breached && m.reviewId
-    ? notice('watch', `The AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Review done.`, `It stays at ${authorityLabel(cap.authority)}. The limit it crossed: ${m.reading}. To give it more authority again, propose a change and get it approved. The review is below.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Decision record' })
+    ? notice('watch', `The AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Review done.`, `It stays at ${authorityLabel(cap.authority)}. The limit it crossed: ${m.reading}. To give it more authority again, propose a change and get it approved. The review is below.`, { link: `#/records/${m.breachRecordId}`, linkText: 'Decision record' })
     : m && m.breached
-    ? notice('fail', `The AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit.`, `It crossed this limit: ${m.reading}. Before it can get more authority again, someone has to review what happened (form below). Formally: automatic restriction.`, { link: `#/decisions/${m.breachRecordId}`, linkText: 'Decision record' })
+    ? notice('fail', `The AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit.`, `It crossed this limit: ${m.reading}. Before it can get more authority again, someone has to review what happened (form below). Formally: automatic restriction.`, { link: `#/records/${m.breachRecordId}`, linkText: 'Decision record' })
     : m && m.recordId
-      ? notice('pass', `Given more authority ${m.windowDays} days ago (simulated)`, 'We\'re watching closely for the first weeks. If any safety limit below is crossed, the AI\'s authority is reduced automatically, without waiting for someone to notice.', { link: `#/decisions/${m.recordId}`, linkText: 'Decision record' })
+      ? notice('pass', `Given more authority ${m.windowDays} days ago (simulated)`, 'We\'re watching closely for the first weeks. If any safety limit below is crossed, the AI\'s authority is reduced automatically, without waiting for someone to notice.', { link: `#/records/${m.recordId}`, linkText: 'Decision record' })
       : !st.rules.length
         ? notice('neutral', 'No safety limits set', `${cap.name}'s rules don't say when to reduce its authority, so nothing is checked automatically. Add a line under "Authority is reduced automatically when".`)
         : st.running
@@ -575,7 +575,7 @@ function monitoringTab(state, cap, d, show = null) {
   }
   // C1: the rollout plan of the decision in force, if it has one.
   const g = grantingRecord(state, cap.id);
-  const rollout = g && g.rolloutPlan ? html`<p class="small muted mon-rollout">Rollout plan: ${g.rolloutPlan.ownerAt ? g.rolloutPlan.ownerAt.name : g.rolloutPlan.owner} · starts ${fmtDate(g.rolloutPlan.startDate)} · review on ${fmtDate(g.rolloutPlan.reviewDate)} · <a href="#/decisions/${g.id}">See plan</a></p>` : '';
+  const rollout = g && g.rolloutPlan ? html`<p class="small muted mon-rollout">Rollout plan: ${g.rolloutPlan.ownerAt ? g.rolloutPlan.ownerAt.name : g.rolloutPlan.owner} · starts ${fmtDate(g.rolloutPlan.startDate)} · review on ${fmtDate(g.rolloutPlan.reviewDate)} · <a href="#/records/${g.id}">See plan</a></p>` : '';
   return html`${views}${head}${rollout}${reviewCard(state, cap, d)}${metrics}${rulesCard(state, cap)}${fired}${opened}${control}`;
 }
 
@@ -611,7 +611,7 @@ function expectedCard(state, cap) {
       <td>${badge(tone[r.status], word[r.status])}${r.status === 'not-met' ? html`<div class="muted small">${r.gapText}</div>` : r.note ? html`<div class="muted small">${r.note}</div>` : ''}</td>
       <td>${r.source ? sourceTag(r.source, r.seeded) : html`<span class="muted small">—</span>`}</td>
     </tr>`)}</tbody>
-  </table></div>`, { subtitle: html`From <a href="#/decisions/${record.id}">${record.id}</a>, the current decision. If we can't find a measured number for an outcome, it shows as "Not measured". We never guess.` });
+  </table></div>`, { subtitle: html`From <a href="#/records/${record.id}">${record.id}</a>, the current decision. If we can't find a measured number for an outcome, it shows as "Not measured". We never guess.` });
 }
 
 // A simple ROI (B2), every assumption visible, versioned with author and reason.

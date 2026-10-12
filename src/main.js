@@ -281,7 +281,7 @@ document.addEventListener('click', (e) => {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
       const rec = capData(store.get(), capId).decision.recordId;
-      location.hash = `#/decisions/${rec}`;
+      location.hash = `#/records/${rec}`;
     });
   }
   const builder = () => `#/capabilities/${capId}/contract/build`;

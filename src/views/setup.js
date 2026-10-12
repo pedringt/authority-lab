@@ -69,7 +69,7 @@ export function setupSteps(state, capabilityId) {
     { id: 'decision', title: 'Decide the first authority change', done: Boolean(lastDecisionId(state, cap.id) && cap.authority.level >= 2), text: 'Usually a move to Draft (Level 2) for a small pilot. The owner decides; Authority Lab only recommends.', link: decisionRequired(state, cap.id) ? `#/capabilities/${cap.id}/decision` : null, linkText: 'Authority decision', needs: testsDone, propose: testsDone && !decisionRequired(state, cap.id) && cap.authority.level < 2 ? cap.authority.level + 1 : null },
   ];
   if (notDelegated) {
-    return [steps[0], { id: 'not-delegated', title: 'Not delegated, by design', done: true, text: 'This capability stays at Level 0 on purpose. Giving it any authority later needs a new decision.', link: `#/decisions/${lastDecisionId(state, cap.id) || ''}`, linkText: 'Decision record' }];
+    return [steps[0], { id: 'not-delegated', title: 'Not delegated, by design', done: true, text: 'This capability stays at Level 0 on purpose. Giving it any authority later needs a new decision.', link: `#/records/${lastDecisionId(state, cap.id) || ''}`, linkText: 'Decision record' }];
   }
   let nextFound = false;
   return steps.map((st) => {
@@ -100,7 +100,7 @@ export function setupView(state, capabilityId, query) {
     <div class="setup-step-head"><span class="req-mark" aria-hidden="true">${st.done ? '✓' : i + 1}</span><strong>${st.title}</strong>${st.done ? badge('pass', 'Done') : st.next ? badge('decision', 'Next') : badge('neutral', 'Later')}</div>
     <p class="muted">${st.text}</p>
     ${st.done && st.link ? html`<a href="${st.id === 'contract' ? `#/capabilities/${cap.id}?tab=rules` : st.id === 'criteria' ? `#/capabilities/${cap.id}?tab=evidence&show=targets` : st.id === 'stakeholders' ? `#/capabilities/${cap.id}` : st.link}">${st.linkText}</a>` : ''}
-    ${st.done && st.id === 'decision' && lastDecisionId(state, cap.id) ? html`<a href="#/decisions/${lastDecisionId(state, cap.id)}">Decision record</a>` : ''}
+    ${st.done && st.id === 'decision' && lastDecisionId(state, cap.id) ? html`<a href="#/records/${lastDecisionId(state, cap.id)}">Decision record</a>` : ''}
     ${!st.done && st.link && st.needs !== false ? html`<a class="btn btn-sm" href="${st.link}">${st.linkText}</a>` : ''}
     ${!st.done && st.propose ? html`<button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${st.propose}">Propose a move to Level ${st.propose}</button>` : ''}
     ${!st.done && st.soon ? html`<p class="muted small">Not available in this prototype yet: ${st.soon}.</p>` : ''}

@@ -178,12 +178,12 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
     link: `#/capabilities/${cap.id}?tab=monitoring`,
   };
   const activity = [
-    { id: `ACT-${Date.now()}-b`, date: state.today, kind: 'restriction', surfaced: true, title: movedBack(next.level), body: `${cap.name} crossed a safety limit (${reading}) and moved from ${authorityLabel(previous)} to ${authorityLabel(next)} automatically. Someone needs to review what happened before it can get more authority again.`, capabilityId: cap.id, link: `#/decisions/${id}` },
+    { id: `ACT-${Date.now()}-b`, date: state.today, kind: 'restriction', surfaced: true, title: movedBack(next.level), body: `${cap.name} crossed a safety limit (${reading}) and moved from ${authorityLabel(previous)} to ${authorityLabel(next)} automatically. Someone needs to review what happened before it can get more authority again.`, capabilityId: cap.id, link: `#/records/${id}` },
     { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed', body: `${cap.name}: ${reading}. ${errors.length} error${errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` },
     ...state.activity,
   ];
   const evidence = [
-    { id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} The AI was moved back to ${levelName(next.level)} automatically.`, link: `#/decisions/${id}` },
+    { id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} The AI was moved back to ${levelName(next.level)} automatically.`, link: `#/records/${id}` },
     ...d.evidence,
   ];
   const capabilities = state.capabilities.map((c) => (c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c));

@@ -26,7 +26,7 @@ export function decisionsListView(state) {
   <div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Capability</th><th>Date</th><th>Change</th><th>Decision</th><th>Decided by</th></tr></thead>
     <tbody>${records.map((x) => html`<tr>
-      <td><a href="#/decisions/${x.id}"><strong>Authority change #${String(x.number).padStart(2, '0')}</strong></a></td>
+      <td><a href="#/records/${x.id}"><strong>Authority change #${String(x.number).padStart(2, '0')}</strong></a></td>
       <td>${getCapability(state, x.capabilityId).name}</td>
       <td>${fmtDate(x.date)}</td>
       <td>${x.previous ? html`${authorityText(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityText(x.next, { short: true })}${x.previous && x.next.level < x.previous.level ? html` <span class="badge badge-restricted">Reduced</span>` : ''}</td>
@@ -111,7 +111,7 @@ export function decisionRecordView(state, id) {
   const auto = x.authorizedBy === 'system';
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow"><a href="#/decisions">Decisions</a> · ${auto ? 'Automatic restriction' : 'Decided by a person'}</p>
+      <p class="eyebrow"><a href="#/records">Decisions</a> · ${auto ? 'Automatic restriction' : 'Decided by a person'}</p>
       <h1>Authority change #${String(x.number).padStart(2, '0')}</h1>
       <p class="lede"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${fmtDate(x.date)} · ${recordNames(state, x)}</p>
     </div>
@@ -203,14 +203,14 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   const proposed = proposedAuthority(state, capabilityId);
   if (dec.recordId && !pending) {
     const rec = state.decisionRecords.find((x) => x.id === dec.recordId);
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/decisions">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was made on ${fmtDate(rec.date)}. See the record: <a href="#/decisions/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a>.</p></div></div>
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/records">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was made on ${fmtDate(rec.date)}. See the record: <a href="#/records/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a>.</p></div></div>
       ${d.reviewRequired
         ? notice('fail', 'Review needed', `After this decision, the AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Record what happened and what changed (the post-incident review) before giving it more authority again.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' })
         : notice('pass', 'Decision recorded', `${cap.name} is at ${authorityLabel(cap.authority)}. To try the decision again, use Reset demo.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Monitoring' })}`;
   }
 
   if (!pending) {
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/decisions">Decisions</a></p><h1>Authority decision</h1><p class="lede">Nothing to decide right now. ${cap.name} is at ${authorityLabel(cap.authority)}, and no one has proposed a change.</p></div></div>`;
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/records">Decisions</a></p><h1>Authority decision</h1><p class="lede">Nothing to decide right now. ${cap.name} is at ${authorityLabel(cap.authority)}, and no one has proposed a change.</p></div></div>`;
   }
 
   const check = canAuthorize(state, capabilityId);
@@ -255,7 +255,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow"><a href="#/decisions">Decisions</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
+      <p class="eyebrow"><a href="#/records">Decisions</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Should ${cap.name} get more authority?</h1>
       ${lede('You\'re deciding whether this AI should get more authority. Review the evidence, set any limits, and record why you\'re comfortable with the change.', rec ? 'Authority Lab summarizes the evidence and suggests an option. You make the decision, and your name goes on the record.' : null)}
     </div>

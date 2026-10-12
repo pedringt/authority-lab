@@ -113,7 +113,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     title: notDelegated ? 'Capability added, not delegated by design' : `Capability added at ${authorityLabel(cap.authority)}`,
     body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${people(state)[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
     capabilityId: id,
-    link: `#/decisions/${recordId}`,
+    link: `#/records/${recordId}`,
   });
   return s;
 }
