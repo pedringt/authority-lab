@@ -59,7 +59,7 @@ let roster = seedPeople;
 export function setPeople(map) { roster = map || seedPeople; }
 
 export function person(key) {
-  if (key === 'system') return { name: 'Software rule', role: 'Automatic restriction', team: 'System' };
+  if (key === 'system') return { name: 'Automatic safety limit', role: 'Automatic restriction', team: 'System' };
   return roster[key] || { name: key, role: '', team: '' };
 }
 
@@ -75,7 +75,7 @@ export function rightsNote(snapshot) {
   if (!snapshot || !snapshot.rights) return '';
   const r = [];
   if (snapshot.rights.riskApprover) r.push('Risk approver');
-  if (snapshot.rights.workspaceAdmin) r.push('workspace admin');
+  if (snapshot.rights.workspaceAdmin) r.push('Workspace admin');
   return r.length ? html`<span class="muted small"> · ${r.join(', ')} at the time</span>` : '';
 }
 
@@ -137,8 +137,8 @@ export function levelScale(current, proposed) {
       current && l.level < current.level ? 'is-below' : '',
     ].join(' ');
     return html`<li class="${cls}" title="${levelTip(l.level)}"><span class="level-num">L${l.level}</span><span class="level-name">${l.name}</span>${
-      current && l.level === current.level ? html`<span class="level-tag">Current${current.limited ? ' · limited' : ''}</span>` : ''
-    }${proposed && l.level === proposed.level && (!current || current.level !== l.level) ? html`<span class="level-tag level-tag-proposed">Proposed${proposed.limited ? ' · limited' : ''}</span>` : ''}</li>`;
+      current && l.level === current.level ? html`<span class="level-tag">Current${current.limited ? ' · with limits' : ''}</span>` : ''
+    }${proposed && l.level === proposed.level && (!current || current.level !== l.level) ? html`<span class="level-tag level-tag-proposed">Proposed${proposed.limited ? ' · with limits' : ''}</span>` : ''}</li>`;
   })}</ol>`;
 }
 
@@ -195,6 +195,10 @@ export function warningNotice(w) {
   const links = w.links || [{ href: w.link, text: w.linkText }];
   return html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>${w.title}</strong><p>${w.body}</p></div><span class="notice-links">${links.map((l, i) => html`${i ? ' · ' : ''}<a class="notice-link" href="${l.href}">${l.text}</a>`)}</span></div>`;
 }
+
+// Shown after a reason someone can't do something: the demo's person picker
+// is in the header. One string, so it follows the header if that changes.
+export const SWITCH_PERSON = 'Choose who you\'re acting as at the top of the page.';
 
 export function empty(text) {
   return html`<p class="empty">${text}</p>`;

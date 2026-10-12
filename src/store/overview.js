@@ -140,7 +140,7 @@ export function overviewApprovals(state, { fmt = (d) => d } = {}) {
         title: `${waiting.length} ${noun} a person to decide`,
         why: `${waiting.slice(0, 3).map((x) => describe(x).replace(/^a /, '')).join(', ')}${waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''}. ${cap.authority.level <= 2 ? `The AI is at ${levelName(cap.authority.level)}, so every action needs a person.` : 'They fell outside the AI\'s approved limits, so they weren\'t processed automatically.'}`,
         who: `Who can approve: ${list(queueApprovers(state, cap.id).map((k) => nameOf(state, k)))}.`,
-        since: `Waiting since ${fmt(oldest)}`, action: refunds ? 'Review the refunds' : 'Review the actions', href: `#/capabilities/${cap.id}?tab=decisions&show=waiting` });
+        since: `Waiting since ${fmt(oldest)}`, action: refunds ? 'Review the refunds' : 'Review the actions', href: `#/capabilities/${cap.id}?tab=decision&show=approvals` });
     }
     for (const p of capData(state, cap.id).proposals.filter((x) => x.status === 'open')) {
       out.push({ kind: 'change', capabilityId: cap.id, cap: cap.name,
@@ -183,9 +183,9 @@ export function importantResults(state, { fmt = (d) => d } = {}) {
     }
     for (const s of (d.pilot && d.pilot.segments) || []) {
       if (s.status !== 'insufficient') continue;
-      out.push({ tone: 'insufficient', label: 'Thin evidence', capabilityId: cap.id, cap: cap.name,
+      out.push({ tone: 'insufficient', label: 'Not enough data yet', capabilityId: cap.id, cap: cap.name,
         text: `${s.name}: ${s.accuracy}% accurate, on only ${s.cases} cases.`,
-        so: 'These cases stay with a person. Any expansion would leave them out.' });
+        so: 'These cases stay with a person. Any move to more authority would leave them out.' });
     }
     for (const e of d.evidence.filter((x) => x.source === 'Incident' && x.status === 'fail' && x.risk === 'High')) {
       const sentences = (String(e.detail || '').replace(/^Scenario [A-Z]-\d+:\s*/, '').match(/[^.!?]+[.!?]+/g) || [e.detail || '']).map((x) => x.trim());
@@ -209,7 +209,7 @@ export function authorityRows(state) {
     const review = reviewNeeded(state, cap.id);
     const held = personRestriction(state, cap.id);
     let next;
-    if (review.restriction) next = { tone: 'restricted', text: 'Review needed before it can expand again' };
+    if (review.restriction) next = { tone: 'restricted', text: 'Review needed before it can get more authority' };
     else if (decisionRequired(state, cap.id)) { const p = proposedAuthority(state, cap.id); next = { tone: 'decision', text: 'Ready for a decision', detail: `Proposed: Level ${p.level}, ${levelName(p.level)}${p.limited ? ', with limits' : ''}` }; }
     else if (cap.status === 'not-delegated') next = { tone: 'neutral', text: 'Not delegated, by design' };
     else if (held && cap.status === 'restricted') next = { tone: 'restricted', text: 'Held until a condition is met' };
