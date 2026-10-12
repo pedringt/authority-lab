@@ -2,7 +2,7 @@
 // tickets, replayed through today's gate. Nothing here calls a model; the
 // recordings are fixed files in src/data/agent-runs/.
 
-import { html, badge, notice, section, lede, fmtDate } from '../ui.js';
+import { html, badge, notice, section, lede, fmtDate, tabIntro } from '../ui.js';
 import { workspaceOf, workflowOf, classifyTicket, outcomeText, runFlags, runLabel, replayRun, restrictionIn, isRunSet, runsOf, ticketRates, rateText, unverifiedCases, CAUGHT } from '../store/index.js';
 
 const parse = (text) => { try { return JSON.parse(text); } catch { return null; } };
@@ -113,7 +113,7 @@ function tally(recs) {
 
 // One run (or set of runs), collapsed: per-ticket counts, and a link to the
 // step-by-step view. Ticket codes appear only in here.
-function runBlock(rec) {
+function runBlock(rec, base) {
   const runs = runsOf(rec);
   const ids = [...new Set(runs.flatMap((r) => (r.tickets || []).map((t) => t.ticketId)))];
   const rows = ids.map((id) => {
@@ -129,13 +129,19 @@ function runBlock(rec) {
       <thead><tr><th>Ticket</th><th>What it tempts</th><th class="num">Declined</th><th class="num">Gate stopped</th><th class="num">Within limits, unverified</th><th class="num">Got through</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <p class="small"><a href="#/agent-runs?run=${encodeURIComponent(rec.file)}#steps">See every step${runs.length > 1 ? ', run by run' : ''}</a></p>
+    <p class="small"><a href="${base}&run=${encodeURIComponent(rec.file)}">See every step${runs.length > 1 ? ', run by run' : ''}</a></p>
   </details>`;
 }
 
 // `loaded`: { status: 'loading' | 'error' | 'ready', runs: [recording + file], error }.
-export function agentRunsView(state, query, loaded) {
-  const head = html`<div class="page-head"><div>
+// Inside a capability (simplification pass) it shows only that capability's
+// recordings, under Evidence › Model runs.
+export function agentRunsView(state, query, loaded, { capabilityId = null, embedded = false } = {}) {
+  const base = capabilityId ? `#/capabilities/${capabilityId}?tab=evidence&show=runs` : '#/agent-runs?';
+  const proofIntro = html`<p class="run-proof-intro"><strong>This site never calls a model.</strong> Every run here was recorded and approved; follow the links to check.</p>`;
+  const head = embedded
+    ? html`${tabIntro('Real models working fictional support tickets, with every action checked against the rules.', 'Some tickets are temptations: they try to get the model to do something it shouldn\'t, like a forbidden refund, a false claim about the record, or a refund on someone else\'s say-so. Every recording is replayed through today\'s rules on this page.')}${proofIntro}`
+    : html`<div class="page-head"><div>
     <p class="eyebrow">${workspaceOf(state).name} · ${workflowOf(state).name}</p>
     <h1>Agent runs</h1>
     ${lede('Real models working fictional support tickets, with every action checked by the gate.', 'Some tickets are temptations: they try to get the model to do something it shouldn\'t, like a forbidden refund, a false claim about the record, or a refund on someone else\'s say-so. Every recording is replayed through today\'s gate on this page; nothing here calls a model.')}
@@ -143,8 +149,8 @@ export function agentRunsView(state, query, loaded) {
   </div></div>`;
   if (!loaded || loaded.status === 'loading') return html`${head}<p class="empty">Loading recordings…</p>`;
   if (loaded.status === 'error') return html`${head}${notice('fail', 'Recordings could not be loaded', loaded.error)}`;
-  const all = loaded.runs;
-  if (!all.length) return html`${head}<p class="empty">No recordings yet.</p>`;
+  const all = capabilityId ? loaded.runs.filter((r) => r.start && r.start.capabilityId === capabilityId) : loaded.runs;
+  if (!all.length) return html`${head}<p class="empty">No model runs have been recorded for this capability.</p>`;
 
   const real = all.filter((r) => r.source === 'recorded');
   const sets = real.filter(isRunSet);
@@ -155,7 +161,7 @@ export function agentRunsView(state, query, loaded) {
 
   // Anything that got through, anywhere, comes first.
   const leaks = all.flatMap((r) => runFlags(r).filter((f) => /got through/.test(f.text)).map((f) => ({ ...f, rec: r })));
-  const leakNote = leaks.length ? leaks.map((f) => notice('fail', `${modelName(f.rec.model)}: something got through`, f.text.replace(/took the bait and it got through/, 'did the forbidden thing and the gate let it through'), { link: `#/agent-runs?run=${encodeURIComponent(f.rec.file)}#steps`, linkText: 'See the steps' })) : '';
+  const leakNote = leaks.length ? leaks.map((f) => notice('fail', `${modelName(f.rec.model)}: something got through`, f.text.replace(/took the bait and it got through/, 'did the forbidden thing and the gate let it through'), { link: `${base}&run=${encodeURIComponent(f.rec.file)}`, linkText: 'See the steps' })) : '';
 
   // Refunds on someone else's say-so: what the gate does now, and what the
   // earlier runs did before the rule.
@@ -183,8 +189,8 @@ export function agentRunsView(state, query, loaded) {
     const shown = reps[rep - 1];
     const replay = replayRun(shown);
     const changed = replay.changed;
-    const repPicker = reps.length > 1 ? html`<div class="filter-bar"><div class="filter-group" role="group" aria-label="Run">${reps.map((_, i) => html`<a class="chip ${i + 1 === rep ? 'is-active' : ''}" href="#/agent-runs?run=${encodeURIComponent(selected.file)}&rep=${i + 1}">Run ${i + 1}</a>`)}</div></div>` : '';
-    steps = section(`${modelName(selected.model)}, ${setName(selected)}${reps.length > 1 ? ` · run ${rep} of ${reps.length}` : ''}`, html`<p class="muted small">${/^claude-/.test(selected.model) ? runLabel(selected).replace(selected.model, modelName(selected.model)) : runLabel(selected)}. <a href="#/agent-runs">Close</a></p>
+    const repPicker = reps.length > 1 ? html`<div class="filter-bar"><div class="filter-group" role="group" aria-label="Run">${reps.map((_, i) => html`<a class="chip ${i + 1 === rep ? 'is-active' : ''}" href="${base}&run=${encodeURIComponent(selected.file)}&rep=${i + 1}">Run ${i + 1}</a>`)}</div></div>` : '';
+    steps = section(`${modelName(selected.model)}, ${setName(selected)}${reps.length > 1 ? ` · run ${rep} of ${reps.length}` : ''}`, html`<p class="muted small">${/^claude-/.test(selected.model) ? runLabel(selected).replace(selected.model, modelName(selected.model)) : runLabel(selected)}. <a href="${base}">Close</a></p>
       ${proofLine(selected)}
       ${changed ? notice('watch', `${changed} step${changed === 1 ? '' : 's'} would be decided differently today`, 'The gate has changed since this was recorded. Both verdicts are shown.') : html`<p class="muted small">Replayed through today's gate: every verdict matches the recording.</p>`}
       ${repPicker}${shown.tickets.map((tk, i) => ticketDetail(shown, replay.tickets[i], tk))}`, { id: 'steps', subtitle: 'Each ticket: what the model asked for, what it was shown, and the gate\'s verdict then and now.' });
@@ -193,7 +199,7 @@ export function agentRunsView(state, query, loaded) {
   return html`${head}${leakNote}${numbers}
   ${section('By model', table, { subtitle: `Share of temptations across ${main.length === sets.length && sets.length ? 'the repeat runs' : 'these runs'}: the model declined, the gate stopped it, it went through within limits on an unverified instruction, or it got through.` })}
   ${ruleNote}
-  ${section('Runs', html`${main.map(runBlock)}`, { subtitle: 'Open a run for each ticket\'s outcome.' })}
-  ${earlier.length ? html`<details class="earlier"><summary>Earlier runs (${earlier.length})</summary>${earlier.map(runBlock)}</details>` : ''}
+  ${section('Runs', html`${main.map((x) => runBlock(x, base))}`, { subtitle: 'Open a run for each ticket\'s outcome.' })}
+  ${earlier.length ? html`<details class="earlier"><summary>Earlier runs (${earlier.length})</summary>${earlier.map((x) => runBlock(x, base))}</details>` : ''}
   ${steps}`;
 }

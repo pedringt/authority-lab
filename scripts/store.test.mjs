@@ -2831,10 +2831,12 @@ test('A2: a contract with no data section shows the AI nothing from the records'
 
 test('A2: the contract tab shows the data boundary', () => {
   const s = initialState();
-  const html = String(capabilityView(s, RR, new URLSearchParams('tab=contract')));
-  assert.match(html, /Data the AI may see/);
+  const html = String(capabilityView(s, RR, new URLSearchParams('tab=rules')));
+  assert.match(html, /The AI can access/);
+  for (const h of ['The AI may', 'Ask a person when', 'The AI must never', 'Authority is reduced automatically when']) assert.match(html, new RegExp(`<h3>${h}</h3>`), h);
+  assert.match(html, /For these cases<\/p>[\s\S]*Any policy exception\.[\s\S]*Whenever this comes up<\/p>[\s\S]*Confidence below 80%\./, 'must-ask and escalation lines both sit under Ask a person when');
   assert.match(html, /Full card number <span class="muted small">\(restricted\)/);
-  assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=contract'))), /no data section/);
+  assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=rules'))), /no data section/);
 });
 
 test('A2 bypass: built-in object names are never orders, through every tool, at every level', () => {
@@ -2974,14 +2976,14 @@ test('A4 bypass: an approval is refused if a cap was crossed, or the order becam
   assert.match(queuedAction(approveAction(flagged, id, { by: 'priya', reason: WHY }), id).decision.refusal, /blocked now: Must never/);
 });
 
-test('A4: the Waiting tab lists waiting actions with their reasons, and who may decide', () => {
+test('A4: Decision › Approvals lists waiting actions with their reasons, and who may decide', () => {
   const s = initialState();
-  const h = String(capabilityView(s, RR, new URLSearchParams('tab=waiting')));
+  const h = String(capabilityView(s, RR, new URLSearchParams('tab=decision&show=approvals')));
   assert.match(h, /Waiting \(2\)/);
   assert.match(h, /Refund \$180 on ORD-5005/);
   assert.match(h, /Any policy exception\./);
   assert.match(h, /Approve as Maya Chen/, 'the owner, acting by default, may decide');
-  const asJonas = String(capabilityView(setActingAs(s, 'jonas'), RR, new URLSearchParams('tab=waiting')));
+  const asJonas = String(capabilityView(setActingAs(s, 'jonas'), RR, new URLSearchParams('tab=decision&show=approvals')));
   assert.doesNotMatch(asJonas, /Approve as/);
   assert.match(asJonas, /isn&#39;t the owner or a named stakeholder/);
 });
@@ -3141,14 +3143,14 @@ test('A5: start empty clears the waiting queue and the gate log', () => {
   assert.deepEqual([e.actionQueue.length, e.gateLog.length], [0, 0]);
 });
 
-test('A5: the Monitoring tab shows gate activity and the Evidence page shows derived, labelled gate evidence', () => {
+test('A5: Evidence › Results shows gate activity and All evidence shows derived, labelled gate evidence', () => {
   let s = expandedRR();
   s = callTool(s, RR, refund('ORD-5003', 10)).state;
-  const mon = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  const mon = String(capabilityView(s, RR, new URLSearchParams('tab=evidence')));
   assert.match(mon, /Gate activity/);
   assert.match(mon, /1 must-never attempt\b/);
   assert.match(mon, /0 false claims/);
-  assert.match(mon, /measured from the gate log/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=monitoring'))), /measured from the gate log/, 'the restriction rules say where their readings come from');
   const ev = String(evidenceView(s, RR, new URLSearchParams()));
   assert.match(ev, /Actions blocked/);
   assert.match(ev, /Derived · Seeded demo data, This session/);
@@ -3756,8 +3758,8 @@ test('C1: the plan shows on the decision workspace, the record and the capabilit
   assert.match(rec, /Rollout plan/);
   assert.match(rec, /#refund-ai-feedback/);
   assert.match(rec, /Priya Natarajan/);
-  const capPage = String(capabilityView(s, RR, new URLSearchParams('')));
-  assert.match(capPage, /Rollout<\/dt><dd>Priya Natarajan · from/);
+  const capPage = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
+  assert.match(capPage, /Rollout: Priya Natarajan · from/);
   const older = initialState().decisionRecords.find((r) => r.next && r.previous && r.next.level > r.previous.level);
   assert.match(String(decisionRecordView(initialState(), older.id)), /before rollout plans were required/);
 });
@@ -3838,49 +3840,102 @@ test('C2: the Monitoring tab lists each warning with what, why and source, and s
 });
 
 // #93: navigation simplified; old addresses keep working.
-test('#93: old addresses are rewritten to where their pages live now, keeping their filters', async () => {
+test('old addresses are rewritten to where their pages live now, keeping their filters (#93, simplification pass)', async () => {
   const { canonicalHash } = await import('../src/routes.js');
+  const C = '#/capabilities/refund-recommendation';
   const cases = [
-    ['#/tests', '#/evidence?show=tests'],
-    ['#/tests?capability=ticket-classification', '#/evidence?capability=ticket-classification&show=tests'],
+    // Evidence, tests and model runs moved into the capability.
+    ['#/tests?capability=ticket-classification', '#/capabilities/ticket-classification?tab=evidence&show=tests'],
+    ['#/tests?capability=ticket-classification&filter=failed', '#/capabilities/ticket-classification?tab=evidence&show=tests&filter=failed'],
+    ['#/evidence?capability=refund-recommendation&status=fail', `${C}?tab=evidence&show=all&status=fail`],
+    ['#/evidence?show=tests&capability=refund-recommendation', `${C}?tab=evidence&show=tests`],
+    ['#/agent-runs', `${C}?tab=evidence&show=runs`],
+    ['#/agent-runs?run=x.json&rep=2', `${C}?tab=evidence&show=runs&run=x.json&rep=2`],
     ['#/activity', '#/records?show=activity'],
     ['#/activity?view=full&kind=decision', '#/records?view=full&kind=decision&show=activity'],
     ['#/decisions', '#/records'],
     ['#/decisions/AC-02', '#/records/AC-02'],
-    ['#/capabilities/refund-recommendation?tab=criteria', '#/capabilities/refund-recommendation?tab=evidence&show=criteria'],
-    ['#/capabilities/refund-recommendation?tab=testing', '#/capabilities/refund-recommendation?tab=evidence&show=testing'],
-    ['#/capabilities/refund-recommendation?tab=waiting&error=x', '#/capabilities/refund-recommendation?tab=decisions&error=x&show=waiting'],
+    // Old capability tabs.
+    [`${C}?tab=contract`, `${C}?tab=rules`],
+    [`${C}?tab=stakeholders`, `${C}?tab=summary`],
+    [`${C}?tab=criteria`, `${C}?tab=evidence&show=targets`],
+    [`${C}?tab=testing`, `${C}?tab=evidence&show=tests`],
+    [`${C}?tab=evidence&show=criteria`, `${C}?tab=evidence&show=targets`],
+    [`${C}?tab=evidence&show=testing`, `${C}?tab=evidence&show=tests`],
+    [`${C}?tab=waiting&error=x`, `${C}?tab=decision&error=x&show=approvals`],
+    [`${C}?tab=decisions&show=waiting`, `${C}?tab=decision&show=approvals`],
+    [`${C}?tab=decisions`, `${C}?tab=history`],
   ];
   for (const [from, to] of cases) assert.equal(canonicalHash(from), to, from);
+  // With no capability named, the focus capability is used, or the list.
+  assert.equal(canonicalHash('#/tests?filter=failed', { focus: 'refund-recommendation' }), `${C}?tab=evidence&show=tests&filter=failed`);
+  assert.equal(canonicalHash('#/evidence'), '#/capabilities');
   // Current addresses are left alone.
-  for (const same of ['#/overview', '#/evidence', '#/records?show=activity', '#/capabilities/refund-recommendation?tab=monitoring', '#/people', '#/agent-runs?run=x.json']) assert.equal(canonicalHash(same), same);
+  for (const same of ['#/overview', '#/records?show=activity', `${C}?tab=monitoring`, `${C}?tab=monitoring&show=value`, `${C}?tab=decision&show=approvals`, `${C}?tab=evidence&show=runs`, '#/people', `${C}/contract/build`]) assert.equal(canonicalHash(same), same);
   assert.equal(canonicalHash(''), '#/overview');
 });
 
-test('#93: five capability tabs; the old tabs open as views inside Evidence and Decisions', () => {
-  const s = initialState();
-  const page = String(capabilityView(s, RR, new URLSearchParams('')));
-  const tabs = [...page.matchAll(/<a class="tab[^"]*" href="#\/capabilities\/refund-recommendation\?tab=([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(tabs, ['contract', 'evidence', 'stakeholders', 'decisions', 'monitoring']);
-  // The summary shows authority once: on the strip, not as pills as well.
-  assert.doesNotMatch(page, /Current authority|Proposed authority/);
-  assert.match(page, /level-tag">Current/);
-  const waiting = String(capabilityView(s, RR, new URLSearchParams('tab=waiting')));
-  assert.match(waiting, /aria-current="page">Decisions/);
-  assert.match(waiting, /class="chip is-active"[^>]*>Waiting for a person/);
-  const criteria = String(capabilityView(s, RR, new URLSearchParams('tab=criteria')));
-  assert.match(criteria, /class="chip is-active"[^>]*>Success criteria/);
+test('every recorded model run acts for the capability the old Agent runs address leads to', async () => {
+  const { AGENT_RUNS_CAPABILITY } = await import('../src/data/seed.js');
+  const dir = new URL('../src/data/agent-runs/', import.meta.url);
+  const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
+  for (const e of index.runs) {
+    const rec = JSON.parse(readFileSync(new URL(e.file, dir), 'utf8'));
+    for (const run of Array.isArray(rec.runs) ? rec.runs : [rec]) assert.equal(run.start.capabilityId, AGENT_RUNS_CAPABILITY, e.file);
+  }
 });
 
-test('#95: Monitoring has a Health view and a Value view; Value counts what needs a look', () => {
+test('six capability tabs: Summary, Rules, Evidence, Decision, Monitoring, History; Stakeholders folds into Summary', () => {
+  const s = initialState();
+  setPeople(people(s));
+  const page = String(capabilityView(s, RR, new URLSearchParams('')));
+  const tabs = [...page.matchAll(/<a class="tab[^"]*" href="#\/capabilities\/refund-recommendation\?tab=([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(tabs, ['summary', 'rules', 'evidence', 'decision', 'monitoring', 'history']);
+  assert.match(page, /aria-current="page">Summary/);
+  // The Decision tab carries the count of approvals waiting.
+  assert.match(page, /tab=decision"[^>]*>Decision <span class="nav-count">2<\/span>/);
+  // Summary: the authority, what it means, the next level, the main concern, and whether it's ready.
+  assert.match(page, /Level 2 · Draft/);
+  assert.match(page, /Drafts\. A person approves every action\./);
+  assert.match(page, /Next possible level<\/p><div><strong>Level 3, Act Within Limits, with limits<\/strong>/);
+  assert.match(page, /Main concern<\/p><div><strong>Minimum 40 high-value refund cases<\/strong>/);
+  assert.match(page, /Almost<\/span> 5 of 6 checks met\./);
+  assert.match(page, /href="#\/capabilities\/refund-recommendation\/decision">Open the decision/);
+  // Below: the people involved, with positions, and this capability's tasks and approvals.
+  assert.match(page, /People involved/);
+  assert.match(page, /Daniel Okafor<\/strong> <span class="muted">Risk<\/span><\/span><span class="sum-pos sum-pos-hold">Hold high-value cases/);
+  assert.match(page, /Manage stakeholders/);
+  assert.match(page, /Open tasks and approvals/);
+  assert.match(page, /2 refunds need a person to decide<\/a><span class="badge badge-decision">Approval/);
+  // Evidence holds results, requirements, targets, tests and model runs.
+  const ev = String(capabilityView(s, RR, new URLSearchParams('tab=evidence')));
+  for (const v of ['Results', 'All evidence', 'Decision requirements', 'Targets', 'Tests', 'Model runs']) assert.match(ev, new RegExp(`class="chip[^"]*"[^>]*>${v}`), v);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=targets'))), /class="chip is-active"[^>]*>Targets/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=requirements'))), /Minimum 40 high-value refund cases/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=tests'))), /data-action="run-tests"/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=runs'), { runs: { status: 'loading', runs: [] } })), /Loading recordings/);
+  // Decision: the open decision, and Approvals beside it.
+  const dec = String(capabilityView(s, RR, new URLSearchParams('tab=decision')));
+  assert.match(dec, /Should Refund recommendation move to Level 3, Act Within Limits, with limits\?/);
+  assert.match(dec, /class="chip[^"]*"[^>]*>Approvals/);
+  // History: decisions, versions and the activity link.
+  const hist = String(capabilityView(s, RR, new URLSearchParams('tab=history')));
+  assert.match(hist, /Authority change #02/);
+  assert.match(hist, /versions\?kind=contract">Rules<\/a>/);
+  assert.match(hist, /All activity for Refund recommendation/);
+  // Off Summary, the level stays visible in the page head.
+  assert.match(hist, /cap-level/);
+});
+
+test('#95: Monitoring has a Still safe? view and a Delivering value? view; the second counts what needs a look', () => {
   const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
   const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
-  assert.match(health, /class="chip is-active"[^>]*>Health/);
+  assert.match(health, /class="chip is-active"[^>]*>Still safe\?/);
   assert.match(health, /Restriction rules/);
-  assert.match(health, /Gate activity/);
+  assert.doesNotMatch(health, /Gate activity/, 'gate activity is evidence, under Evidence › Results');
   assert.doesNotMatch(health, /Expected vs actual|Return on investment|Adoption signals/);
   // Three outcomes not met, two simulated adoption warnings: 5 on the Value chip.
-  assert.match(health, /show=value"[^>]*>Value <span class="chip-count">5<\/span>/);
+  assert.match(health, /show=value"[^>]*>Delivering value\? <span class="chip-count">5<\/span>/);
   const value = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
   assert.match(value, /Expected vs actual/);
   assert.match(value, /Return on investment/);

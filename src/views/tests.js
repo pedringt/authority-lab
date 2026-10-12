@@ -1,5 +1,5 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, section, notice, fmtDate, lede } from '../ui.js';
+import { html, raw, badge, section, notice, fmtDate, lede, tabIntro } from '../ui.js';
 import { testSummary, capData, getCapability, canRunSuite, workspaceOf } from '../store/index.js';
 
 const FILTERS = [
@@ -10,7 +10,7 @@ const FILTERS = [
   ['passed', 'Passed'],
 ];
 
-export function testsView(state, capabilityId, query) {
+export function testsView(state, capabilityId, query, { embedded = false } = {}) {
   const cap = getCapability(state, capabilityId);
   const t = testSummary(state, capabilityId);
   const filter = query.get('filter') || 'all';
@@ -43,14 +43,17 @@ export function testsView(state, capabilityId, query) {
 
   const groupNames = seed.SCENARIO_GROUPS.map((g) => g.name.toLowerCase()).join(', ');
 
-  return html`<div class="page-head">
+  const head = embedded
+    ? html`<div class="tests-head">${tabIntro(html`${t.total} scenarios run against the current rules.`, html`They come in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}). No real model is called; results replay recorded decisions so the demo is repeatable.`)}${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}</div>`
+    : html`<div class="page-head">
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/tests?capability=${id}`)}</h1>
+      <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/capabilities/${id}?tab=evidence&show=tests`)}</h1>
       ${lede(html`${t.total} seeded scenarios run against the capability's current contract.`, html`They come in ${seed.SCENARIO_GROUPS.length} groups (${groupNames}). No real model call is made; results replay the recorded decisions so the demo is repeatable.`)}
     </div>
     ${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}
-  </div>
+  </div>`;
+  return html`${head}
   ${query.get('error') ? notice('fail', 'Could not run the test suite', query.get('error')) : ''}
   ${cap.added ? html`<p class="muted small"><a href="#/capabilities/${cap.id}/scenarios/edit">Edit the scenario library</a></p>` : ''}
   <div class="card run-summary ${t.status === 'not-run' && t.total ? 'is-cta' : ''}"><p>${summaryLine}</p>${t.status === 'not-run' && t.total ? html`<div class="run-cta">${runControl}</div>` : ''}${progress}</div>
@@ -97,7 +100,7 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
     if (filter === 'passed') rows = rows.filter((s) => s.pass);
   }
 
-  const base = `#/tests?capability=${capabilityId}`;
+  const base = `#/capabilities/${capabilityId}?tab=evidence&show=tests`;
   const filters = compact || !d.scenarios.length ? '' : filterBar({
     selects: [
       { label: 'Result', value: hasResults ? filter : 'all', options: FILTERS.map(([k, label]) => [k, hasResults && k !== 'all' ? `${label} (${countFor(k)})` : label]), hrefFor: (k) => `${base}&filter=${k}&group=${group}`, disabled: hasResults ? '' : 'Result filters apply after the suite has run.' },

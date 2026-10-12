@@ -1098,3 +1098,7 @@ export const capabilityData = {
     lastTestRun: '2026-10-03',
   },
 };
+
+// The capability the recorded model runs (A6) act for. The MCP server acts
+// for one capability, fixed at start; every recording so far is of this one.
+export const AGENT_RUNS_CAPABILITY = 'refund-recommendation';

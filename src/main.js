@@ -5,8 +5,6 @@ import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
 import { capabilityView } from './views/capability.js';
-import { testsView } from './views/tests.js';
-import { evidenceView } from './views/evidence.js';
 import { decisionsListView, decisionWorkspaceView, decisionRecordView } from './views/decisions.js';
 import { activityView } from './views/activity.js';
 import { versionsView } from './views/versions.js';
@@ -18,7 +16,6 @@ import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
 import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
-import { agentRunsView } from './views/agentruns.js';
 import { decisionBriefView } from './views/brief.js';
 
 const store = createStore({ storage: safeStorage() });
@@ -65,28 +62,22 @@ function loadAgentRuns() {
     ]))
     .then((all) => { setTicketDefinitions(all.filter((x) => x.definitions).flatMap((x) => x.definitions)); agentRuns = { status: 'ready', runs: all.filter((x) => !x.definitions) }; })
     .catch((err) => { agentRuns = { status: 'error', runs: [], error: err.message }; })
-    .then(() => { if (parseRoute().parts[0] === 'agent-runs') render(); });
+    .then(() => { const { parts, query } = parseRoute(); if (parts[0] === 'capabilities' && query.get('show') === 'runs') render(); });
 }
 
+// Where an old address that named no capability should go.
+const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
+
 function parseRoute() {
-  const hash = canonicalHash(location.hash || '#/overview');
+  const hash = canonicalHash(location.hash || '#/overview', { focus: focusId() });
   const [path, qs] = hash.slice(1).split('?');
   const parts = path.split('/').filter(Boolean);
   return { parts, query: new URLSearchParams(qs || '') };
 }
 
-// Tests and Evidence are per capability; without one in the query they show
-// the capability the workspace is focused on.
-function capabilityFor(state, query) {
-  const id = query.get('capability');
-  if (id && getCapability(state, id)) return id;
-  const focus = focusCapability(state);
-  return focus ? focus.id : null;
-}
-
 function render() {
   // An old address is rewritten in place, without adding a history entry.
-  const canon = canonicalHash(location.hash);
+  const canon = canonicalHash(location.hash, { focus: focusId() });
   if (location.hash && canon !== location.hash) history.replaceState(null, '', canon);
   const state = store.get();
   setPeople(people(state));
@@ -112,18 +103,13 @@ function render() {
       else if (sub && action === 'scenarios' && parts[3] === 'edit') { view = scenariosEditorView(state, sub, query); title = 'Scenario library'; }
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Amend'; }
       else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed amendment'; }
-      else if (sub) { view = capabilityView(state, sub, query); title = getCapability(state, sub)?.name || 'Capability'; }
+      else if (sub) {
+        if (query.get('tab') === 'evidence' && query.get('show') === 'runs') loadAgentRuns();
+        view = capabilityView(state, sub, query, { runs: agentRuns });
+        title = getCapability(state, sub)?.name || 'Capability';
+      }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
       break;
-    case 'evidence': {
-      // Evidence and the testing ground, one place (#93).
-      const showTests = query.get('show') === 'tests';
-      const capQ = query.get('capability') ? `&capability=${encodeURIComponent(query.get('capability'))}` : '';
-      const tabs = subNav([{ href: `#/evidence?show=evidence${capQ}`, label: 'Evidence', active: !showTests }, { href: `#/evidence?show=tests${capQ}`, label: 'Tests', active: showTests }], 'Evidence views');
-      view = empty ? noCapabilitiesView(state, showTests ? 'Testing ground' : 'Evidence') : html`${tabs}${showTests ? testsView(state, capabilityFor(state, query), query) : evidenceView(state, capabilityFor(state, query), query)}`;
-      title = showTests ? 'Tests' : 'Evidence';
-      break;
-    }
     case 'records': {
       // Decision records and the activity history, one place (#93).
       if (sub && action === 'brief') { view = decisionBriefView(state, sub); title = 'Decision brief'; break; }
@@ -136,8 +122,7 @@ function render() {
       break;
     }
     case 'people': view = peopleView(state, query); title = 'People'; break;
-    case 'agent-runs': loadAgentRuns(); view = agentRunsView(state, query, agentRuns); title = 'Agent runs'; break;
-    default: view = empty ? noCapabilitiesView(state, 'Where do we need to make a decision?') : overviewView(state); title = 'Overview';
+    default: view = empty ? noCapabilitiesView(state, 'Overview') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
 
@@ -189,6 +174,8 @@ function render() {
   if (lastRoute === location.hash) window.scrollTo(0, y); else window.scrollTo(0, 0);
   // Settings → Workspace opens People at the workspace section.
   if (lastRoute !== location.hash && root === 'people' && query.get('focus') === 'workspace') { const ws = document.getElementById('workspace'); if (ws) ws.scrollIntoView(); }
+  // Opening a model run shows its steps.
+  if (lastRoute !== location.hash && query.get('run')) { const st = document.getElementById('steps'); if (st) st.scrollIntoView(); }
   lastRoute = location.hash;
 }
 let lastRoute = null;
