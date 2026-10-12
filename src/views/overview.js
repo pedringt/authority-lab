@@ -52,7 +52,7 @@ function authorityTable(rows) {
     <thead><tr><th>Capability</th><th>Current authority</th><th>Next</th></tr></thead>
     <tbody>${rows.map((r) => html`<tr>
       <td><a href="#/capabilities/${r.capabilityId}"><strong>${r.cap}</strong></a></td>
-      <td><span class="ov-level">${ladder(r.authority.level)} Level ${r.authority.level}, ${levelName(r.authority.level)}${r.authority.limited ? ' (limited)' : ''}</span>${r.movedBack ? html` ${badge('restricted', 'Moved back')}` : ''}<div class="ov-plain">${r.plain}</div></td>
+      <td><span class="ov-level">${ladder(r.authority.level)} Level ${r.authority.level}, ${levelName(r.authority.level)}${r.authority.limited ? ', with limits' : ''}</span>${r.movedBack ? html` ${badge('restricted', 'Moved back')}` : ''}<div class="ov-plain">${r.plain}</div></td>
       <td>${badge(r.next.tone, r.next.text)}${r.next.detail ? html`<div class="ov-plain">${r.next.detail}</div>` : ''}</td>
     </tr>`)}</tbody>
   </table></div>`;

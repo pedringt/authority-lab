@@ -25,6 +25,7 @@ import {
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView, decisionWorkspaceView } from '../src/views/decisions.js';
 import { capabilityView } from '../src/views/capability.js';
+import { contractBuilderView } from '../src/views/contract.js';
 import { evidenceView } from '../src/views/evidence.js';
 import { proposalView } from '../src/views/proposals.js';
 import { agentRunsView } from '../src/views/agentruns.js';
@@ -2835,8 +2836,8 @@ test('A2: the contract tab shows the data boundary', () => {
   assert.match(html, /The AI can access/);
   for (const h of ['The AI may', 'Ask a person when', 'The AI must never', 'Authority is reduced automatically when']) assert.match(html, new RegExp(`<h3>${h}</h3>`), h);
   assert.match(html, /For these cases<\/p>[\s\S]*Any policy exception\.[\s\S]*Whenever this comes up<\/p>[\s\S]*Confidence below 80%\./, 'must-ask and escalation lines both sit under Ask a person when');
-  assert.match(html, /Full card number <span class="muted small">\(restricted\)/);
-  assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=rules'))), /no data section/);
+  assert.match(html, /Full card number <span class="muted small">\(never allowed\)/);
+  assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=rules'))), /No data access is set in the rules, so the AI sees nothing/);
 });
 
 test('A2 bypass: built-in object names are never orders, through every tool, at every level', () => {
@@ -2979,12 +2980,16 @@ test('A4 bypass: an approval is refused if a cap was crossed, or the order becam
 test('A4: Decision › Approvals lists waiting actions with their reasons, and who may decide', () => {
   const s = initialState();
   const h = String(capabilityView(s, RR, new URLSearchParams('tab=decision&show=approvals')));
-  assert.match(h, /Waiting \(2\)/);
+  assert.match(h, /Needs approval \(2\)/);
+  assert.match(h, /2 actions need a person to decide\. At Draft, every action needs a person to approve it\./);
   assert.match(h, /Refund \$180 on ORD-5005/);
   assert.match(h, /Any policy exception\./);
-  assert.match(h, /Approve as Maya Chen/, 'the owner, acting by default, may decide');
+  assert.match(h, /Deciding as <strong>Maya Chen<\/strong>/, 'the owner, acting by default, may decide');
+  assert.match(h, /value="approve">Approve<\/button>/);
+  assert.match(h, /placeholder="Why\? \(required\)"/);
   const asJonas = String(capabilityView(setActingAs(s, 'jonas'), RR, new URLSearchParams('tab=decision&show=approvals')));
-  assert.doesNotMatch(asJonas, /Approve as/);
+  assert.doesNotMatch(asJonas, /value="approve"/);
+  assert.match(asJonas, /Choose who you&#39;re acting as at the top of the page\./);
   assert.match(asJonas, /isn&#39;t the owner or a named stakeholder/);
 });
 
@@ -3147,10 +3152,13 @@ test('A5: Evidence › Results shows gate activity and All evidence shows derive
   let s = expandedRR();
   s = callTool(s, RR, refund('ORD-5003', 10)).state;
   const mon = String(capabilityView(s, RR, new URLSearchParams('tab=evidence')));
-  assert.match(mon, /Gate activity/);
-  assert.match(mon, /1 must-never attempt\b/);
-  assert.match(mon, /0 false claims/);
-  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=monitoring'))), /measured from the gate log/, 'the restriction rules say where their readings come from');
+  assert.match(mon, /What the AI tried/);
+  assert.match(mon, /tried something never allowed 1 time\b/);
+  assert.match(mon, /0 claims that didn't match the records/);
+  // Tool ids, verdict keys and event ids stay out of the main columns.
+  assert.match(mon, /<td>Refund ORD-5003<\/td>/);
+  assert.doesNotMatch(mon.replace(/title="[^"]*"/g, ''), /issue_refund|lookup_order|needs-person|>GL-\d|>WA-\d/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=monitoring'))), /counted from logged actions/, 'the safety limits say where their readings come from');
   const ev = String(evidenceView(s, RR, new URLSearchParams()));
   assert.match(ev, /Actions blocked/);
   assert.match(ev, /Derived · Seeded demo data, This session/);
@@ -3664,14 +3672,14 @@ test('B2: ROI assumptions change only as a new version, with author and reason; 
 test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded data labelled', () => {
   const s = expandedRRB2();
   const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(page, /Expected vs actual/);
+  assert.match(page, /Expected impact vs actual/);
   assert.match(page, /8 points short of the target/);
   assert.match(page, /Seeded demo data \(pilot\)/);
   assert.match(page, /Return on investment/);
-  assert.match(page, /Assumptions, version 1/);
-  assert.match(page, /Seeded demo data/);
+  assert.match(page, /Assumptions <span class="badge badge-neutral">Demo data<\/span>/);
   assert.match(page, /data-form="roi-assumptions"/);
-  assert.match(page, /Save as version 2/);
+  assert.match(page, />Save<\/button>/);
+  assert.match(page, /Changes are kept in history\./);
 });
 
 test('B2: the seeded assumptions\' author snapshot has the same shape as a real one', () => {
@@ -3759,7 +3767,7 @@ test('C1: the plan shows on the decision workspace, the record and the capabilit
   assert.match(rec, /#refund-ai-feedback/);
   assert.match(rec, /Priya Natarajan/);
   const capPage = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
-  assert.match(capPage, /Rollout: Priya Natarajan · from/);
+  assert.match(capPage, /Rollout plan: Priya Natarajan · starts/);
   const older = initialState().decisionRecords.find((r) => r.next && r.previous && r.next.level > r.previous.level);
   assert.match(String(decisionRecordView(initialState(), older.id)), /before rollout plans were required/);
 });
@@ -3829,14 +3837,14 @@ test('C2: adoption signals never block: the gate, the queue and authorizing beha
 
 test('C2: the Monitoring tab lists each warning with what, why and source, and says when the data is simulated', () => {
   const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(page, /Adoption signals/);
-  assert.match(page, /Warnings only: they never block/);
+  assert.match(page, /How people are using it/);
+  assert.match(page, /Early warnings only\. They never block anything\./);
   assert.match(page, /Possible rubber-stamping/);
   assert.match(page, /Overrides are rising/);
   assert.match(page, /Why it matters/);
   assert.match(page, /Simulated demo data/);
   const quiet = String(capabilityView(withAdoption(initialState(), null), RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(quiet, /No adoption warnings/);
+  assert.match(quiet, /Nothing looks off/);
 });
 
 // #93: navigation simplified; old addresses keep working.
@@ -3931,16 +3939,16 @@ test('#95: Monitoring has a Still safe? view and a Delivering value? view; the s
   const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
   const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
   assert.match(health, /class="chip is-active"[^>]*>Still safe\?/);
-  assert.match(health, /Restriction rules/);
-  assert.doesNotMatch(health, /Gate activity/, 'gate activity is evidence, under Evidence › Results');
-  assert.doesNotMatch(health, /Expected vs actual|Return on investment|Adoption signals/);
+  assert.match(health, /Safety limits/);
+  assert.doesNotMatch(health, /What the AI tried/, 'gate activity is evidence, under Evidence › Results');
+  assert.doesNotMatch(health, /Expected impact vs actual|Return on investment|How people are using it/);
   // Three outcomes not met, two simulated adoption warnings: 5 on the Value chip.
   assert.match(health, /show=value"[^>]*>Delivering value\? <span class="chip-count">5<\/span>/);
   const value = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(value, /Expected vs actual/);
+  assert.match(value, /Expected impact vs actual/);
   assert.match(value, /Return on investment/);
-  assert.match(value, /Adoption signals/);
-  assert.doesNotMatch(value, /Restriction rules/);
+  assert.match(value, /How people are using it/);
+  assert.doesNotMatch(value, /Safety limits/);
 });
 
 test('#96: the decision page numbers its steps and the checklist says exactly what blocks Authorize', () => {
@@ -4055,8 +4063,9 @@ test('Overview: To do, Approvals needed, Important results, Current authority, i
   // Approvals: the waiting refunds, with who can approve.
   assert.match(out, /2 refunds need a person to decide/);
   assert.match(out, /Who can approve: Maya Chen, Priya Natarajan, Daniel Okafor, Sofia Alvarez or Elena Rossi\./);
+  assert.match(out, /href="#\/capabilities\/refund-recommendation\?tab=decision&amp;show=approvals">Review the refunds/, 'the approvals link opens Decision › Approvals directly');
   // Important results: only what changes authority.
-  assert.match(out, /Thin evidence<\/span>/);
+  assert.match(out, /Not enough data yet<\/span>/);
   assert.match(out, /High-value refunds \(&gt; \$100\): 83% accurate, on only 18 cases\./);
   assert.match(out, /Severe failure<\/span>/);
   assert.match(out, /Moved back to Recommend on Sep 24 by Daniel Okafor\./);
@@ -4081,7 +4090,7 @@ test('Overview after an automatic restriction: the review comes first, the resul
   assert.match(todo, />Record the review</);
   assert.doesNotMatch(todo, /Decide whether Refund recommendation/);
   assert.match(out, /Moved back automatically<\/span>/);
-  assert.match(out, /Review needed before it can expand again/);
+  assert.match(out, /Review needed before it can get more authority/);
   assert.match(out, /Moved back<\/span><div class="ov-plain">/);
 });
 
@@ -4110,4 +4119,39 @@ test('Overview with nothing outstanding says so in each section', () => {
   assert.match(out, /Nothing is waiting for approval\./);
   assert.match(out, /No results are changing what the AI may do\./);
   assert.match(out, /No change planned/);
+});
+
+// Copy pass (2026-10-12): dates on screen come from the data, never a
+// hard-coded fallback that goes stale after a reset or Start empty.
+const withCapData = (s, id, patch) => ({ ...s, capabilityData: { ...s.capabilityData, [id]: { ...capData(s, id), ...patch } } });
+
+test('the pilot range and the stakeholder positions date never fall back to a made-up date', () => {
+  const s0 = initialState();
+  setPeople(people(s0));
+  // A pilot still running: "since" its start, not "to Oct 6".
+  const running = withCapData(s0, RR, { pilot: { ...capData(s0, RR).pilot, started: '2026-10-03', ended: undefined } });
+  const ev = String(capabilityView(running, RR, new URLSearchParams('tab=evidence')));
+  assert.match(ev, /Limited pilot · since Oct 3</);
+  assert.doesNotMatch(ev, /Limited pilot · [^<]*Oct 6/);
+  // A finished pilot keeps its real range.
+  assert.match(String(capabilityView(s0, RR, new URLSearchParams('tab=evidence'))), /Limited pilot · Oct 1 to Oct 6</);
+  // Positions with no recorded date: no date at all.
+  const versions = capData(s0, RR).versions;
+  const last = versions.stakeholders.at(-1);
+  const undated = withCapData(s0, RR, { versions: { ...versions, stakeholders: [...versions.stakeholders.slice(0, -1), { ...last, value: last.value.map(({ date, ...rest }) => rest) }] } });
+  const summary = String(capabilityView(undated, RR, new URLSearchParams('')));
+  assert.match(summary, /<p class="muted">Each view is shown as it was given, not averaged into a score\.<\/p>/);
+  assert.doesNotMatch(summary, /Positions (as of|recorded)/);
+  // With dates, the latest one is shown.
+  assert.match(String(capabilityView(s0, TC, new URLSearchParams(''))), /Positions as of Aug 18\. Each view is shown as it was given/);
+});
+
+test('the rules builder for a capability that already has rules points to its Rules tab, with no issue numbers on screen', () => {
+  const s = initialState();
+  const page = String(contractBuilderView(s, RR, new URLSearchParams()));
+  assert.match(page, /<h1>Set up rules<\/h1>/);
+  assert.match(page, /Rules are already set/);
+  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=rules">See rules</);
+  const text = page.replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'");
+  assert.doesNotMatch(text, /#\d|amendment|sign-off|contract/i);
 });
