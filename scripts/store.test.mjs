@@ -30,6 +30,7 @@ import { proposalView } from '../src/views/proposals.js';
 import { agentRunsView } from '../src/views/agentruns.js';
 import { overviewView } from '../src/views/overview.js';
 import { versionsView } from '../src/views/versions.js';
+import { peopleView } from '../src/views/people.js';
 import { starterScenarios } from '../src/data/scenario-templates.js';
 import { defaultCriteria, defaultRequirements } from '../src/data/criteria-defaults.js';
 import { pickTemplate, suggestLines } from '../src/data/contract-templates.js';
@@ -352,7 +353,7 @@ test('amend covers criteria, requirements, risk and stakeholders, and rejects ba
   s = amend(s, RR, 'stakeholders', { value: [], author: 'maya', reason: 'Reset positions.' });
   assert.deepEqual(current(s, RR, 'stakeholders'), []);
   assert.throws(() => amend(s, RR, 'contract', { value: {}, author: 'maya', reason: '' }), /reason/);
-  assert.throws(() => amend(s, RR, 'contract', { value: {}, author: 'nobody', reason: 'x' }), /author/);
+  assert.throws(() => amend(s, RR, 'contract', { value: {}, author: 'nobody', reason: 'x' }), /Choose who is acting/);
   assert.throws(() => amend(s, RR, 'pilot', { value: {}, author: 'maya', reason: 'x' }), /Unknown versioned/);
   assert.throws(() => amend(s, 'no-such', 'contract', { value: {}, author: 'maya', reason: 'x' }), /Unknown capability/);
 });
@@ -370,7 +371,7 @@ test('afterEvidence is set from whether evidence existed, and decides whether th
   s = amend(s, RR, 'criteria', { value: current(s, RR, 'criteria'), author: 'maya', reason: 'Re-saved after the pilot.' });
   assert.equal(currentVersion(s, RR, 'criteria').afterEvidence, true);
   assert.equal(s.activity[0].surfaced, true, 'an amendment after evidence is surfaced');
-  assert.match(s.activity[0].body, /after evidence existed/);
+  assert.match(s.activity[0].body, /Changed after results were in/);
 });
 
 test('decision records save the version numbers in force at the time', () => {
@@ -562,7 +563,9 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: LOW_RISK, startingLevel: 2 }), /Level 0 or Level 1/);
   assert.throws(() => addCapability(initialState(), { name: '', owner: 'priya', risk: LOW_RISK, startingLevel: 0 }), /name/);
   assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'nobody', risk: LOW_RISK, startingLevel: 0 }), /owner/);
-  assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: { impact: 'High' }, startingLevel: 0 }), /reversibility/);
+  assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: { impact: 'High' }, startingLevel: 0 }), /Choose whether it can be undone/);
+  assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: { reversibility: 'Easy to reverse', exposure: 'Internal only' }, startingLevel: 0 }), /Choose how serious a bad decision would be/);
+  assert.throws(() => addCapability(initialState(), { name: 'X', owner: 'priya', risk: { impact: 'Low', reversibility: 'Easy to reverse' }, startingLevel: 0 }), /Choose who or what is affected/);
   // The seeded demo is untouched.
   assert.equal(decisionRequired(s, RR), true);
   assert.equal(focusCapability(s).id, RR);
@@ -582,7 +585,7 @@ test('whoever is acting is recorded as the authorizer, alongside the owner when 
 });
 
 test('"not delegated, by design" needs a rationale and is recorded as a decision', () => {
-  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /rationale/);
+  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /Say why the AI won't do this/);
   const s = addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High', reversibility: 'Difficult to reverse' }, notDelegated: true, rationale: 'Deletion is irreversible and rare. A person does it.', by: 'daniel' });
   const c = s.capabilities[s.capabilities.length - 1];
   assert.equal(c.status, 'not-delegated');
@@ -691,7 +694,7 @@ test('starting a draft builds template lines (accepted) plus AI suggestions (pen
   // Starting again is a no-op while a draft is open.
   assert.equal(startContractDraft(s, id), s);
   // The seeded refund capability already has a contract.
-  assert.throws(() => startContractDraft(initialState(), RR), /already has a finalized contract/);
+  assert.throws(() => startContractDraft(initialState(), RR), /These rules are already set. To change them, propose a change/);
 });
 
 test('suggestions are reviewed one at a time; edits keep the original; rejections are kept', () => {
@@ -709,12 +712,12 @@ test('suggestions are reviewed one at a time; edits keep the original; rejection
   assert.equal(capData(s, id).contractDraft.lines.find((l) => l.id === ai[2].id).status, 'rejected');
   assert.ok(!draftValue(capData(s, id).contractDraft)[ai[2].section].includes(ai[2].text), 'rejected text is not in the contract');
   assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'approve' }), /Unknown decision/);
-  assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'edit', text: '  ' }), /needs text/);
+  assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'edit', text: '  ' }), /Type the rule, or reject the suggestion/);
   const tpl = capData(s, id).contractDraft.lines.find((l) => l.source === 'template');
   assert.throws(() => reviewSuggestion(s, id, tpl.id, { decision: 'accept' }), /Only AI suggestions/);
   // A section cannot be confirmed while it has pending suggestions.
   const pendingSection = capData(s, id).contractDraft.lines.find((l) => l.status === 'pending').section;
-  assert.throws(() => confirmSection(s, id, pendingSection, true), /Review every suggestion/);
+  assert.throws(() => confirmSection(s, id, pendingSection, true), /Accept, edit or reject every suggestion in this section first/);
 });
 
 test('lines can be added, edited and removed; any change unconfirms the section', () => {
@@ -732,9 +735,9 @@ test('lines can be added, edited and removed; any change unconfirms the section'
   s = removeContractLine(s, id, tpl.id);
   assert.equal(capData(s, id).contractDraft.lines.find((l) => l.id === tpl.id).status, 'removed');
   const ai = capData(s, id).contractDraft.lines.find((l) => l.source === 'ai');
-  assert.throws(() => removeContractLine(s, id, ai.id), /Reject a suggestion/);
+  assert.throws(() => removeContractLine(s, id, ai.id), /Reject this suggestion instead/);
   assert.throws(() => addContractLine(s, id, 'nope', 'x'), /Unknown section/);
-  assert.throws(() => addContractLine(s, id, 'may', ''), /needs text/);
+  assert.throws(() => addContractLine(s, id, 'may', ''), /Type the rule first/);
 });
 
 test('software checks: empty hard limits above Low, contradictions, rules without a number or window, financial without a value limit', () => {
@@ -783,10 +786,10 @@ test('finalize needs every suggestion reviewed, every section confirmed and no b
   const ai = capData(s, id).contractDraft.lines.filter((l) => l.source === 'ai');
   s = reviewSuggestion(s, id, ai[0].id, { decision: 'reject' });
   for (const l of ai.slice(1)) s = reviewSuggestion(s, id, l.id, { decision: 'accept' });
-  assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /not yet confirmed/);
+  assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /Confirm \d+ sections?: /);
   s = confirmAll(s, id);
   assert.equal(canFinalizeContract(s, id).ok, true, JSON.stringify(contractChecks(s, id)));
-  assert.throws(() => finalizeContract(s, id, {}), /named person/);
+  assert.throws(() => finalizeContract(s, id, {}), /Choose who is acting before you save the rules/);
   const before = s.activity.length;
   s = finalizeContract(s, id, { by: 'daniel' });
   const v = currentVersion(s, id, 'contract');
@@ -808,9 +811,9 @@ test('finalize needs every suggestion reviewed, every section confirmed and no b
   assert.equal(getCapability(s, id).status, 'setup');
   assert.deepEqual(getCapability(s, id).authority, { level: 0, limited: false });
   // Finalized drafts are closed to edits.
-  assert.throws(() => addContractLine(s, id, 'may', 'More.'), /finalized/);
-  assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /already finalized/);
-  assert.throws(() => startContractDraft(s, id), /already has a finalized contract/);
+  assert.throws(() => addContractLine(s, id, 'may', 'More.'), /These rules are already set/);
+  assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /These rules are already saved/);
+  assert.throws(() => startContractDraft(s, id), /These rules are already set. To change them, propose a change/);
   assert.match(contractSummary(v.value, getCapability(s, id)), /must never/);
 });
 
@@ -851,7 +854,7 @@ test('saving writes v1 of both; saving again before the lock writes v2; readines
   let [s, id] = withNewCap();
   assert.equal(criteriaSaved(s, id), false);
   const d = defaultsFor(s, id);
-  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements }), /named person/);
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements }), /Choose who is acting before you save the criteria/);
   assert.throws(() => saveCriteria(s, id, { criteria: [], requirements: d.requirements, by: 'priya' }), /at least one success criterion/);
   assert.throws(() => saveCriteria(s, id, { criteria: [{ name: 'Quality', target: '' }], requirements: d.requirements, by: 'priya' }), /needs a name and a target/);
   assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: [{ text: ' ' }], by: 'priya' }), /needs text/);
@@ -1184,12 +1187,12 @@ test('a proposed contract must pass the builder checks before it can be submitte
   // Empty hard limits on a High-impact capability.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [], autoRestriction: [] }, by: 'priya', reason: 'Trying to drop the hard limits.' }), /fails 2 checks/);
   // A contradiction.
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /appears under both/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "AI may" and "AI must never". Keep it in one/);
   // An unmeasurable restriction rule.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, autoRestriction: ['Too many errors returns the capability to Draft.'] }, by: 'priya', reason: 'A vague rule.' }), /has no number/);
   // Value limit only under "must never" on a financial capability.
   const noLimit = { ...c, mustAsk: c.mustAsk.filter((t) => !/\$/.test(t)), may: c.may.filter((t) => !/\$/.test(t)), mustNever: [...c.mustNever, 'Issue a refund above $500.'] };
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: noLimit, by: 'priya', reason: 'Moving the limit to must never.' }), /sets no value limit/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: noLimit, by: 'priya', reason: 'Moving the limit to must never.' }), /these rules set no value limit/);
   // A valid change goes through.
   const ok = proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [...c.mustNever, 'Issue a refund while a fraud review is open.'] }, by: 'priya', reason: 'Close the gap found in INC-01.' });
   assert.ok(openProposal(ok, RR, 'contract'));
@@ -1606,8 +1609,8 @@ test('the roster is version 1 of the seed, with explicit rights; everything read
 
 test('only a workspace admin changes the roster, always with a reason; add, edit and deactivate write versions', () => {
   let s = initialState();
-  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /not a workspace admin/);
-  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: '' }), /needs a reason/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: '' }), /Add a reason \(a few words\)/);
   assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: '', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' }), /name, a title and a team/);
   const before = s.activity.length;
   s = addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' });
@@ -1624,8 +1627,8 @@ test('only a workspace admin changes the roster, always with a reason; add, edit
   s = addPerson(s, { name: 'Omar Haddad', title: 'Analyst', team: 'Finance', by: 'jonas', reason: 'A second Omar.' });
   assert.ok(personRecord(s, 'omar-haddad-2'));
   // Edit name/title/team only.
-  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /not a workspace admin/);
-  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'maya', reason: 'Nothing happened here.' }), /Nothing changed/);
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'maya', reason: 'Nothing happened here.' }), /Nothing to save: the name, title and team are unchanged/);
   s = editPerson(s, 'omar-haddad', { title: 'Support Team Lead', by: 'maya', reason: 'Promoted to lead.' });
   assert.equal(personRecord(s, 'omar-haddad').role, 'Support Team Lead');
   assert.equal(rosterVersions(s).length, 4);
@@ -1657,7 +1660,7 @@ test('a deactivated person cannot act, propose, approve, author or be a stakehol
   assert.ok(!p.eligible.includes('elena'), 'not eligible when frozen');
   assert.throws(() => approveProposal(s, RR, p.id, { by: 'elena' }), /deactivated and cannot approve/);
   assert.throws(() => rejectProposal(s, RR, p.id, { by: 'elena', reason: 'Not from here.' }), /deactivated/);
-  assert.throws(() => amend(s, RR, 'risk', { value: current(s, RR, 'risk'), author: 'elena', reason: 'Trying anyway.' }), /deactivated and cannot author/);
+  assert.throws(() => amend(s, RR, 'risk', { value: current(s, RR, 'risk'), author: 'elena', reason: 'Trying anyway.' }), /deactivated and can't make changes/);
   assert.throws(() => authorize(selectDecision(s, RR, 'hold'), RR, { by: 'elena' }), /deactivated and cannot authorize/);
   assert.throws(() => addCapability(s, { name: 'X', owner: 'elena', risk: LOW_RISK, startingLevel: 0 }), /deactivated and cannot own/);
   // Stakeholder lists: cannot add; existing entries stop counting as named stakeholders.
@@ -1719,11 +1722,11 @@ test('no team-based Risk logic remains in the store or the views', () => {
 test('rights are granted and removed through a proposal by an admin, approved by a different admin, never self-granted', () => {
   let s = initialState();
   assert.deepEqual(activeAdmins(s).sort(), ['jonas', 'maya']);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /not a workspace admin/);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'riskApprover', grant: true, by: 'maya', reason: 'I want it.' }), /Nobody grants a right to themselves/);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: true, by: 'maya', reason: 'Already has it.' }), /already holds/);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: false, by: 'maya', reason: 'Never had it.' }), /does not hold/);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'ok' }), /needs a reason/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'riskApprover', grant: true, by: 'maya', reason: 'I want it.' }), /You can't grant a right to yourself/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: true, by: 'maya', reason: 'Already has it.' }), /Daniel Okafor is already a Risk approver/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: false, by: 'maya', reason: 'Never had it.' }), /Elena .* isn't a Risk approver/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'ok' }), /Add a reason \(a few words\)/);
   s = proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'Finance joins Risk sign-off.' });
   const pr = openRosterProposal(s, 'elena');
   assert.equal(pr.id, 'RP-1');
@@ -1731,11 +1734,15 @@ test('rights are granted and removed through a proposal by an admin, approved by
   assert.equal(isRiskApprover(s, 'elena'), false, 'nothing applied yet');
   assert.equal(s.activity[0].kind, 'roster');
   assert.equal(s.activity[0].surfaced, true);
+  assert.match(s.activity[0].title, /^Proposed: Make Elena \S+ a Risk approver$/);
+  const waitingFor = s.activity[0].body.match(/Waiting for approval from ([^.]+)\./)[1].split(', ').sort();
+  assert.deepEqual(waitingFor, ['Daniel Okafor', 'Jonas Lindqvist', 'Sofia Alvarez'], 'names who can approve');
   assert.throws(() => approveRosterChange(s, 'RP-1', { by: 'maya' }), /someone else must approve/);
   assert.throws(() => approveRosterChange(s, 'RP-1', { by: 'priya' }), /neither a workspace admin nor a Risk approver/);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'workspaceAdmin', grant: true, by: 'jonas', reason: 'Second change at once.' }), /already awaiting sign-off/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'workspaceAdmin', grant: true, by: 'jonas', reason: 'Second change at once.' }), /already waiting for approval. Approve, reject or withdraw it first/);
   s = approveRosterChange(s, 'RP-1', { by: 'jonas' });
   assert.equal(getRosterProposal(s, 'RP-1').status, 'approved');
+  assert.match(s.activity[0].title, /^Elena \S+ is now a Risk approver$/);
   assert.equal(isRiskApprover(s, 'elena'), true);
   const v = rosterVersions(s)[rosterVersions(s).length - 1];
   assert.equal(v.author, 'maya');
@@ -1753,7 +1760,7 @@ test('rights are granted and removed through a proposal by an admin, approved by
   const rej = rejectRosterChange(s, 'RP-2', { by: 'maya', reason: 'Keep her on for the quarter.' });
   assert.equal(getRosterProposal(rej, 'RP-2').status, 'rejected');
   assert.equal(isRiskApprover(rej, 'elena'), true);
-  assert.throws(() => withdrawRosterChange(s, 'RP-2', { by: 'maya', reason: 'Not mine.' }), /Only the proposer withdraws/);
+  assert.throws(() => withdrawRosterChange(s, 'RP-2', { by: 'maya', reason: 'Not mine.' }), /Only the person who proposed this can withdraw it/);
   const wd = withdrawRosterChange(s, 'RP-2', { by: 'jonas', reason: 'Raised too early.' });
   assert.equal(getRosterProposal(wd, 'RP-2').status, 'withdrawn');
   s = approveRosterChange(s, 'RP-2', { by: 'maya' });
@@ -1767,10 +1774,10 @@ test('the last workspace admin cannot be removed or deactivated; a rights holder
   s = approveRosterChange(s, 'RP-1', { by: 'jonas' });
   assert.deepEqual(activeAdmins(s), ['maya']);
   // Now nothing about Maya's admin right can be proposed: removal would leave none, and no other admin could sign off anyway.
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'workspaceAdmin', grant: false, by: 'maya', reason: 'Stepping down.' }), /no workspace admin/);
-  assert.throws(() => deactivatePerson(s, 'maya', { by: 'maya', reason: 'Leaving somehow.' }), /no workspace admin/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'workspaceAdmin', grant: false, by: 'maya', reason: 'Stepping down.' }), /Make someone else a workspace admin first/);
+  assert.throws(() => deactivatePerson(s, 'maya', { by: 'maya', reason: 'Leaving somehow.' }), /Make someone else a workspace admin first/);
   // Any other governed change now needs a second admin, which does not exist.
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'workspaceAdmin', grant: true, by: 'maya', reason: 'Finance needs an admin.' }), /No other workspace admin can sign this off/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'workspaceAdmin', grant: true, by: 'maya', reason: 'Finance needs an admin.' }), /Nobody else can approve this. Make someone else a workspace admin first/);
   // A Risk approver grant still has approvers: the existing Risk approvers.
   assert.deepEqual(openRosterProposal(proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'Finance joins Risk sign-off.' }), 'elena').eligible.sort(), ['daniel', 'sofia']);
   // Deactivating a Risk approver goes through a proposal; a plain person does not.
@@ -1818,7 +1825,7 @@ test('a grant cannot be approved by the person receiving it; a Risk approver gra
   // A workspace admin grant is admins only: a Risk approver cannot sign it, and the recipient cannot.
   let u = proposeRosterChange(initialState(), { kind: 'rights', person: 'priya', right: 'workspaceAdmin', grant: true, by: 'maya', reason: 'Operations needs an admin.' });
   assert.deepEqual(openRosterProposal(u, 'priya').eligible, ['jonas']);
-  assert.throws(() => approveRosterChange(u, 'RP-1', { by: 'daniel' }), /not an active workspace admin/);
+  assert.throws(() => approveRosterChange(u, 'RP-1', { by: 'daniel' }), /Daniel Okafor isn't a workspace admin/);
   assert.throws(() => approveRosterChange(u, 'RP-1', { by: 'priya' }), /cannot approve their own grant/);
   u = approveRosterChange(u, 'RP-1', { by: 'jonas' });
   assert.equal(isWorkspaceAdmin(u, 'priya'), true);
@@ -1929,10 +1936,10 @@ test('a High or Financial capability warns when fewer than two active Risk appro
   s = removeRight(s, 'sofia', 'riskApprover');
   const w = coverageWarning(s, RR);
   assert.ok(w);
-  assert.match(w.title, /only one active Risk approver/);
+  assert.equal(w.title, 'Add a second Risk approver to Refund recommendation');
   assert.match(w.body, /Daniel Okafor is the only Risk approver/);
-  assert.equal(w.link, '#/capabilities/refund-recommendation?tab=stakeholders');
-  assert.deepEqual(w.links.map((l) => l.text), ['Stakeholders', 'People']);
+  assert.equal(w.link, '#/capabilities/refund-recommendation/stakeholders/edit');
+  assert.deepEqual(w.links.map((l) => [l.text, l.href]), [['Manage stakeholders', '#/capabilities/refund-recommendation/stakeholders/edit'], ['People', '#/people']]);
   assert.ok(coverageWarnings(s).some((x) => x.capabilityId === 'account-closure'));
   assert.ok(!coverageWarnings(s).some((x) => x.capabilityId === TC));
   // Nothing is blocked: proposing on the capability still works (Daniel can be the Risk approver if someone else proposes).
@@ -1941,7 +1948,8 @@ test('a High or Financial capability warns when fewer than two active Risk appro
   // Deactivating Daniel too: no Risk approver at all.
   s = proposeRosterChange(s, { kind: 'deactivate', person: 'daniel', by: 'maya', reason: 'Leaving the company.' });
   s = approveRosterChange(s, openRosterProposal(s, 'daniel').id, { by: 'jonas' });
-  assert.match(coverageWarning(s, RR).title, /no active Risk approvers/);
+  assert.equal(coverageWarning(s, RR).title, 'Add two Risk approvers to Refund recommendation');
+  assert.match(coverageWarning(s, RR).body, /Nobody on its stakeholder list is a Risk approver/);
   // Granting the right to a listed person clears it.
   s = proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'maya', reason: 'Finance covers Risk sign-off.' });
   s = approveRosterChange(s, openRosterProposal(s, 'elena').id, { by: 'jonas' });
@@ -1961,9 +1969,10 @@ test('an open proposal is flagged when its frozen approvers can no longer satisf
   s = removeRight(s, 'sofia', 'riskApprover');
   const w = proposalWarning(s, RR, p());
   assert.ok(w);
-  assert.match(w.title, /P-1 on Refund recommendation can no longer be signed off/);
-  assert.match(w.body, /none of the approvers frozen when it opened holds the Risk approver right now/);
-  assert.match(w.body, /withdraw it and propose again/);
+  assert.equal(w.title, 'This change to Refund recommendation can no longer be approved');
+  assert.match(w.body, /Risk approval still needed, and none of the people who can approve it is a Risk approver any more/);
+  assert.match(w.body, /Who can approve P-1 was set when it was proposed/);
+  assert.match(w.body, /withdraws it and proposes it again/);
   assert.equal(w.link, '#/capabilities/refund-recommendation/proposals/P-1');
   assert.ok(coverageWarnings(s, RR).some((x) => x.kind === 'proposal'));
   // Approvals are still accepted where eligible; nothing is blocked, the gap is just explained.
@@ -1981,7 +1990,7 @@ test('an open proposal is flagged when its frozen approvers can no longer satisf
   t = proposeAmendment(t, id, 'criteria', { value: { criteria: current(t, id, 'criteria'), requirements: current(t, id, 'requirements') }, by: 'maya', reason: 'Non-owner proposing; the owner must approve.' });
   assert.equal(proposalSatisfiable(t, id, openProposal(t, id, 'criteria')).ok, true);
   t = deactivatePerson(t, 'priya', { by: 'maya', reason: 'Left the company.' });
-  assert.match(proposalSatisfiable(t, id, openProposal(t, id, 'criteria')).reason, /owner .* can no longer do so/);
+  assert.match(proposalSatisfiable(t, id, openProposal(t, id, 'criteria')).reason, /Only the owner, .*, can approve this, and they no longer can/);
 });
 
 test('removing a right or deactivating someone shows the impact and still goes through with a reason', () => {
@@ -2002,7 +2011,7 @@ test('removing a right or deactivating someone shows the impact and still goes t
   const impact2 = rosterChangeImpact(s, { kind: 'deactivate', person: 'sofia' });
   assert.deepEqual(impact2.proposals.map((x) => x.id), ['P-1']);
   // The roster proposal records the impact; a reason is required; it is not blocked.
-  assert.throws(() => proposeRosterChange(s, { kind: 'deactivate', person: 'sofia', by: 'maya', reason: '' }), /needs a reason/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'deactivate', person: 'sofia', by: 'maya', reason: '' }), /Add a reason \(a few words\)/);
   s = proposeRosterChange(s, { kind: 'deactivate', person: 'sofia', by: 'maya', reason: 'Leaving the company; Risk cover to be rebuilt.' });
   const pr = openRosterProposal(s, 'sofia');
   assert.equal(pr.impact.any, true);
@@ -2282,7 +2291,7 @@ test('workspace setup records the workspace, the one workflow and the founding r
   assert.deepEqual([workspaceOf(s).name, workflowOf(s).name], ['Acme Help', 'Ticket handling']);
   const v = rosterVersions(s);
   assert.equal(v.length, 1);
-  assert.match(v[0].reason, /Founding roster/);
+  assert.equal(v[0].reason, 'People added when the workspace was set up.');
   assert.equal(v[0].author, 'ben-okoro', 'the person who chose to set it up, not the first listed');
   assert.equal(v[0].authorAt.name, 'Ben Okoro');
   assert.deepEqual(activeAdmins(s).sort(), ['ana-ruiz', 'ben-okoro']);
@@ -2297,8 +2306,8 @@ test('setup refuses an incomplete workspace and a founding roster with fewer tha
   const e = startEmpty();
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workspace: { name: '' } }), /Name the workspace/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workflow: { name: '' } }), /Name the workflow/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]] }), /at least two people/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /at least 2 workspace admins/, 'a lone admin could never grant a right');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]] }), /Add at least two people/);
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /Mark at least 2 people as workspace admins/, 'a lone admin could never grant a right');
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Ana Ruiz', title: 'Twin', team: 'X' }] }), /same name/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Dev', title: '', team: 'X' }] }), /name, a title and a team/);
 });
@@ -2335,11 +2344,24 @@ test('the store persists an empty workspace through setup', () => {
 test('the person setting up the workspace is chosen, and must be a founding admin', () => {
   const e = startEmpty();
   assert.throws(() => setUpWorkspace(e, { ...SETUP, by: '' }), /Choose who is setting this up/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Cara Ng' }), /not one of the founding workspace admins/, 'a founding Risk approver who is not an admin');
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Maya Chen' }), /not one of the founding workspace admins/, 'someone not in the roster');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Cara Ng' }), /isn't marked as a workspace admin. Choose a workspace admin to set this up/, 'a founding Risk approver who is not an admin');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, by: 'Maya Chen' }), /isn't marked as a workspace admin. Choose a workspace admin to set this up/, 'someone not in the roster');
   const s = setUpWorkspace(e, { ...SETUP, by: 'Ana Ruiz' });
   assert.deepEqual([rosterVersions(s)[0].author, s.actingAs], ['ana-ruiz', 'ana-ruiz']);
-  assert.match(s.activity[0].body, /^Set up by Ana Ruiz\./);
+  assert.match(s.activity[0].body, /^Ana Ruiz set up Acme Help for the Ticket handling workflow with 3 people\./);
+});
+
+test('repro: People history never calls the first list "Seed roster", and a workspace started empty names it as set up', () => {
+  const s = setUpWorkspace(startEmpty(), SETUP);
+  setPeople(people(s));
+  const page = String(peopleView(s, new URLSearchParams()));
+  setPeople(null);
+  assert.ok(!/Seed roster/.test(page), 'not seed data in a workspace started empty');
+  assert.match(page, /<h3>People at setup<\/h3>/);
+  assert.match(page, /People added when the workspace was set up\./);
+  const demo = String(peopleView(initialState(), new URLSearchParams()));
+  assert.ok(!/Seed roster/.test(demo));
+  assert.match(demo, /<h3>Demo starting list<\/h3>/);
 });
 
 test('setup notes, without blocking, when fewer than two Risk approvers are listed', () => {
@@ -2367,11 +2389,24 @@ test('a workspace admin renames the workspace and workflow directly, with a reas
   assert.match(s.activity[0].body, /Reason: The support org was renamed/);
 });
 
+test('repro: a rename reason with no final full stop still ends its sentence in Activity', () => {
+  const s = renameWorkspace(initialState(), { ...RENAME, reason: 'The support org was renamed this quarter', by: 'maya' });
+  assert.equal(s.activity[0].title, 'Workspace details changed');
+  assert.match(s.activity[0].body, /Reason: The support org was renamed this quarter\. Older records keep the names they were made under\.$/);
+  assert.equal(s.activity[0].link, '#/people?focus=workspace');
+  // A reason that already ends a sentence gets no second full stop.
+  const t = renameWorkspace(initialState(), { ...RENAME, by: 'maya' });
+  assert.match(t.activity[0].body, /Reason: The support org was renamed this quarter\. Older records/);
+  assert.ok(!/\.\./.test(t.activity[0].body));
+  const q = renameWorkspace(initialState(), { ...RENAME, reason: 'Did the support org really get renamed?', by: 'maya' });
+  assert.match(q.activity[0].body, /renamed\? Older records/);
+});
+
 test('only an active workspace admin renames, and only with a reason and an actual change', () => {
   const s = initialState();
-  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /not a workspace admin/, 'a Risk approver is not enough');
-  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'maya', reason: 'rename' }), /needs a reason/);
-  assert.throws(() => renameWorkspace(s, { workspace: { name: 'Northstar Support' }, workflow: { name: 'Customer Support Resolution' }, reason: 'No real change here.', by: 'maya' }), /Nothing changed/);
+  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/, 'a Risk approver is not enough');
+  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'maya', reason: 'rename' }), /Add a reason for the change \(a sentence\)/);
+  assert.throws(() => renameWorkspace(s, { workspace: { name: 'Northstar Support' }, workflow: { name: 'Customer Support Resolution' }, reason: 'No real change here.', by: 'maya' }), /Nothing to save: the names and descriptions are unchanged/);
   assert.throws(() => renameWorkspace(s, { ...RENAME, workspace: { name: ' ' }, by: 'maya' }), /Name the workspace/);
   assert.throws(() => renameWorkspace(startEmpty(), { ...RENAME, by: 'maya' }), /Set up the workspace first/);
   let d = proposeRosterChange(s, { kind: 'deactivate', person: 'jonas', by: 'maya', reason: 'Jonas left the company.' });
@@ -2811,7 +2846,7 @@ test('A2: the data section is versioned with the contract and checked by softwar
   assert.deepEqual(checks(['order.id']), []);
   assert.match(checks(['order.cardNumber']).join(), /restricted/);
   assert.match(checks(['customer.address']).join(), /restricted/);
-  assert.match(checks(['order.secretSauce']).join(), /not a field/);
+  assert.match(checks(['order.secretSauce']).join(), /isn't data any connected tool provides/);
   // A proposed contract amendment carries the data section through.
   const after = proposeAmendment(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id', 'order.value'] }, by: 'maya', reason: 'Narrowing what the AI sees.' });
   const p = capData(after, RR).proposals.at(-1);
@@ -3515,7 +3550,7 @@ test('#89 loophole: an automatic restriction closes an open proposal, so L2 → 
   assert.equal(getCapability(s, RR).authority.level, 2);
   assert.equal(capData(s, RR).decision.proposed, null, 'the proposal is closed');
   assert.match(closedNote(s).title, /from Level 3 to Level 2/);
-  assert.match(closedNote(s).body, /proposal to move to Level 4/);
+  assert.match(closedNote(s).body, /Refund recommendation dropped from Level 3 to Level 2, so the proposed move to Level 4 no longer applies\. To expand again, propose a move to Level 3\./);
   s = recordReview(s, RR, { by: 'daniel', whatHappened: 'Severe error rate crossed the threshold.', cause: 'Idempotency check failed on retries.', changes: 'Added a duplicate guard and a test.' });
   // The probe: select Expand, rationale, two outcomes, authorize. Entering
   // outcomes is already refused (no open decision)...
