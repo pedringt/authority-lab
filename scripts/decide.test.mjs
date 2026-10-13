@@ -45,8 +45,8 @@ test('Decide step 1: now and proposed, behaviour first and the level second', ()
   const now = page.indexOf('<span class="muted small">Now</span>');
   const proposed = page.indexOf('<span class="muted small">Proposed</span>');
   assert.ok(now > 0 && proposed > now);
-  assert.match(page, /Now<\/span><strong>Drafts\. A person approves every action\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
-  assert.match(page, /Proposed<\/span><strong>Acts on its own within limits\. Everything else goes to a person\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
+  assert.match(page, /Now<\/span><strong>Prepares the action\. A person approves every one\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
+  assert.match(page, /Proposed<\/span><strong>Runs automatically within limits\. Everything else goes to human review\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
 });
 
 test('Decide step 2: one headline, the top gap, a serious failure, and one line per kind of evidence', () => {
@@ -227,7 +227,7 @@ test('Decide with no decision open: what has to happen first, the evidence, and 
   assert.match(ready, /data-action="propose-authority" data-capability="refund-execution-high-value" data-level="2">Propose a move to Level 2<\/button>/);
   const opened = decide(proposeAuthority(tested, HV, 2, { by: 'maya' }), HV);
   assert.match(opened, /<h2>Your decision<\/h2>/);
-  assert.match(opened, /Proposed<\/span><strong>Drafts\. A person approves every action\.<\/strong>/);
+  assert.match(opened, /Proposed<\/span><strong>Prepares the action\. A person approves every one\.<\/strong>/);
 });
 
 test('Decide after an automatic restriction says once that a review comes first, and links to Monitor', () => {
