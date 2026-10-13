@@ -49,6 +49,30 @@
 /* History ----------------------------------------------------------------- */
 
 /* Overview ---------------------------------------------------------------- */
+/* Work rows on dividers, not cards. The Capabilities page shares the table. */
+.ov-rows, .ov-results { border-top: 1px solid var(--border); }
+.ov-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: center; padding: 10px 4px 10px 12px; border-bottom: 1px solid var(--border); }
+.ov-row.is-hot { box-shadow: inset 3px 0 0 var(--decide); background: var(--surface); }
+.ov-row p, .ov-result p { margin: 0; }
+.ov-cap { font-size: 12.5px; color: var(--muted); }
+.ov-title { font-weight: 600; }
+.ov-sub { font-size: 13.5px; color: var(--text-2); }
+.ov-row .ov-who { margin: 0; font-size: 12.5px; color: var(--muted); }
+.ov-yours { color: #92400e; font-weight: 600; }
+.ov-result { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 2px 14px; align-items: start; padding: 9px 4px; border-top: 0; border-bottom: 1px solid var(--border); }
+.ov-kind { font-size: 12.5px; font-weight: 600; }
+.ov-kind-fail { color: var(--fail); }
+.ov-kind-restricted { color: var(--restr); }
+.ov-kind-insufficient { color: var(--insuf); }
+.ov-result-cap { display: block; font-weight: 400; color: var(--muted); }
+.ov-result .ov-so { margin: 0; font-size: 13.5px; }
+.ov-table-wrap { border-top: 1px solid var(--border); overflow-x: auto; }
+.ov-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ov-table th { text-align: left; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.ov-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ov-table .ov-level { font-size: 12.5px; color: var(--muted); font-weight: 400; white-space: normal; }
+.ov-table .ov-next { font-size: 13.5px; }
+@media (max-width: 720px) { .ov-row, .ov-result { grid-template-columns: 1fr; } .ov-row .btn { justify-self: start; } }
 
 /* Setup and onboarding ---------------------------------------------------- */
 
