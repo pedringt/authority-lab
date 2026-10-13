@@ -90,7 +90,8 @@ test('initial state: data is per capability', () => {
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(decisionRequired(s, RR), true);
   assert.equal(capData(s, RR).scenarios.length, 26);
-  assert.equal(capData(s, RR).evidence.length, 12);
+  assert.equal(capData(s, RR).evidence.filter((e) => e.from === 'seeded').length, 12);
+  assert.equal(capData(s, RR).evidence.filter((e) => e.demo).length, 9, 'example evidence from connected sources and a review (#126), marked demo');
   assert.equal(capData(s, RR).monitoring, null);
   assert.equal(capData(s, TC).scenarios.length, 0);
   assert.equal(capData(s, TC).pilot, null);
@@ -1477,7 +1478,7 @@ test('mature capabilities carry criteria, requirements and stakeholders in the e
   // The refund demo is unchanged.
   assert.equal(current(s, RR, 'criteria').length, 7);
   assert.equal(readiness(s, RR).met, 5);
-  assert.equal(capData(s, RR).evidence.length, 12);
+  assert.equal(capData(s, RR).evidence.filter((e) => e.from === 'seeded').length, 12);
   assert.equal(current(s, RR, 'stakeholders').length, 5);
   assert.equal(focusCapability(s).id, RR);
   // Risk eligibility still comes from people, not from these lists.

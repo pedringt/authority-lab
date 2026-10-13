@@ -5,7 +5,7 @@
 // verdict follows; the mechanisms open on demand, one line each.
 
 import { html, raw, badge, kv, fmtDate, person, personAt, rightsNote, subNav, SWITCH_PERSON } from '../ui.js';
-import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES } from '../store/index.js';
+import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES, evidenceSignals } from '../store/index.js';
 
 const PILOT = 'Demo data (pilot)';
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
@@ -167,13 +167,25 @@ function demoControl(state, cap) {
     <button class="btn btn-sm btn-danger" data-action="simulate-breach" data-capability="${cap.id}">${demo.kind === 'incident' ? 'Simulate a safety-limit incident' : 'Simulate a safety-limit breach'}</button></div>`;
 }
 
+// Evidence signals (#126): new, stale, gaps, disagreement, and checks no
+// longer met. Warnings only; they never block.
+const SIGNAL_TONE = { new: 'neutral', stale: 'watch', coverage: 'insufficient', disagreement: 'neutral', reconsider: 'fail' };
+const SIGNAL_WORDS = { new: 'New evidence', stale: 'Stale', coverage: 'Coverage', disagreement: 'Disagreement', reconsider: 'Reconsider' };
+function evidenceLine(state, cap) {
+  const sig = evidenceSignals(state, cap.id);
+  const meta = sig.length ? `${plural(sig.length, 'thing')} to look at` : 'nothing to look at';
+  return line('Evidence', meta, sig.length
+    ? html`<ul class="plain-list mon-signals">${sig.map((x) => html`<li>${badge(SIGNAL_TONE[x.kind], SIGNAL_WORDS[x.kind])} ${x.what}${x.record ? ` (${x.record}, ${fmtDate(x.date)}).` : ''} <span class="muted">${x.why}</span> <a href="${x.link}">Look</a></li>`)}</ul><p class="muted small">Warnings only: none of these blocks anything or changes authority.</p>`
+    : html`<p>The evidence is current, every decision requirement has enough of it, and nothing that was met has slipped.</p>`);
+}
+
 function stillSafe(state, cap, d) {
   const st = monitoringStatus(state, cap.id);
   return html`${safetyVerdict(state, cap, d, st)}
     ${outcomeStats(d.monitoring)}
     ${whatHappened(state, cap, d)}
     ${reviewSection(state, cap)}
-    ${lines(safetyLimitsLine(state, cap, st), triedLine(state, cap), reviewsLine(d))}
+    ${lines(safetyLimitsLine(state, cap, st), evidenceLine(state, cap), triedLine(state, cap), reviewsLine(d))}
     ${rolloutLine(state, cap)}
     ${demoControl(state, cap)}`;
 }

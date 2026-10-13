@@ -178,11 +178,31 @@ export function carryMeasure(row, base, words, label) {
     return rest;
   }
   if (!base || !base.measure) return row;
-  if (base.measure.op === '=') return { ...row, measure: base.measure };
+  // The measure follows the wording entirely (comparison and number); the
+  // tightening rule, which reads the wording, decides whether it needs approval.
   const t = barFromWords(words);
-  const atLeast = (op) => op === '>=' || op === '>';
-  if (!t || atLeast(t.op) !== atLeast(base.measure.op)) throw new Error(`"${label}" is measured (${base.measure.op} ${base.measure.value}), so its wording must keep a number in the same direction.`);
-  return { ...row, measure: { ...base.measure, value: t.value } };
+  if (!t) throw new Error(`"${label}" is measured (${base.measure.op} ${base.measure.value}), so its wording must keep a number to check. To stop measuring it, remove its evidence under Configure evidence.`);
+  return { ...row, measure: { ...base.measure, op: t.op, value: t.value } };
+}
+
+// A submitted row that repeats its stored measure unchanged (code that copies
+// a row and edits only its words) hasn't changed how it is measured: drop the
+// repeat so carryMeasure moves the number with the words.
+const sameMeasure = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+export function unchangedMeasuresDropped(rows, baseRows) {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map((r) => {
+    const b = (baseRows || []).find((x) => x.id === r.id);
+    if (r && r.measure && b && b.measure && sameMeasure(r.measure, b.measure)) { const { measure, ...rest } = r; return rest; }
+    return r;
+  });
+}
+
+// The next evidence id, "EV-nn": one past the highest in use. Counting the
+// list would collide once imported items (named by their run) are in it.
+export function nextEvidenceId(list) {
+  const top = list.reduce((n, e) => { const m = /^EV-(\d+)$/.exec(e.id || ''); return m ? Math.max(n, Number(m[1])) : n; }, 0);
+  return `EV-${String(top + 1).padStart(2, '0')}`;
 }
 
 // Rows that can be adjusted but never removed.
@@ -226,8 +246,8 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   if (criteriaLocked(state, capabilityId)) throw new Error('These targets can\'t be changed directly now that results exist. Propose a change instead.');
   const baseC = current(state, capabilityId, 'criteria');
   const baseR = current(state, capabilityId, 'requirements');
-  const c = cleanCriteria(criteria).map((x) => carryMeasure(x, baseC.find((b) => b.id === x.id), x.target, x.name));
-  const r = cleanRequirements(requirements).map((x) => carryMeasure(x, baseR.find((b) => b.id === x.id), x.text, x.text));
+  const c = cleanCriteria(unchangedMeasuresDropped(criteria, baseC)).map((x) => carryMeasure(x, baseC.find((b) => b.id === x.id), x.target, x.name));
+  const r = cleanRequirements(unchangedMeasuresDropped(requirements, baseR)).map((x) => carryMeasure(x, baseR.find((b) => b.id === x.id), x.text, x.text));
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
   if (missingCore.length) throw new Error(`You can change these but not remove them: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
   const defaults = defaultsFor(state, capabilityId);

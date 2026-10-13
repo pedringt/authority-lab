@@ -139,8 +139,8 @@ function importedLine(state, cap, base, line) {
   })}
     <p class="small"><a href="${base}&show=all">Every imported result, where it came from and its versions →</a></p>`;
   const weakCount = items.filter(weak).length;
-  const runs = streams.reduce((n, st) => n + st.currentRuns.length, 0);
-  return line('Imported results', `${runs} run${runs === 1 ? '' : 's'} from ${[...new Set(streams.map((s) => s.system))].join(', ')}${weakCount ? ` · ${weakCount} weak` : ''}`, body);
+  const systems = [...new Set(streams.map((s) => s.system))];
+  return line('Evidence from sources', `${systems.length} source${systems.length === 1 ? '' : 's'}: ${systems.join(', ')}${weakCount ? ` · ${weakCount} weak` : ''}`, body);
 }
 
 export function gateActivityCard(state, cap) {

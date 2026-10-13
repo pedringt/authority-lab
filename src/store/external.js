@@ -150,6 +150,7 @@ const RISK_OF = { high: 'High', medium: 'Medium', low: 'Low' };
 // evidence. `from: 'imported'` and `external` say where it came from; the
 // measurement itself is kept so targets can be judged from it (#120).
 function itemsFor(env, { via = 'file', sourceId = null, recordedBy = null } = {}) {
+  const manual = via === 'manual' || Boolean(recordedBy);
   const external = {
     importId: env.id,
     system: env.source.system,
@@ -161,10 +162,12 @@ function itemsFor(env, { via = 'file', sourceId = null, recordedBy = null } = {}
   };
   return env.measurements.map((m) => ({
     id: `${env.id}#${m.metric}${m.segment ? `@${m.segment.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''}`,
-    from: via === 'manual' ? 'manual' : 'imported',
+    from: manual ? 'manual' : 'imported',
+    // Seeded example evidence (#126) is demo data, never a live import.
+    ...(via === 'seed' ? { demo: true } : {}),
     sourceId: sourceId || sourceIdFor(env.source.system, env.source.capability),
     ...(recordedBy ? { recordedBy } : {}),
-    source: via === 'manual' ? 'Manual review' : `${env.source.system} ${env.kind === 'eval' ? 'eval' : 'production'}`,
+    source: manual ? 'Manual review' : `${env.source.system} ${env.kind === 'eval' ? 'eval' : 'production'}`,
     metric: m.label || m.metric,
     value: measurementText(m),
     status: 'recorded',
@@ -196,6 +199,8 @@ export function importEvidence(state, env, { via = 'file', sourceId = null, reco
   const record = { id: env.id, importedOn: state.today, via, envelope: canonicalEvidence(env), ...(recordedBy ? { recordedBy } : {}) };
   // A connected system becomes a workspace source the first time it sends
   // evidence (#126); a result a person records belongs to manual review.
+  // Seeded examples are part of the seed: no registration, no Activity.
+  if (via === 'seed') return updateCap(state, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
   let s = via === 'manual' ? state : registerSource(state, { system: env.source.system, capability: env.source.capability, kind: env.kind });
   s = updateCap(s, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
   const logged = logEvent(s, {

@@ -259,7 +259,10 @@ test('an imported result shows its source, run, versions and link behind "Where 
   assert.match(d, /<dt>Configuration<\/dt><dd>Provider Example · Model model-a · Prompt p-3 · Implementation abc1234 · Eval set es-2<\/dd>/);
   assert.match(d, /<dt>Metric<\/dt><dd>latency-p95<\/dd>/, "the first card shown");
   // Seeded evidence has no such disclosure.
-  assert.doesNotMatch(evView(initialState(), RR), /Where this came from/);
+  // Seeded demo items that predate sources have none; the example ones (#126) do.
+  const rrPage = evView(initialState(), RR);
+  assert.equal((rrPage.match(/<summary>Where this came from<\/summary>/g) || []).length, capData(initialState(), RR).evidence.filter((e) => e.external).length);
+  assert.doesNotMatch(rrPage.slice(rrPage.indexOf('EV-02'), rrPage.indexOf('</article>', rrPage.indexOf('EV-02'))), /Where this came from/);
 });
 
 test('a changed configuration is surfaced, and its earlier results are shown but never blended in', () => {
@@ -309,16 +312,16 @@ test('a decision record keeps the imported evidence and configuration in force w
   s = importEvidence(s, run(2, { capabilityId: RR, observedAt: '2026-10-05', config: { model: 'model-b' } }));
   s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
   const rec = s.decisionRecords.at(-1);
-  assert.deepEqual(JSON.parse(JSON.stringify(rec.externalEvidence)), [{ system: 'Acme', capability: 'Classifier', kind: 'eval', runs: [{ id: 'acme:eval:run-2', observedAt: '2026-10-05', reference: { url: 'https://example.com/runs/0001', label: 'Run 0001' } }], config: { model: 'model-b' }, excluded: 4 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(rec.externalEvidence.filter((x) => x.system === 'Acme'))), [{ system: 'Acme', capability: 'Classifier', kind: 'eval', runs: [{ id: 'acme:eval:run-2', observedAt: '2026-10-05', reference: { url: 'https://example.com/runs/0001', label: 'Run 0001' } }], config: { model: 'model-b' }, excluded: 4 }]);
   assert.ok(Object.isFrozen(rec.externalEvidence[0].config));
   // Later evidence doesn't rewrite it.
   const later = importEvidence(s, run(3, { capabilityId: RR, observedAt: '2026-10-07', config: { model: 'model-c' } }));
   assert.deepEqual(later.decisionRecords.at(-1).externalEvidence, rec.externalEvidence);
+  // The demo's example sources are on it too (#126).
+  assert.ok(rec.externalEvidence.some((x) => x.system === 'Support platform'));
   setPeople(people(later));
   const h = String(decisionRecordView(later, rec.id));
-  assert.match(h, /<dt>Imported evidence<\/dt><dd><ul class="plain-list"><li><strong>Acme Classifier<\/strong> \(eval\): 1 run, latest Oct 5 · <a href="https:\/\/example\.com\/runs\/0001" target="_blank" rel="noopener">Run 0001<\/a>\. <span class="muted">Model model-b\.<\/span> 4 results from an earlier configuration left out\.<\/li><\/ul><\/dd>/);
-  // A record with no imported evidence doesn't mention it.
-  const plain = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
-  assert.equal(plain.decisionRecords.at(-1).externalEvidence, undefined);
-  assert.equal(externalSnapshot(initialState(), RR).length, 0);
+  assert.match(h, /<dt>Imported evidence<\/dt><dd><ul class="plain-list">[\s\S]*?<li><strong>Acme Classifier<\/strong> \(eval\): 1 run, latest Oct 5 · <a href="https:\/\/example\.com\/runs\/0001" target="_blank" rel="noopener">Run 0001<\/a>\. <span class="muted">Model model-b\.<\/span> 4 results from an earlier configuration left out\.<\/li><\/ul><\/dd>/);
+  // A record with no imported evidence doesn't mention it: Ticket classification has none.
+  assert.equal(externalSnapshot(initialState(), TC).length, 0);
 });
