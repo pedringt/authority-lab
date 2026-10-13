@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -17,6 +17,7 @@ import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
 import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
 import { decisionBriefView } from './views/brief.js';
+import { welcomeView, guideView, GUIDE_STEPS } from './views/guide.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -68,6 +69,28 @@ function loadAgentRuns() {
 // Where an old address that named no capability should go.
 const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
 
+// The guided demo (redesign) runs on its own copy of the demo state, in
+// memory only, so it never touches the workspace. Its "Demo as" is its own.
+let guide = null;
+function newGuide() {
+  const state = initialState();
+  return { state, capabilityId: focusCapability(state).id, role: focusCapability(state).owner, tested: false, decided: null, breached: false };
+}
+const guideDo = {
+  runTests() { let s = startTestRun(guide.state, guide.capabilityId); for (let i = 0; i < 200 && capData(s, guide.capabilityId).testRun.status === 'running'; i++) s = advanceTestRun(s, guide.capabilityId); guide = { ...guide, state: s, tested: true }; },
+  decide() { const owner = getCapability(guide.state, guide.capabilityId).owner; const s = authorize(selectDecision(guide.state, guide.capabilityId, 'expand-limits'), guide.capabilityId, { by: owner }); guide = { ...guide, state: s, decided: s.decisionRecords.at(-1).id }; },
+  breach() { guide = { ...guide, state: simulateBreach(guide.state, guide.capabilityId), breached: true }; },
+};
+// Opening a later step directly does the earlier steps' actions first.
+function guideAt(step) {
+  if (!guide) guide = newGuide();
+  if (step > 5 && !guide.tested) guideDo.runTests();
+  if (step > 6 && !guide.decided) guideDo.decide();
+  return guide;
+}
+const WELCOMED = 'authority-lab-welcomed';
+const welcomed = () => { try { return window.localStorage.getItem(WELCOMED) === '1'; } catch { return true; } };
+
 function parseRoute() {
   const hash = canonicalHash(location.hash || '#/overview', { focus: focusId() });
   const [path, qs] = hash.slice(1).split('?');
@@ -79,6 +102,8 @@ function render() {
   // An old address is rewritten in place, without adding a history entry.
   const canon = canonicalHash(location.hash, { focus: focusId() });
   if (location.hash && canon !== location.hash) history.replaceState(null, '', canon);
+  // A first visit opens on the welcome choice (redesign), once.
+  if (!welcomed() && (!location.hash || location.hash === '#/' || location.hash === '#/overview') && !setupPending(store.get())) history.replaceState(null, '', '#/welcome');
   const state = store.get();
   setPeople(people(state));
   setToday(state.today);
@@ -122,6 +147,8 @@ function render() {
       break;
     }
     case 'people': view = peopleView(state, query); title = 'People'; break;
+    case 'welcome': view = welcomeView(); title = 'Welcome'; break;
+    case 'guide': { const n = Math.min(Math.max(Number(sub) || 1, 1), GUIDE_STEPS.length); view = guideView(guideAt(n), n); title = `Guided demo: ${GUIDE_STEPS[n - 1]}`; break; }
     default: view = empty ? noCapabilitiesView(state, 'Overview') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
@@ -146,7 +173,12 @@ function render() {
   const defaultName = (roster[defaultOwner] || roster[current] || {}).name || 'Nobody yet';
   // A demo control: a real version would know who is signed in. Only active
   // people can be chosen.
-  if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo only. In a real product you'd be signed in. Switch people here to see how proposing, approving and deciding work for each role.">
+  const inGuide = root === 'guide';
+  if (inGuide && guide) {
+    // The guided demo's own role, on its own copy of the demo.
+    acting.innerHTML = String(html`<label class="acting" title="Demo only. Switch people here to see how approvals work."><span class="acting-label">Demo as</span>
+      <select data-action="set-acting" aria-label="Demo as">${Object.entries(activePeople(guide.state)).map(([k, p]) => html`<option value="${k}" ${guide.role === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}</select></label>`);
+  } else if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo only. In a real product you'd be signed in. Switch people here to see how proposing, approving and deciding work for each role.">
     <span class="acting-label">Demo as</span>
     <select data-action="set-acting" aria-label="Demo as">
       <option value="" ${state.actingAs ? '' : 'selected'}>${defaultName}${defaultOwner ? ' (owner)' : ''}</option>
@@ -277,6 +309,15 @@ document.addEventListener('click', (e) => {
   const action = btn.dataset.action;
   const capId = btn.dataset.capability;
   if (action === 'run-tests') { const route = here(); dispatchOr(route, () => { runSuite(capId); clearErrorOn(route, 'error'); }); }
+  // The welcome choice is remembered, so it shows once.
+  if (action === 'welcomed') { try { window.localStorage.setItem(WELCOMED, '1'); } catch { /* storage blocked: it shows again next visit */ } }
+  // The guided demo acts on its own copy of the demo state.
+  if (action === 'guide-run-tests' || action === 'guide-decide' || action === 'guide-breach') {
+    guideAt(1);
+    guideDo[{ 'guide-run-tests': 'runTests', 'guide-decide': 'decide', 'guide-breach': 'breach' }[action]]();
+    render();
+    return;
+  }
   if (action === 'simulate-breach') store.dispatch('simulateBreach', capId);
   if (action === 'authorize') {
     dispatchOr(here(), () => {
@@ -345,7 +386,11 @@ document.addEventListener('change', (e) => {
   const capId = el.dataset.capability;
   // Heading capability selector and filter dropdowns: each option is a route.
   if (el.dataset.action === 'navigate') { location.hash = el.value; return; }
-  if (el.dataset.action === 'set-acting') { store.dispatch('setActingAs', el.value || null); return; }
+  if (el.dataset.action === 'set-acting') {
+    if (parseRoute().parts[0] === 'guide' && guide) { guide = { ...guide, role: el.value }; render(); return; }
+    store.dispatch('setActingAs', el.value || null);
+    return;
+  }
   if (el.dataset.action === 'choose-owner') { store.dispatch('setActingAs', el.value || null); return; }
   if (el.dataset.action === 'select-option') store.dispatch('selectDecision', capId, el.value);
   if (el.dataset.action === 'set-condition') {
@@ -364,6 +409,15 @@ function readCriteriaRows(form) {
 }
 
 document.addEventListener('submit', (e) => {
+  const guideReview = e.target.closest('[data-form="guide-review"]');
+  if (guideReview && guide) {
+    e.preventDefault();
+    const f = new FormData(guideReview);
+    const text = String(f.get('whatHappened') || '').trim();
+    guide = { ...guide, state: recordReview(guide.state, guide.capabilityId, { by: guide.role, whatHappened: text, cause: 'Return status was not checked before refunding.', changes: 'Check return status before any automatic refund.' }) };
+    render();
+    return;
+  }
   const personForm = e.target.closest('[data-form="add-person"], [data-form="edit-person"], [data-form="deactivate-person"]');
   if (personForm) {
     e.preventDefault();
