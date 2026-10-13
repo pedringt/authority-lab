@@ -140,8 +140,8 @@ test('Status, a newly added capability: the setup stage as the one next statemen
   const st = story(h);
   assert.match(st, /<h2 class="st-title">Recommend <span class="st-lvl">Level 1 of 5<\/span> <\/h2>/);
   assert.match(st, /Why it&#39;s here<\/span><p>Added by Priya Natarajan on Oct 7\. Starting at Recommend/);
-  assert.match(st, /What happens next<\/span><p>It&#39;s still being set up\. Next setup step: set the rules\./);
-  assert.deepEqual(nextLinks(h), [[`#/capabilities/${id}/setup?step=contract`, 'set the rules →']]);
+  assert.match(st, /What happens next<\/span><p>It&#39;s still being set up\. Next setup step: set the boundaries\./);
+  assert.deepEqual(nextLinks(h), [[`#/capabilities/${id}/setup?step=contract`, 'set the boundaries →']]);
   assert.match(h, /<b>Boundaries<\/b><span class="st-meta-text">No rules yet\.<\/span><a class="st-open" href="#\/capabilities\/order-status-lookup\/contract\/build">Set up rules →/);
   assert.match(h, /<b>People involved: 1<\/b><span class="st-meta-text">Only the owner, Priya Natarajan, so far\.<\/span>/);
   assert.doesNotMatch(h, /Needs your decision/);
