@@ -593,7 +593,7 @@ test('whoever is acting is recorded as the authorizer, alongside the owner when 
 });
 
 test('"not delegated, by design" needs a rationale and is recorded as a decision', () => {
-  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /Say why the AI won't do this/);
+  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /Say why this stays with people/);
   const s = addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High', reversibility: 'Difficult to reverse' }, notDelegated: true, rationale: 'Deletion is irreversible and rare. A person does it.', by: 'daniel' });
   const c = s.capabilities[s.capabilities.length - 1];
   assert.equal(c.status, 'not-delegated');
@@ -1617,7 +1617,7 @@ test('the roster is version 1 of the seed, with explicit rights; everything read
 
 test('only a workspace admin changes the roster, always with a reason; add, edit and deactivate write versions', () => {
   let s = initialState();
-  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: '' }), /Add a reason \(a few words\)/);
   assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: '', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' }), /name, a title and a team/);
   const before = s.activity.length;
@@ -1635,7 +1635,7 @@ test('only a workspace admin changes the roster, always with a reason; add, edit
   s = addPerson(s, { name: 'Omar Haddad', title: 'Analyst', team: 'Finance', by: 'jonas', reason: 'A second Omar.' });
   assert.ok(personRecord(s, 'omar-haddad-2'));
   // Edit name/title/team only.
-  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => editPerson(s, 'omar-haddad', { by: 'maya', reason: 'Nothing happened here.' }), /Nothing to save: the name, title and team are unchanged/);
   s = editPerson(s, 'omar-haddad', { title: 'Support Team Lead', by: 'maya', reason: 'Promoted to lead.' });
   assert.equal(personRecord(s, 'omar-haddad').role, 'Support Team Lead');
@@ -1730,7 +1730,7 @@ test('no team-based Risk logic remains in the store or the views', () => {
 test('rights are granted and removed through a proposal by an admin, approved by a different admin, never self-granted', () => {
   let s = initialState();
   assert.deepEqual(activeAdmins(s).sort(), ['jonas', 'maya']);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'riskApprover', grant: true, by: 'maya', reason: 'I want it.' }), /You can't grant a right to yourself/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: true, by: 'maya', reason: 'Already has it.' }), /Daniel Okafor is already a Risk approver/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: false, by: 'maya', reason: 'Never had it.' }), /Elena .* isn't a Risk approver/);
@@ -2310,12 +2310,16 @@ test('workspace setup records the workspace, the one workflow and the founding r
   assert.throws(() => setUpWorkspace(s, SETUP), /already set up/, 'setup happens once');
 });
 
-test('setup refuses an incomplete workspace and a founding roster with fewer than two admins', () => {
+// Rule change (Paige, 2026-10-12): one person can start a workspace. This test
+// used to refuse a founding roster with fewer than two people or two admins.
+test('setup refuses an incomplete workspace and a roster with no workspace admin setting it up; one admin is enough', () => {
   const e = startEmpty();
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workspace: { name: '' } }), /Name the workspace/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workflow: { name: '' } }), /Name the workflow/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]] }), /Add at least two people/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /Mark at least 2 people as workspace admins/, 'a lone admin could never grant a right');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [] }), /Add the person starting the workspace/);
+  assert.doesNotThrow(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]], by: 'Ana Ruiz' }), 'one person, the workspace admin, is enough');
+  assert.doesNotThrow(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]], by: 'Ana Ruiz' }), 'a lone admin may start it');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /isn't marked as a workspace admin/, 'whoever sets it up is still an admin');
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Ana Ruiz', title: 'Twin', team: 'X' }] }), /same name/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Dev', title: '', team: 'X' }] }), /name, a title and a team/);
 });
@@ -2372,10 +2376,13 @@ test('repro: People history never calls the first list "Seed roster", and a work
   assert.match(demo, /<h3>Demo starting list<\/h3>/);
 });
 
-test('setup notes, without blocking, when fewer than two Risk approvers are listed', () => {
+// Rule change (Paige, 2026-10-12): setup no longer shows a Risk approver note;
+// a Risk approver is asked for when a change first needs one.
+test('setup never needs a Risk approver; the founding count is still computed', () => {
   assert.equal(foundingRiskGap(FOUNDERS), 1);
   assert.equal(foundingRiskGap([...FOUNDERS, { name: 'Dev Patel', title: 'Risk Analyst', team: 'Risk', riskApprover: true }]), null);
   assert.doesNotThrow(() => setUpWorkspace(startEmpty(), SETUP), 'one Risk approver is allowed');
+  assert.doesNotThrow(() => setUpWorkspace(startEmpty(), { ...SETUP, people: FOUNDERS.slice(0, 2) }), 'and so is none');
 });
 
 // ---------------------------------------------------------------------------
@@ -2412,7 +2419,7 @@ test('repro: a rename reason with no final full stop still ends its sentence in 
 
 test('only an active workspace admin renames, and only with a reason and an actual change', () => {
   const s = initialState();
-  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/, 'a Risk approver is not enough');
+  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/, 'a Risk approver is not enough');
   assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'maya', reason: 'rename' }), /Add a reason for the change \(a sentence\)/);
   assert.throws(() => renameWorkspace(s, { workspace: { name: 'Northstar Support' }, workflow: { name: 'Customer Support Resolution' }, reason: 'No real change here.', by: 'maya' }), /Nothing to save: the names and descriptions are unchanged/);
   assert.throws(() => renameWorkspace(s, { ...RENAME, workspace: { name: ' ' }, by: 'maya' }), /Name the workspace/);

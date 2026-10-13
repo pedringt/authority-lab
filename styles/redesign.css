@@ -51,5 +51,33 @@
 /* Overview ---------------------------------------------------------------- */
 
 /* Setup and onboarding ---------------------------------------------------- */
+/* Onboarding forms: one question per group, on dividers, not cards. */
+.onboard-form { max-width: 760px; }
+.onboard-group { padding: 18px 0; border-top: 1px solid var(--border); }
+.onboard-group:first-child { border-top: 0; padding-top: 4px; }
+.onboard-q { font-size: 17px; margin: 0 0 10px; }
+.onboard-form .two-col { margin-top: 0; }
+.onboard-more { border-top: 1px solid var(--border); padding: 12px 0; margin-bottom: 12px; }
+.onboard-more > summary { cursor: pointer; color: var(--text-2); font-weight: 600; }
+.onboard-more[open] > summary { margin-bottom: 8px; }
+
+/* Setup: seven steps as three stages (Define, Test, Decide). */
+.setup-stages { display: grid; gap: 20px; max-width: 820px; }
+.setup-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.setup-stage-head h2 { margin: 0; font-size: 18px; }
+.setup-stage > .muted.small { margin: 2px 0 8px; }
+.setup-stage .setup-steps { gap: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.setup-stage .setup-step { padding: 12px 14px; border-top: 1px solid var(--border); }
+.setup-stage .setup-step:first-child { border-top: 0; }
+.setup-stage .setup-step.is-next { box-shadow: inset 3px 0 0 var(--decide); border-color: var(--border); }
+.setup-stage .setup-step.is-done { opacity: 1; }
+
+/* People: a simple table first; history and past changes in disclosures. */
+.table-people td:nth-child(3), .table-people td:nth-child(4) { white-space: nowrap; }
+.people-history, .rights-history { margin-top: 16px; }
+.people-history .version, .rights-history .roster-proposal { padding: 12px 0; border-top: 1px solid var(--border); }
+.roster-proposal { padding: 12px 0; border-top: 1px solid var(--border); }
+form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; border-radius: 4px; }
+
 
 /* Guided demo ------------------------------------------------------------- */

@@ -15,7 +15,7 @@ import { proposeView, proposalView } from './views/proposals.js';
 import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
-import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
+import { workspaceSetupView, noCapabilitiesView } from './views/workspace.js';
 import { decisionBriefView } from './views/brief.js';
 
 const store = createStore({ storage: safeStorage() });
@@ -516,14 +516,13 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const val = (el, name) => (el.querySelector(`[name="${name}"]`) || {}).value || '';
     const draft = {
-      by: val(wsForm, 'ws-by'),
-      workspace: { name: val(wsForm, 'ws-name'), description: val(wsForm, 'ws-description') },
-      workflow: { name: val(wsForm, 'wf-name'), description: val(wsForm, 'wf-description') },
-      people: [...wsForm.querySelectorAll('[data-rows="founders"] tr')].map((tr) => ({ name: val(tr, 'p-name'), title: val(tr, 'p-title'), team: val(tr, 'p-team'), workspaceAdmin: tr.querySelector('[name="p-admin"]').checked, riskApprover: tr.querySelector('[name="p-risk"]').checked })),
+      workspace: { name: val(wsForm, 'ws-name') },
+      workflow: { name: val(wsForm, 'wf-name') },
+      founder: { name: val(wsForm, 'f-name'), title: val(wsForm, 'f-title') },
     };
     // Keep what was typed if setup is refused; drop it once it goes through.
     setupDraft = draft;
-    dispatchOr('#/overview', () => { store.dispatch('setUpWorkspace', draft); setupDraft = null; location.hash = '#/overview'; render(); });
+    dispatchOr('#/overview', () => { store.dispatch('setUpWorkspace', draft); setupDraft = null; location.hash = '#/capabilities/new'; render(); });
     return;
   }
   const critForm = e.target.closest('[data-form="save-criteria"]');
@@ -554,7 +553,6 @@ document.addEventListener('submit', (e) => {
   if (!form) return;
   e.preventDefault();
   const f = new FormData(form);
-  const starting = f.get('starting');
   dispatchOr('#/capabilities/new', () => {
     const before = store.get().capabilities.length;
     store.dispatch('addCapability', {
@@ -562,8 +560,8 @@ document.addEventListener('submit', (e) => {
       summary: f.get('summary'),
       owner: f.get('owner'),
       risk: { impact: f.get('impact'), reversibility: f.get('reversibility'), exposure: f.get('exposure'), failureTypes: f.getAll('failureTypes'), note: f.get('riskNote') },
-      startingLevel: starting === 'not-delegated' ? 0 : Number(starting),
-      notDelegated: starting === 'not-delegated',
+      // "What does it do today?": context that sets a starting level of 0 or 1.
+      today: f.get('today') || '',
       rationale: f.get('rationale'),
       by: actor(store.get()),
     });
@@ -571,29 +569,6 @@ document.addEventListener('submit', (e) => {
     location.hash = `#/capabilities/${added.id}/setup`;
   });
 });
-
-// The setup form's "Who is setting this up?" list and Risk approver note follow
-// the roster rows as they are edited.
-function readFounders(form) {
-  const val = (el, name) => (el.querySelector(`[name="${name}"]`) || {}).value || '';
-  return [...form.querySelectorAll('[data-rows="founders"] tr')].map((tr) => ({ name: val(tr, 'p-name'), workspaceAdmin: tr.querySelector('[name="p-admin"]').checked, riskApprover: tr.querySelector('[name="p-risk"]').checked }));
-}
-function refreshSetupForm(form) {
-  const people = readFounders(form);
-  const select = form.querySelector('[data-founders]');
-  const chosen = select.value;
-  select.innerHTML = String(founderOptions(people, chosen));
-  const note = form.querySelector('[data-risk-gap]');
-  const text = riskGapNote(people);
-  note.textContent = text;
-  note.hidden = !text;
-}
-for (const type of ['input', 'change', 'click']) {
-  document.addEventListener(type, (e) => {
-    const form = e.target.closest && e.target.closest('[data-form="setup-workspace"]');
-    if (form && !e.target.matches('[data-founders]')) queueMicrotask(() => refreshSetupForm(form));
-  });
-}
 
 document.addEventListener('input', (e) => {
   const nameEl = e.target.closest('[data-action="check-name"]');
