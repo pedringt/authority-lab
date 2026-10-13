@@ -4,6 +4,8 @@ import { capData, getCapability, current, workspaceOf, gateEvidence } from '../s
 import { requirementsList, proposedChangeLabel } from './cap-decide.js';
 import { capabilityHeading, filterBar } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';
+import { fromBadge, standingNote, provenanceDetails, configChangeNotices } from './provenance.js';
+import { importedStanding } from '../store/index.js';
 
 const STATUSES = [['all', 'All statuses'], ['pass', 'Pass'], ['watch', 'Needs attention'], ['insufficient', 'Not enough data'], ['fail', 'Fail'], ['recorded', 'Not judged yet']];
 // The same words on the filter and on each item's badge.
@@ -23,6 +25,8 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
 
   // Stored evidence plus what the gate log derives (A5), each labelled.
   const all = [...d.evidence, ...gateEvidence(state, capabilityId)];
+  const seededIds = new Set(((seed.capabilityData[capabilityId] || {}).evidence || []).map((e) => e.id));
+  const standing = importedStanding(state, capabilityId);
   const sources = [...new Set(all.map((e) => e.source))];
   const segments = [...new Set(all.map((e) => e.segment))];
   const risks = ['High', 'Medium', 'Low'];
@@ -56,12 +60,14 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
 
   const cards = items.map((e) => html`<article class="card evidence-item evidence-${e.status}">
     <div class="evidence-head">
-      <div><span class="eyebrow">${e.source}</span><h3>${metricText(e)}</h3>${e.derived ? html`<span class="badge badge-neutral" title="Counted from every action the AI asked for. It updates as new actions happen and isn't a stored result.">Calculated from logged actions · ${e.origin}</span>` : ''}</div>
+      <div><span class="eyebrow">${e.source}</span><h3>${metricText(e)}</h3>${fromBadge(e, seededIds)}${e.derived ? html`<span class="badge badge-neutral" title="Counted from every action the AI asked for. It updates as new actions happen and isn't a stored result.">Calculated from logged actions · ${e.origin}</span>` : ''}</div>
       ${badge(e.status, STATUS_LABEL[e.status])}
     </div>
     <p class="evidence-value">${e.value}</p>
     <p class="muted">${evidenceDetail(e)}</p>
+    ${standingNote(standing.get(e.id))}
     <div class="evidence-meta"><span>${e.id}</span><span>${fmtDate(e.date)}</span><span>${e.segment === 'All' ? 'All segments' : e.segment}</span>${e.risk ? html`<span>${e.risk} risk</span>` : ''}${e.link ? (/^https:/.test(e.link) ? html`<a href="${e.link}" target="_blank" rel="noopener">View source</a>` : html`<a href="${e.link}">View source</a>`) : ''}</div>
+    ${provenanceDetails(state, e)}
   </article>`);
 
   const head = embedded
@@ -74,6 +80,7 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
     </div>
   </div>`;
   return html`${head}
+  ${configChangeNotices(state, capabilityId)}
   ${all.length ? filters : ''}
   ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${all.length ? 'No evidence matches these filters.' : `No evidence yet for ${cap.name}. Run the tests or start a pilot to collect some.`}</p>`}
   ${d.evidence.length ? '' : evidenceSourcesCard()}

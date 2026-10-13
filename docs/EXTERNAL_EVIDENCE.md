@@ -58,6 +58,10 @@ A measurement has a `metric` id (lowercase letters, digits, hyphens), an optiona
 
 Authority Lab gets a summary and a reference, never the source's content. Every key is allowlisted at every level, so a field the contract doesn't have (a document body, a system prompt, examples, a token) is refused, and every text field is short. The source system stays the record of the detailed run; follow `reference.url` to see it.
 
+## Versions and comparability
+
+Send every version you know in `config`, the same way on every run. Authority Lab groups runs by source system, source capability and kind (eval or production). The newest run by `observedAt` sets the current configuration; results from a different configuration (any version changed, added or dropped) are shown as **Earlier configuration** and don't count toward targets. Under the same configuration, a newer run's result for a metric and segment replaces the older one. A decision record keeps the configuration in force when it was made.
+
 ## What happens to it
 
 Each measurement becomes one item in the capability's evidence, next to tests, pilots and everything else, marked as imported and labelled with its source. Imported results count as performance results, so they lock the capability's targets the way a first test run does. They're shown as **Not judged yet** until a target or decision requirement is bound to the metric (#120). Evidence on its own never changes a capability's authority: a person decides.

@@ -352,3 +352,14 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .guide-nav { display: flex; justify-content: space-between; margin-top: 22px; }
 .btn.is-disabled { opacity: 0.4; pointer-events: none; }
 @media (max-width: 820px) { .guide, .welcome-four, .welcome-paths, .guide-bounds { grid-template-columns: 1fr; } .guide-rail { position: static; } }
+
+/* External evidence (#119): the imported label, the disclosure with source
+   and versions, and whether a result counts toward targets. */
+.badge-imported { color: var(--accent); background: var(--accent-soft); border-color: var(--border-strong); }
+.evidence-item .badge-imported, .evidence-item h3 + .badge-neutral { margin-top: 4px; }
+.evidence-standing { display: flex; gap: 8px; align-items: baseline; font-size: 14px; margin: 0; }
+.provenance { font-size: 14px; }
+.provenance summary { cursor: pointer; color: var(--muted); }
+.provenance .kv { margin-top: 6px; grid-template-columns: 1fr; gap: 4px; }
+.provenance .kv > div { grid-template-columns: 100px 1fr; }
+.provenance .kv dd { overflow-wrap: anywhere; }

@@ -46,6 +46,7 @@ export function finishTestRun(state, capabilityId) {
     status: summary.highSeverity ? 'watch' : summary.failed ? 'watch' : 'pass',
     date: state.today,
     runOn: state.today,
+    from: 'workspace',
     detail,
   };
   const evidence = existing ? d.evidence.map((e) => (e === existing ? item : e)) : [item, ...d.evidence];

@@ -5,6 +5,7 @@ import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { versionsInForce, proposedAuthority, decisionRequired, levelName, authorityLabel, readiness, testSummary } from './selectors.js';
 import { people, snapshotPerson, requireActive, isActivePerson } from './people.js';
 import { DECISION_OPTIONS } from '../data/seed.js';
+import { externalSnapshot } from './external.js';
 
 export function actionNoun(cap) {
   return (cap && cap.actionNoun) || 'actions';
@@ -306,6 +307,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     scope: scopeText(option, d.decision.conditions, cap, next),
     rationale: d.decision.rationale.trim(),
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
+    // #119: imported evidence in force, with the configuration it describes.
+    ...(externalSnapshot(state, capabilityId).length ? { externalEvidence: deepFreeze(externalSnapshot(state, capabilityId)) } : {}),
     openCondition: openConditionText(option, state, capabilityId),
     conditions: option === 'expand-limits' && next.level >= 3 ? { ...d.decision.conditions } : null,
     // B1: what this expansion is expected to achieve, fixed from here on.
