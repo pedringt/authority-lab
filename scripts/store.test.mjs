@@ -2876,9 +2876,9 @@ test('A2: a contract with no data section shows the AI nothing from the records'
 test('A2: the contract tab shows the data boundary', () => {
   const s = initialState();
   const html = String(capabilityView(s, RR, new URLSearchParams('tab=rules')));
-  assert.match(html, /The AI can access/);
-  for (const h of ['The AI may', 'Ask a person when', 'The AI must never', 'Authority is reduced automatically when']) assert.match(html, new RegExp(`<h3>${h}</h3>`), h);
-  assert.match(html, /For these cases<\/p>[\s\S]*Any policy exception\.[\s\S]*Whenever this comes up<\/p>[\s\S]*Confidence below 80%\./, 'must-ask and escalation lines both sit under Ask a person when');
+  assert.match(html, /<h3>Data it can access<\/h3>/);
+  for (const h of ['Allowed', 'Requires human review', 'Never allowed', 'Automation is pulled back if']) assert.match(html, new RegExp(`<h3>${h}</h3>`), h);
+  assert.match(html, /<h3>Requires human review<\/h3>[\s\S]*For these cases<\/p>[\s\S]*Any policy exception\.[\s\S]*Whenever this comes up<\/p>[\s\S]*Confidence below 80%\.[\s\S]*<h3>Never allowed<\/h3>/, 'must-ask and escalation lines both sit under Requires human review');
   assert.match(html, /Full card number <span class="muted small">\(never allowed\)/);
   assert.match(String(capabilityView(s, 'ticket-classification', new URLSearchParams('tab=rules'))), /No data access is set in the rules, so the AI sees nothing/);
 });
@@ -3023,11 +3023,12 @@ test('A4 bypass: an approval is refused if a cap was crossed, or the order becam
 test('A4: Decision › Approvals lists waiting actions with their reasons, and who may decide', () => {
   const s = initialState();
   const h = String(capabilityView(s, RR, new URLSearchParams('tab=decision&show=approvals')));
-  assert.match(h, /Needs approval \(2\)/);
-  assert.match(h, /2 actions need a person to decide\. At Draft, every action needs a person to approve it\./);
+  assert.match(h, /Needs your decision <span class="st-n">2 refunds<\/span>/);
+  assert.match(h, /At Draft, every action needs a person to approve it\./);
   assert.match(h, /Refund \$180 on ORD-5005/);
   assert.match(h, /Any policy exception\./);
-  assert.match(h, /Deciding as <strong>Maya Chen<\/strong>/, 'the owner, acting by default, may decide');
+  assert.match(h, /Approving as <strong>Maya Chen<\/strong>; a reason is required\./, 'the owner, acting by default, may decide');
+  assert.match(h, /Who can approve: Maya Chen, Priya Natarajan, Daniel Okafor, Sofia Alvarez, Elena Rossi/);
   assert.match(h, /value="approve">Approve<\/button>/);
   assert.match(h, /placeholder="Why\? \(required\)"/);
   const asJonas = String(capabilityView(setActingAs(s, 'jonas'), RR, new URLSearchParams('tab=decision&show=approvals')));
@@ -3961,21 +3962,20 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   // Status carries the count of actions waiting for a person.
   assert.match(page, /tab=status"[^>]*>Status <span class="nav-count"[^>]*>2<\/span>/);
   // Rules and approvals open under Status.
-  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=rules'))), /<h3>Ask a person when<\/h3>/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=rules'))), /<h3>Requires human review<\/h3>/);
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=approvals'))), /data-form="decide-action"/);
-  // Summary: the authority, what it means, the next level, the main concern, and whether it's ready.
-  assert.match(page, /Level 2 · Draft/);
-  assert.match(page, /Drafts\. A person approves every action\./);
-  assert.match(page, /Next possible level<\/p><div><strong>Level 3, Act Within Limits, with limits<\/strong>/);
-  assert.match(page, /Main concern<\/p><div><strong>Minimum 40 high-value refund cases<\/strong>/);
-  assert.match(page, /Almost<\/span> 5 of 6 checks met\./);
-  assert.match(page, /href="#\/capabilities\/refund-recommendation\/decision">Open the decision/);
-  // Below: the people involved, with positions, and this capability's tasks and approvals.
-  assert.match(page, /People involved/);
-  assert.match(page, /Daniel Okafor<\/strong> <span class="muted">Risk<\/span><\/span><span class="sum-pos sum-pos-hold">Hold high-value cases/);
+  // Status: the level, what it does now, the proposed level, the open gap, and whether it's ready, told once.
+  assert.match(page, /Draft <span class="st-lvl">Level 2 of 5<\/span>/);
+  assert.match(page, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
+  assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 checks are met; still open: high-value refund performance needs more evidence\./);
+  assert.match(page, /Then<\/span><p>Standard refunds up to \$50 would run without review\./);
+  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=decide">Next: review the evidence/);
+  // Below: this capability's waiting actions, and the people involved, with positions.
+  assert.match(page, /People involved: 5/);
+  assert.match(page, /Daniel Okafor<\/strong> <span class="muted">Risk<\/span>: <span class="st-pos st-pos-hold">Hold high-value cases/);
   assert.match(page, /Manage stakeholders/);
-  assert.match(page, /Open tasks and approvals/);
-  assert.match(page, /2 refunds need a person to decide<\/a><span class="badge badge-decision">Approval/);
+  assert.match(page, /Needs your decision <span class="st-n">2 refunds<\/span>/);
+  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=status&show=approvals">All waiting actions/);
   // Decide holds the evidence: results, requirements, targets, tests and model
   // runs, each linked from the decision (no chip row), each with a way back.
   const ev = String(capabilityView(s, RR, new URLSearchParams('tab=decide')));
