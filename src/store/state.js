@@ -13,6 +13,9 @@ export function emptyCapabilityData() {
     scenarios: [],
     pilot: null,
     evidence: [],
+    // Evidence imported from an external system (#118), one entry per
+    // envelope, kept as received. Never edited or removed.
+    imports: [],
     stakeholderSummary: null,
     recommendation: null,
     monitoringRule: null,
@@ -53,7 +56,7 @@ export function seededCapabilityData(id) {
     ...base,
     scenarios: clone(s.scenarios || []),
     pilot: s.pilot ? clone(s.pilot) : null,
-    evidence: clone(s.evidence || []),
+    evidence: clone(s.evidence || []).map((e) => ({ ...e, from: 'seeded' })),
     stakeholderSummary: s.stakeholderSummary ? clone(s.stakeholderSummary) : null,
     recommendation: s.recommendation ? clone(s.recommendation) : null,
     monitoringRule: s.monitoringRule ? clone(s.monitoringRule) : null,

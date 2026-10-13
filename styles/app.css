@@ -134,6 +134,7 @@ button { font: inherit; }
 .badge-restricted { color: var(--restr); background: var(--restr-bg); border-color: var(--restr-bd); }
 .badge-decision { color: var(--decide); background: var(--decide-bg); border-color: var(--decide-bd); }
 .badge-neutral { color: var(--neutral); background: var(--neutral-bg); border-color: var(--neutral-bd); }
+.badge-recorded { color: var(--neutral); background: var(--neutral-bg); border-color: var(--neutral-bd); }
 
 .has-tip { text-decoration: underline dotted var(--border-strong); text-underline-offset: 3px; cursor: help; }
 .level-step, .authority { cursor: help; }

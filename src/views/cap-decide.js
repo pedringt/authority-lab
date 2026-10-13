@@ -5,7 +5,7 @@
 // requirements, pilot results) stay one link away, through `show=`.
 
 import { html, raw, section, badge, fmtDate, person, notice, empty, tabIntro } from '../ui.js';
-import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce } from '../store/index.js';
+import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams} from '../store/index.js';
 import { AGENT_RUNS_CAPABILITY } from '../data/seed.js';
 import { testsView } from './tests.js';
 import { emptyState } from './setup.js';
@@ -67,15 +67,15 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
   const p = d.pilot;
   const gap = r.unmet[0];
   const serious = t.lastRun || t.status === 'complete' ? d.scenarios.filter((x) => !x.pass && x.severity === 'High') : [];
-  const reqs = current(state, cap.id, 'requirements');
-  const criteria = current(state, cap.id, 'criteria');
+  const reqs = requirementsNow(state, cap.id);
+  const criteria = targetsNow(state, cap.id);
   const before = setBeforePilot(state, cap, d);
   const targetsOpen = criteria.filter((c) => c.status !== 'pass').length;
 
   const checks = html`<p class="decide-line-lead">What needs to be true first.</p>
     ${reqs.length ? requirementsList(state, cap.id) : html`<p class="muted">No decision requirements set yet.${criteriaSaved(state, cap.id) ? '' : html` <a href="#/capabilities/${cap.id}/criteria/edit">Set them</a>`}</p>`}
     ${criteria.length ? html`<table class="table decide-targets"><thead><tr><th>Target</th><th>Goal</th><th>Now</th><th>Status</th></tr></thead>
-      <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}</td><td>${c.status === 'pending' ? html`<span class="muted">Not measured yet</span>` : TARGET_WORDS[c.status] || c.status}</td></tr>`)}</tbody></table>` : ''}
+      <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}</td><td>${c.status === 'pending' ? html`<span class="muted">Not measured yet</span>` : c.judged && ['fail', 'insufficient', 'too-early'].includes(c.status) ? html`<span class="decide-weak">${TARGET_WORDS[c.status]}</span>` : TARGET_WORDS[c.status] || c.status}</td></tr>`)}</tbody></table>` : ''}
     ${before === true ? html`<p class="muted small">Set before the pilot started, so the bar didn't move after the results came in.</p>` : before === false ? html`<p class="muted small">Changed after the pilot started. Every change is in <a href="#/capabilities/${cap.id}/versions?kind=criteria">history</a>.</p>` : ''}
     <p class="small"><a href="${base}&show=requirements">Decision requirements</a> · <a href="${base}&show=targets">Targets</a></p>`;
 
@@ -110,11 +110,37 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
     <div class="decide-lines">
       ${line('Checks', `${r.total ? `${r.met} of ${r.total} met` : 'none set'}${targetsOpen ? ` · ${plural(targetsOpen, 'target')} not met yet` : ''}`, checks)}
       ${line('Tests', testsMeta, tests)}
+      ${importedLine(state, cap, base, line)}
       ${line('Pilot results', p ? `${p.cases} cases, ${p.accuracy}% accurate` : 'none yet', pilot)}
       ${hasRuns ? line('Model runs', rs ? `${plural(rs.runs, 'run')}, ${rs.gotThrough ? `${rs.gotThrough} got through` : 'nothing got through'}` : 'recorded, checked against the rules', modelRuns) : ''}
       ${line('Stakeholder positions', !stakeholders.length ? 'none recorded' : stances.size > 1 ? 'not unanimous' : 'all agree', stakeholders.length ? positions : html`<p class="muted">No positions recorded yet.</p>`)}
     </div>
     <p class="small decide-all"><a href="${base}&show=all">All evidence →</a></p>`;
+}
+
+// Imported results (#120), one stream at a time: each current result with its
+// segments beneath it, so a weak segment is never averaged away. A result
+// judged not met, or not enough data, is marked.
+function importedLine(state, cap, base, line) {
+  const streams = evidenceStreams(state, cap.id);
+  if (!streams.length) return '';
+  const standing = importedStanding(state, cap.id);
+  const verdicts = importedVerdicts(state, cap.id);
+  const items = capData(state, cap.id).evidence.filter((e) => e.from === 'imported' && (standing.get(e.id) || {}).standing === 'current');
+  const weak = (e) => ['fail', 'insufficient'].includes(verdicts.get(e.id));
+  const body = html`${streams.map((st) => {
+    const mine = items.filter((e) => e.external.importId && st.currentRuns.some((x) => x.id === e.external.importId) && e.external.kind === st.kind);
+    const overall = mine.filter((e) => e.segment === 'All');
+    const segs = (metric) => mine.filter((e) => e.segment !== 'All' && e.measure.metric === metric);
+    const orphanSegs = mine.filter((e) => e.segment !== 'All' && !overall.some((o) => o.measure.metric === e.measure.metric));
+    const row = (e) => html`<span class="${weak(e) ? 'decide-weak' : ''}">${e.segment === 'All' ? e.metric : e.segment}: ${e.value}${weak(e) ? ` (${verdicts.get(e.id) === 'fail' ? 'not met' : 'not enough data'})` : ''}</span>`;
+    return html`<p><strong>${st.system} ${st.capability}</strong> <span class="muted small">(${st.kind}, latest ${fmtDate(st.latest.envelope.observedAt.slice(0, 10))})</span></p>
+      <ul class="plain-list">${overall.map((e) => html`<li>${row(e)}${segs(e.measure.metric).length ? html`<ul class="plain-list imported-segs">${segs(e.measure.metric).map((x) => html`<li>${row(x)}</li>`)}</ul>` : ''}</li>`)}${orphanSegs.map((e) => html`<li>${row(e)}</li>`)}</ul>`;
+  })}
+    <p class="small"><a href="${base}&show=all">Every imported result, where it came from and its versions →</a></p>`;
+  const weakCount = items.filter(weak).length;
+  const runs = streams.reduce((n, st) => n + st.currentRuns.length, 0);
+  return line('Imported results', `${runs} run${runs === 1 ? '' : 's'} from ${[...new Set(streams.map((s) => s.system))].join(', ')}${weakCount ? ` · ${weakCount} weak` : ''}`, body);
 }
 
 export function gateActivityCard(state, cap) {
@@ -135,19 +161,19 @@ export function gateActivityCard(state, cap) {
     </table></div>`, { subtitle: `${g.events} actions, from: ${g.sources.map((x) => GATE_SOURCES[x] || x).join(', ')}. Every action is checked against the rules and logged. These numbers feed the results and the safety limits.` });
 }
 
-const TARGET_WORDS = { pass: 'Met', watch: 'Not met yet', fail: 'Not met', insufficient: 'Not enough data yet' };
+const TARGET_WORDS = { pass: 'Met', watch: 'Not met yet', fail: 'Not met', insufficient: 'Not enough data yet', 'too-early': 'Too early to judge' };
 
 const SEGMENT_WORDS = { pass: 'Looks good', watch: 'Watch', fail: 'Problem', insufficient: 'Not enough data yet' };
 
 export function criteriaTab(state, cap) {
-  const criteria = current(state, cap.id, 'criteria');
+  const criteria = targetsNow(state, cap.id);
   if (!criteriaSaved(state, cap.id)) return emptyState(state, cap.id, 'No targets yet.', 'criteria');
   const locked = criteriaLocked(state, cap.id);
   const rows = criteria.map((c) => html`<tr>
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
     <td>${c.current}</td>
-    <td>${c.status === 'pending' ? badge('neutral', 'Not measured yet') : badge(c.status, TARGET_WORDS[c.status])}</td>
+    <td>${c.status === 'pending' ? badge('neutral', c.judged ? 'No results yet' : 'Not measured yet') : badge(c.status === 'too-early' ? 'insufficient' : c.status, TARGET_WORDS[c.status])}</td>
     <td class="muted">${c.note}</td>
   </tr>`);
   const defining = state.decisionRecords.find((x) => x.capabilityId === cap.id && x.number === 2);
@@ -177,12 +203,12 @@ export function proposedChangeLabel(cap, state) {
 
 export function requirementsList(state, capabilityId) {
   const r = readiness(state, capabilityId);
-  const reqs = current(state, capabilityId, 'requirements');
+  const reqs = requirementsNow(state, capabilityId);
   if (!reqs.length) return empty('No decision requirements set.');
   return html`<div class="card">
     <ul class="req-list">${reqs.map((q) => html`<li class="${q.met ? 'is-met' : 'is-unmet'}">
       <span class="req-mark" aria-hidden="true">${q.met ? '✓' : '⚠'}</span>
-      <span class="req-text"><strong>${q.text}</strong><span class="muted"> · ${q.met ? 'Met' : 'Not met'}: ${q.current}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
+      <span class="req-text"><strong>${q.text}</strong><span class="muted"> · ${q.met ? 'Met' : q.judged && ['too-early', 'insufficient', 'pending'].includes(q.judged.status) ? TARGET_WORDS[q.judged.status] || 'No results yet' : 'Not met'}: ${q.current}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
     </li>`)}</ul>
     <p class="muted small"><strong>${r.met} of ${r.total}</strong> checks met.</p>
   </div>`;
