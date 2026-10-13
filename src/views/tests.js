@@ -40,7 +40,7 @@ export function testsView(state, capabilityId, query, { embedded = false } = {})
 
   const highFailures = d.scenarios.filter((s) => !s.pass && s.severity === 'High');
   const failureCallout = t.status === 'complete' && highFailures.length
-    ? notice('fail', `${highFailures.length === 1 ? 'One serious failure' : `${highFailures.length} serious failures`}`, highFailures.map((s) => `${s.id}: ${s.name}. ${s.explanation.split('. ')[0]}.`).join(' ') + ' These count against giving the AI more authority.', { link: `#/tests?capability=${cap.id}&filter=high`, linkText: 'Show failures' })
+    ? notice('fail', `${highFailures.length === 1 ? 'One serious failure' : `${highFailures.length} serious failures`}`, highFailures.map((s) => `${s.id}: ${s.name}. ${s.explanation.split('. ')[0]}.`).join(' ') + ' These count against expanding autonomy.', { link: `#/capabilities/${cap.id}?tab=decide&show=tests&filter=high`, linkText: 'Show failures' })
     : '';
 
   const groupNames = seed.SCENARIO_GROUPS.map((g) => g.name.toLowerCase()).join(', ');
