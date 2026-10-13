@@ -12,6 +12,7 @@ import { simulateBreach, recordReview } from './monitoring.js';
 import { startEmpty, setUpWorkspace, renameWorkspace } from './workspace.js';
 import { approveAction, rejectAction } from './queue.js';
 import { importEvidenceFiles } from './external.js';
+import { recordManualEvidence } from './sources.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
@@ -82,6 +83,7 @@ export const ACTIONS = {
   rejectAction,
   setRoiAssumptions,
   importEvidenceFiles: (state, files) => importEvidenceFiles(state, files).state,
+  recordManualEvidence,
   reset,
 };
 

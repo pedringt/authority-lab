@@ -364,3 +364,13 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .provenance .kv > div { grid-template-columns: 100px 1fr; }
 .provenance .kv dd { overflow-wrap: anywhere; }
 .imported-segs { margin: 2px 0 6px 16px; }
+
+/* Record a result by hand (#126). */
+.form-stack { display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+.form-stack label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 500; }
+.form-stack input[type="text"], .form-stack input[type="number"], .form-stack input[type="date"], .form-stack input[type="url"], .form-stack select, .form-stack textarea { font: inherit; font-weight: 400; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; }
+.choice-row { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.choice-row legend { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.choice-row label { flex-direction: row; align-items: center; gap: 6px; font-weight: 400; }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.form-actions { display: flex; gap: 8px; }

@@ -117,6 +117,9 @@ export function initialState() {
     // chargebacks, the refund ledger and escalations. The gate reads facts
     // only from here.
     systems: clone(seed.systems),
+    // Evidence sources connected to this workspace (#126). The built-in ones
+    // (Authority Lab tests, manual review) are added by the selector.
+    evidenceSources: [],
     // "Waiting for a person" (A4): actions the gate sent to a person.
     actionQueue: [],
     // Every gate check and every decision on a waiting action (A5).

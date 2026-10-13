@@ -30,6 +30,7 @@ export function startEmpty() {
     decisionRecords: [],
     activity: [],
     alerts: [],
+    evidenceSources: [],
     // A new workspace has nothing waiting and no gate history.
     actionQueue: [],
     gateLog: [],

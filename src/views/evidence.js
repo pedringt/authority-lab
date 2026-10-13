@@ -27,7 +27,7 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
   // An imported result takes the status of the targets and requirements that
   // judge it (#120); one nothing judges stays "Not judged yet".
   const verdicts = importedVerdicts(state, capabilityId);
-  const all = [...d.evidence.map((e) => (e.from === 'imported' && verdicts.has(e.id) ? { ...e, status: verdicts.get(e.id) } : e)), ...gateEvidence(state, capabilityId)];
+  const all = [...d.evidence.map((e) => (e.external && verdicts.has(e.id) ? { ...e, status: verdicts.get(e.id) } : e)), ...gateEvidence(state, capabilityId)];
   const seededIds = new Set(((seed.capabilityData[capabilityId] || {}).evidence || []).map((e) => e.id));
   const standing = importedStanding(state, capabilityId);
   const sources = [...new Set(all.map((e) => e.source))];
@@ -83,6 +83,7 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
     </div>
   </div>`;
   return html`${head}
+  <p class="evidence-actions"><a class="btn btn-sm" href="#/capabilities/${cap.id}/evidence/record">Record a result</a> <a class="small" href="#/sources">Evidence sources</a></p>
   ${configChangeNotices(state, capabilityId)}
   ${all.length ? filters : ''}
   ${items.length ? html`<div class="evidence-grid">${cards}</div>` : html`<p class="empty">${all.length ? 'No evidence matches these filters.' : `No evidence yet for ${cap.name}. Run the tests or start a pilot to collect some.`}</p>`}

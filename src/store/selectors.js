@@ -54,7 +54,7 @@ export const MEASURED_SOURCES = new Set(['Automated tests', 'Pilot outcomes', 'H
 // amendments (afterEvidence) and by the criteria lock (#6).
 export function performanceResultsSeen(state, capabilityId) {
   const d = capData(state, capabilityId);
-  return Boolean(d.testRun.lastRun) || Boolean(d.pilot) || d.evidence.some((e) => MEASURED_SOURCES.has(e.source) || e.from === 'imported');
+  return Boolean(d.testRun.lastRun) || Boolean(d.pilot) || d.evidence.some((e) => MEASURED_SOURCES.has(e.source) || Boolean(e.external));
 }
 
 // Kinds shown in Activity by default (decision 3): decisions, automatic
@@ -62,7 +62,7 @@ export function performanceResultsSeen(state, capabilityId) {
 // contract finalized, plus mitigations and stakeholder reviews. Setup-type
 // events (for example "criteria defined") sit in Full history. An amendment
 // is surfaced only when it was made after performance results were seen.
-export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision', 'proposal', 'workspace', 'evidence-imported']);
+export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'milestone', 'criteria-locked', 'contract-finalized', 'failure', 'review', 'mitigation', 'decision', 'proposal', 'workspace', 'evidence-imported', 'evidence-source']);
 
 // Activity badge text, in the agreed terms (Rules, Targets, Decision
 // requirements, Proposed change). The keys are stored on events; only the
@@ -70,7 +70,7 @@ export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'mile
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Authority reduced', failure: 'Failure', mitigation: 'Fix', milestone: 'Milestone',
   review: 'Review', workspace: 'Workspace', criteria: 'Targets set', 'criteria-locked': 'Targets can no longer be edited directly', 'contract-finalized': 'Rules finalized', 'contract-draft': 'Rules drafted', 'criteria-saved': 'Targets saved', 'scenarios-saved': 'Test cases saved', proposal: 'Proposed change', roster: 'People',
-  decision: 'Decision', test: 'Test run', amendment: 'Change', 'roi-assumptions': 'ROI change', 'evidence-imported': 'Evidence imported',
+  decision: 'Decision', test: 'Test run', amendment: 'Change', 'roi-assumptions': 'ROI change', 'evidence-imported': 'Evidence', 'evidence-source': 'Evidence source',
 };
 
 // Activity events for the Activity screen. Default: surfaced events only.

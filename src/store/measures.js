@@ -67,7 +67,7 @@ const casesText = (n) => `${n} case${n === 1 ? '' : 's'}`;
 export function measuredEvidence(state, capabilityId, measure) {
   const standing = importedStanding(state, capabilityId);
   const seg = measure.segment || null;
-  const items = capData(state, capabilityId).evidence.filter((e) => e.from === 'imported' && e.measure
+  const items = capData(state, capabilityId).evidence.filter((e) => e.external && e.measure
     && e.measure.metric === measure.metric && (e.measure.segment || null) === seg
     && (!measure.kind || e.external.kind === measure.kind)
     && (standing.get(e.id) || {}).standing === 'current');

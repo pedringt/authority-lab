@@ -15,6 +15,7 @@
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { enforceImportedRules } from './monitoring.js';
+import { registerSource, sourceIdFor } from './sources.js';
 
 export const EVIDENCE_SCHEMA = 'authority-lab-evidence/1';
 export const EVIDENCE_KINDS = ['eval', 'production'];
@@ -148,7 +149,7 @@ const RISK_OF = { high: 'High', medium: 'Medium', low: 'Low' };
 // One evidence item per measurement, in the same list as every other piece of
 // evidence. `from: 'imported'` and `external` say where it came from; the
 // measurement itself is kept so targets can be judged from it (#120).
-function itemsFor(env) {
+function itemsFor(env, { via = 'file', sourceId = null, recordedBy = null } = {}) {
   const external = {
     importId: env.id,
     system: env.source.system,
@@ -160,8 +161,10 @@ function itemsFor(env) {
   };
   return env.measurements.map((m) => ({
     id: `${env.id}#${m.metric}${m.segment ? `@${m.segment.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''}`,
-    from: 'imported',
-    source: `${env.source.system} ${env.kind === 'eval' ? 'eval' : 'production'}`,
+    from: via === 'manual' ? 'manual' : 'imported',
+    sourceId: sourceId || sourceIdFor(env.source.system, env.source.capability),
+    ...(recordedBy ? { recordedBy } : {}),
+    source: via === 'manual' ? 'Manual review' : `${env.source.system} ${env.kind === 'eval' ? 'eval' : 'production'}`,
     metric: m.label || m.metric,
     value: measurementText(m),
     status: 'recorded',
@@ -179,7 +182,7 @@ function itemsFor(env) {
 // immutable: the same envelope again (a retry) changes nothing and returns
 // the same state; the same id with different content is refused, because a
 // correction arrives as new evidence with its own id.
-export function importEvidence(state, env, { via = 'file' } = {}) {
+export function importEvidence(state, env, { via = 'file', sourceId = null, recordedBy = null } = {}) {
   const errors = checkEvidence(env);
   if (errors.length) throw new Error(`This evidence can't be imported: ${errors.join(' ')}`);
   const cap = getCapability(state, env.capabilityId);
@@ -189,14 +192,19 @@ export function importEvidence(state, env, { via = 'file' } = {}) {
     if (prior.capabilityId === env.capabilityId && same(prior.envelope, env)) return state;
     throw new Error(`Evidence ${env.id} was already imported with different content. Imported evidence never changes: send a correction as new evidence with its own id.`);
   }
-  const items = itemsFor(env);
-  const record = { id: env.id, importedOn: state.today, via, envelope: canonicalEvidence(env) };
-  const s = updateCap(state, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
+  const items = itemsFor(env, { via, sourceId, recordedBy });
+  const record = { id: env.id, importedOn: state.today, via, envelope: canonicalEvidence(env), ...(recordedBy ? { recordedBy } : {}) };
+  // A connected system becomes a workspace source the first time it sends
+  // evidence (#126); a result a person records belongs to manual review.
+  let s = via === 'manual' ? state : registerSource(state, { system: env.source.system, capability: env.source.capability, kind: env.kind });
+  s = updateCap(s, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
   const logged = logEvent(s, {
     kind: 'evidence-imported',
     surfaced: true,
-    title: `Evidence imported from ${env.source.system}`,
-    body: `${cap.name}: ${items.length} result${items.length === 1 ? '' : 's'} from ${env.source.capability} (${env.kind === 'eval' ? 'an eval' : 'production'}, ${env.observedAt.slice(0, 10)}), run ${env.id}.`,
+    title: via === 'manual' ? `Result recorded by ${recordedBy ? recordedBy.name : 'a person'}` : `Evidence imported from ${env.source.system}`,
+    body: via === 'manual'
+      ? `${cap.name}: ${items[0].metric}, ${items[0].value} (${env.kind === 'eval' ? 'on test cases' : 'in real use'}, ${env.observedAt.slice(0, 10)}), recorded by hand.`
+      : `${cap.name}: ${items.length} result${items.length === 1 ? '' : 's'} from ${env.source.capability} (${env.kind === 'eval' ? 'an eval' : 'production'}, ${env.observedAt.slice(0, 10)}), run ${env.id}.`,
     capabilityId: cap.id,
     link: `#/capabilities/${cap.id}?tab=decide&show=all`,
   });
@@ -233,7 +241,7 @@ export function importEvidenceFiles(state, files) {
 
 // Where a piece of evidence came from, for every item in a capability's list.
 // Items stamped before `from` existed fall back on the seed's ids.
-export const FROM_LABELS = { seeded: 'Demo data', workspace: 'Recorded in this workspace', imported: 'Imported', calculated: 'Calculated from logged actions' };
+export const FROM_LABELS = { seeded: 'Demo data', workspace: 'Recorded in this workspace', imported: 'Imported', manual: 'Recorded by a person', calculated: 'Calculated from logged actions' };
 export function evidenceFrom(e, seededIds = null) {
   if (e.from) return e.from;
   if (e.derived) return 'calculated';

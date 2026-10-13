@@ -70,6 +70,8 @@ Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/�
 
 An AI system that runs somewhere else can send evidence about one of its capabilities: one JSON envelope per run, committed to `src/data/external-evidence/` in a pull request and checked by CI. The site imports the committed files into the normal evidence list, labelled with their source. See [docs/EXTERNAL_EVIDENCE.md](docs/EXTERNAL_EVIDENCE.md).
 
+Evidence sources (Settings → Evidence sources) show where a workspace's evidence comes from; the owner or a stakeholder can also record a result by hand.
+
 ## Starting empty
 
 **Settings → Start empty** (the gear at the top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). **Start a workspace** comes first: your name and title (you become its workspace admin) and the names of the workspace and its one workflow. One person is enough; a second admin or a Risk approver is asked for the first time an approval needs one ("You're the only person in this workspace: add someone on People first."). One bootstrap exception (the founding roster) breaks the deadlock: while you're the only workspace admin, you can make one other person a workspace admin without approval, recorded as a founding change. Nothing else skips approval: not the Risk approver right, and never a right to yourself. Once the second admin exists, the two of you set up Risk approvers and every other right through the normal approval rules. Then add the first capability. **Reset demo** brings Northstar back.
