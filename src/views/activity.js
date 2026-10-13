@@ -22,6 +22,7 @@ export const KIND_TONE = {
   'roi-assumptions': 'neutral',
   decision: 'neutral',
   test: 'neutral',
+  'evidence-imported': 'neutral',
 };
 
 // A change to a versioned object says which object it changed.

@@ -1,6 +1,6 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
-import { html, setPeople, setToday, fmtDate, subNav } from './ui.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles } from './store/index.js';
+import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
 import { capabilitiesView } from './views/capabilities.js';
@@ -65,6 +65,34 @@ function loadAgentRuns() {
     .catch((err) => { agentRuns = { status: 'error', runs: [], error: err.message }; })
     .then(() => { const { parts, query } = parseRoute(); if (parts[0] === 'capabilities' && query.get('tab') === 'decide') render(); });
 }
+
+// External evidence (#118): envelopes committed under
+// src/data/external-evidence/, imported on every load and again after a reset.
+// Importing is idempotent, so a file already in the workspace changes nothing.
+// A file that can't be imported is listed on Records, never dropped quietly.
+let externalFiles = null;
+let externalProblems = [];
+function loadExternalEvidence() {
+  const base = 'src/data/external-evidence/';
+  fetch(`${base}index.json`, { cache: 'no-cache' })
+    .then((r) => { if (!r.ok) throw new Error(`index.json: ${r.status}`); return r.json(); })
+    .then((index) => Promise.all((index.files || []).map((file) => fetch(`${base}${file}`, { cache: 'no-cache' })
+      .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
+      .then((envelope) => ({ file, envelope }), (err) => ({ file, error: `couldn't be read (${err.message})` })))))
+    .then((files) => { externalFiles = files; applyExternalEvidence(); })
+    .catch((err) => { externalProblems = [{ file: 'index.json', reason: `The list of evidence files couldn't be read (${err.message}).` }]; render(); });
+}
+function applyExternalEvidence() {
+  if (!externalFiles) return;
+  const readable = externalFiles.filter((f) => f.envelope);
+  const { results } = importEvidenceFiles(store.get(), readable);
+  externalProblems = [...externalFiles.filter((f) => f.error).map((f) => ({ file: f.file, reason: f.error })), ...results.filter((r) => r.status === 'refused')];
+  store.dispatch('importEvidenceFiles', readable);
+  render();
+}
+const externalNotice = () => (externalProblems.length
+  ? notice('fail', `${externalProblems.length === 1 ? 'One evidence file' : `${externalProblems.length} evidence files`} couldn't be imported`, html`${externalProblems.map((p) => html`${p.file}: ${p.reason}<br>`)}`)
+  : '');
 
 // Where an old address that named no capability should go.
 const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
@@ -150,7 +178,7 @@ function render() {
       const showActivity = query.get('show') === 'activity';
       const pendingCount = state.capabilities.filter((c) => decisionRequired(state, c.id)).length;
       const tabs = subNav([{ href: '#/records', label: 'Decisions', active: !showActivity, count: pendingCount }, { href: '#/records?show=activity', label: 'Activity', active: showActivity }], 'Record views');
-      view = html`${tabs}${showActivity ? activityView(state, query) : decisionsListView(state)}`;
+      view = html`${externalNotice()}${tabs}${showActivity ? activityView(state, query) : decisionsListView(state)}`;
       title = showActivity ? 'Activity' : 'Decisions';
       break;
     }
@@ -381,6 +409,7 @@ document.addEventListener('click', (e) => {
     const kind = pendingErase;
     closeEraseConfirm(false);
     store.dispatch(kind === 'start-empty' ? 'startEmpty' : 'reset');
+    applyExternalEvidence();
     stopSuite();
     setupDraft = null;
     location.hash = '#/overview';
@@ -690,3 +719,4 @@ function stopSuite() {
 store.subscribe(render);
 window.addEventListener('hashchange', render);
 render();
+loadExternalEvidence();

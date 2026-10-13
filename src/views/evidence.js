@@ -5,7 +5,7 @@ import { requirementsList, proposedChangeLabel } from './cap-decide.js';
 import { capabilityHeading, filterBar } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';
 
-const STATUSES = [['all', 'All statuses'], ['pass', 'Pass'], ['watch', 'Needs attention'], ['insufficient', 'Not enough data'], ['fail', 'Fail']];
+const STATUSES = [['all', 'All statuses'], ['pass', 'Pass'], ['watch', 'Needs attention'], ['insufficient', 'Not enough data'], ['fail', 'Fail'], ['recorded', 'Not judged yet']];
 // The same words on the filter and on each item's badge.
 const STATUS_LABEL = Object.fromEntries(STATUSES);
 
@@ -61,7 +61,7 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
     </div>
     <p class="evidence-value">${e.value}</p>
     <p class="muted">${evidenceDetail(e)}</p>
-    <div class="evidence-meta"><span>${e.id}</span><span>${fmtDate(e.date)}</span><span>${e.segment === 'All' ? 'All segments' : e.segment}</span><span>${e.risk} risk</span><a href="${e.link}">View source</a></div>
+    <div class="evidence-meta"><span>${e.id}</span><span>${fmtDate(e.date)}</span><span>${e.segment === 'All' ? 'All segments' : e.segment}</span>${e.risk ? html`<span>${e.risk} risk</span>` : ''}${e.link ? (/^https:/.test(e.link) ? html`<a href="${e.link}" target="_blank" rel="noopener">View source</a>` : html`<a href="${e.link}">View source</a>`) : ''}</div>
   </article>`);
 
   const head = embedded

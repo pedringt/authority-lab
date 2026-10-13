@@ -104,6 +104,17 @@ The product decisions behind Authority Lab, why they were made, and what's next.
   - **Escalations left waiting:** an action waiting for a person for more than 2 days. Real data, from the waiting queue.
   - **Work-arounds:** a refund someone issued by hand since the expansion in force, not by the AI and not through an approved waiting action. Real data, from the refund ledger.
   - **Simulated data says so:** the seed's simulated data raises the first two warnings in the demo, each badged "Simulated" with its source. The thresholds are constants in `src/store/adoption.js`.
+### External evidence (#118–#121, 2026-10-12)
+
+- **State's Evidence Interpreter is the first real external capability, and the test of generality.** Authority Lab isn't redesigned around State: State fits through configuration and a generic evidence contract, and anything that doesn't fit is recorded as the Northstar-specific assumption it exposed, never patched with a State-only case. The first pass is one-way: State sends evidence; Authority Lab doesn't control State (runtime checks are #117, later). (Paige, 2026-10-12.)
+- **Git is the transport (Paige, 2026-10-12).** The site stays static: a sender commits one envelope per run under `src/data/external-evidence/` in a pull request; CI checks every file, so a merged file is an acknowledged one; the app imports the committed files on load. Considered and not chosen: a small backend (it reverses the static-site decision and would move the workspace server-side) and a manual upload (it only lands in one browser). Each import is a deploy, so imports are batched.
+- **The contract (#118).** `authority-lab-evidence/1`: a stable run id, the capability, the source system and capability, eval or production, the date, optional version strings (provider, model, prompt, implementation, eval set, tool policy), an optional https reference, and 1–40 measurements (rate, count or value; optional segment and severity). Nothing domain-specific; a test checks the module for refund, support and sender words.
+  - **A summary and a reference, never content.** Every key is allowlisted at every level and every text field is short, so a document body, a system prompt or a token is refused.
+  - **Immutable and idempotent.** The same envelope again changes nothing; the same id with different content is refused; a correction is new evidence with its own id.
+  - **Same evidence model.** Each measurement is an item in the capability's evidence list, `from: 'imported'`, shown as "Not judged yet" until a target is bound to it (#120). Imported results are performance results, so they lock the targets.
+  - **Failures are visible.** CI refuses a bad file before merge; a file that still can't be imported is listed on Records with the reason.
+- **The real capability gets its own workspace (Paige, 2026-10-12).** "Interpret incoming project evidence" lives in a second built-in workspace beside the Northstar demo, so real and fictional data never mix. Needs a workspace switcher (#121).
+
 ### Workspace setup
 
 - **"Start empty" sits beside Reset demo.** It swaps the seeded Northstar demo for a blank workspace; Reset demo brings Northstar back. One workspace at a time. Until setup is done, every route shows the setup screen, with no tabs and no acting-as picker. (Decided 2026-10-09, #58.)

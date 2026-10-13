@@ -13,6 +13,9 @@ export function emptyCapabilityData() {
     scenarios: [],
     pilot: null,
     evidence: [],
+    // Evidence imported from an external system (#118), one entry per
+    // envelope, kept as received. Never edited or removed.
+    imports: [],
     stakeholderSummary: null,
     recommendation: null,
     monitoringRule: null,

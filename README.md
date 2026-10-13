@@ -66,6 +66,10 @@ Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/â
 
 `agent/` is an MCP server that gives a model the tools to look up orders, issue refunds and escalate to a person. Every call goes through the gate and the data filter in `src/store/`. It's separate from the static app: it has its own pinned dependencies and is never deployed. See [agent/README.md](agent/README.md) to run it with Claude Code or Claude Desktop.
 
+## Evidence from other systems
+
+An AI system that runs somewhere else can send evidence about one of its capabilities: one JSON envelope per run, committed to `src/data/external-evidence/` in a pull request and checked by CI. The site imports the committed files into the normal evidence list, labelled with their source. See [docs/EXTERNAL_EVIDENCE.md](docs/EXTERNAL_EVIDENCE.md).
+
 ## Starting empty
 
 **Settings â†’ Start empty** (the gear at the top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). **Start a workspace** comes first: your name and title (you become its workspace admin) and the names of the workspace and its one workflow. One person is enough; a second admin or a Risk approver is asked for the first time an approval needs one ("You're the only person in this workspace: add someone on People first."). One bootstrap exception (the founding roster) breaks the deadlock: while you're the only workspace admin, you can make one other person a workspace admin without approval, recorded as a founding change. Nothing else skips approval: not the Risk approver right, and never a right to yourself. Once the second admin exists, the two of you set up Risk approvers and every other right through the normal approval rules. Then add the first capability. **Reset demo** brings Northstar back.

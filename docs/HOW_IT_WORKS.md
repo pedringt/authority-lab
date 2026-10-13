@@ -86,6 +86,8 @@ Two of these deserve a note:
 
 **Evidence** is anything that tells the team how the capability actually performs. It comes from several sources: automated test scenarios, the live pilot, human reviewers, operational metrics, cost, incidents, user feedback and stakeholder assessments. Every piece of evidence has a status: pass, watch, insufficient evidence, or fail.
 
+Evidence can also be **imported** from an AI system that runs somewhere else: one envelope per run, committed to the repo and checked by CI, carrying a summary and a reference back to the source, never its content (see `docs/EXTERNAL_EVIDENCE.md`). Each result lands in the same evidence list, labelled with its source and marked **Not judged yet** until a target is bound to it. A retry changes nothing; a correction is new evidence. Imported results count as performance results, so they lock the targets like a test run.
+
 Evidence is deliberately kept **segmented**. Refund recommendation scores 94% overall, but only 83% on high-value refunds, and there are only 18 of those. The aggregate number would hide that. The product shows it.
 
 ### Evidence requirements and decision readiness (Decision requirements in the app)
@@ -333,11 +335,12 @@ The prototype is a static web app: plain HTML, CSS and JavaScript, no build step
 - `src/store/tools.js` holds the agent's tools, `lookup_order`, `issue_refund` and `escalate_to_human`. Each call goes through the gate, and only executes on an allow. Results are filtered to the contract's data section (**Data it can access**, under Status → All rules) against fictional seeded systems of record: orders, customers, fraud flags, chargebacks and a refund ledger. Card numbers and full addresses never reach the model.
 - `src/store/queue.js` holds the queue of actions waiting for a person: actions the gate sent to a person wait under the capability's Status tab (**Needs a decision**, with all of them at `show=approvals`), and show in the Overview's Approvals needed. The owner or a named stakeholder approves or rejects each one, with a reason. Approving re-runs the gate first, and refuses if anything changed since the action was queued: a restriction, a crossed cap, or a newly blocked order. The demo opens with two refund requests waiting on Refund recommendation.
 - `src/store/gatelog.js` logs every gate decision, and every person's decision on a waiting action. Each event is labelled seeded, this session, or recorded. Decide → Pilot results shows the counts and the latest events as **What the AI tried**. All evidence adds three items derived from the log (allowed, sent to a person, blocked), marked as derived. A restriction rule the log can measure, such as Refund recommendation's "3 attempts at a must-never action within 7 days", restricts the capability as soon as it's crossed.
+- `src/store/external.js` holds the external evidence contract (`authority-lab-evidence/1`): `checkEvidence` validates an envelope, `importEvidence` adds it to the capability's evidence, and `importEvidenceFiles` imports the files committed under `src/data/external-evidence/`, which the app does on every load. Files that can't be imported are listed on Records.
 - `agent/` (not part of the deployed site) is an MCP server that offers those three tools to a model such as Claude, through the same gate and filter. See `agent/README.md` to connect it to Claude Code or Claude Desktop.
 - `src/views/` holds one module per screen. Screens read state and draw it; they never change it directly.
 - `styles/app.css` is the design. Colour always carries a state (pass, watch, fail, insufficient evidence, restricted, decision required) and is always paired with a word.
 
-Nothing calls a model. In a real version, the evidence would come from outside: a test harness, a ticketing system, a payments system, a model API, an eval framework. Authority Lab would sit above those systems and turn what they report into a decision about authority.
+Nothing calls a model. Evidence from outside arrives as committed files (`src/data/external-evidence/`), never over the network. In a real version, more of the evidence would come from outside: a test harness, a ticketing system, a payments system, a model API, an eval framework. Authority Lab would sit above those systems and turn what they report into a decision about authority.
 
 ---
 
