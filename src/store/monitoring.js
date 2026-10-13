@@ -7,6 +7,7 @@ import { people, snapshotPerson, isActivePerson, isRiskApprover, soloHint } from
 import { isHighOrFinancial } from './coverage.js';
 import { gateMetricOf, gateReading } from './gatelog.js';
 import { importedRuleReading } from './measures.js';
+import { nextEvidenceId } from './evidence.js';
 
 // Restriction rules come from the contract's "Automatic restriction" lines
 // (the contract wins, decided 2026-10-08). A line names its threshold, its
@@ -134,7 +135,7 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
   const contractV = rule.contractVersion ? `the rules (version ${rule.contractVersion})` : 'the rules';
   const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
   const incidentId = `INC-${String(incidentNumber).padStart(2, '0')}`;
-  const evidenceId = `EV-${String(d.evidence.length + 1).padStart(2, '0')}`;
+  const evidenceId = nextEvidenceId(d.evidence);
   const ruleReadings = { ...(d.ruleReadings || {}), [rule.text]: value };
 
   if (rule.kind === 'incident') {

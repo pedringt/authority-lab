@@ -23,11 +23,12 @@ const env = (over = {}) => ({
 });
 const manual = (s, over = {}) => recordManualEvidence(s, RR, { by: 'maya', label: 'Policy compliance in a Risk review', kind: 'production', type: 'rate', passed: '18', total: '20', ...over });
 
-test('every workspace has the two built-in sources, and Start empty keeps only those', () => {
+test('every workspace has the two built-in sources; the demo adds three example ones; Start empty keeps only the built-ins', () => {
   const ids = (s) => evidenceSources(s).map((x) => x.id);
-  assert.deepEqual(ids(initialState()), [TESTS_SOURCE, MANUAL_SOURCE]);
+  assert.deepEqual(ids(initialState()), [TESTS_SOURCE, MANUAL_SOURCE, 'support-platform-refund-decisions', 'ticketing-escalations', 'eval-harness-refund-suite']);
+  assert.ok(evidenceSources(initialState()).slice(2).every((x) => x.example && x.connection === 'connected'));
   const s = importEvidence(initialState(), env());
-  assert.equal(evidenceSources(s).length, 3);
+  assert.equal(evidenceSources(s).length, 6);
   assert.deepEqual(ids(startEmpty(s)), [TESTS_SOURCE, MANUAL_SOURCE]);
   assert.deepEqual(BUILT_IN_SOURCES.map((x) => x.connection), ['built-in', 'manual']);
 });
@@ -46,7 +47,7 @@ test('a connected system becomes a source the first time it sends evidence, and 
   assert.match(activityEvents(s).find((e) => e.kind === 'evidence-source').title, /^Evidence source connected: Acme · Classifier$/);
   // A second run from the same system is no new source.
   s = importEvidence(s, env({ id: 'acme:production:2', kind: 'production', observedAt: '2026-10-06', measurements: [{ metric: 'escalations', type: 'count', value: 2, total: 40 }] }));
-  assert.equal(evidenceSources(s).filter((x) => x.connection === 'connected').length, 1);
+  assert.equal(evidenceSources(s).filter((x) => x.id.startsWith('acme')).length, 1);
   assert.equal(activityEvents(s).filter((e) => e.kind === 'evidence-source').length, 1);
   assert.equal(findSource(s, 'acme-classifier').lastReceived, '2026-10-06');
   // Every imported item names its source.
@@ -60,6 +61,8 @@ test('test runs belong to the built-in tests source; seeded demo items to none',
   assert.equal(sourceOfItem(items.find((e) => e.source === 'Automated tests')), TESTS_SOURCE);
   assert.equal(sourceOfItem(items.find((e) => e.id === 'EV-02')), null);
   assert.equal(findSource(s, TESTS_SOURCE).lastReceived, s.today);
+  // The seeded test runs count too: the tests source reports through recorded runs.
+  assert.ok(findSource(initialState(), TESTS_SOURCE).capabilities.includes(RR));
 });
 
 test('the owner or a named stakeholder records a result by hand; it is kept as recorded, with who recorded it', () => {
@@ -72,13 +75,13 @@ test('the owner or a named stakeholder records a result by hand; it is kept as r
   assert.equal(item.external.kind, 'production');
   assert.equal(evidenceFrom(item), 'manual');
   assert.equal(findSource(s, MANUAL_SOURCE).lastReceived, s.today);
-  assert.equal(evidenceSources(s).length, 2, 'a hand-recorded result registers no new source');
+  assert.equal(evidenceSources(s).length, evidenceSources(initialState()).length, 'a hand-recorded result registers no new source');
   const ev = activityEvents(s).find((e) => e.kind === 'evidence-imported');
   assert.equal(ev.title, 'Result recorded by Maya Chen');
   assert.match(ev.body, /Refund recommendation: Policy compliance in a Risk review, 90% \(18 of 20\) \(in real use, 2026-10-07\), recorded by hand\./);
   // A named stakeholder may; the next one gets its own id.
   const s2 = manual(s, { by: 'daniel', label: 'Escalations reviewed', type: 'count', value: '1', total: '20', severity: 'high' });
-  assert.equal(capData(s2, RR).evidence.filter((e) => e.from === 'manual').length, 2);
+  assert.equal(capData(s2, RR).evidence.filter((e) => e.from === 'manual' && !e.demo).length, 2);
   assert.ok(capData(s2, RR).evidence.some((e) => e.id === 'manual:refund-recommendation:2#escalations-reviewed' && e.risk === 'High'));
 });
 
@@ -128,7 +131,7 @@ test('screens: the sources page lists built-in and connected sources; the form i
   assert.match(h, /badge-pass">Connected</);
   assert.match(h, /Classification quality <span class="muted small">\(1 segment\)<\/span>/);
   assert.doesNotMatch(String(sourcesView(initialState())), /credential|API key|token|password|<input/i, 'no connection settings here');
-  assert.match(String(sourcesView(initialState())), /No connected systems yet/);
+  assert.match(String(sourcesView(startEmpty(initialState()))), /No connected systems yet/);
   const form = String(recordEvidenceView(s, RR, new URLSearchParams()));
   assert.match(form, /data-form="record-evidence" data-capability="refund-recommendation"/);
   assert.match(form, /Recording as <strong>Maya Chen<\/strong>/);

@@ -10,6 +10,7 @@ import { people, isActivePerson, snapshotPerson } from './people.js';
 import { checkAction, own, toolLabel } from './gate.js';
 import { executeRefund } from './tools.js';
 import { logGate } from './gatelog.js';
+import { nextEvidenceId } from './evidence.js';
 
 const items = (state) => state.actionQueue || [];
 // A decided item's status, in words.
@@ -76,7 +77,7 @@ function openQueueFullIncident(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
   const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
   const incidentId = `INC-${String(incidentNumber).padStart(2, '0')}`;
-  const evidence = [{ id: `EV-${String(d.evidence.length + 1).padStart(2, '0')}`, from: 'workspace', source: 'Incident', metric: `${incidentId}: approval list full`, value: `${QUEUE_LIMIT} actions waiting`, status: 'fail', risk: 'Medium', segment: 'All', date: state.today, detail: `${QUEUE_LIMIT} actions on ${cap.name} need a person to decide, so new ones are blocked until some are decided. The AI is asking faster than people can decide; worth a look.`, link: `#/capabilities/${cap.id}?tab=status&show=approvals` }, ...d.evidence];
+  const evidence = [{ id: nextEvidenceId(d.evidence), from: 'workspace', source: 'Incident', metric: `${incidentId}: approval list full`, value: `${QUEUE_LIMIT} actions waiting`, status: 'fail', risk: 'Medium', segment: 'All', date: state.today, detail: `${QUEUE_LIMIT} actions on ${cap.name} need a person to decide, so new ones are blocked until some are decided. The AI is asking faster than people can decide; worth a look.`, link: `#/capabilities/${cap.id}?tab=status&show=approvals` }, ...d.evidence];
   const s = { ...state, capabilityData: { ...state.capabilityData, [capabilityId]: { ...d, evidence, queueFull: { since: state.today, incidentId } } } };
   // `kind` marks the alert so it clears when the list drains, whatever its wording.
   const alert = { id: `ALERT-${Date.now()}-q`, kind: 'queue-full', date: state.today, severity: 'medium', capabilityId, title: `Approval list full: ${cap.name}`, body: `${QUEUE_LIMIT} actions need a person to decide. New ones are blocked until some are decided (${incidentId}).`, link: `#/capabilities/${cap.id}?tab=status&show=approvals` };

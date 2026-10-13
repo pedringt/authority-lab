@@ -377,3 +377,4 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .coverage-summary { margin-bottom: 16px; }
 .coverage-summary .decide-big { margin: 0 0 4px; }
 .gap-list li { margin-bottom: 8px; }
+.mon-signals li { margin-bottom: 8px; }

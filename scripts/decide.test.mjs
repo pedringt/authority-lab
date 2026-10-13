@@ -58,6 +58,8 @@ test('Decide step 2: one headline, the top gap, a serious failure, and one line 
   assert.deepEqual(lines(page), {
     Checks: '5 of 6 met · 2 targets not met yet',
     Tests: '24 of 26 passed',
+    // #126: the example connected sources and Daniel's review, with the weak high-value slice.
+    'Evidence from sources': '4 sources: Support platform, Ticketing, Eval harness, Manual review · 1 weak',
     'Pilot results': '218 cases, 94% accurate',
     'Model runs': 'recorded, checked against the rules',
     'Stakeholder positions': 'not unanimous',

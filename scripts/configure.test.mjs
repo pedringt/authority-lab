@@ -170,3 +170,57 @@ test('the Configure evidence page: coverage first, each row\'s evidence, gaps wi
   const steps = setupStepsView(s, id).map((x) => x.title);
   assert.deepEqual(steps.slice(2, 6), ['Set what good looks like', 'Configure evidence', 'Review evidence coverage', 'Fill the gaps']);
 });
+
+// ---------------------------------------------------------------------------
+// PR 3: the Northstar example and Monitor's evidence signals (#126)
+// ---------------------------------------------------------------------------
+
+import { evidenceSignals, evidenceSources as sourcesOf } from '../src/store/index.js';
+import { evidenceView } from '../src/views/evidence.js';
+import { capabilityView } from '../src/views/capability.js';
+
+const RR = 'refund-recommendation';
+
+test('the example: Refund recommendation is judged by a connected platform, ticketing, an eval suite and a manual review, and the story is unchanged', () => {
+  const s = initialState();
+  const cov = evidenceCoverage(s, RR);
+  const by = Object.fromEntries(cov.requirements.map((r) => [r.id, r]));
+  assert.deepEqual(Object.fromEntries(Object.entries(by).map(([k, r]) => [k, r.row.measure.source])), {
+    'min-cases': 'support-platform-refund-decisions', accuracy: 'support-platform-refund-decisions', severe: 'ticketing-escalations',
+    override: 'support-platform-refund-decisions', incidents: 'manual-review', 'high-value': 'support-platform-refund-decisions',
+  });
+  // The demo still reads 5 of 6, with the high-value gap in its own words.
+  assert.equal(cov.requirements.filter((r) => r.row.met).length, 5);
+  assert.equal(by['high-value'].row.current, '18');
+  assert.match(by['high-value'].row.gap, /^High-value refund performance needs more evidence\./);
+  assert.equal(by.severe.row.current, '1.4% across 218 cases');
+  assert.equal(by.incidents.row.met, true, 'Daniel\'s review: 0 unresolved critical incidents');
+  assert.equal(coverageText(cov), '5 of 6 decision requirements have sufficient evidence; "Minimum 40 high-value refund cases" still needs more cases (18 of 40 cases).');
+  // The eval suite last ran on Sep 3, past its 30-day window: the quality target is stale, still counted.
+  const quality = cov.targets.find((t) => t.id === 'quality');
+  assert.equal(quality.status, 'stale');
+  assert.equal(quality.age, 34);
+  // Everything about it says demo, nothing says live import.
+  setPeople(people(s));
+  const ev = String(evidenceView(s, RR, new URLSearchParams(), { embedded: true }));
+  assert.match(ev, /Demo data · from Support platform/);
+  assert.match(ev, /Demo data · recorded by Daniel Okafor/);
+  assert.doesNotMatch(ev, /Imported from/);
+  assert.ok(sourcesOf(s).filter((x) => x.example).every((x) => /fictional/.test(x.description)));
+});
+
+test('Monitor lists what to look at in the evidence; warnings never block', () => {
+  const s = initialState();
+  const kinds = evidenceSignals(s, RR).map((x) => x.kind);
+  assert.deepEqual(kinds, ['new', 'stale', 'coverage', 'disagreement']);
+  // A check that was met and now isn't is a reason to reconsider, not a block.
+  const worse = importEvidence(s, { schema: EVIDENCE_SCHEMA, id: 'northstar:production:refund-pilot-2026-10-07', capabilityId: RR, source: { system: 'Support platform', capability: 'Refund decisions', environment: 'production' }, kind: 'production', observedAt: '2026-10-07', measurements: [{ metric: 'refund-decisions', type: 'rate', passed: 180, total: 220 }] });
+  const sig = evidenceSignals(worse, RR);
+  assert.ok(sig.some((x) => x.kind === 'reconsider' && /"Overall accuracy ≥ 92%" is not met now: 81.8% across 220 cases\./.test(x.what)));
+  assert.equal(getCapability(worse, RR).authority.level, getCapability(s, RR).authority.level, 'evidence never changes authority by itself');
+  setPeople(people(worse));
+  const h = String(capabilityView(worse, RR, new URLSearchParams('tab=monitor')));
+  assert.match(h, /<strong>Evidence<\/strong><span class="mh-line-meta">\d+ things to look at<\/span>/);
+  assert.match(h, /badge-fail">Reconsider</);
+  assert.match(h, /Warnings only: none of these blocks anything or changes authority\./);
+});

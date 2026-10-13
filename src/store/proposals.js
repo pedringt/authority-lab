@@ -6,7 +6,7 @@ import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, r
 import { amend } from './capabilities.js';
 import { SECTION_KEYS, contractValueChecks } from './contract.js';
 import { requirementsNow, judgeMeasure } from './measures.js';
-import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS, carryMeasure } from './evidence.js';
+import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS, carryMeasure, unchangedMeasuresDropped } from './evidence.js';
 
 // Assumption, not yet confirmed (decision 7): the same sign-off applies to
 // contract edits once a pilot has started. One named setting so it can be
@@ -118,8 +118,8 @@ export function cleanContractValue(value) {
 export function cleanAmendmentValue(state, capabilityId, kind, value) {
   if (kind === 'contract') return cleanContractValue(value);
   if (kind === 'stakeholders') return cleanStakeholders(state, value);
-  const c = cleanCriteria(value && value.criteria);
-  const r = cleanRequirements(value && value.requirements);
+  const c = cleanCriteria(unchangedMeasuresDropped(value && value.criteria, current(state, capabilityId, 'criteria')));
+  const r = cleanRequirements(unchangedMeasuresDropped(value && value.requirements, current(state, capabilityId, 'requirements')));
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
   if (missingCore.length) throw new Error(`These rows are required. You can change their numbers but not remove them: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
   const baseC = current(state, capabilityId, 'criteria');

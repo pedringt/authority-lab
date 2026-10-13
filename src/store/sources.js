@@ -65,8 +65,10 @@ export function evidenceSources(state) {
       if (e.measure.segment && !m.segments.includes(e.measure.segment)) m.segments.push(e.measure.segment);
       metrics.set(e.measure.metric, m);
     }
-    const last = mine.reduce((d, e) => (e.date > d ? e.date : d), '');
-    return { ...src, metrics: [...metrics.values()], lastReceived: last || null, capabilities: [...new Set(mine.map((e) => e.capabilityId))] };
+    // Authority Lab tests report through each capability's recorded run.
+    const runs = src.id === TESTS_SOURCE ? Object.keys(state.capabilityData || {}).filter((id) => capData(state, id).testRun.lastRun).map((id) => ({ capabilityId: id, date: capData(state, id).testRun.lastRun })) : [];
+    const last = [...mine, ...runs].reduce((d, e) => (e.date > d ? e.date : d), '');
+    return { ...src, metrics: [...metrics.values()], lastReceived: last || null, capabilities: [...new Set([...mine, ...runs].map((e) => e.capabilityId))] };
   });
 }
 

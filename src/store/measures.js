@@ -103,7 +103,8 @@ export function judgeMeasure(state, capabilityId, measure) {
   const sample = measurementSample(m);
   const base = { evidenceId: e.id, importId: e.external.importId, kind: e.external.kind, date: e.date, sample, actual };
   if (actual === null) return { ...base, status: 'pending', text: `This result can't be read as a ${measure.stat}` };
-  const actualText = measure.stat === 'sample' ? casesText(actual) : `${fmt(actual, measure.stat)}${sample !== null ? ` across ${casesText(sample)}` : ''}`;
+  // A case count reads as the bare number ("now 18" against "Minimum 40 … cases").
+  const actualText = measure.stat === 'sample' ? `${actual}` : `${fmt(actual, measure.stat)}${sample !== null ? ` across ${casesText(sample)}` : ''}`;
   const ok = compare(actual, measure.op, measure.value);
   const ceilingBreached = measure.stat === 'count' && ['<=', '<', '='].includes(measure.op) && !ok && actual > measure.value;
   const needed = e.external.kind === 'production' ? (measure.minSample || MIN_PRODUCTION_SAMPLE) : measure.minSample || 0;
@@ -131,7 +132,10 @@ export function requirementsNow(state, capabilityId) {
   return current(state, capabilityId, 'requirements').map((r) => {
     if (!r.measure) return r;
     const j = judgeMeasure(state, capabilityId, r.measure);
+    // A row's own explanation of its gap, written by a person, is kept while
+    // the gap is open; the generated sentence is the fallback.
     const gap = j.status === 'pass' ? undefined
+      : r.gap ? r.gap
       : j.status === 'fail' ? `Measured ${j.text} in ${j.importId}.`
         : j.status === 'pending' ? 'No imported results measure this yet.'
           : `${MEASURE_WORDS[j.status]}: ${j.text}.`;
@@ -206,6 +210,9 @@ export function rowCoverage(state, capabilityId, row) {
   const source = row.measure.source ? findSource(state, row.measure.source) : null;
   if (j.status === 'pending') return { status: 'no-data', mapped: true, judged: j, source };
   if (j.status === 'insufficient' || j.status === 'too-early') return { status: 'insufficient', mapped: true, judged: j, source };
+  // A minimum-cases requirement that isn't met is a volume gap: more cases are
+  // needed, which is coverage, not a failing result.
+  if (row.measure.stat === 'sample' && j.status === 'fail') return { status: 'insufficient', mapped: true, judged: { ...j, text: `${j.actual} of ${row.measure.value} cases` }, source };
   const item = capData(state, capabilityId).evidence.find((e) => e.id === j.evidenceId);
   const src = source || (item ? findSource(state, sourceOfItem(item)) : null);
   const fresh = src ? src.freshForDays : null;
@@ -241,4 +248,41 @@ export function coverageText(cov) {
       : gap.status === 'stale' ? `has stale evidence (${gap.age} days old)`
         : 'has no evidence source mapped';
   return `${head}; "${gap.label}" ${why}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Evidence signals for Monitor (#126): what has changed in the evidence since
+// the decision in force, and anything that should make a person look again.
+// Warnings only: like every warning here, they never block (Paige, 2026-10-13).
+// ---------------------------------------------------------------------------
+
+export function evidenceSignals(state, capabilityId) {
+  const records = state.decisionRecords.filter((r) => r.capabilityId === capabilityId);
+  const inForce = records.at(-1) || null;
+  const since = inForce ? inForce.date : null;
+  const cov = evidenceCoverage(state, capabilityId);
+  const all = [...cov.requirements, ...cov.targets];
+  const out = [];
+  const link = (show) => `#/capabilities/${capabilityId}/evidence/configure${show ? `?row=${show}` : ''}`;
+  const fresh = capData(state, capabilityId).evidence.filter((e) => e.external && since && e.date > since);
+  if (fresh.length) {
+    const runs = new Set(fresh.map((e) => e.external.importId)).size;
+    out.push({ id: 'new', kind: 'new', date: since, record: inForce.id, what: `${runs} new evidence result${runs === 1 ? '' : 's'} since the decision in force`, why: 'The decision was made on older evidence; see whether anything it relied on has moved.', link: `#/capabilities/${capabilityId}?tab=decide&show=all` });
+  }
+  for (const r of all.filter((x) => x.status === 'stale')) {
+    out.push({ id: `stale-${r.kind}-${r.id}`, kind: 'stale', what: `"${r.label}" rests on evidence ${r.age} days old${r.source ? `, past ${r.source.name}'s ${r.source.freshForDays}-day window` : ''}.`, why: 'It still counts, but it may no longer describe how the capability behaves today.', link: link(`${r.kind}:${r.id}`) });
+  }
+  const gaps = cov.requirements.filter((r) => ['insufficient', 'no-data', 'no-source'].includes(r.status));
+  if (gaps.length) {
+    out.push({ id: 'coverage', kind: 'coverage', what: coverageText(cov), why: 'A decision requirement without sufficient evidence is judged by people alone, or not at all.', link: link() });
+  }
+  const stances = new Set(current(state, capabilityId, 'stakeholders').map((s) => s.stance).filter(Boolean));
+  if (stances.size > 1) {
+    out.push({ id: 'disagreement', kind: 'disagreement', what: 'Stakeholders don\'t agree on how much autonomy is right.', why: 'Their positions are recorded with each decision; a change in evidence is a good moment to ask again.', link: `#/capabilities/${capabilityId}?tab=status&show=people` });
+  }
+  // A check that counts cases is a coverage gap, not a reason to reconsider.
+  for (const r of cov.requirements.filter((x) => (x.status === 'covered' || x.status === 'stale') && !x.passing && x.row.measure.stat !== 'sample')) {
+    out.push({ id: `reconsider-${r.id}`, kind: 'reconsider', what: `"${r.label}" is not met now: ${r.judged.text}.`, why: `Consider whether the authority in force${inForce ? ` (${inForce.id})` : ''} still fits. Only a person can change it; evidence never does.`, link: `#/capabilities/${capabilityId}?tab=decide` });
+  }
+  return out;
 }

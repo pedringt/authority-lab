@@ -280,6 +280,7 @@ export const successCriteria = [
     target: '≥ 92% correct decisions',
     current: '94%',
     status: 'pass',
+    measure: { source: 'eval-harness-refund-suite', metric: 'decision-accuracy', stat: 'rate', op: '>=', value: 92 },
     note: 'Correctness is judged by a reviewer against policy, not by whether the agent accepted the recommendation.',
   },
   {
@@ -288,6 +289,7 @@ export const successCriteria = [
     target: '< 2% high-impact errors',
     current: '1.4%',
     status: 'pass',
+    measure: { source: 'ticketing-escalations', metric: 'severe-errors', stat: 'share', op: '<', value: 2 },
     note: '3 of 218 cases. Two were in the high-value segment, one was a policy exception. Severe means approving an obviously fraudulent refund, denying a clearly valid high-value refund, or violating refund policy.',
   },
   {
@@ -337,15 +339,16 @@ export const successCriteria = [
 // ---------------------------------------------------------------------------
 
 export const evidenceRequirements = [
-  { id: 'min-cases', text: 'Minimum 200 pilot cases', current: '218', met: true },
-  { id: 'accuracy', text: 'Overall accuracy ≥ 92%', current: '94%', met: true },
-  { id: 'severe', text: 'High-severity error rate < 2%', current: '1.4%', met: true },
-  { id: 'override', text: 'Override rate < 20%', current: '11%', met: true },
+  { id: 'min-cases', text: 'Minimum 200 pilot cases', current: '218', met: true, measure: { source: 'support-platform-refund-decisions', metric: 'refund-decisions', stat: 'sample', op: '>=', value: 200 } },
+  { id: 'accuracy', text: 'Overall accuracy ≥ 92%', current: '94%', met: true, measure: { source: 'support-platform-refund-decisions', metric: 'refund-decisions', stat: 'rate', op: '>=', value: 92 } },
+  { id: 'severe', text: 'High-severity error rate < 2%', current: '1.4%', met: true, measure: { source: 'ticketing-escalations', metric: 'severe-errors', stat: 'share', op: '<', value: 2 } },
+  { id: 'override', text: 'Override rate < 20%', current: '11%', met: true, measure: { source: 'support-platform-refund-decisions', metric: 'overrides', stat: 'share', op: '<', value: 20 } },
   {
     id: 'incidents',
     text: 'No unresolved critical incidents',
     current: 'INC-01 mitigated by a software gate; fraud-signaled cases stay approval-required',
     met: true,
+    measure: { source: 'manual-review', metric: 'unresolved-critical-incidents', stat: 'count', op: '<=', value: 0 },
   },
   {
     id: 'high-value',
@@ -353,6 +356,7 @@ export const evidenceRequirements = [
     current: '18',
     met: false,
     gap: 'High-value refund performance needs more evidence. Only 18 pilot cases over $100 have been observed, and accuracy on them is 83%.',
+    measure: { source: 'support-platform-refund-decisions', metric: 'refund-decisions', segment: 'High-value refunds (> $100)', stat: 'sample', op: '>=', value: 40 },
   },
 ];
 
@@ -1102,3 +1106,63 @@ export const capabilityData = {
 // The capability the recorded model runs (A6) act for. The MCP server acts
 // for one capability, fixed at start; every recording so far is of this one.
 export const AGENT_RUNS_CAPABILITY = 'refund-recommendation';
+
+// ---------------------------------------------------------------------------
+// Example evidence sources and their evidence (#126). Fictional, like the
+// rest of Northstar: they show a product person mapping connected evidence
+// to Refund recommendation's checks. Vendor names are generic on purpose.
+// Imported at startup through the same contract as real evidence, marked as
+// demo data, and logged nowhere (they are part of the seed, not new events).
+// The numbers mirror the seeded pilot, so the demo story is unchanged.
+// ---------------------------------------------------------------------------
+
+export const exampleEvidenceSources = [
+  { id: 'support-platform-refund-decisions', name: 'Support platform · Refund decisions', kind: 'production', connection: 'connected', description: 'Example connected system (fictional): every refund decision in real use and whether a reviewer judged it correct.', freshForDays: 14, example: true },
+  { id: 'ticketing-escalations', name: 'Ticketing · Escalations', kind: 'ticketing', connection: 'connected', description: 'Example connected system (fictional): cases reviewers escalated, with their severity.', freshForDays: 14, example: true },
+  { id: 'eval-harness-refund-suite', name: 'Eval harness · Refund suite', kind: 'eval', connection: 'connected', description: 'Example connected system (fictional): the refund eval suite the engineering team runs before releases.', freshForDays: 30, example: true },
+];
+
+const HV = 'High-value refunds (> $100)';
+export const exampleEvidence = [
+  {
+    envelope: {
+      schema: 'authority-lab-evidence/1', id: 'northstar:production:refund-pilot-2026-10-06', capabilityId: 'refund-recommendation',
+      source: { system: 'Support platform', capability: 'Refund decisions', environment: 'production' }, kind: 'production', observedAt: '2026-10-06',
+      measurements: [
+        { metric: 'refund-decisions', label: 'Refund decisions judged correct', type: 'rate', passed: 205, total: 218 },
+        { metric: 'refund-decisions', label: 'Refund decisions judged correct', type: 'rate', passed: 138, total: 142, segment: 'Standard refunds' },
+        { metric: 'refund-decisions', label: 'Refund decisions judged correct', type: 'rate', passed: 35, total: 38, segment: 'Policy exceptions' },
+        { metric: 'refund-decisions', label: 'Refund decisions judged correct', type: 'rate', passed: 15, total: 18, segment: HV },
+        { metric: 'refund-decisions', label: 'Refund decisions judged correct', type: 'rate', passed: 19, total: 20, segment: 'Fraud-signaled cases' },
+        { metric: 'overrides', label: 'Recommendations overridden', type: 'count', value: 24, total: 218 },
+      ],
+      notes: 'The Oct 1-6 pilot as the support platform reports it.',
+    },
+  },
+  {
+    envelope: {
+      schema: 'authority-lab-evidence/1', id: 'northstar:production:escalations-2026-10-06', capabilityId: 'refund-recommendation',
+      source: { system: 'Ticketing', capability: 'Escalations', environment: 'production' }, kind: 'production', observedAt: '2026-10-06',
+      measurements: [{ metric: 'severe-errors', label: 'Severe errors escalated by reviewers', type: 'count', value: 3, total: 218, severity: 'high' }],
+      notes: 'Two in high-value refunds, one a policy exception. All three were caught before any refund was issued.',
+    },
+  },
+  {
+    envelope: {
+      schema: 'authority-lab-evidence/1', id: 'northstar:eval:refund-suite-2026-09-03', capabilityId: 'refund-recommendation',
+      source: { system: 'Eval harness', capability: 'Refund suite' }, kind: 'eval', observedAt: '2026-09-03',
+      config: { model: 'example-model-1', prompt: 'refund-prompt-v4', evalSet: 'refund-suite-v2' },
+      measurements: [{ metric: 'decision-accuracy', label: 'Decision accuracy', type: 'rate', passed: 188, total: 200 }],
+      notes: 'Last run before the pilot; not re-run since, so it is past its 30-day freshness.',
+    },
+  },
+  {
+    recordedBy: 'daniel',
+    envelope: {
+      schema: 'authority-lab-evidence/1', id: 'manual:refund-recommendation:risk-review-2026-10-04', capabilityId: 'refund-recommendation',
+      source: { system: 'Manual review', capability: 'Daniel Okafor' }, kind: 'production', observedAt: '2026-10-04',
+      measurements: [{ metric: 'unresolved-critical-incidents', label: 'Unresolved critical incidents', type: 'count', value: 0, total: 218, severity: 'high' }],
+      notes: 'Risk review of the 218 pilot cases: INC-01 is mitigated by a software gate (fraud-flagged refunds are blocked); no critical incident is open.',
+    },
+  },
+];
