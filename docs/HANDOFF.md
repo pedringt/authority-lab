@@ -1,27 +1,31 @@
-# Handoff: where Authority Lab stands (2026-10-13)
+# Handoff: where Authority Lab stands (2026-10-13, end of day)
 
 Read this first, then `CLAUDE.md` (the working rules) and `docs/DECISIONS.md` (every product rule, with the "Redesign (2026-10-12, Paige)" entry at the top of the Interface section). Verify the live state with `gh pr list` and `git log origin/main -3` before trusting anything here.
 
-## Right now: State is onboarded as the first real client (PR open, not merged)
+## Right now: everything is merged; the next exercise is Question Investigator
 
-- **On `main`:**
-  - the redesign (#106 to #113) and its review polish (#114);
-  - the external evidence contract (#118, #119, #120: `src/store/external.js`, `src/store/measures.js`, `docs/EXTERNAL_EVIDENCE.md`);
-  - the evidence-configuration model (#126: evidence sources, manual results, Configure evidence, coverage, the Evidence setup stage, Monitor's evidence signals, and the Northstar example).
-- **#121, State's workspace, is on `main`** (merged with Paige's OK, `ab54dee`).
-  - A second built-in workspace, built from configuration (`src/data/workspaces/state.js`) by the generic `buildWorkspace` (`src/store/workspaces.js`), plus a workspace switcher in the Settings menu.
-  - No State-specific code; a test checks this.
-  - No fictional evidence: State shows "0 of 5 decision requirements have sufficient evidence" until its results arrive.
-- **Merging:** Paige must name the destination each time (CLAUDE.md, "How to work").
-- **#518, State's first evidence file, is on `main`** (#132, `f372cb9`). Later deliveries follow the same steps:
-  - Take the envelope from a State AI quality check run's artifact (`authority-lab-evidence-<run>-<attempt>`, kept 90 days).
-  - Commit it under `src/data/external-evidence/`, add it to `index.json`, and open a PR. CI checks it.
-  - The first delivered run is the Oct 13 verification run, 38411808397 (16/16, staging).
-  - Decisions stay runtime records, never configuration (DECISIONS: "Configuration is the starting point").
-- **State side (pedringt/ai-learning):** #517 (the export) is on State's `staging`, not promoted. #519 to #522 are side issues it found.
-- **Known limit (#130):** a check is judged on the newest run only; State's own rule reads its suite across runs. Recorded, not built (Paige).
+`main` = `a398483` (published records, #133), live on https://authority-lab.vercel.app/ and checked there. Nothing Authority Lab-side is waiting in a PR.
 
-Tests: `npm test` 345 pass, `npm test --prefix agent` 46 pass.
+**On `main`:**
+- **The redesign** (#106 to #114).
+- **External evidence** (#118 to #120: `src/store/external.js`, `src/store/measures.js`, `docs/EXTERNAL_EVIDENCE.md`).
+- **The evidence-configuration model** (#126: evidence sources, manual results, Configure evidence, coverage, the Evidence setup stage, Monitor's evidence signals, the Northstar example).
+- **State's workspace** (#121), built from `src/data/workspaces/state.js` by the generic `buildWorkspace`.
+- **State's first real evidence** (#132: run 38411808397, 16/16; it reads 5 of 5 checks met).
+- **Published records** (#133). A client workspace shows its published record read-only to every visitor. "Try changes in this browser" is local only. A decision becomes real only when its `authority-lab-record/1` file is committed to `src/data/published-records/`; it is replayed through the same checks on every load.
+
+**Not done:**
+- **Paige's Draft decision for State** exists only in her browser; she hasn't published it yet. When she pastes its file (Copy on the record page, in "try changes" mode), commit it under `src/data/published-records/`, add it to `index.json`, and open a PR. CI replays it. Merging needs her OK.
+- **The design round 1 package** (Paige's Cowork mockups, research and a design HANDOFF, in `~/Desktop/authority-lab-design-round-1.zip`) is **on hold**: the visual redesign is paused. Don't commit it or open its gap report unless she asks.
+
+**Process rules (Paige, 2026-10-13; also in CLAUDE.md):**
+- **Paige makes product decisions.** Claude builds mechanics and reports technical facts; it stops and asks at any setup step that needs product judgment.
+- **Merges need her named destination.**
+- **The visual redesign is paused:** no styling or layout changes.
+
+**The next Authority Lab work comes from State's Question Investigator** (pedringt/ai-learning#142). After it's built and measured there, it becomes a new, otherwise blank workspace here: only its source pre-connected, with every product decision Paige's, done from scratch. See `docs/PROJECT_STATUS.md` in ai-learning for the decisions so far.
+
+Tests: `npm test` 351 pass, `npm test --prefix agent` 46 pass (on `a398483`).
 
 ## Reference material Paige approved (claude.ai artifacts, private to Paige)
 
@@ -65,5 +69,10 @@ Standing budget $25 per calendar month; October spend is $11.20 (`agent/runs/led
 
 ## What comes next
 
-1. **Published records** (this work): State is read-only for visitors and shows only committed decisions. Paige recorded the Draft decision in her own browser on Oct 13; to publish it, she turns on "Try changes in this browser", opens the record, and its file is committed to `src/data/published-records/`.
-3. Later: #130 (judging across runs), #117 (runtime policy check), #105 (stakeholder tradeoff).
+1. **Question Investigator, in State first** (pedringt/ai-learning#142). Decisions 1 to 4 are made. Decision 5 (the eval cases) is in progress: the Q-101 test card waits for Paige's approval (`docs/evals/question-investigator-cases.md` in ai-learning, on its handoff branch).
+2. **Publish Paige's Draft decision for State** when she sends its file (see "Not done").
+3. **Later:**
+   - #130: judge a check across runs;
+   - #134: setup summaries (paused with the redesign);
+   - #117: runtime policy check;
+   - #105: stakeholder tradeoff.
