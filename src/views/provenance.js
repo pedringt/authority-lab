@@ -16,6 +16,8 @@ const refLink = (r, fallback = 'View source') => (r && r.url ? html`<a href="${r
 // The origin label on an evidence card.
 export function fromBadge(e, seededIds) {
   const from = evidenceFrom(e, seededIds);
+  // Seeded examples (#126) are demo data, never mistaken for a live import.
+  if (e.demo) return html`<span class="badge badge-neutral" title="Example evidence in the fictional demo, not a live import.">Demo data · ${from === 'manual' ? `recorded by ${e.recordedBy ? e.recordedBy.name : 'a person'}` : `from ${e.external.system}`}</span>`;
   if (from === 'manual') return html`<span class="badge badge-imported" title="Recorded by hand and kept as recorded. It can't be edited.">Recorded by ${e.recordedBy ? e.recordedBy.name : 'a person'}</span>`;
   if (from === 'imported') return html`<span class="badge badge-imported" title="Sent by ${e.external.system}; checked and imported. It can't be edited.">Imported from ${e.external.system}</span>`;
   if (from === 'calculated') return '';

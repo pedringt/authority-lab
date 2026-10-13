@@ -70,7 +70,7 @@ Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/�
 
 An AI system that runs somewhere else can send evidence about one of its capabilities: one JSON envelope per run, committed to `src/data/external-evidence/` in a pull request and checked by CI. The site imports the committed files into the normal evidence list, labelled with their source. See [docs/EXTERNAL_EVIDENCE.md](docs/EXTERNAL_EVIDENCE.md).
 
-Evidence sources (Settings → Evidence sources) show where a workspace's evidence comes from; the owner or a stakeholder can also record a result by hand.
+Evidence sources (Settings → Evidence sources) show where a workspace's evidence comes from; the owner or a stakeholder can also record a result by hand. Each capability's **Configure evidence** maps sources to its checks and shows coverage; in the demo, Refund recommendation is judged by example (fictional) connected sources and a Risk review, and Monitor's Evidence line flags stale evidence and gaps.
 
 ## Starting empty
 
@@ -111,10 +111,10 @@ Expanding authority needs a pending proposal; restricting, suspending or redesig
 1. **Capabilities → Add capability**: the four questions; starts at Level 0 or 1. Writes the capability's first record.
 2. **Setup → Set the boundaries**: template plus suggestions, review each one, confirm the sections, **Save rules** (contract v1).
 3. **Setup → Set what good looks like**: targets and decision requirements from the risk profile; **Save targets** (v1).
-4. **Setup → Add test cases**: **Add 20 suggested cases** ("Suggested by AI") or write your own; **Save test cases**.
-5. **Setup → Run the tests** (Decide → Tests): results are simulated deterministically; the first run locks the targets.
-6. **Setup → Name who decides**: the people whose positions will be recorded (best before the first run: after it, changing who is involved needs sign-off).
-7. **Setup or Decide → Propose a move to Level N**, then **Record decision** in the Decide flow: the capability's second record; a move to Draft sets status Pilot.
+4. **Setup → Configure evidence**: choose which evidence judges each decision requirement (a connected source, Authority Lab tests, or a manual review); **Review evidence coverage** shows what's covered.
+5. **Setup → Fill the gaps** (optional): add test cases and run them, record a result by hand, or let a connected source send results. The first measured result locks the targets.
+6. **Setup → Name who decides**: the people whose positions will be recorded (best before the first results: after them, changing who is involved needs sign-off).
+7. **Setup or Decide → Propose a move to Level N** (once any measured result exists), then **Record decision** in the Decide flow: the capability's second record; a move to Draft sets status Pilot.
 
 ## People and rights
 

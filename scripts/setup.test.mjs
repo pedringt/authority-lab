@@ -9,6 +9,7 @@ import {
   addCapability, getCapability, capData, current, startContractDraft, reviewSuggestion, confirmSection, finalizeContract, SECTION_KEYS,
   saveCriteria, defaultsFor, saveStakeholders, addStarterScenarios, startTestRun, advanceTestRun, proposeAuthority, selectDecision,
   setOutcome, setRolloutField, authorize, proposeAmendment, versionList, RISK_OPTIONS,
+  mapEvidence, recordManualEvidence,
 } from '../src/store/index.js';
 import { setPeople, setToday } from '../src/ui.js';
 import { workspaceSetupView } from '../src/views/workspace.js';
@@ -78,8 +79,21 @@ test('a one-person workspace adds a capability and takes it all the way to its f
   const d = defaultsFor(s, id);
   s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'ana-ruiz' });
   s = saveStakeholders(s, id, { stakeholders: [{ person: 'ana-ruiz', team: 'Support', position: 'Support', stance: 'support', reasoning: 'I own it.' }], by: 'ana-ruiz' });
+  // Configure evidence (#126): which evidence judges each requirement. Three
+  // from Authority Lab's own tests, two from a review recorded by hand.
+  const map = (rowId, measure) => { s = mapEvidence(s, id, { rowKind: 'requirement', rowId, measure, by: 'ana-ruiz' }); };
+  map('min-cases', { source: 'authority-lab-tests', metric: 'tests-passed', stat: 'sample' });
+  map('accuracy', { source: 'authority-lab-tests', metric: 'tests-passed', stat: 'rate' });
+  map('severe', { source: 'authority-lab-tests', metric: 'serious-test-failures', stat: 'share' });
+  map('override', { source: 'manual-review', metric: 'override-rate', stat: 'value' });
+  map('incidents', { source: 'manual-review', metric: 'unresolved-critical-incidents', stat: 'count' });
+  assert.equal(setupSteps(s, id).find((st) => st.id === 'configure').done, true, 'every requirement says which evidence judges it');
+  assert.equal(setupSteps(s, id).find((st) => st.id === 'coverage').done, false, 'no results yet');
   s = addStarterScenarios(s, id, { by: 'ana-ruiz' });
   s = runSuite(s, id);
+  s = recordManualEvidence(s, id, { by: 'ana-ruiz', label: 'Override rate', kind: 'eval', type: 'value', value: '12', unit: '%' });
+  s = recordManualEvidence(s, id, { by: 'ana-ruiz', label: 'Unresolved critical incidents', kind: 'eval', type: 'count', value: '0' });
+  assert.equal(setupSteps(s, id).find((st) => st.id === 'coverage').done, true, 'every requirement has results');
   s = proposeAuthority(s, id, 2, { by: 'ana-ruiz' });
   s = selectDecision(s, id, 'expand');
   s = setOutcome(setOutcome(s, id, 0, 'metric', 'Lookup accuracy'), id, 0, 'target', '≥ 95%');
@@ -87,7 +101,7 @@ test('a one-person workspace adds a capability and takes it all the way to its f
   for (const [k, v] of Object.entries({ owner: 'ana-ruiz', scope: 'Lookups for the billing queue only.', startDate: '2026-10-08', feedbackChannel: '#lookup-feedback', reviewerNotes: 'Check each draft before sending it.', reviewDate: '2026-10-21' })) s = setRolloutField(s, id, k, v);
   s = authorize(s, id, { by: 'ana-ruiz' });
   assert.deepEqual(getCapability(s, id).authority, { level: 2, limited: false });
-  assert.equal(setupSteps(s, id).every((st) => st.done), true, 'every setup step done by one person');
+  assert.equal(setupSteps(s, id).filter((st) => !st.optional).every((st) => st.done), true, 'every required setup step done by one person');
 });
 
 test('a roster change that needs a second approver is refused just in time, naming what to add', () => {
@@ -265,24 +279,26 @@ test('the add-capability page asks four plain questions; answers map to the stor
 // The seven steps as three stages
 // ---------------------------------------------------------------------------
 
-test('setup shows the seven steps as Define, Test and Decide, keeping their order and gating', () => {
+test('setup shows its steps as Define, Evidence and Decide; tests are one way to fill a gap, not a step (#126)', () => {
   const s = addCapability(solo(), { name: 'Refund execution', owner: 'ana-ruiz', risk: FIN, today: 'acts', by: 'ana-ruiz' });
   const id = lastCap(s);
   const steps = setupSteps(s, id);
-  assert.deepEqual(steps.map((st) => st.id), ['define', 'contract', 'criteria', 'stakeholders', 'scenarios', 'tests', 'decision'], 'underlying order unchanged');
-  assert.deepEqual(SETUP_STAGES.map((st) => st.title), ['Define', 'Test', 'Decide']);
-  assert.deepEqual(SETUP_STAGES.map((stage) => steps.filter((st) => st.stage === stage.id).map((st) => st.id)), [['define', 'contract'], ['criteria', 'scenarios', 'tests'], ['stakeholders', 'decision']]);
+  assert.deepEqual(steps.map((st) => st.id), ['define', 'contract', 'criteria', 'configure', 'coverage', 'gaps', 'stakeholders', 'decision']);
+  assert.deepEqual(SETUP_STAGES.map((st) => st.title), ['Define', 'Evidence', 'Decide']);
+  assert.deepEqual(SETUP_STAGES.map((stage) => steps.filter((st) => st.stage === stage.id).map((st) => st.id)), [['define', 'contract'], ['criteria', 'configure', 'coverage', 'gaps'], ['stakeholders', 'decision']]);
   assert.equal(steps.find((st) => st.next).id, 'contract');
-  assert.deepEqual([steps.find((st) => st.id === 'tests').needs, steps.find((st) => st.id === 'decision').needs], [false, false], 'tests wait for cases and targets; the decision waits for tests');
+  assert.deepEqual([steps.find((st) => st.id === 'configure').needs, steps.find((st) => st.id === 'decision').needs], [false, false], 'evidence waits for the checks; the decision waits for any evidence');
+  assert.equal(steps.find((st) => st.id === 'gaps').optional, true, 'filling gaps is optional: a connected eval can be enough');
   const page = render(s, () => String(setupView(s, id, q())));
   const words = text(page);
   assert.equal((page.match(/class="setup-stage /g) || []).length, 3);
-  assert.match(words, /1\. Define 1 of 2 done[\s\S]*2\. Test 0 of 3 done[\s\S]*3\. Decide 0 of 2 done/);
+  assert.match(words, /1\. Define 1 of 2 done[\s\S]*2\. Evidence 0 of 4 done[\s\S]*3\. Decide 0 of 2 done/);
   // Strong defaults to review, derived from the risk profile.
   assert.match(words, /These are the default safety limits for this risk profile: \d+ starter rules for a high-impact financial capability\./);
   assert.match(words, /For a high-impact financial capability, we recommend these checks: 7 targets and 7 decision requirements\./);
-  assert.match(words, /We prepared 20 starter test cases/);
-  assert.match(words, /Name them before the first test run/);
+  assert.match(words, /Configure evidence[\s\S]*a connected source, Authority Lab tests, or a manual review/);
+  assert.match(words, /Not every capability needs local tests: a connected eval can be enough\./);
+  assert.match(words, /Name them before the first results come in/);
 });
 
 test('a capability that stays with people shows only its definition and the not-delegated step', () => {

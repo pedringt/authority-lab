@@ -90,7 +90,8 @@ test('initial state: data is per capability', () => {
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(decisionRequired(s, RR), true);
   assert.equal(capData(s, RR).scenarios.length, 26);
-  assert.equal(capData(s, RR).evidence.length, 12);
+  assert.equal(capData(s, RR).evidence.filter((e) => e.from === 'seeded').length, 12);
+  assert.equal(capData(s, RR).evidence.filter((e) => e.demo).length, 9, 'example evidence from connected sources and a review (#126), marked demo');
   assert.equal(capData(s, RR).monitoring, null);
   assert.equal(capData(s, TC).scenarios.length, 0);
   assert.equal(capData(s, TC).pilot, null);
@@ -503,7 +504,7 @@ test('views read the contract, risk, criteria, requirements and stakeholders onl
   const dir = new URL('../src/views', import.meta.url).pathname;
   // Allowed: a decision record's own version numbers, an evidence item's risk
   // level, the defaults object, and the versions-in-force number map.
-  const allowed = [/\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g, /\b(p\.value|p\.base|before)\.(contract|criteria|requirements|stakeholders)\b/g, /versionsInForce\([^)]*\)\.(contract|criteria|requirements|risk|stakeholders)\b/g];
+  const allowed = [/\bcov\.(requirements|targets)\b/g, /\bx\.versions\b/g, /\brecord\.versions\b/g, /\be\.risk\b/g, /\bdefaults\.(criteria|requirements)\b/g, /\bv\.(criteria|requirements)\b/g, /\b(p\.value|p\.base|before)\.(contract|criteria|requirements|stakeholders)\b/g, /versionsInForce\([^)]*\)\.(contract|criteria|requirements|risk|stakeholders)\b/g];
   const forbidden = /\.(contract|criteria|requirements|stakeholders|versions)\b|\b(cap|c|capability)\.risk\b/g;
   const offenders = [];
   for (const f of readdirSync(dir)) {
@@ -1282,7 +1283,7 @@ test('saving the library keeps recorded results for unchanged scenarios, simulat
 test('a new capability can reach its second record: propose a move to Draft after the first run, then authorize it', () => {
   let s = addCapability(initialState(), { name: 'Order status lookup', summary: 'Answers where an order is.', owner: 'priya', risk: MED_CF, startingLevel: 1 });
   const id = s.capabilities[s.capabilities.length - 1].id;
-  assert.throws(() => proposeAuthority(s, id, 2, { by: 'priya' }), /Run the test suite/);
+  assert.throws(() => proposeAuthority(s, id, 2, { by: 'priya' }), /There is no evidence yet\. Run the tests, record a result, or have a connected source send results/);
   s = addStarterScenarios(s, id, { by: 'priya' });
   const d = defaultsFor(s, id);
   s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
@@ -1477,7 +1478,7 @@ test('mature capabilities carry criteria, requirements and stakeholders in the e
   // The refund demo is unchanged.
   assert.equal(current(s, RR, 'criteria').length, 7);
   assert.equal(readiness(s, RR).met, 5);
-  assert.equal(capData(s, RR).evidence.length, 12);
+  assert.equal(capData(s, RR).evidence.filter((e) => e.from === 'seeded').length, 12);
   assert.equal(current(s, RR, 'stakeholders').length, 5);
   assert.equal(focusCapability(s).id, RR);
   // Risk eligibility still comes from people, not from these lists.

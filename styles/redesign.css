@@ -374,3 +374,7 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .choice-row label { flex-direction: row; align-items: center; gap: 6px; font-weight: 400; }
 .field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .form-actions { display: flex; gap: 8px; }
+.coverage-summary { margin-bottom: 16px; }
+.coverage-summary .decide-big { margin: 0 0 4px; }
+.gap-list li { margin-bottom: 8px; }
+.mon-signals li { margin-bottom: 8px; }

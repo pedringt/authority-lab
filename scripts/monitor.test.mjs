@@ -35,7 +35,7 @@ test('Still safe? within limits after an expansion: one verdict, the outcomes, t
   assert.match(text(html), /No safety limits have been crossed since autonomy was expanded on Oct 7\./);
   assert.match(text(html), /43 ran automatically 12 sent to human review 2 reversed by a reviewer 0 incidents/);
   assert.match(html, /simulated demo data/, 'the simulated monitoring numbers say so');
-  assert.deepEqual(lineTitles(html), ['Safety limits', 'What the automation tried']);
+  assert.deepEqual(lineTitles(html), ['Safety limits', 'Evidence', 'What the automation tried']);
   assert.match(html, /<span class="mh-line-meta">5 limits, all within range<\/span>/);
   assert.match(text(html), /2%, last 50 cases · limit 5% \(simulated\)/, 'each limit has its reading and its limit');
   assert.match(html, /counted from logged actions/);
