@@ -120,6 +120,9 @@ function safetyLimitsLine(state, cap, st) {
     if (!r.threshold || !r.window) return html`<span class="muted">Can't be checked automatically: add a number and a time window in the rules.</span>`;
     if (!r.active) return html`<span class="muted">Applies above ${levelName(r.fallback)}</span>`;
     if (!r.measured) return html`<span class="muted">No data yet · limit ${r.threshold.value}${unit(r)}</span>`;
+    // Imported production results (#120) name their run; a percentage on too
+    // few cases is shown as too early, never as over the limit.
+    if (r.imported) return html`${r.crossed ? badge('fail', 'Over the limit') : r.imported.early ? badge('insufficient', 'Too early to judge') : ''} ${r.value}${unit(r)}${r.imported.sample !== null ? ` across ${r.imported.sample} cases` : ''} · limit ${r.threshold.value}${unit(r)} <span class="muted small">(imported, ${r.imported.importId}${r.imported.early ? `; ${r.imported.needed} cases needed` : ''})</span>`;
     return html`${r.crossed ? badge('fail', 'Over the limit') : ''} ${r.value}${unit(r)}${span(r)} · limit ${r.threshold.value}${unit(r)} <span class="muted small">(${r.fromGate ? 'counted from logged actions' : 'simulated'})</span>`;
   };
   const effect = (r) => (r.kind === 'incident' ? 'If crossed: an incident opens; autonomy doesn\'t change.' : `If crossed: back to ${levelName(r.fallback)}${r.defaulted ? ' (one level down: the rule names no level)' : ''}.`);

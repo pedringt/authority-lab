@@ -62,6 +62,10 @@ Authority Lab gets a summary and a reference, never the source's content. Every 
 
 Send every version you know in `config`, the same way on every run. Authority Lab groups runs by source system, source capability and kind (eval or production). The newest run by `observedAt` sets the current configuration; results from a different configuration (any version changed, added or dropped) are shown as **Earlier configuration** and don't count toward targets. Under the same configuration, a newer run's result for a metric and segment replaces the older one. A decision record keeps the configuration in force when it was made.
 
+## Getting your results judged
+
+A capability's targets, decision requirements and safety limits can be **measured** from your metrics: each names a `metric` id (and `segment`), what to read (`rate`, `fail-rate`, `share`, `count`, `value` or `sample`), a comparison and a number. Use the same metric ids and segment names on every run. Production results need at least 20 cases (or the row's own minimum) before they're judged; until then they're "Too early to judge". Only production results feed safety limits.
+
 ## What happens to it
 
 Each measurement becomes one item in the capability's evidence, next to tests, pilots and everything else, marked as imported and labelled with its source. Imported results count as performance results, so they lock the capability's targets the way a first test run does. They're shown as **Not judged yet** until a target or decision requirement is bound to the metric (#120). Evidence on its own never changes a capability's authority: a person decides.

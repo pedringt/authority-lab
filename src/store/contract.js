@@ -6,6 +6,7 @@ import { DATA_FIELDS } from '../data/seed.js';
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionList, performanceResultsSeen } from './selectors.js';
 import { people, snapshotPerson, requireActive } from './people.js';
+import { measureProblems } from './measures.js';
 
 export const SECTION_KEYS = CONTRACT_SECTIONS.map(([k]) => k);
 export const SECTION_LABELS = Object.fromEntries(CONTRACT_SECTIONS);
@@ -152,6 +153,12 @@ export function contractValueChecks(state, capabilityId, value) {
     const known = DATA_FIELDS.find((x) => x.id === f);
     if (!known) out.push({ id: `data-unknown-${f}`, level: 'block', section: 'dataSeen', text: `"${f}" isn't data any connected tool provides.` });
     else if (known.restricted) out.push({ id: `data-restricted-${f}`, level: 'block', section: 'dataSeen', text: `${known.label} is restricted and never reaches the AI, so the rules can't include it.` });
+  }
+  // A measured restriction line (#120) names a line that exists, and a valid measure.
+  for (const [line, m] of Object.entries(value.ruleMeasures || {})) {
+    if (!(value.autoRestriction || []).includes(line)) out.push({ id: `measure-orphan-${norm(line).slice(0, 20)}`, level: 'block', section: 'autoRestriction', text: `A measure is set for "${line}", which isn't one of the automatic-restriction rules.` });
+    const problems = measureProblems(m);
+    if (problems.length) out.push({ id: `measure-bad-${norm(line).slice(0, 20)}`, level: 'block', section: 'autoRestriction', text: `"${line}": ${problems.join(' ')}` });
   }
   // Contradictions: the same line in "may" and in "must never" or "must ask".
   const may = value.may.map(norm);

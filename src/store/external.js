@@ -14,6 +14,7 @@
 // project's documents can't ride along in a free-text field.
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
+import { enforceImportedRules } from './monitoring.js';
 
 export const EVIDENCE_SCHEMA = 'authority-lab-evidence/1';
 export const EVIDENCE_KINDS = ['eval', 'production'];
@@ -191,7 +192,7 @@ export function importEvidence(state, env, { via = 'file' } = {}) {
   const items = itemsFor(env);
   const record = { id: env.id, importedOn: state.today, via, envelope: canonicalEvidence(env) };
   const s = updateCap(state, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
-  return logEvent(s, {
+  const logged = logEvent(s, {
     kind: 'evidence-imported',
     surfaced: true,
     title: `Evidence imported from ${env.source.system}`,
@@ -199,6 +200,8 @@ export function importEvidence(state, env, { via = 'file' } = {}) {
     capabilityId: cap.id,
     link: `#/capabilities/${cap.id}?tab=decide&show=all`,
   });
+  // A production result can cross a safety limit bound to it (#120).
+  return env.kind === 'production' ? enforceImportedRules(logged, cap.id) : logged;
 }
 
 // Import a batch of committed envelopes. Never throws: each one is imported,
