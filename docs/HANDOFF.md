@@ -1,16 +1,27 @@
-# Handoff: where Authority Lab stands (2026-10-12, after the redesign shipped)
+# Handoff: where Authority Lab stands (2026-10-13)
 
 Read this first, then `CLAUDE.md` (the working rules) and `docs/DECISIONS.md` (every product rule, with the "Redesign (2026-10-12, Paige)" entry at the top of the Interface section). Verify the live state with `gh pr list` and `git log origin/main -3` before trusting anything here.
 
-## Right now: the redesign is live and reviewed
+## Right now: State is onboarded as the first real client (PR open, not merged)
 
-The eight redesign PRs (#106–#113) merged to `main` on 2026-10-12 (merge `908b803`) and deployed to https://authority-lab.vercel.app/. Paige reviewed the live site: structurally in a good place, polish only. The two fixes from that review (the "Needs a decision" heading, the ladder's screen-reader label) and these doc updates went in together. Her keep list is in DECISIONS.md ("Review of the live redesign"): don't redesign further on the strength of that review.
+- **On `main`:**
+  - the redesign (#106 to #113) and its review polish (#114);
+  - the external evidence contract (#118, #119, #120: `src/store/external.js`, `src/store/measures.js`, `docs/EXTERNAL_EVIDENCE.md`);
+  - the evidence-configuration model (#126: evidence sources, manual results, Configure evidence, coverage, the Evidence setup stage, Monitor's evidence signals, and the Northstar example).
+- **#121, State's workspace, is in an open PR, deliberately not merged.**
+  - A second built-in workspace, built from configuration (`src/data/workspaces/state.js`) by the generic `buildWorkspace` (`src/store/workspaces.js`), plus a workspace switcher in the Settings menu.
+  - No State-specific code; a test checks this.
+  - No fictional evidence: State shows "0 of 5 decision requirements have sufficient evidence" until its results arrive.
+- **Merging:** Paige must name the destination each time (CLAUDE.md, "How to work"). Don't merge #121 or anything else until she does.
+- **Next: State #518, delivering State's evidence by hand.**
+  - Take the envelope from a State AI quality check run's artifact (`authority-lab-evidence-<run>-<attempt>`, kept 90 days).
+  - Commit it under `src/data/external-evidence/`, add it to `index.json`, and open a PR. CI checks it.
+  - Delivery waits until #121 is merged, because the capability only exists in the State workspace.
+  - The first candidate is the Oct 13 verification run, 38411808397 (16/16, staging). It's the fixture in `scripts/workspaces.test.mjs`.
+- **State side (pedringt/ai-learning):** #517 (the export) is on State's `staging`, not promoted. #519 to #522 are side issues it found.
+- **Known limit (#130):** a check is judged on the newest run only; State's own rule reads its suite across runs. Recorded, not built (Paige).
 
-**Merging:** for now `main` is the testing ground (Paige, 2026-10-12). Merge your own PRs to `main` once CI is green; batch them, because each merge is a Vercel deploy. Still stop for product decisions, governance rules and paid runs (CLAUDE.md, "How to work"). After a merge, confirm the deploy: GitHub deployment status, then fetch a changed file from the live site.
-
-The redesign's structure, for reference: four capability tabs (Status, Decide, Monitor, History) in a header panel; a quiet global bar (Overview, Capabilities, Records) and Settings menu; "Demo as"; one view module per tab (`src/views/cap-*.js`); old addresses rewritten in `src/routes.js`; first-visit welcome and the seven-step guided demo.
-
-Tests: `node --test scripts/*.test.mjs` 291 pass, `npm test --prefix agent` 46 pass.
+Tests: `npm test` 345 pass, `npm test --prefix agent` 46 pass.
 
 ## Reference material Paige approved (claude.ai artifacts, private to Paige)
 
@@ -54,5 +65,6 @@ Standing budget $25 per calendar month; October spend is $11.20 (`agent/runs/led
 
 ## What comes next
 
-- **#105, a realistic stakeholder tradeoff on one autonomy decision** (Paige's issue): positions stay distinct instead of averaging into consensus, the decision says which evidence mattered, the approved limits reflect the tradeoff, and the record says what would reopen it. Keep it subordinate to the core decision flow; not a stakeholder-management tool. Not scoped yet: propose a plan before building.
-- Otherwise the roadmap in DECISIONS.md is complete.
+1. Paige reviews the #121 PR and names where it goes.
+2. #518: the first real State envelope, delivered by file.
+3. Later: #130 (judging across runs), #117 (runtime policy check), #105 (stakeholder tradeoff).

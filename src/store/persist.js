@@ -13,19 +13,22 @@ import { startEmpty, setUpWorkspace, renameWorkspace } from './workspace.js';
 import { approveAction, rejectAction } from './queue.js';
 import { importEvidenceFiles } from './external.js';
 import { recordManualEvidence } from './sources.js';
+import { advanceToday } from './workspaces.js';
 import { mapEvidence } from './configure.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
 
-export function createStore({ storage = null } = {}) {
-  let state = load(storage) || initialState();
+// One store per workspace (#121): \`key\` is where it is saved, \`build\` makes it
+// from scratch, which is also what Reset does. The defaults are the demo's.
+export function createStore({ storage = null, key = STORAGE_KEY, build = initialState } = {}) {
+  let state = load(storage, key) || build();
   const listeners = new Set();
 
   function set(next) {
     if (next === state) return;
     state = next;
-    save(storage, state);
+    save(storage, state, key);
     listeners.forEach((fn) => fn(state));
   }
 
@@ -33,6 +36,7 @@ export function createStore({ storage = null } = {}) {
     get: () => state,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     dispatch(action, ...args) {
+      if (action === 'reset') { set(build()); return; }
       const fn = ACTIONS[action];
       if (!fn) throw new Error(`Unknown action: ${action}`);
       set(fn(state, ...args));
@@ -86,13 +90,14 @@ export const ACTIONS = {
   importEvidenceFiles: (state, files) => importEvidenceFiles(state, files).state,
   recordManualEvidence,
   mapEvidence,
+  advanceToday,
   reset,
 };
 
-export function load(storage) {
+export function load(storage, key = STORAGE_KEY) {
   if (!storage) return null;
   try {
-    const raw = storage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || parsed.version !== 14) return null;
@@ -107,10 +112,10 @@ export function load(storage) {
   }
 }
 
-export function save(storage, state) {
+export function save(storage, state, key = STORAGE_KEY) {
   if (!storage) return;
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify(state));
+    storage.setItem(key, JSON.stringify(state));
   } catch {
     // Storage may be unavailable (private window, blocked). The app still works.
   }
