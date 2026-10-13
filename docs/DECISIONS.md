@@ -153,6 +153,10 @@ The product decisions behind Authority Lab, why they were made, and what's next.
   - **"What does it do today?" is context, not authority.** When a new capability already drafts or acts in the real world, that's recorded as context; Authority Lab starts it conservatively (Level 1 at most) and formalizing its existing autonomy is the first authority decision.
   - **Language:** capability, automation, autonomy, human review, boundaries; no anthropomorphic "the AI…" phrasing. Levels are secondary except during onboarding, the decision flow and a quiet current-state label.
   - **"Demo as"** replaces "Acting as" and is styled as a demo control.
+  - **The founding roster (needs Paige's confirmation).** With one person, nobody could ever be given a right, because a grant needs an approver who is neither the proposer nor the recipient. So until the workspace has had two active workspace admins, its one admin's grant of a right to someone else takes effect straight away, recorded as a founding change (no approvers, surfaced in Activity). Giving a right to yourself is refused; removals and deactivating a rights holder still need approval; once a second admin exists, the founding roster ends for good. The demo starts with two admins, so it never applies there.
+  - **Refusals say what to add, just in time.** When a step needs someone else and the person is alone in the workspace, the refusal ends "You're the only person in this workspace: add someone on People first."
+  - **The guided demo** opens on a first visit (once, remembered in the browser) and from Settings → Guided demo. It runs on its own in-memory copy of the demo state with real store transitions, so it never changes the workspace.
+  - **"Too early to judge"** on Delivering value? appears while rollout goals are still measured on pilot or seeded numbers. There is no minimum number of production cases before a goal counts as met or missed; that would be a new product rule (open question for Paige).
 - **Simplification pass (2026-10-12, Paige):** the surface is simple and the rigor stays underneath. A product person should see what changed that matters, what to do, what needs approval and what authority is in force, without learning a governance vocabulary first. Authority Lab stays centred on AI authority, not general project health.
   - **Three places across the top:** Overview, Capabilities, Records. People, the workspace, Start empty and Reset demo sit in a Settings menu (gear). Evidence, tests and model runs live inside each capability.
   - **The Overview has four sections, in this order:** To do, Approvals needed, Important results, Current authority. Each item names its capability and the person it waits on. An important result is one that blocks, causes or calls into question an authority level; adoption warnings, ROI and gate counts stay in Monitoring. The metric grid, monitoring stats, recommendation, disagreement detail, coverage explanation and readiness breakdown left the Overview.
@@ -202,6 +206,8 @@ Lesson: most gaps came from assumptions about who people are and what role they 
 ## Open questions for Paige
 
 - **S04: refunds within limits on an unverified instruction.** Decided: Paige chose option 2, with an addition from Cowork's review (see "Who gave the instruction" under Agents and expansions).
+- **Founding roster:** confirm the one-admin founding exception described under "Redesign (2026-10-12, Paige)".
+- **Minimum production sample:** should rollout goals need a minimum number of production cases before they count as met or missed?
 
 ## Roadmap
 

@@ -63,7 +63,7 @@ function loadAgentRuns() {
     ]))
     .then((all) => { setTicketDefinitions(all.filter((x) => x.definitions).flatMap((x) => x.definitions)); agentRuns = { status: 'ready', runs: all.filter((x) => !x.definitions) }; })
     .catch((err) => { agentRuns = { status: 'error', runs: [], error: err.message }; })
-    .then(() => { const { parts, query } = parseRoute(); if (parts[0] === 'capabilities' && query.get('show') === 'runs') render(); });
+    .then(() => { const { parts, query } = parseRoute(); if (parts[0] === 'capabilities' && query.get('tab') === 'decide') render(); });
 }
 
 // Where an old address that named no capability should go.
@@ -136,7 +136,8 @@ function render() {
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Propose a change'; }
       else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed change'; }
       else if (sub) {
-        if (query.get('tab') === 'decide' && query.get('show') === 'runs') loadAgentRuns();
+        // Decide summarizes the recorded model runs; its runs view lists them.
+        if (query.get('tab') === 'decide' && (!query.get('show') || query.get('show') === 'runs')) loadAgentRuns();
         view = capabilityView(state, sub, query, { runs: agentRuns });
         title = getCapability(state, sub)?.name || 'Capability';
       }
@@ -557,7 +558,8 @@ document.addEventListener('submit', (e) => {
     const reason = new FormData(decideForm).get('reason');
     const decision = e.submitter && e.submitter.value === 'reject' ? 'rejectAction' : 'approveAction';
     const item = (store.get().actionQueue || []).find((x) => x.id === id);
-    const route = `#/capabilities/${item ? item.capabilityId : ''}?tab=status&show=approvals`;
+    // Stay where the decision was made: Status or the full approvals list.
+    const route = here();
     dispatchOr(route, () => { store.dispatch(decision, id, { by: actor(store.get(), item && item.capabilityId), reason }); clearErrorOn(route, 'error'); render(); });
     return;
   }

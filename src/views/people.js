@@ -1,19 +1,10 @@
 import { html, raw, badge, notice, section, person, personAt, fmtDate, kv, warningNotice, SWITCH_PERSON } from '../ui.js';
-import { people, actor, isWorkspaceAdmin, rosterVersions, RIGHTS, RIGHT_LABELS, openRosterProposal, rosterApprovalEligibility, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf } from '../store/index.js';
+import { people, actor, isWorkspaceAdmin, rosterVersions, RIGHTS, RIGHT_LABELS, openRosterProposal, rosterApprovalEligibility, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf, foundingRoster } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 // A right as it reads mid-sentence: "Make Jonas a Risk approver".
 const RIGHT_NOUNS = { riskApprover: 'Risk approver', workspaceAdmin: 'workspace admin' };
 const rightChange = (grant, right, name) => (grant ? `Make ${name} a ${RIGHT_NOUNS[right]}` : `Remove ${name} as ${RIGHT_NOUNS[right]}`);
-
-// Whether the founding roster is still open: the workspace has never had two
-// active workspace admins, so its one admin gives rights directly. Mirrors
-// foundingRoster in src/store/people.js, which is what enforces it.
-function founding(state) {
-  const versions = rosterVersions(state);
-  const admins = (value) => Object.values(value || {}).filter((p) => p.active !== false && p.rights && p.rights.workspaceAdmin).length;
-  return versions.length > 0 && versions.every((v) => admins(v.value) < 2);
-}
 
 // The people roster (#22). Primary view: a simple table of who can do what
 // (redesign, 2026-10-12). How approvals work is explained where it matters,
@@ -33,7 +24,7 @@ export function peopleView(state, query) {
   const showInactive = query.get('inactive') === '1';
   const entries = Object.entries(roster).filter(([, p]) => showInactive || p.active !== false);
   const hasInactive = Object.values(roster).some((p) => p.active === false);
-  const solo = founding(state);
+  const solo = foundingRoster(state);
 
   const row = ([key, p]) => {
     if (editing === key && admin) {

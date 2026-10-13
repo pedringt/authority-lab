@@ -19,9 +19,9 @@ import { expectedVsActual } from './value.js';
 export const LEVEL_PLAIN = [
   'Watches only. A person does all the work.',
   'Suggests. A person decides and acts.',
-  'Drafts. A person approves every action.',
-  'Acts on its own within limits. Everything else goes to a person.',
-  'Handles most cases on its own. A person handles the exceptions.',
+  'Prepares the action. A person approves every one.',
+  'Runs automatically within limits. Everything else goes to human review.',
+  'Handles most cases automatically. A person handles the exceptions.',
 ];
 
 const nameOf = (state, key) => (people(state)[key] || {}).name || key;

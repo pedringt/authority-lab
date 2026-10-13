@@ -361,3 +361,9 @@ export function setActingAs(state, personKey) {
   if (personKey && !isActivePerson(state, personKey)) throw new Error(`${people(state)[personKey].name} is deactivated and cannot act.`);
   return { ...state, actingAs: personKey || null };
 }
+
+// Just in time (redesign): when the only person in a workspace hits a step
+// that needs someone else, say what to add. Empty otherwise.
+export function soloHint(state) {
+  return Object.keys(activePeople(state)).length === 1 ? ' You\'re the only person in this workspace: add someone on People first.' : '';
+}

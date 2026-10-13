@@ -158,6 +158,8 @@ test('a capability change after results needs someone else, so a one-person work
   s = runSuite(s, id);
   const loosened = { criteria: current(s, id, 'criteria'), requirements: current(s, id, 'requirements').filter((r) => r.id !== 'incidents') };
   assert.throws(() => proposeAmendment(s, id, 'criteria', { value: loosened, by: 'ana-ruiz', reason: 'Incidents are tracked elsewhere for this one.' }), /other than Ana Ruiz/);
+  // Just in time: the refusal says what to add when nobody else exists.
+  assert.throws(() => proposeAmendment(s, id, 'criteria', { value: loosened, by: 'ana-ruiz', reason: 'Incidents are tracked elsewhere for this one.' }), /You're the only person in this workspace: add someone on People first\./);
   // With a second person named, the same change opens, and Ana still can't approve it.
   s = addPerson(s, { name: 'Ben Okoro', title: 'Ops Lead', team: 'Operations', by: 'ana-ruiz', reason: 'Joins the pilot.' });
   s = proposeAmendment(s, id, 'criteria', { value: loosened, by: 'ana-ruiz', reason: 'Incidents are tracked elsewhere for this one.' });

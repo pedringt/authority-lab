@@ -3998,8 +3998,8 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   // Decide: the open decision.
   const dec = String(capabilityView(s, RR, new URLSearchParams('tab=decide')));
   assert.match(dec, /Should we expand autonomy for this capability\?/);
-  assert.match(dec, /<span class="muted small">Now<\/span><strong>Drafts\. A person approves every action\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
-  assert.match(dec, /<span class="muted small">Proposed<\/span><strong>Acts on its own within limits\. Everything else goes to a person\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
+  assert.match(dec, /<span class="muted small">Now<\/span><strong>Prepares the action\. A person approves every one\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
+  assert.match(dec, /<span class="muted small">Proposed<\/span><strong>Runs automatically within limits\. Everything else goes to human review\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
   // History: decisions, versions and the activity link.
   const hist = String(capabilityView(s, RR, new URLSearchParams('tab=history')));
   assert.match(hist, /Authority change #02/);
