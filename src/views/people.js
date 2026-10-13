@@ -1,19 +1,10 @@
 import { html, raw, badge, notice, section, person, personAt, fmtDate, kv, warningNotice, SWITCH_PERSON } from '../ui.js';
-import { people, actor, isWorkspaceAdmin, rosterVersions, RIGHTS, RIGHT_LABELS, openRosterProposal, rosterApprovalEligibility, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf } from '../store/index.js';
+import { people, actor, isWorkspaceAdmin, rosterVersions, RIGHTS, RIGHT_LABELS, openRosterProposal, rosterApprovalEligibility, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf, foundingRoster } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 // A right as it reads mid-sentence: "Make Jonas a Risk approver".
 const RIGHT_NOUNS = { riskApprover: 'Risk approver', workspaceAdmin: 'workspace admin' };
 const rightChange = (grant, right, name) => (grant ? `Make ${name} a ${RIGHT_NOUNS[right]}` : `Remove ${name} as ${RIGHT_NOUNS[right]}`);
-
-// Whether the founding roster is still open: the workspace has never had two
-// active workspace admins, so its one admin gives rights directly. Mirrors
-// foundingRoster in src/store/people.js, which is what enforces it.
-function founding(state) {
-  const versions = rosterVersions(state);
-  const admins = (value) => Object.values(value || {}).filter((p) => p.active !== false && p.rights && p.rights.workspaceAdmin).length;
-  return versions.length > 0 && versions.every((v) => admins(v.value) < 2);
-}
 
 // The people roster (#22). Primary view: a simple table of who can do what
 // (redesign, 2026-10-12). How approvals work is explained where it matters,
@@ -33,7 +24,7 @@ export function peopleView(state, query) {
   const showInactive = query.get('inactive') === '1';
   const entries = Object.entries(roster).filter(([, p]) => showInactive || p.active !== false);
   const hasInactive = Object.values(roster).some((p) => p.active === false);
-  const solo = founding(state);
+  const solo = foundingRoster(state);
 
   const row = ([key, p]) => {
     if (editing === key && admin) {
@@ -64,8 +55,10 @@ export function peopleView(state, query) {
     if (rightPerson === key && RIGHT_LABELS[rightKey] && admin) {
       const impact = rosterChangeImpact(state, { kind: 'rights', person: key, right: rightKey, grant: rightGrant });
       // Said just in time: who has to approve this, or why nobody needs to.
-      const how = rightGrant && solo
-        ? 'You\'re the only workspace admin, so this takes effect straight away. Once there are two admins, changing anyone\'s rights needs the other\'s approval.'
+      const how = rightGrant && solo && rightKey === 'workspaceAdmin'
+        ? 'You\'re the only workspace admin, so making a second one takes effect straight away. From then on, changing anyone\'s rights needs the other admin\'s approval.'
+        : rightGrant && solo
+          ? 'You\'re the only workspace admin, so nobody can approve this yet. Make someone else a workspace admin first; then the two of you set up Risk approvers.'
         : `You're proposing this, so ${rightGrant && rightKey === 'riskApprover' ? 'another workspace admin or a current Risk approver' : 'another workspace admin'} must approve it${rightGrant ? `; ${p.name} can't approve their own grant` : ''}.`;
       return html`<tr class="is-editing"><td colspan="5">
         ${impactNote(impact)}
@@ -106,7 +99,7 @@ export function peopleView(state, query) {
       <h1>People</h1>
     </div>
   </div>
-  ${error ? notice('fail', query.get('workspace') === 'edit' ? 'Could not change the workspace' : 'Could not update people', error, admin && /Add a second workspace admin/.test(error) ? { link: '#/people?focus=add', linkText: 'Add person' } : {}) : ''}
+  ${error ? notice('fail', query.get('workspace') === 'edit' ? 'Could not change the workspace' : 'Could not update people', error, admin && /Make someone else a workspace admin first: as the only admin/.test(error) ? { link: '#/people?focus=add', linkText: 'Add person' } : {}) : ''}
   ${coverageWarnings(state).map((w) => warningNotice({ ...w, links: w.kind === 'coverage' ? [{ href: `#/capabilities/${w.capabilityId}/stakeholders/edit`, text: 'Manage stakeholders' }] : null }))}
   ${admin ? '' : notice('neutral', `${who.name} isn't a workspace admin`, `Only workspace admins can add or change people. ${SWITCH_PERSON}`)}
   <div class="table-card people-card"><table class="table table-people">
@@ -122,7 +115,7 @@ export function peopleView(state, query) {
       <label class="field field-stack"><span>Team</span><input type="text" name="team" maxlength="40" required></label>
     </div>
     <label class="field field-stack"><span>Reason</span><input type="text" name="reason" maxlength="200" placeholder="Why they are being added" required></label>
-    <p class="muted small">Added by <strong>${who.name}</strong>. New people start with no rights; give them one from Manage.${solo ? ' While you\'re the only workspace admin, a right you give takes effect at once.' : ''}</p>
+    <p class="muted small">Added by <strong>${who.name}</strong>. New people start with no rights; give them one from Manage.${solo ? ' While you\'re the only workspace admin, making one other person an admin takes effect at once. Every other right needs approval.' : ''}</p>
     <button class="btn btn-primary" type="submit">Add person</button>
   </form>`, { id: 'add' }) : ''}
   ${workspaceSection(state, admin, who, query.get('workspace') === 'edit')}

@@ -8,6 +8,7 @@ import {
   callTool, proposeAmendment, approveProposal, current, versionsInForce,
 } from '../src/store/index.js';
 import { capabilityView } from '../src/views/capability.js';
+import { logGate } from '../src/store/gatelog.js';
 import { SWITCH_PERSON } from '../src/ui.js';
 
 const RR = 'refund-recommendation';
@@ -120,7 +121,7 @@ test('Still safe? nothing to monitor yet: a Level 1 capability with no safety li
 test('Delivering value? on pilot numbers is "Too early to judge", neutral, not a failure', () => {
   const html = value(expanded());
   assert.deepEqual(verdicts(html), [['neutral', 'Too early to judge']]);
-  assert.match(text(html), /0 of 3 rollout goals met so far\. It's day 3 of the rollout, and pilot numbers fill the gap until enough production cases come in\./);
+  assert.match(text(html), /0 of 3 rollout goals met so far\. It's day 3 of the rollout\. Pilot numbers fill the gap until enough production cases come in \(0 of 20 production cases recorded\)\./);
   assert.match(html, /<th>Goal<\/th><th>Expected<\/th><th>So far<\/th>/);
   assert.equal((html.match(/\(pilot · demo data\)/g) || []).length, 3, 'every pilot number is labelled');
   assert.doesNotMatch(html, /badge-fail|Not met</, 'no failure styling while it is too early');
@@ -134,7 +135,7 @@ test('Delivering value? on pilot numbers is "Too early to judge", neutral, not a
   assert.match(html, /Simulated demo data/);
 });
 
-test('Delivering value? on real logged numbers: "N of M rollout goals on track", and misses count on the chip', () => {
+test('Delivering value? on real logged numbers: too early until 20 production cases, then "N of M rollout goals on track", and misses count on the chip', () => {
   let s = selectDecision(initialState(), RR, 'expand-limits');
   const rows = [{ metric: 'Share done automatically', target: '≥ 50%' }, { metric: 'Escalation rate', target: '≤ 30%' }];
   for (let i = 0; i < OUTCOMES_MAX; i++) {
@@ -144,6 +145,14 @@ test('Delivering value? on real logged numbers: "N of M rollout goals on track",
   s = authorize(s, RR);
   const ticket = (o) => `TK-2${seed.systems.orders[o].customerId.slice(3)}`;
   for (const o of ['ORD-5001', 'ORD-5002', 'ORD-5004']) s = callTool(s, RR, { tool: 'issue_refund', args: { orderId: o, amount: 10, confidence: 95, instructionSource: 'customer' }, ticketId: ticket(o) }).state;
+  // Three production actions are not enough to judge (Paige, 2026-10-12: 20 by default).
+  const early = value(s);
+  assert.deepEqual(verdicts(early), [['neutral', 'Too early to judge']]);
+  assert.match(text(early), /Goals are judged once enough production cases are recorded: 3 of 20 production cases recorded\./);
+  assert.match(early, /show=value"[^>]*>Delivering value\? <span class="chip-count">2<\/span>/, 'a goal not yet judged is not counted as missed');
+  // Up to 20 production cases: 12 done automatically, 8 sent to a person.
+  for (let i = 0; i < 9; i++) s = logGate(s, { capabilityId: RR, tool: 'issue_refund', verdict: 'allow', orderId: 'ORD-5001' });
+  for (let i = 0; i < 8; i++) s = logGate(s, { capabilityId: RR, tool: 'issue_refund', verdict: 'needs-person', orderId: 'ORD-5005' });
   const html = value(s);
   assert.deepEqual(verdicts(html), [['watch', '1 of 2 rollout goals on track']]);
   assert.match(text(html), /Not on track yet: Escalation rate\./);
@@ -218,4 +227,28 @@ test('History: an approved proposed change names the versions it made, and they 
   assert.equal(titles[0], 'Proposed change to the targets approved: now Targets v2, Decision requirements v2');
   assert.ok(!titles.some((t) => /^Targets v2/.test(t)), 'not repeated as a separate version line');
   assert.match(history(s), /Targets v2 · Decision requirements v2/);
+});
+
+test('the minimum production sample: 20 by default, a goal can name its own, and only real actions count', async () => {
+  const { MIN_PRODUCTION_CASES, goalSample, productionCases, expectedVsActual } = await import('../src/store/value.js');
+  const { importantResults } = await import('../src/store/overview.js');
+  assert.equal(MIN_PRODUCTION_CASES, 20);
+  assert.equal(goalSample({ metric: 'Override rate', target: '≤ 8%' }), 20);
+  assert.equal(goalSample({ metric: 'Override rate', target: '≤ 8% across at least 50 refunds' }), 50, 'a goal\'s own sample wins');
+  assert.equal(goalSample({ metric: 'Resolution time over 1,200 cases', target: 'at least 50% faster' }), 1200);
+  // Seeded and scripted dry-run actions never count as production.
+  let s = expanded();
+  assert.equal(productionCases(s, RR), 0, 'seeded gate events are demo data');
+  s = logGate(s, { capabilityId: RR, tool: 'issue_refund', verdict: 'allow', source: 'mock' });
+  s = logGate(s, { capabilityId: RR, tool: 'lookup_order', verdict: 'allow' });
+  assert.equal(productionCases(s, RR), 0, 'a dry run and a read are not production cases');
+  s = logGate(s, { capabilityId: RR, tool: 'issue_refund', verdict: 'allow', source: 'recorded' });
+  s = logGate(s, { capabilityId: RR, tool: 'issue_refund', verdict: 'block' });
+  assert.equal(productionCases(s, RR), 2);
+  // Right after expanding, every goal is still on pilot numbers: none is judged,
+  // so the Overview doesn't call any of them missed.
+  const rows = expectedVsActual(expanded(), RR).rows;
+  assert.ok(rows.length && rows.every((r) => r.judged === false));
+  assert.ok(rows.some((r) => r.status === 'not-met'), 'the raw comparison is still there');
+  assert.ok(!importantResults(expanded()).some((r) => r.label === 'Expected outcome missed'));
 });

@@ -19,9 +19,9 @@ import { expectedVsActual } from './value.js';
 export const LEVEL_PLAIN = [
   'Watches only. A person does all the work.',
   'Suggests. A person decides and acts.',
-  'Drafts. A person approves every action.',
-  'Acts on its own within limits. Everything else goes to a person.',
-  'Handles most cases on its own. A person handles the exceptions.',
+  'Prepares the action. A person approves every one.',
+  'Runs automatically within limits. Everything else goes to human review.',
+  'Handles most cases automatically. A person handles the exceptions.',
 ];
 
 const nameOf = (state, key) => (people(state)[key] || {}).name || key;
@@ -253,7 +253,8 @@ export function importantResults(state, { fmt = (d) => d } = {}) {
         text: what || metric,
         so: sentences[0] ? sentences[1] || metric : '' });
     }
-    for (const r of expectedVsActual(state, cap.id).rows.filter((x) => x.status === 'not-met')) {
+    // Only a goal judged on enough production evidence counts as missed.
+    for (const r of expectedVsActual(state, cap.id).rows.filter((x) => x.status === 'not-met' && x.judged)) {
       add({ tone: 'fail', label: 'Expected outcome missed',
         text: `${r.metric}: ${r.actualText}. The decision expected ${r.target}.`,
         so: 'That calls the case for the current autonomy into question.' });
