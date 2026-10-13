@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles } from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES} from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -21,7 +21,14 @@ import { welcomeView, guideView, GUIDE_STEPS } from './views/guide.js';
 import { sourcesView, recordEvidenceView } from './views/sources.js';
 import { configureEvidenceView } from './views/configure.js';
 
-const store = createStore({ storage: safeStorage() });
+// Which built-in workspace is open (#121): the demo, or a client's real
+// configuration. Each is its own store, saved under its own key.
+const WORKSPACE_KEY = 'authority-lab-workspace';
+const openWorkspace = findWorkspace((() => { try { return window.localStorage.getItem(WORKSPACE_KEY); } catch { return null; } })());
+const store = createStore({ storage: safeStorage(), key: storageKeyFor(openWorkspace.id), build: () => openWorkspace.build() });
+// A client workspace runs on the real calendar, so freshness is real.
+if (store.get().clientWorkspace) store.dispatch('advanceToday', realToday());
+const isClient = () => Boolean(store.get().clientWorkspace);
 const app = document.getElementById('app');
 const nav = document.getElementById('nav');
 const acting = document.getElementById('acting');
@@ -139,7 +146,8 @@ function render() {
   setToday(state.today);
   demoDate.textContent = fmtDate(state.today);
   brandWs.textContent = workspaceOf(state).name;
-  footData.textContent = state.startedEmpty ? 'AI responses here are simulated. Nothing calls a real model.' : 'All data is fictional demo data.';
+  footData.textContent = state.clientWorkspace ? 'Real configuration. Evidence comes only from the connected source; nothing here calls a model.' : state.startedEmpty ? 'AI responses here are simulated. Nothing calls a real model.' : 'All data is fictional demo data.';
+  renderWorkspaceMenu();
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;
   let view;
@@ -314,10 +322,23 @@ function here() {
 // The inline confirm step for the two buttons that erase every record.
 let pendingErase = null;
 const demoButtons = document.getElementById('demo-buttons');
+// The workspace switcher, in the Settings menu. A client workspace offers
+// Reset (back to its configuration) but not Start empty.
+function renderWorkspaceMenu() {
+  const list = document.getElementById('workspace-list');
+  if (!list) return;
+  list.innerHTML = BUILT_IN_WORKSPACES.map((w) => `<button class="menu-item${w.id === openWorkspace.id ? ' is-current' : ''}" data-action="switch-workspace" data-workspace="${w.id}" ${w.id === openWorkspace.id ? 'aria-current="true"' : ''}>${w.name} <span class="muted small">${w.note}</span></button>`).join('');
+  const startEmpty = document.querySelector('[data-action="start-empty"]');
+  if (startEmpty) startEmpty.hidden = isClient();
+  const resetBtn = document.querySelector('[data-action="reset"]');
+  const note = document.querySelector('.menu-note');
+  if (note) note.textContent = isClient() ? `${openWorkspace.name} is a real configuration: no fictional data, and nothing here calls a model.` : 'Demo data only. No real customers, money or model calls.';
+  if (resetBtn) { resetBtn.textContent = isClient() ? 'Reset workspace' : 'Reset demo'; resetBtn.title = isClient() ? `Bring ${openWorkspace.name} back to its configuration` : 'Bring back the original Northstar demo'; }
+}
 const demoConfirm = document.getElementById('demo-confirm');
 function askToErase(kind) {
   pendingErase = kind;
-  document.getElementById('demo-confirm-go').textContent = kind === 'start-empty' ? 'Erase and start empty' : 'Erase and reset the demo';
+  document.getElementById('demo-confirm-go').textContent = kind === 'start-empty' ? 'Erase and start empty' : isClient() ? 'Erase and reset the workspace' : 'Erase and reset the demo';
   demoButtons.open = false;
   demoButtons.hidden = true;
   demoConfirm.hidden = false;
@@ -407,6 +428,11 @@ document.addEventListener('click', (e) => {
   if (action === 'row-remove') { btn.closest('tr').remove(); return; }
   // Start empty and Reset demo erase every record, so each asks first, inline.
   if (action === 'start-empty' || action === 'reset') askToErase(action);
+  if (action === 'switch-workspace') {
+    try { window.localStorage.setItem(WORKSPACE_KEY, btn.dataset.workspace); } catch { /* storage blocked: the demo stays open */ }
+    location.hash = '#/overview';
+    location.reload();
+  }
   // The decision brief's Print button (D1).
   if (action === 'print') window.print();
   if (action === 'cancel-erase') closeEraseConfirm();

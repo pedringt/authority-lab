@@ -27,7 +27,7 @@ export function sourcesView(state) {
     </div></div>
     ${connected.length ? '' : notice('neutral', 'No connected systems yet', 'Evidence can still come from Authority Lab tests and manual review. When a connected system sends its first evidence, it appears here.')}
     <div class="card table-card"><table class="table">
-      <thead><tr><th>Source</th><th>Kind</th><th>Connection</th><th>Metrics it has sent</th><th>Last data</th><th>Used by</th></tr></thead>
+      <thead><tr><th>Source</th><th>Kind</th><th>Connection</th><th>Metrics it provides</th><th>Last data</th><th>Used by</th></tr></thead>
       <tbody>${sources.map(row)}</tbody>
     </table></div>`;
 }
