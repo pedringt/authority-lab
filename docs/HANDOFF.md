@@ -1,25 +1,16 @@
-# Handoff: where Authority Lab stands (2026-10-12)
+# Handoff: where Authority Lab stands (2026-10-12, after the redesign shipped)
 
 Read this first, then `CLAUDE.md` (the working rules) and `docs/DECISIONS.md` (every product rule, with the "Redesign (2026-10-12, Paige)" entry at the top of the Interface section). Verify the live state with `gh pr list` and `git log origin/main -3` before trusting anything here.
 
-## Right now: the redesign is built and waiting for Paige to merge
+## Right now: the redesign is live and reviewed
 
-Eight stacked PRs, CI green, all left open for Paige. Paige approved the direction and the clickable mockup; she hasn't yet reviewed the built PRs.
+The eight redesign PRs (#106–#113) merged to `main` on 2026-10-12 (merge `908b803`) and deployed to https://authority-lab.vercel.app/. Paige reviewed the live site: structurally in a good place, polish only. The two fixes from that review (the "Needs a decision" heading, the ladder's screen-reader label) and these doc updates went in together. Her keep list is in DECISIONS.md ("Review of the live redesign"): don't redesign further on the strength of that review.
 
-| PR | Branch → base | What |
-|---|---|---|
-| #106 | `redesign/foundation` → `main` | Four capability tabs (Status, Decide, Monitor, History) in a header panel; quiet dark global bar; "Demo as"; one view module per tab (`src/views/cap-*.js`); old addresses rewritten in `src/routes.js` |
-| #107 | `redesign/status` → foundation | Status tells one story: what it does now, why it's here, what happens next, then. Waiting actions as rows; boundaries and people as one-liners |
-| #108 | `redesign/decide` → status | Decide as one vertical flow; four plain choices mapping to the recorded options |
-| #109 | `redesign/monitor` → decide | Monitor leads with one verdict; History is a timeline |
-| #110 | `redesign/overview` → monitor | Overview as compact work rows; "Current autonomy" table |
-| #111 | `redesign/setup` → overview | One person can start a workspace; four-question Add capability ("what it does today" is context, never above Level 1); three setup stages; simple People table |
-| #112 | `redesign/guide` → setup | First-visit welcome choice and the seven-step guided demo (on its own in-memory copy of the demo) |
-| #113 | `redesign/finish` → guide | Follow-ups, docs, and Paige's two decisions: founding roster narrowed, 20-case minimum production sample |
+**Merging:** for now `main` is the testing ground (Paige, 2026-10-12). Merge your own PRs to `main` once CI is green; batch them, because each merge is a Vercel deploy. Still stop for product decisions, governance rules and paid runs (CLAUDE.md, "How to work"). After a merge, confirm the deploy: GitHub deployment status, then fetch a changed file from the live site.
 
-**To deploy once:** merge from the top down (#113 into `redesign/guide`, then #112, … #107 into `redesign/foundation`), waiting for CI on each new head, then #106 into `main`. Every merge to `main` is a Vercel production deploy. Confirm the deploy (GitHub deployment status, then fetch `https://authority-lab.vercel.app/` and check for new code, e.g. `settings-menu` and `src/views/guide.js`). After the deploy, close nothing automatically: these PRs have no linked issues.
+The redesign's structure, for reference: four capability tabs (Status, Decide, Monitor, History) in a header panel; a quiet global bar (Overview, Capabilities, Records) and Settings menu; "Demo as"; one view module per tab (`src/views/cap-*.js`); old addresses rewritten in `src/routes.js`; first-visit welcome and the seven-step guided demo.
 
-Tests at the top of the stack: `node --test scripts/*.test.mjs` 290 pass, `npm test --prefix agent` 46 pass.
+Tests: `node --test scripts/*.test.mjs` 291 pass, `npm test --prefix agent` 46 pass.
 
 ## Reference material Paige approved (claude.ai artifacts, private to Paige)
 
@@ -46,6 +37,7 @@ Tests at the top of the stack: `node --test scripts/*.test.mjs` 290 pass, `npm t
 - Model runs call temptation tickets "trap" tickets.
 - Seeded activity entries and any demo state saved in a visitor's browser keep older wording until Reset demo.
 - Old `.ov-*` rules in `styles/app.css` are unused since the Overview rewrite.
+- `ladder()` in `src/views/overview.js` (the five-square autonomy ladder) is exported but rendered nowhere today; its screen-reader label was fixed anyway in the review polish.
 - Mobile layout is low priority for this project (Paige); don't chase phone widths.
 
 ## How the work is organised
@@ -62,4 +54,5 @@ Standing budget $25 per calendar month; October spend is $11.20 (`agent/runs/led
 
 ## What comes next
 
-Nothing is queued after the merge. After Paige reviews the deployed redesign, expect feedback on it; the roadmap in DECISIONS.md is otherwise complete.
+- **#105, a realistic stakeholder tradeoff on one autonomy decision** (Paige's issue): positions stay distinct instead of averaging into consensus, the decision says which evidence mattered, the approved limits reflect the tradeoff, and the record says what would reopen it. Keep it subordinate to the core decision flow; not a stakeholder-management tool. Not scoped yet: propose a plan before building.
+- Otherwise the roadmap in DECISIONS.md is complete.

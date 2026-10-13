@@ -4,12 +4,12 @@
 // cards; detail lives one level down, in the capability.
 
 import { html, badge, section, fmtDate } from '../ui.js';
-import { workspaceOf, workflowOf, overviewTodos, overviewApprovals, importantResults, authorityRows } from '../store/index.js';
+import { levelName, workspaceOf, workflowOf, overviewTodos, overviewApprovals, importantResults, authorityRows } from '../store/index.js';
 
 // The authority ladder as five small squares: filled up to the current level,
 // dashed at a proposed one. Used by the capability's Status tab.
 export function ladder(level, next = null) {
-  return html`<span class="ladder" role="img" aria-label="Level ${level} of 4">${[0, 1, 2, 3, 4].map((i) => html`<i class="${i <= level ? 'on' : i === next ? 'next' : ''}"></i>`)}</span>`;
+  return html`<span class="ladder" role="img" aria-label="Level ${level}, ${levelName(level)}">${[0, 1, 2, 3, 4].map((i) => html`<i class="${i <= level ? 'on' : i === next ? 'next' : ''}"></i>`)}</span>`;
 }
 
 const empty = (text) => html`<p class="ov-empty">${text}</p>`;

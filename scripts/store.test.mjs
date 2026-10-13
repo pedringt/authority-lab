@@ -3030,7 +3030,7 @@ test('A4 bypass: an approval is refused if a cap was crossed, or the order becam
 test('A4: Decision › Approvals lists waiting actions with their reasons, and who may decide', () => {
   const s = initialState();
   const h = String(capabilityView(s, RR, new URLSearchParams('tab=decision&show=approvals')));
-  assert.match(h, /Needs your decision <span class="st-n">2 refunds<\/span>/);
+  assert.match(h, /Needs a decision <span class="st-n">2 refunds<\/span>/);
   assert.match(h, /At Draft, every action needs a person to approve it\./);
   assert.match(h, /Refund \$180 on ORD-5005/);
   assert.match(h, /Any policy exception\./);
@@ -3982,7 +3982,7 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   assert.match(page, /People involved: 5/);
   assert.match(page, /Daniel Okafor<\/strong> <span class="muted">Risk<\/span>: <span class="st-pos st-pos-hold">Hold high-value cases/);
   assert.match(page, /Manage stakeholders/);
-  assert.match(page, /Needs your decision <span class="st-n">2 refunds<\/span>/);
+  assert.match(page, /Needs a decision <span class="st-n">2 refunds<\/span>/);
   assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=status&show=approvals">All waiting actions/);
   // Decide holds the evidence: results, requirements, targets, tests and model
   // runs, each linked from the decision (no chip row), each with a way back.
