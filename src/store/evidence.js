@@ -71,7 +71,7 @@ export function finishTestRun(state, capabilityId) {
       title: 'Targets locked',
       body: `${cap.name}: the first test results are in, so the targets (version ${versionsInForce(s, capabilityId).criteria}) and decision requirements (version ${versionsInForce(s, capabilityId).requirements}) can't be changed directly now. That way the bar doesn't move after we've seen the results. To change them, propose a change and get it approved.`,
       capabilityId,
-      link: `#/capabilities/${capabilityId}?tab=criteria`,
+      link: `#/capabilities/${capabilityId}?tab=decide&show=targets`,
     });
   }
   return s;
@@ -195,7 +195,7 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
     title: first ? 'Targets and decision requirements saved' : 'Targets and decision requirements updated',
     body: `${cap.name}: ${c.length} target${c.length === 1 ? '' : 's'} and ${r.length} decision requirement${r.length === 1 ? '' : 's'} saved by ${people(state)[by].name} (targets v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}).${deviations.length ? ` ${deviations.length} recommended safeguard${deviations.length === 1 ? ' was' : 's were'} weakened or removed: ${text}` : ''} They lock when the first test results come in.`,
     capabilityId,
-    link: `#/capabilities/${capabilityId}?tab=criteria`,
+    link: `#/capabilities/${capabilityId}?tab=decide&show=targets`,
   });
 }
 

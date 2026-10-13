@@ -161,7 +161,7 @@ export function amend(state, capabilityId, kind, { value, author, reason, meta =
 export const KIND_LABELS = { contract: 'Rules', criteria: 'Targets', requirements: 'Decision requirements', risk: 'Risk profile', stakeholders: 'Stakeholders' };
 
 // Where each versioned object is shown on the capability page.
-const KIND_TABS = { contract: '?tab=rules', risk: '?tab=rules', criteria: '?tab=evidence&show=targets', requirements: '?tab=evidence&show=requirements', stakeholders: '' };
+const KIND_TABS = { contract: '?tab=status&show=rules', risk: '?tab=status&show=rules', criteria: '?tab=decide&show=targets', requirements: '?tab=decide&show=requirements', stakeholders: '' };
 
 // One message per risk question, matching the setup form.
 const RISK_MISSING = { impact: 'Choose how serious a bad decision would be.', reversibility: 'Choose whether it can be undone.', exposure: 'Choose who or what is affected.' };

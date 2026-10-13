@@ -20,7 +20,7 @@ export function criteriaEditorView(state, capabilityId, query) {
 
   if (locked) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p><h1>Targets and decision requirements</h1><p class="lede">These targets can't be changed directly now that results exist.</p></div></div>
-      ${notice('watch', 'Propose a change instead', 'Submit a target change for review. It takes effect once it is approved. The current targets are on the capability page.', { link: `#/capabilities/${cap.id}?tab=evidence&show=targets`, linkText: 'Current targets' })}
+      ${notice('watch', 'Propose a change instead', 'Submit a target change for review. It takes effect once it is approved. The current targets are on the capability page.', { link: `#/capabilities/${cap.id}?tab=decide&show=targets`, linkText: 'Current targets' })}
       <a class="btn btn-primary" href="#/capabilities/${cap.id}/amend/criteria">Propose a target change</a>`;
   }
 

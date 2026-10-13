@@ -104,7 +104,7 @@ function render() {
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Propose a change'; }
       else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed change'; }
       else if (sub) {
-        if (query.get('tab') === 'evidence' && query.get('show') === 'runs') loadAgentRuns();
+        if (query.get('tab') === 'decide' && query.get('show') === 'runs') loadAgentRuns();
         view = capabilityView(state, sub, query, { runs: agentRuns });
         title = getCapability(state, sub)?.name || 'Capability';
       }
@@ -136,7 +136,8 @@ function render() {
   if (setupPending(state)) { nav.innerHTML = ''; acting.innerHTML = ''; }
   else nav.innerHTML = String(html`${NAV.map(([k, label]) => html`<a class="nav-link ${root === k || (!root && k === 'overview') ? 'is-active' : ''}" href="#/${k}" ${root === k ? 'aria-current="page"' : ''}>${label}${counts[k] ? html`<span class="nav-count ${state.alerts.length && k === 'overview' ? 'is-alert' : ''}">${counts[k]}</span>` : ''}</a>`)}`);
 
-  // "Acting as" picker. Default is the owner of the capability in context.
+  // "Demo as" picker (redesign): a demo control, marked as one. Default is the
+  // owner of the capability in context.
   const contextCap = root === 'capabilities' && sub && sub !== 'new' ? sub : null;
   const current = actor(state, contextCap);
   const focus = focusCapability(state);
@@ -146,8 +147,8 @@ function render() {
   // A demo control: a real version would know who is signed in. Only active
   // people can be chosen.
   if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo only. In a real product you'd be signed in. Switch people here to see how proposing, approving and deciding work for each role.">
-    <span class="acting-label">Acting as</span>
-    <select data-action="set-acting" aria-label="Demo: acting as">
+    <span class="acting-label">Demo as</span>
+    <select data-action="set-acting" aria-label="Demo as">
       <option value="" ${state.actingAs ? '' : 'selected'}>${defaultName}${defaultOwner ? ' (owner)' : ''}</option>
       ${Object.entries(activePeople(state)).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
     </select>
@@ -294,7 +295,7 @@ document.addEventListener('click', (e) => {
   if (action === 'section-unconfirm') tryDispatch(() => store.dispatch('confirmSection', capId, btn.dataset.section, false));
   if (action === 'contract-finalize') {
     tryDispatch(() => store.dispatch('finalizeContract', capId, { by: actor(store.get(), capId) }));
-    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=rules`;
+    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=status&show=rules`;
   }
   if (action === 'starter-add') {
     const route = `#/capabilities/${capId}/scenarios/edit`;
@@ -431,7 +432,7 @@ document.addEventListener('submit', (e) => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) });
       const after = capData(store.get(), capId).proposals;
-      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=summary`;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=status`;
     });
     return;
   }
@@ -441,7 +442,7 @@ document.addEventListener('submit', (e) => {
     const capId = parseRoute().parts[1];
     const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
     const scenarios = [...scForm.querySelectorAll('[data-rows="scenarios"] tr')].map((tr) => ({ id: val(tr, 'sc-id') || undefined, source: val(tr, 'sc-source'), group: val(tr, 'sc-group'), name: val(tr, 'sc-name'), situation: val(tr, 'sc-situation'), expected: val(tr, 'sc-expected') }));
-    dispatchOr(`#/capabilities/${capId}/scenarios/edit`, () => { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}?tab=evidence&show=tests`; });
+    dispatchOr(`#/capabilities/${capId}/scenarios/edit`, () => { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}?tab=decide&show=tests`; });
     return;
   }
   const withdrawForm = e.target.closest('[data-form="withdraw-proposal"]');
@@ -495,7 +496,7 @@ document.addEventListener('submit', (e) => {
     const reason = new FormData(decideForm).get('reason');
     const decision = e.submitter && e.submitter.value === 'reject' ? 'rejectAction' : 'approveAction';
     const item = (store.get().actionQueue || []).find((x) => x.id === id);
-    const route = `#/capabilities/${item ? item.capabilityId : ''}?tab=decision&show=approvals`;
+    const route = `#/capabilities/${item ? item.capabilityId : ''}?tab=status&show=approvals`;
     dispatchOr(route, () => { store.dispatch(decision, id, { by: actor(store.get(), item && item.capabilityId), reason }); clearErrorOn(route, 'error'); render(); });
     return;
   }
@@ -532,7 +533,7 @@ document.addEventListener('submit', (e) => {
     const { criteria, requirements } = readCriteriaRows(critForm);
     dispatchOr(`#/capabilities/${capId}/criteria/edit`, () => {
       store.dispatch('saveCriteria', capId, { criteria, requirements, by: actor(store.get(), capId), reason: critForm.reason.value });
-      location.hash = `#/capabilities/${capId}?tab=evidence&show=targets`;
+      location.hash = `#/capabilities/${capId}?tab=decide&show=targets`;
     });
     return;
   }

@@ -22,7 +22,7 @@ export function contractBuilderView(state, capabilityId, query) {
 
   if (versionList(state, capabilityId, 'contract').length) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Set up rules</h1><p class="lede">${cap.name} already has rules. To change them, propose a rule change; it needs approval.</p></div></div>
-      ${notice('neutral', 'Rules are already set', 'See them on the capability\'s Rules tab, where you can also propose a change.', { link: `#/capabilities/${cap.id}?tab=rules`, linkText: 'See rules' })}`;
+      ${notice('neutral', 'Rules are already set', 'See them on the capability\'s Rules tab, where you can also propose a change.', { link: `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: 'See rules' })}`;
   }
 
   if (!draft) {

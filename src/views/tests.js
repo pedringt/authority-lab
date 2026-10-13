@@ -50,7 +50,7 @@ export function testsView(state, capabilityId, query, { embedded = false } = {})
     : html`<div class="page-head">
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/capabilities/${id}?tab=evidence&show=tests`)}</h1>
+      <h1>${capabilityHeading(state, cap, 'Tests for', (id) => `#/capabilities/${id}?tab=decide&show=tests`)}</h1>
       ${lede(html`${t.total} test cases that check ${cap.name} against the current rules.`, html`They're grouped by type (${groupNames}). No AI model is called here: each test replays a saved answer, so a run always gives the same result.`)}
     </div>
     ${t.status === 'not-run' && t.total ? '' : html`<div class="page-actions">${runControl}</div>`}
@@ -102,7 +102,7 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
     if (filter === 'passed') rows = rows.filter((s) => s.pass);
   }
 
-  const base = `#/capabilities/${capabilityId}?tab=evidence&show=tests`;
+  const base = `#/capabilities/${capabilityId}?tab=decide&show=tests`;
   const filters = compact || !d.scenarios.length ? '' : filterBar({
     selects: [
       { label: 'Result', value: hasResults ? filter : 'all', options: FILTERS.map(([k, label]) => [k, hasResults && k !== 'all' ? `${label} (${countFor(k)})` : label]), hrefFor: (k) => `${base}&filter=${k}&group=${group}`, disabled: hasResults ? '' : 'Run the tests to filter by result.' },

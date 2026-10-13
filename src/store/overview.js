@@ -58,12 +58,12 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
       out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
         title: `Review why ${cap.name} was moved back to ${levelName(auto.next.level)}`,
         why: `On ${fmt(auto.date)} it crossed a safety limit: ${capData(state, cap.id).monitoring.reading}. It went back to ${levelName(auto.next.level)} automatically. It can't get more authority until someone records what happened and what changes.`,
-        who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitoring') });
+        who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitor') });
     } else if (review.incidents.length) {
       out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
         title: `Review ${review.incidents.length === 1 ? 'an incident' : `${review.incidents.length} incidents`} on ${cap.name}`,
         why: 'A safety limit was crossed but authority didn\'t change. Record what happened before the capability can get more authority.',
-        who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitoring') });
+        who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitor') });
     }
     if (decisionRequired(state, cap.id)) {
       const p = proposedAuthority(state, cap.id);
@@ -87,7 +87,7 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
         out.push({ kind: 'evidence', capabilityId: cap.id, cap: cap.name,
           title: `Meet the open check: ${gap.text.replace(/^./, (c) => c.toLowerCase())}`,
           why: `${firstSentence(gap.gap || gap.text)} Now: ${gap.current}. ${readinessText(r)}`,
-          who: `Owner: ${owner}`, action: 'See the evidence', href: link('?tab=evidence') });
+          who: `Owner: ${owner}`, action: 'See the evidence', href: link('?tab=decide&show=results') });
       }
     }
   }
@@ -140,7 +140,7 @@ export function overviewApprovals(state, { fmt = (d) => d } = {}) {
         title: `${waiting.length} ${noun} a person to decide`,
         why: `${waiting.slice(0, 3).map((x) => describe(x).replace(/^a /, '')).join(', ')}${waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''}. ${cap.authority.level <= 2 ? `The AI is at ${levelName(cap.authority.level)}, so every action needs a person.` : 'They fell outside the AI\'s approved limits, so they weren\'t processed automatically.'}`,
         who: `Who can approve: ${list(queueApprovers(state, cap.id).map((k) => nameOf(state, k)))}.`,
-        since: `Waiting since ${fmt(oldest)}`, action: refunds ? 'Review the refunds' : 'Review the actions', href: `#/capabilities/${cap.id}?tab=decision&show=approvals` });
+        since: `Waiting since ${fmt(oldest)}`, action: refunds ? 'Review the refunds' : 'Review the actions', href: `#/capabilities/${cap.id}?tab=status&show=approvals` });
     }
     for (const p of capData(state, cap.id).proposals.filter((x) => x.status === 'open')) {
       out.push({ kind: 'change', capabilityId: cap.id, cap: cap.name,

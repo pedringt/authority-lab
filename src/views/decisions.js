@@ -1,7 +1,8 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
 import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName } from '../store/index.js';
-import { requirementsList, optionLabel } from './capability.js';
+import { requirementsList } from './cap-decide.js';
+import { optionLabel } from './cap-history.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -22,7 +23,7 @@ export function decisionsListView(state) {
   </div>
   ${pending.map((c) => notice('decision', `Decision needed: ${c.name}`, `Someone has proposed moving ${c.name} from ${authorityLabel(c.authority)} to ${authorityLabel(proposedAuthority(state, c.id))}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} checks met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
   ${state.capabilities.flatMap((c) => capData(state, c.id).proposals.filter((p) => p.status === 'open').map((p) => notice('watch', `Approval needed: ${c.name}`, `${person(p.proposedBy).name} proposed a ${KIND_NOUN[p.kind]} change. ${requirementLabel(p.required, p.approvals)}.`, { link: `#/capabilities/${c.id}/proposals/${p.id}`, linkText: 'Open' })))}
-  ${reviews.map((c) => notice('fail', `Review needed before ${c.name} gets more authority`, `The AI was moved back to ${levelName(c.authority.level)} after crossing a safety limit. Before it can get more authority again, the owner or a Risk approver needs to record what happened and what changed (the post-incident review).`, { link: `#/capabilities/${c.id}?tab=monitoring`, linkText: 'Record the review' }))}
+  ${reviews.map((c) => notice('fail', `Review needed before ${c.name} gets more authority`, `The AI was moved back to ${levelName(c.authority.level)} after crossing a safety limit. Before it can get more authority again, the owner or a Risk approver needs to record what happened and what changed (the post-incident review).`, { link: `#/capabilities/${c.id}?tab=monitor`, linkText: 'Record the review' }))}
   <div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Capability</th><th>Date</th><th>Change</th><th>Decision</th><th>Decided by</th></tr></thead>
     <tbody>${records.map((x) => html`<tr>
@@ -118,7 +119,7 @@ export function decisionRecordView(state, id) {
     <a class="btn btn-sm" href="#/records/${x.id}/brief">Decision brief (one page)</a>
   </div>
   ${auto ? notice('fail', `The AI was moved back to ${levelName(x.next.level)} after crossing a safety limit.`, 'No one made this change by hand. It followed a rule people agreed in advance ("Authority is reduced automatically when…"). People decide when the AI gets more authority; Authority Lab can take authority away on its own when a limit is crossed. Formally, this is an automatic restriction.') : ''}
-  ${auto && reviewForRecord(state, x.id) ? (() => { const rv = reviewForRecord(state, x.id); return notice('pass', `Reviewed by ${personAt(rv.byAt, rv.by).name} on ${fmtDate(rv.date)} (${rv.id})`, `What happened: ${rv.cause} What changed: ${rv.changes} The review is saved separately; this record stays as it was.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'See the review' }); })() : auto && capData(state, cap.id).reviewRequired ? notice('watch', 'Not reviewed yet', 'The owner or a Risk approver needs to record what happened and what changed (the post-incident review) on the Monitoring tab. Until then the AI can\'t get more authority.', { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' }) : ''}
+  ${auto && reviewForRecord(state, x.id) ? (() => { const rv = reviewForRecord(state, x.id); return notice('pass', `Reviewed by ${personAt(rv.byAt, rv.by).name} on ${fmtDate(rv.date)} (${rv.id})`, `What happened: ${rv.cause} What changed: ${rv.changes} The review is saved separately; this record stays as it was.`, { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'See the review' }); })() : auto && capData(state, cap.id).reviewRequired ? notice('watch', 'Not reviewed yet', 'The owner or a Risk approver needs to record what happened and what changed (the post-incident review) on the Monitoring tab. Until then the AI can\'t get more authority.', { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Record the review' }) : ''}
   <div class="card record">
     <div class="record-change">
       <div><span class="fact-label">Previous</span>${x.previous ? authorityBadge(x.previous) : html`<span class="muted">None (new capability)</span>`}</div>
@@ -205,8 +206,8 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     const rec = state.decisionRecords.find((x) => x.id === dec.recordId);
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/records">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was made on ${fmtDate(rec.date)}. See the record: <a href="#/records/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a>.</p></div></div>
       ${d.reviewRequired
-        ? notice('fail', 'Review needed', `After this decision, the AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Record what happened and what changed (the post-incident review) before giving it more authority again.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' })
-        : notice('pass', 'Decision recorded', `${cap.name} is at ${authorityLabel(cap.authority)}. To try the decision again, use Reset demo.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Monitoring' })}`;
+        ? notice('fail', 'Review needed', `After this decision, the AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Record what happened and what changed (the post-incident review) before giving it more authority again.`, { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Record the review' })
+        : notice('pass', 'Decision recorded', `${cap.name} is at ${authorityLabel(cap.authority)}. To try the decision again, use Reset demo.`, { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Monitoring' })}`;
   }
 
   if (!pending) {
@@ -283,7 +284,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
 
       ${stakeholders.length ? section('Stakeholder positions', html`<div class="card"><ul class="position-list">${stakeholders.map((s) => html`<li><span class="position-team">${s.team}</span>${badge(stakeholderTone[s.stance] || 'neutral', s.position)}<span class="muted small">${person(s.person).name}</span></li>`)}</ul>
         ${d.stakeholderSummary ? html`<p><strong>Where people agree:</strong> ${d.stakeholderSummary.consensus}</p>
-        <p><strong>Still disagree on:</strong> ${d.stakeholderSummary.disagreement} <a href="#/capabilities/${cap.id}?tab=summary">All positions</a></p>` : ''}</div>`) : ''}
+        <p><strong>Still disagree on:</strong> ${d.stakeholderSummary.disagreement} <a href="#/capabilities/${cap.id}?tab=status">All positions</a></p>` : ''}</div>`) : ''}
       </details>
     </div>
 

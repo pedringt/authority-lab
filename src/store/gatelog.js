@@ -77,7 +77,7 @@ export function gateEvidence(state, capabilityId) {
   const g = gateSummary(state, capabilityId);
   if (!g.actions) return [];
   const origin = g.sources.map((s) => GATE_SOURCES[s] || s).join(', ');
-  const base = { source: 'Logged actions', segment: 'All', date: state.today, risk: 'High', link: `#/capabilities/${capabilityId}?tab=monitoring`, derived: true, origin };
+  const base = { source: 'Logged actions', segment: 'All', date: state.today, risk: 'High', link: `#/capabilities/${capabilityId}?tab=monitor`, derived: true, origin };
   const pct = (v) => (v == null ? 'n/a' : `${v}%`);
   return [
     { ...base, id: 'GATE-1', metric: 'Actions done automatically', value: `${g.counts.allowed} of ${g.actions} (${pct(g.rates.automation)})`, status: 'pass', detail: `Done without asking a person, because they were within the rules. From logged actions: ${origin}.` },

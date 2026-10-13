@@ -76,11 +76,11 @@ function openQueueFullIncident(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
   const incidentNumber = d.evidence.filter((e) => e.source === 'Incident').length + 1;
   const incidentId = `INC-${String(incidentNumber).padStart(2, '0')}`;
-  const evidence = [{ id: `EV-${String(d.evidence.length + 1).padStart(2, '0')}`, source: 'Incident', metric: `${incidentId}: approval list full`, value: `${QUEUE_LIMIT} actions waiting`, status: 'fail', risk: 'Medium', segment: 'All', date: state.today, detail: `${QUEUE_LIMIT} actions on ${cap.name} need a person to decide, so new ones are blocked until some are decided. The AI is asking faster than people can decide; worth a look.`, link: `#/capabilities/${cap.id}?tab=waiting` }, ...d.evidence];
+  const evidence = [{ id: `EV-${String(d.evidence.length + 1).padStart(2, '0')}`, source: 'Incident', metric: `${incidentId}: approval list full`, value: `${QUEUE_LIMIT} actions waiting`, status: 'fail', risk: 'Medium', segment: 'All', date: state.today, detail: `${QUEUE_LIMIT} actions on ${cap.name} need a person to decide, so new ones are blocked until some are decided. The AI is asking faster than people can decide; worth a look.`, link: `#/capabilities/${cap.id}?tab=status&show=approvals` }, ...d.evidence];
   const s = { ...state, capabilityData: { ...state.capabilityData, [capabilityId]: { ...d, evidence, queueFull: { since: state.today, incidentId } } } };
   // `kind` marks the alert so it clears when the list drains, whatever its wording.
-  const alert = { id: `ALERT-${Date.now()}-q`, kind: 'queue-full', date: state.today, severity: 'medium', capabilityId, title: `Approval list full: ${cap.name}`, body: `${QUEUE_LIMIT} actions need a person to decide. New ones are blocked until some are decided (${incidentId}).`, link: `#/capabilities/${cap.id}?tab=waiting` };
-  return logEvent({ ...s, alerts: [alert, ...state.alerts] }, { kind: 'failure', surfaced: true, title: `Approval list full: ${cap.name}`, body: `${QUEUE_LIMIT} actions need a person to decide, so new ones that need approval are blocked. ${incidentId} opened.`, capabilityId, link: `#/capabilities/${cap.id}?tab=waiting` });
+  const alert = { id: `ALERT-${Date.now()}-q`, kind: 'queue-full', date: state.today, severity: 'medium', capabilityId, title: `Approval list full: ${cap.name}`, body: `${QUEUE_LIMIT} actions need a person to decide. New ones are blocked until some are decided (${incidentId}).`, link: `#/capabilities/${cap.id}?tab=status&show=approvals` };
+  return logEvent({ ...s, alerts: [alert, ...state.alerts] }, { kind: 'failure', surfaced: true, title: `Approval list full: ${cap.name}`, body: `${QUEUE_LIMIT} actions need a person to decide, so new ones that need approval are blocked. ${incidentId} opened.`, capabilityId, link: `#/capabilities/${cap.id}?tab=status&show=approvals` });
 }
 
 // Once the queue is below the limit again, the full-queue incident closes and
@@ -142,7 +142,7 @@ export function approveAction(state, id, { by, reason } = {}) {
   if (!check.ok) {
     // Refused at execution: recorded with who approved and why it didn't run.
     const s = decide(state, id, by, 'refused', why, { refusal: check.reason });
-    return logEvent(s, { kind: 'failure', surfaced: true, title: `Approved, but not carried out: ${item.id}`, body: `${who.name} approved ${describe(item)} on ${cap.name}, but it was no longer allowed when it came to run. ${check.reason}`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=waiting` });
+    return logEvent(s, { kind: 'failure', surfaced: true, title: `Approved, but not carried out: ${item.id}`, body: `${who.name} approved ${describe(item)} on ${cap.name}, but it was no longer allowed when it came to run. ${check.reason}`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=status&show=approvals` });
   }
   let s = state;
   let execution = {};
@@ -152,7 +152,7 @@ export function approveAction(state, id, { by, reason } = {}) {
     execution = { refundId: r.entry.id };
   }
   s = decide(s, id, by, 'executed', why, execution);
-  return logEvent(s, { kind: 'decision', surfaced: true, title: `Approved and done: ${item.id}`, body: `${who.name} approved ${describe(item)} on ${cap.name}. It needed approval because: ${item.rule.text} It was checked again against the rules before it ran. Reason: ${why}`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=waiting` });
+  return logEvent(s, { kind: 'decision', surfaced: true, title: `Approved and done: ${item.id}`, body: `${who.name} approved ${describe(item)} on ${cap.name}. It needed approval because: ${item.rule.text} It was checked again against the rules before it ran. Reason: ${why}`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=status&show=approvals` });
 }
 
 export function rejectAction(state, id, { by, reason } = {}) {
@@ -163,7 +163,7 @@ export function rejectAction(state, id, { by, reason } = {}) {
   const item = queuedAction(state, id);
   const cap = getCapability(state, item.capabilityId);
   const s = decide(state, id, by, 'rejected', why);
-  return logEvent(s, { kind: 'decision', surfaced: true, title: `Rejected: ${item.id}`, body: `${people(state)[by].name} rejected ${describe(item)} on ${cap.name}. Reason: ${why}`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=waiting` });
+  return logEvent(s, { kind: 'decision', surfaced: true, title: `Rejected: ${item.id}`, body: `${people(state)[by].name} rejected ${describe(item)} on ${cap.name}. Reason: ${why}`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=status&show=approvals` });
 }
 
 export function describe(item) {

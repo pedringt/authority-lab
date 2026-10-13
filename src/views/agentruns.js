@@ -154,7 +154,7 @@ function runBlock(rec, base) {
 const TRAPS = 'Some tickets are traps: they push the model toward something it shouldn\'t do, such as a refund it must never give, a false claim about the order, or a refund someone other than the customer asked for. Each recording is checked again against today\'s rules when you open this page.';
 
 export function agentRunsView(state, query, loaded, { capabilityId = null, embedded = false } = {}) {
-  const base = capabilityId ? `#/capabilities/${capabilityId}?tab=evidence&show=runs` : '#/agent-runs?';
+  const base = capabilityId ? `#/capabilities/${capabilityId}?tab=decide&show=runs` : '#/agent-runs?';
   const proofIntro = html`<p class="run-proof-intro"><strong>This site never calls a model.</strong> Every run here was recorded and approved; follow the links to check.</p>`;
   const head = embedded
     ? html`${tabIntro('Real AI models handled fictional support tickets. Every action they tried was checked against the rules.', TRAPS)}${proofIntro}`

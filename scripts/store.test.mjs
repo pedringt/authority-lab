@@ -3032,7 +3032,7 @@ test('A4: Decision › Approvals lists waiting actions with their reasons, and w
   assert.match(h, /placeholder="Why\? \(required\)"/);
   const asJonas = String(capabilityView(setActingAs(s, 'jonas'), RR, new URLSearchParams('tab=decision&show=approvals')));
   assert.doesNotMatch(asJonas, /value="approve"/);
-  assert.match(asJonas, /Choose who you&#39;re acting as at the top of the page\./);
+  assert.match(asJonas, /For the demo, switch people in &quot;Demo as&quot; at the top\./);
   assert.match(asJonas, /isn&#39;t the owner or a named stakeholder/);
 });
 
@@ -3896,38 +3896,46 @@ test('C2: the Monitoring tab lists each warning with what, why and source, and s
 });
 
 // #93: navigation simplified; old addresses keep working.
-test('old addresses are rewritten to where their pages live now, keeping their filters (#93, simplification pass)', async () => {
+test('old addresses are rewritten to where their pages live now, keeping their filters (#93, simplification pass, redesign)', async () => {
   const { canonicalHash } = await import('../src/routes.js');
   const C = '#/capabilities/refund-recommendation';
   const cases = [
-    // Evidence, tests and model runs moved into the capability.
-    ['#/tests?capability=ticket-classification', '#/capabilities/ticket-classification?tab=evidence&show=tests'],
-    ['#/tests?capability=ticket-classification&filter=failed', '#/capabilities/ticket-classification?tab=evidence&show=tests&filter=failed'],
-    ['#/evidence?capability=refund-recommendation&status=fail', `${C}?tab=evidence&show=all&status=fail`],
-    ['#/evidence?show=tests&capability=refund-recommendation', `${C}?tab=evidence&show=tests`],
-    ['#/agent-runs', `${C}?tab=evidence&show=runs`],
-    ['#/agent-runs?run=x.json&rep=2', `${C}?tab=evidence&show=runs&run=x.json&rep=2`],
+    // Evidence, tests and model runs live under Decide.
+    ['#/tests?capability=ticket-classification', '#/capabilities/ticket-classification?tab=decide&show=tests'],
+    ['#/tests?capability=ticket-classification&filter=failed', '#/capabilities/ticket-classification?tab=decide&show=tests&filter=failed'],
+    ['#/evidence?capability=refund-recommendation&status=fail', `${C}?tab=decide&show=all&status=fail`],
+    ['#/evidence?show=tests&capability=refund-recommendation', `${C}?tab=decide&show=tests`],
+    ['#/agent-runs', `${C}?tab=decide&show=runs`],
+    ['#/agent-runs?run=x.json&rep=2', `${C}?tab=decide&show=runs&run=x.json&rep=2`],
     ['#/activity', '#/records?show=activity'],
     ['#/activity?view=full&kind=decision', '#/records?view=full&kind=decision&show=activity'],
     ['#/decisions', '#/records'],
     ['#/decisions/AC-02', '#/records/AC-02'],
-    // Old capability tabs.
-    [`${C}?tab=contract`, `${C}?tab=rules`],
-    [`${C}?tab=stakeholders`, `${C}?tab=summary`],
-    [`${C}?tab=criteria`, `${C}?tab=evidence&show=targets`],
-    [`${C}?tab=testing`, `${C}?tab=evidence&show=tests`],
-    [`${C}?tab=evidence&show=criteria`, `${C}?tab=evidence&show=targets`],
-    [`${C}?tab=evidence&show=testing`, `${C}?tab=evidence&show=tests`],
-    [`${C}?tab=waiting&error=x`, `${C}?tab=decision&error=x&show=approvals`],
-    [`${C}?tab=decisions&show=waiting`, `${C}?tab=decision&show=approvals`],
+    // Tabs from before the simplification pass.
+    [`${C}?tab=contract`, `${C}?tab=status&show=rules`],
+    [`${C}?tab=stakeholders`, `${C}?tab=status`],
+    [`${C}?tab=criteria`, `${C}?tab=decide&show=targets`],
+    [`${C}?tab=testing`, `${C}?tab=decide&show=tests`],
+    [`${C}?tab=waiting&error=x`, `${C}?tab=status&error=x&show=approvals`],
+    [`${C}?tab=decisions&show=waiting`, `${C}?tab=status&show=approvals`],
     [`${C}?tab=decisions`, `${C}?tab=history`],
+    // Tabs from the simplification pass.
+    [`${C}?tab=summary`, `${C}?tab=status`],
+    [`${C}?tab=rules`, `${C}?tab=status&show=rules`],
+    [`${C}?tab=evidence`, `${C}?tab=decide&show=results`],
+    [`${C}?tab=evidence&show=criteria`, `${C}?tab=decide&show=targets`],
+    [`${C}?tab=evidence&show=runs`, `${C}?tab=decide&show=runs`],
+    [`${C}?tab=decision`, `${C}?tab=decide`],
+    [`${C}?tab=decision&show=approvals`, `${C}?tab=status&show=approvals`],
+    [`${C}?tab=monitoring`, `${C}?tab=monitor`],
+    [`${C}?tab=monitoring&show=value`, `${C}?tab=monitor&show=value`],
   ];
   for (const [from, to] of cases) assert.equal(canonicalHash(from), to, from);
   // With no capability named, the focus capability is used, or the list.
-  assert.equal(canonicalHash('#/tests?filter=failed', { focus: 'refund-recommendation' }), `${C}?tab=evidence&show=tests&filter=failed`);
+  assert.equal(canonicalHash('#/tests?filter=failed', { focus: 'refund-recommendation' }), `${C}?tab=decide&show=tests&filter=failed`);
   assert.equal(canonicalHash('#/evidence'), '#/capabilities');
   // Current addresses are left alone.
-  for (const same of ['#/overview', '#/records?show=activity', `${C}?tab=monitoring`, `${C}?tab=monitoring&show=value`, `${C}?tab=decision&show=approvals`, `${C}?tab=evidence&show=runs`, '#/people', `${C}/contract/build`]) assert.equal(canonicalHash(same), same);
+  for (const same of ['#/overview', '#/records?show=activity', `${C}?tab=monitor`, `${C}?tab=monitor&show=value`, `${C}?tab=status&show=approvals`, `${C}?tab=decide&show=runs`, `${C}?tab=history`, '#/people', `${C}/contract/build`]) assert.equal(canonicalHash(same), same);
   assert.equal(canonicalHash(''), '#/overview');
 });
 
@@ -3941,15 +3949,20 @@ test('every recorded model run acts for the capability the old Agent runs addres
   }
 });
 
-test('six capability tabs: Summary, Rules, Evidence, Decision, Monitoring, History; Stakeholders folds into Summary', () => {
+test('four capability tabs: Status, Decide, Monitor, History, in a header panel with the capability named once', () => {
   const s = initialState();
   setPeople(people(s));
   const page = String(capabilityView(s, RR, new URLSearchParams('')));
-  const tabs = [...page.matchAll(/<a class="tab[^"]*" href="#\/capabilities\/refund-recommendation\?tab=([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(tabs, ['summary', 'rules', 'evidence', 'decision', 'monitoring', 'history']);
-  assert.match(page, /aria-current="page">Summary/);
-  // The Decision tab carries the count of approvals waiting.
-  assert.match(page, /tab=decision"[^>]*>Decision <span class="nav-count">2<\/span>/);
+  const tabs = [...page.matchAll(/<a class="ltab[^"]*" href="#\/capabilities\/refund-recommendation\?tab=([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(tabs, ['status', 'decide', 'monitor', 'history']);
+  assert.match(page, /aria-current="page">Status/);
+  // The header names the capability once; the tabs belong to it.
+  assert.match(page, /<header class="cap-header">\s*<p class="crumb"><a href="#\/capabilities">Capabilities<\/a> \/ Refund recommendation<\/p>\s*<h1>Refund recommendation<\/h1>/);
+  // Status carries the count of actions waiting for a person.
+  assert.match(page, /tab=status"[^>]*>Status <span class="nav-count"[^>]*>2<\/span>/);
+  // Rules and approvals open under Status.
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=rules'))), /<h3>Ask a person when<\/h3>/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=approvals'))), /data-form="decide-action"/);
   // Summary: the authority, what it means, the next level, the main concern, and whether it's ready.
   assert.match(page, /Level 2 · Draft/);
   assert.match(page, /Drafts\. A person approves every action\./);
@@ -3963,24 +3976,21 @@ test('six capability tabs: Summary, Rules, Evidence, Decision, Monitoring, Histo
   assert.match(page, /Manage stakeholders/);
   assert.match(page, /Open tasks and approvals/);
   assert.match(page, /2 refunds need a person to decide<\/a><span class="badge badge-decision">Approval/);
-  // Evidence holds results, requirements, targets, tests and model runs.
-  const ev = String(capabilityView(s, RR, new URLSearchParams('tab=evidence')));
+  // Decide holds the evidence: results, requirements, targets, tests and model runs.
+  const ev = String(capabilityView(s, RR, new URLSearchParams('tab=decide')));
   for (const v of ['Results', 'All evidence', 'Decision requirements', 'Targets', 'Tests', 'Model runs']) assert.match(ev, new RegExp(`class="chip[^"]*"[^>]*>${v}`), v);
-  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=targets'))), /class="chip is-active"[^>]*>Targets/);
-  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=requirements'))), /Minimum 40 high-value refund cases/);
-  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=tests'))), /data-action="run-tests"/);
-  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=evidence&show=runs'), { runs: { status: 'loading', runs: [] } })), /Loading model runs/);
-  // Decision: the open decision, and Approvals beside it.
-  const dec = String(capabilityView(s, RR, new URLSearchParams('tab=decision')));
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=decide&show=targets'))), /class="chip is-active"[^>]*>Targets/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=decide&show=requirements'))), /Minimum 40 high-value refund cases/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=decide&show=tests'))), /data-action="run-tests"/);
+  assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=decide&show=runs'), { runs: { status: 'loading', runs: [] } })), /Loading model runs/);
+  // Decide: the open decision.
+  const dec = String(capabilityView(s, RR, new URLSearchParams('tab=decide')));
   assert.match(dec, /Should Refund recommendation move to Level 3, Act Within Limits, with limits\?/);
-  assert.match(dec, /class="chip[^"]*"[^>]*>Approvals/);
   // History: decisions, versions and the activity link.
   const hist = String(capabilityView(s, RR, new URLSearchParams('tab=history')));
   assert.match(hist, /Authority change #02/);
   assert.match(hist, /versions\?kind=contract">Rules<\/a>/);
   assert.match(hist, /All activity for Refund recommendation/);
-  // Off Summary, the level stays visible in the page head.
-  assert.match(hist, /cap-level/);
 });
 
 test('#95: Monitoring has a Still safe? view and a Delivering value? view; the second counts what needs a look', () => {
@@ -4111,7 +4121,7 @@ test('Overview: To do, Approvals needed, Important results, Current authority, i
   // Approvals: the waiting refunds, with who can approve.
   assert.match(out, /2 refunds need a person to decide/);
   assert.match(out, /Who can approve: Maya Chen, Priya Natarajan, Daniel Okafor, Sofia Alvarez or Elena Rossi\./);
-  assert.match(out, /href="#\/capabilities\/refund-recommendation\?tab=decision&amp;show=approvals">Review the refunds/, 'the approvals link opens Decision › Approvals directly');
+  assert.match(out, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=approvals">Review the refunds/, 'the approvals link opens the waiting actions under Status directly');
   // Important results: only what changes authority.
   assert.match(out, /Not enough data yet<\/span>/);
   assert.match(out, /High-value refunds \(&gt; \$100\): 83% accurate, on only 18 cases\./);
@@ -4204,7 +4214,7 @@ test('the rules builder for a capability that already has rules points to its Ru
   const page = String(contractBuilderView(s, RR, new URLSearchParams()));
   assert.match(page, /<h1>Set up rules<\/h1>/);
   assert.match(page, /Rules are already set/);
-  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=rules">See rules</);
+  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=rules">See rules</);
   const text = page.replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'");
   assert.doesNotMatch(text, /#\d|amendment|sign-off|contract/i);
 });

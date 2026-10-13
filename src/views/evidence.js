@@ -1,7 +1,7 @@
 import * as seed from '../data/seed.js';
 import { html, badge, section, fmtDate, evidenceDetail, lede, tabIntro } from '../ui.js';
 import { capData, getCapability, current, workspaceOf, gateEvidence } from '../store/index.js';
-import { requirementsList, proposedChangeLabel } from './capability.js';
+import { requirementsList, proposedChangeLabel } from './cap-decide.js';
 import { capabilityHeading, filterBar } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';
 
@@ -35,7 +35,7 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
 
   const link = (over) => {
     const q = new URLSearchParams({ source, status, segment, risk, ...over });
-    return `#/capabilities/${cap.id}?tab=evidence&show=all&${q.toString()}`;
+    return `#/capabilities/${cap.id}?tab=decide&show=all&${q.toString()}`;
   };
 
   const counts = Object.fromEntries(STATUSES.map(([k]) => [k, all.filter((e) => e.status === k).length]));
@@ -47,7 +47,7 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
       { label: 'Segment', value: segment, options: [['all', 'All segments'], ...segments.map((s) => [s, s])], hrefFor: (s) => link({ segment: s }) },
       { label: 'Risk', value: risk, options: [['all', 'Any risk'], ...risks.map((s) => [s, `${s} risk`])], hrefFor: (s) => link({ risk: s }) },
     ],
-    clearHref: `#/capabilities/${cap.id}?tab=evidence&show=all`,
+    clearHref: `#/capabilities/${cap.id}?tab=decide&show=all`,
     active: [source, status, segment, risk].some((v) => v !== 'all'),
     showing: items.length,
     total: all.length,
@@ -69,7 +69,7 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
     : html`<div class="page-head">
     <div>
       <p class="eyebrow">${workspaceOf(state).name} · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>${capabilityHeading(state, cap, 'Evidence for', (id) => `#/capabilities/${id}?tab=evidence&show=all`)}</h1>
+      <h1>${capabilityHeading(state, cap, 'Evidence for', (id) => `#/capabilities/${id}?tab=decide&show=all`)}</h1>
       ${lede(`What we know so far about how ${cap.name} performs.`, 'Evidence comes from tests, the pilot, reviewer decisions, day-to-day operations, cost, incidents, user feedback and stakeholder reviews. Each item links back to where it came from.')}
     </div>
   </div>`;
