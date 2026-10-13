@@ -23,6 +23,7 @@ export const KIND_TONE = {
   decision: 'neutral',
   test: 'neutral',
   'evidence-imported': 'neutral',
+  'evidence-source': 'neutral',
 };
 
 // A change to a versioned object says which object it changed.

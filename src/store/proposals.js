@@ -6,7 +6,7 @@ import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, r
 import { amend } from './capabilities.js';
 import { SECTION_KEYS, contractValueChecks } from './contract.js';
 import { requirementsNow, judgeMeasure } from './measures.js';
-import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS } from './evidence.js';
+import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS, carryMeasure, unchangedMeasuresDropped } from './evidence.js';
 
 // Assumption, not yet confirmed (decision 7): the same sign-off applies to
 // contract edits once a pilot has started. One named setting so it can be
@@ -118,28 +118,16 @@ export function cleanContractValue(value) {
 export function cleanAmendmentValue(state, capabilityId, kind, value) {
   if (kind === 'contract') return cleanContractValue(value);
   if (kind === 'stakeholders') return cleanStakeholders(state, value);
-  const c = cleanCriteria(value && value.criteria);
-  const r = cleanRequirements(value && value.requirements);
+  const c = cleanCriteria(unchangedMeasuresDropped(value && value.criteria, current(state, capabilityId, 'criteria')));
+  const r = cleanRequirements(unchangedMeasuresDropped(value && value.requirements, current(state, capabilityId, 'requirements')));
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
   if (missingCore.length) throw new Error(`These rows are required. You can change their numbers but not remove them: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
   const baseC = current(state, capabilityId, 'criteria');
   const baseR = current(state, capabilityId, 'requirements');
-  const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? withMeasure({ ...b, name: x.name, target: x.target, note: x.note }, b, x, x.target, x.name) : x; });
-  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); return b ? withMeasure({ ...b, text: x.text }, b, x, x.text, x.text) : x; });
+  const unmeasured = ({ measure, ...rest }) => rest;
+  const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? carryMeasure({ ...unmeasured(b), name: x.name, target: x.target, note: x.note, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.target, x.name) : x; });
+  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); return b ? carryMeasure({ ...unmeasured(b), text: x.text, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text) : x; });
   return { criteria, requirements };
-}
-
-// A measured row (#120) keeps its measure when a person edits only the
-// words: the measure's number follows the wording's number, in the same
-// direction, so the two never disagree. A submitted measure is used as sent
-// (cleanCriteria has already checked it against the words).
-function withMeasure(row, base, submitted, words, label) {
-  if (submitted.measure) return { ...row, measure: submitted.measure };
-  if (!base.measure || base.measure.op === '=') return row;
-  const t = threshold(words);
-  const atLeast = base.measure.op === '>=' || base.measure.op === '>';
-  if (!t || t.atLeast !== atLeast) throw new Error(`"${label}" is measured (${base.measure.op} ${base.measure.value}), so its wording must keep a number in the same direction.`);
-  return { ...row, measure: { ...base.measure, value: t.n } };
 }
 
 // Re-evaluate a requirement's "met" when its threshold changed and the current

@@ -68,7 +68,7 @@ test('imported evidence judges the measured targets and requirements; unmeasured
   assert.equal(tgt(s, id, 'quality-ambiguous').status, 'pass');
   assert.equal(tgt(s, id, 'speed').status, 'pending', 'an unmeasured target is untouched');
   assert.deepEqual(['min-cases', 'accuracy', 'severe', 'no-false-certainty'].map((r) => req(s, id, r).met), [true, true, true, true]);
-  assert.equal(req(s, id, 'min-cases').current, '60 cases');
+  assert.equal(req(s, id, 'min-cases').current, '60');
   const r = readiness(s, id);
   assert.equal(r.met, 4);
   assert.deepEqual(r.unmet.map((x) => x.id), ['override', 'incidents'], 'rows nothing measures still need a person to judge them');
@@ -94,7 +94,7 @@ test('a weak segment stays visible and fails on its own, however good the overal
   assert.match(ev, /evidence-item evidence-fail">[\s\S]*?Ambiguous/);
   // Decide lists it under its metric, marked weak.
   const h = String(capabilityView(s, id, new URLSearchParams('tab=decide')));
-  assert.match(h, /Imported results[\s\S]*?1 run from Src · 1 weak/);
+  assert.match(h, /Evidence from sources[\s\S]*?1 source: Src · 1 weak/);
   assert.match(h, /<ul class="plain-list imported-segs"><li><span class="decide-weak">Ambiguous: 58\.3% \(7 of 12\) \(not met\)<\/span><\/li><\/ul>/);
   // Fewer ambiguous cases than the target's own minimum: not enough data, not a pass.
   const few = importEvidence(s0, env(id, { measurements: [{ metric: 'quality', type: 'rate', passed: 6, total: 6, segment: 'Ambiguous' }] }));
@@ -185,7 +185,7 @@ test('after results, a measured row\'s number moves with its wording, and nothin
   assert.equal(tighteningOnly(base, edit((c) => (c.id === 'quality' ? { ...c, measure: { ...M.quality, value: 95 } } : c))).ok, false);
   // Wording that drops the number can't keep a measure.
   assert.throws(() => proposeAmendment(s, id, 'criteria', { value: { criteria: base.criteria.map(({ measure, ...c }) => (c.id === 'quality' ? { ...c, target: 'Mostly correct' } : c)), requirements: base.requirements.map(({ measure, ...r }) => r) }, by: 'maya', reason: 'Simplify the wording of the bar.' }),
-    /"Quality" is measured \(>= 85\), so its wording must keep a number in the same direction\./);
+    /"Quality" is measured \(>= 85\), so its wording must keep a number to check\./);
 });
 
 // A safety limit measured from imported production evidence.

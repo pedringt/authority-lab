@@ -5,6 +5,8 @@ import * as seed from '../data/seed.js';
 import { isSurfaced } from './selectors.js';
 import { snapshotPerson } from './people.js';
 import { callTool } from './tools.js';
+import { importEvidence } from './external.js';
+import { MANUAL_SOURCE } from './sources.js';
 
 export const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -117,6 +119,9 @@ export function initialState() {
     // chargebacks, the refund ledger and escalations. The gate reads facts
     // only from here.
     systems: clone(seed.systems),
+    // Evidence sources connected to this workspace (#126). The built-in ones
+    // (Authority Lab tests, manual review) are added by the selector.
+    evidenceSources: clone(seed.exampleEvidenceSources),
     // "Waiting for a person" (A4): actions the gate sent to a person.
     actionQueue: [],
     // Every gate check and every decision on a waiting action (A5).
@@ -136,8 +141,10 @@ export function initialState() {
     activity: clone(seed.activity),
     alerts: [],
   };
+  // Seeded example evidence (#126) goes through the evidence contract.
+  const withEvidence = seed.exampleEvidence.reduce((st, x) => importEvidence(st, x.envelope, { via: 'seed', sourceId: x.recordedBy ? MANUAL_SOURCE : null, recordedBy: x.recordedBy ? snapshotPerson(seedState, x.recordedBy) : null }), base);
   // Seeded requests go through the real gate, so the queue holds exactly what it would.
-  return seed.waitingRequests.reduce((st, r) => callTool(st, r.capabilityId, r.call, { source: 'seeded' }).state, base);
+  return seed.waitingRequests.reduce((st, r) => callTool(st, r.capabilityId, r.call, { source: 'seeded' }).state, withEvidence);
 }
 
 

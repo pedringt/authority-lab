@@ -16,6 +16,9 @@ const refLink = (r, fallback = 'View source') => (r && r.url ? html`<a href="${r
 // The origin label on an evidence card.
 export function fromBadge(e, seededIds) {
   const from = evidenceFrom(e, seededIds);
+  // Seeded examples (#126) are demo data, never mistaken for a live import.
+  if (e.demo) return html`<span class="badge badge-neutral" title="Example evidence in the fictional demo, not a live import.">Demo data · ${from === 'manual' ? `recorded by ${e.recordedBy ? e.recordedBy.name : 'a person'}` : `from ${e.external.system}`}</span>`;
+  if (from === 'manual') return html`<span class="badge badge-imported" title="Recorded by hand and kept as recorded. It can't be edited.">Recorded by ${e.recordedBy ? e.recordedBy.name : 'a person'}</span>`;
   if (from === 'imported') return html`<span class="badge badge-imported" title="Sent by ${e.external.system}; checked and imported. It can't be edited.">Imported from ${e.external.system}</span>`;
   if (from === 'calculated') return '';
   return html`<span class="badge badge-neutral">${FROM_LABELS[from]}</span>`;
@@ -35,10 +38,10 @@ export function provenanceDetails(state, e) {
   const imp = findImport(state, x.importId);
   const env = imp ? imp.envelope : {};
   return html`<details class="provenance"><summary>Where this came from</summary>${kv([
-    ['Source', `${x.system} · ${x.capability}${x.environment ? ` (${x.environment})` : ''}`],
-    ['Run', html`${x.importId} · ${KIND_WORDS[x.kind]}${x.reference ? html` · ${refLink(x.reference)}` : ''}`],
+    ['Source', e.from === 'manual' ? html`Manual review, recorded by ${e.recordedBy ? `${e.recordedBy.name}${e.recordedBy.title ? `, ${e.recordedBy.title}` : ''}` : 'a person'}` : `${x.system} · ${x.capability}${x.environment ? ` (${x.environment})` : ''}`],
+    ['Run', html`${x.importId} · ${e.from === 'manual' ? (x.kind === 'eval' ? 'on test cases' : 'in real use') : KIND_WORDS[x.kind]}${x.reference ? html` · ${refLink(x.reference)}` : ''}`],
     ['Observed', env.observedAt ? env.observedAt.replace('T', ' ') : fmtDate(e.date)],
-    ['Imported', imp ? fmtDate(imp.importedOn) : '?'],
+    [e.from === 'manual' ? 'Recorded' : 'Imported', imp ? fmtDate(imp.importedOn) : '?'],
     ['Configuration', configLine(x.config) || html`<span class="muted">No versions reported.</span>`],
     ...(e.measure && e.measure.metric ? [['Metric', `${e.measure.metric}${e.measure.segment ? ` · ${e.measure.segment}` : ''}${e.measure.severity ? ` · ${e.measure.severity} severity` : ''}`]] : []),
   ])}</details>`;

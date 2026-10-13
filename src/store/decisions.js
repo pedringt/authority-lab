@@ -2,7 +2,7 @@
 // scope copy, authorizing, and proposing a new level.
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
-import { versionsInForce, proposedAuthority, decisionRequired, levelName, authorityLabel, readiness, testSummary } from './selectors.js';
+import { versionsInForce, proposedAuthority, decisionRequired, levelName, authorityLabel, readiness, testSummary, performanceResultsSeen } from './selectors.js';
 import { people, snapshotPerson, requireActive, isActivePerson } from './people.js';
 import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
@@ -369,8 +369,18 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   return s;
 }
 
+// Evidence from real use (#126): a pilot, or any production result, imported
+// or recorded by hand. Evals and in-app tests are not real use.
+export function realUseEvidence(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  return Boolean(d.pilot) || d.evidence.some((e) => e.external && e.external.kind === 'production');
+}
+
 // Open an authority decision for a capability: propose the next level. Needs
-// a recorded test run. Used to take a new capability to Draft (its second record).
+// a measured result from any source: an in-app test run, an imported result
+// or one recorded by hand (Paige, 2026-10-13, #126; it was the in-app tests).
+// Level 3 needs real-use evidence: a pilot, or production results from any
+// source. Used to take a new capability to Draft (its second record).
 export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error('This capability no longer exists.');
@@ -379,8 +389,8 @@ export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   if (cap.status === 'not-delegated') throw new Error('This work is not delegated by design: it was deliberately kept with people, so the AI has no authority here.');
   const target = Number(level);
   if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
-  if (!capData(state, capabilityId).testRun.lastRun) throw new Error('Run the test suite before proposing more authority.');
-  if (target >= 3 && !capData(state, capabilityId).pilot) throw new Error('Level 3 needs pilot evidence. Run a pilot at Draft first, so there are real results to look at.');
+  if (!performanceResultsSeen(state, capabilityId)) throw new Error('There is no evidence yet. Run the tests, record a result, or have a connected source send results, then propose more authority.');
+  if (target >= 3 && !realUseEvidence(state, capabilityId)) throw new Error('Level 3 needs evidence from real use: a pilot at Draft, or production results from a connected source or recorded by hand.');
   const d = capData(state, capabilityId);
   let s = updateCap(state, capabilityId, { decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
   return logEvent(s, {

@@ -107,18 +107,34 @@ export function defaultsFor(state, capabilityId) {
 
 export const slugId = (text, i) => (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `item-${i + 1}`;
 
+// The comparison a row's wording states: "≥ 92%", "at most 0", "< 3%",
+// "Minimum 200 pilot cases", and "No unresolved critical incidents" (at most
+// 0). null when the wording names no number.
+export function barFromWords(text) {
+  const t = String(text || '');
+  const m = t.match(/(≥|>=|≤|<=|<|>|=|\bminimum\b|\bat least\b|\bmaximum\b|\bat most\b|\bno more than\b|\bexactly\b)\s*\$?\s*(\d+(?:\.\d+)?)/i);
+  if (m) {
+    const op = { '≥': '>=', '>=': '>=', minimum: '>=', 'at least': '>=', '≤': '<=', '<=': '<=', maximum: '<=', 'at most': '<=', 'no more than': '<=', '<': '<', '>': '>', '=': '=', exactly: '=' }[m[1].toLowerCase()];
+    return { op, value: Number(m[2]) };
+  }
+  if (/^\s*(no|zero)\b/i.test(t)) return { op: '<=', value: 0 };
+  return null;
+}
+
 // A measured row (#120) says its bar in words too, and the two must agree,
 // so a person reading the row sees the bar software checks and the tightening
 // rule (which reads the words) sees the same number.
 function cleanMeasure(measure, words, what) {
-  if (measure === undefined || measure === null) return {};
+  if (measure === undefined) return {};
+  // null removes a mapping explicitly (Configure evidence, #126).
+  if (measure === null) return { measure: null };
   const problems = measureProblems(measure);
   if (problems.length) throw new Error(`${what}: ${problems.join(' ')}`);
   if (measure.op !== '=') {
-    const t = threshold(words);
+    const t = barFromWords(words);
     if (!t) throw new Error(`${what} is measured, so its wording has to name the number too (for example "≥ ${measure.value}").`);
-    const atLeast = measure.op === '>=' || measure.op === '>';
-    if (t.atLeast !== atLeast || t.n !== measure.value) throw new Error(`${what} says "${words}" but its measure checks ${measure.op} ${measure.value}. Make them agree.`);
+    const atLeast = (op) => op === '>=' || op === '>';
+    if (atLeast(t.op) !== atLeast(measure.op) || t.value !== measure.value) throw new Error(`${what} says "${words}" but its measure checks ${measure.op} ${measure.value}. Make them agree.`);
   }
   return { measure: { ...measure } };
 }
@@ -148,6 +164,45 @@ export function cleanRequirements(items) {
     seen.add(id);
     return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
   });
+}
+
+// A measured row keeps its measure when a form edits only its words (the
+// targets editor doesn't send measures): the measure's number follows the
+// wording's number, in the same direction, so the two never disagree. A row
+// that names its measure uses it; \`measure: null\` removes it. Shared by the
+// targets editor and proposed target changes.
+export function carryMeasure(row, base, words, label) {
+  if (Object.hasOwn(row, 'measure')) {
+    if (row.measure !== null) return row;
+    const { measure, ...rest } = row;
+    return rest;
+  }
+  if (!base || !base.measure) return row;
+  // The measure follows the wording entirely (comparison and number); the
+  // tightening rule, which reads the wording, decides whether it needs approval.
+  const t = barFromWords(words);
+  if (!t) throw new Error(`"${label}" is measured (${base.measure.op} ${base.measure.value}), so its wording must keep a number to check. To stop measuring it, remove its evidence under Configure evidence.`);
+  return { ...row, measure: { ...base.measure, op: t.op, value: t.value } };
+}
+
+// A submitted row that repeats its stored measure unchanged (code that copies
+// a row and edits only its words) hasn't changed how it is measured: drop the
+// repeat so carryMeasure moves the number with the words.
+const sameMeasure = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+export function unchangedMeasuresDropped(rows, baseRows) {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map((r) => {
+    const b = (baseRows || []).find((x) => x.id === r.id);
+    if (r && r.measure && b && b.measure && sameMeasure(r.measure, b.measure)) { const { measure, ...rest } = r; return rest; }
+    return r;
+  });
+}
+
+// The next evidence id, "EV-nn": one past the highest in use. Counting the
+// list would collide once imported items (named by their run) are in it.
+export function nextEvidenceId(list) {
+  const top = list.reduce((n, e) => { const m = /^EV-(\d+)$/.exec(e.id || ''); return m ? Math.max(n, Number(m[1])) : n; }, 0);
+  return `EV-${String(top + 1).padStart(2, '0')}`;
 }
 
 // Rows that can be adjusted but never removed.
@@ -189,8 +244,10 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
   requireActive(state, by, 'save the targets');
   if (criteriaLocked(state, capabilityId)) throw new Error('These targets can\'t be changed directly now that results exist. Propose a change instead.');
-  const c = cleanCriteria(criteria);
-  const r = cleanRequirements(requirements);
+  const baseC = current(state, capabilityId, 'criteria');
+  const baseR = current(state, capabilityId, 'requirements');
+  const c = cleanCriteria(unchangedMeasuresDropped(criteria, baseC)).map((x) => carryMeasure(x, baseC.find((b) => b.id === x.id), x.target, x.name));
+  const r = cleanRequirements(unchangedMeasuresDropped(requirements, baseR)).map((x) => carryMeasure(x, baseR.find((b) => b.id === x.id), x.text, x.text));
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
   if (missingCore.length) throw new Error(`You can change these but not remove them: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
   const defaults = defaultsFor(state, capabilityId);

@@ -58,6 +58,8 @@ test('Decide step 2: one headline, the top gap, a serious failure, and one line 
   assert.deepEqual(lines(page), {
     Checks: '5 of 6 met · 2 targets not met yet',
     Tests: '24 of 26 passed',
+    // #126: the example connected sources and Daniel's review, with the weak high-value slice.
+    'Evidence from sources': '4 sources: Support platform, Ticketing, Eval harness, Manual review · 1 weak',
     'Pilot results': '218 cases, 94% accurate',
     'Model runs': 'recorded, checked against the rules',
     'Stakeholder positions': 'not unanimous',
@@ -215,7 +217,8 @@ test('Decide after recording: what was decided, who and when, what now runs auto
 test('Decide with no decision open: what has to happen first, the evidence, and no form', () => {
   const s = initialState();
   const tc = decide(s, TC);
-  assert.match(tc, /<h2>No decision is open<\/h2><p>Run the tests first\. Then a move to Level 4, Broad Delegation, can be proposed\./);
+  // Its measured evidence (seeded) is enough to propose (#126): no in-app run needed.
+  assert.match(tc, /<h2>No decision is open<\/h2><p>No one has proposed a move to Level 4, Broad Delegation, yet\./);
   assert.match(tc, /<h2>What do we know\?<\/h2>/);
   assert.match(tc, /<p class="decide-big">Ready: all 5 checks met<\/p>/);
   assert.doesNotMatch(tc, /data-action="(authorize|select-option|propose-authority)"/);
