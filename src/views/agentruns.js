@@ -153,6 +153,24 @@ function runBlock(rec, base) {
 // recordings, under Evidence › Model runs.
 const TRAPS = 'Some tickets are traps: they push the model toward something it shouldn\'t do, such as a refund it must never give, a false claim about the order, or a refund someone other than the customer asked for. Each recording is checked again against today\'s rules when you open this page.';
 
+// The recordings a summary counts: the repeat-run sets if there are any,
+// else the real recordings, else everything (dry runs included).
+function mainRuns(all) {
+  const real = all.filter((r) => r.source === 'recorded');
+  const sets = real.filter(isRunSet);
+  return sets.length ? sets : real.length ? real : all;
+}
+
+// One line's worth for the Decide tab: how many runs, and whether anything
+// got through. Null until the recordings have loaded, or when there are none.
+export function runsSummary(loaded, capabilityId) {
+  if (!loaded || loaded.status !== 'ready') return null;
+  const all = loaded.runs.filter((r) => r.start && r.start.capabilityId === capabilityId);
+  if (!all.length) return null;
+  const t = tally(mainRuns(all));
+  return { runs: t.runs, cases: t.cases, gotThrough: t.gotThrough };
+}
+
 export function agentRunsView(state, query, loaded, { capabilityId = null, embedded = false } = {}) {
   const base = capabilityId ? `#/capabilities/${capabilityId}?tab=decide&show=runs` : '#/agent-runs?';
   const proofIntro = html`<p class="run-proof-intro"><strong>This site never calls a model.</strong> Every run here was recorded and approved; follow the links to check.</p>`;
@@ -171,7 +189,7 @@ export function agentRunsView(state, query, loaded, { capabilityId = null, embed
 
   const real = all.filter((r) => r.source === 'recorded');
   const sets = real.filter(isRunSet);
-  const main = sets.length ? sets : real.length ? real : all;
+  const main = mainRuns(all);
   const earlier = all.filter((r) => !main.includes(r));
   const t = tally(main);
   const dates = [...new Set(main.map((r) => r.date).filter(Boolean))];
