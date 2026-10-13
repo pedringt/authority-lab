@@ -7,13 +7,10 @@
 // Rules, approvals, evidence, tests and model runs live under these. Each tab
 // is its own module; old tab names are rewritten in routes.js.
 
-import { html, raw, notice, subNav } from '../ui.js';
+import { html, raw, notice } from '../ui.js';
 import { getCapability, capData, waitingActions } from '../store/index.js';
-import { testsView } from './tests.js';
-import { evidenceView } from './evidence.js';
-import { agentRunsView } from './agentruns.js';
 import { summaryTab, contractTab, waitingTab } from './cap-status.js';
-import { decisionTab, gateActivityCard, criteriaTab, requirementsTab, evidenceTab } from './cap-decide.js';
+import { decideTab } from './cap-decide.js';
 import { monitoringTab } from './cap-monitor.js';
 import { historyTab } from './cap-history.js';
 import { newTab } from '../routes.js';
@@ -24,8 +21,6 @@ export const TABS = [
   ['monitor', 'Monitor'],
   ['history', 'History'],
 ];
-// Supporting evidence under Decide, until Decide folds it into one flow.
-const EVIDENCE_VIEWS = [['results', 'Results'], ['all', 'All evidence'], ['requirements', 'Decision requirements'], ['targets', 'Targets'], ['tests', 'Tests'], ['runs', 'Model runs']];
 
 export function capabilityView(state, id, query, { runs = null } = {}) {
   const cap = getCapability(state, id);
@@ -41,20 +36,8 @@ export function capabilityView(state, id, query, { runs = null } = {}) {
 
   let body;
   switch (tab) {
-    case 'decide': {
-      const v = EVIDENCE_VIEWS.some(([k]) => k === show) ? show : null;
-      const views = subNav([{ href: `${base}?tab=decide`, label: 'Decision', active: !v }, ...EVIDENCE_VIEWS.map(([k, label]) => ({ href: `${base}?tab=decide&show=${k}`, label, active: v === k }))], 'Decide views');
-      const inner = !v ? decisionTab(state, cap) : {
-        results: () => html`${evidenceTab(state, cap, d)}${gateActivityCard(state, cap)}`,
-        all: () => evidenceView(state, cap.id, query, { embedded: true }),
-        requirements: () => requirementsTab(state, cap),
-        targets: () => criteriaTab(state, cap),
-        tests: () => testsView(state, cap.id, query, { embedded: true }),
-        runs: () => agentRunsView(state, query, runs, { capabilityId: cap.id, embedded: true }),
-      }[v]();
-      body = html`${views}${inner}`;
-      break;
-    }
+    // One vertical flow; the full evidence views open through show=.
+    case 'decide': body = decideTab(state, cap, query, show, { runs }); break;
     case 'monitor': body = monitoringTab(state, cap, d, show); break;
     case 'history': body = historyTab(state, cap); break;
     default:
