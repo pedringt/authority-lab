@@ -16,6 +16,7 @@
 import { capData, getCapability } from './state.js';
 import { current } from './selectors.js';
 import { importedStanding, measurementSample } from './external.js';
+import { sourceOfItem, findSource, testMeasurements, TESTS_SOURCE } from './sources.js';
 
 // The default minimum production sample before a production result is judged
 // (Paige, 2026-10-12): the same 20 cases as rollout goals. A measure's own
@@ -27,7 +28,9 @@ export const MIN_PRODUCTION_SAMPLE = 20;
 // and `value` read the number; `sample` reads the number of cases.
 export const MEASURE_STATS = ['rate', 'fail-rate', 'share', 'count', 'value', 'sample'];
 export const MEASURE_OPS = ['>=', '>', '<=', '<', '='];
-const KEYS = ['metric', 'segment', 'stat', 'op', 'value', 'minSample', 'kind'];
+// `source` (#126) names the evidence source the metric comes from; without it,
+// any source's result for the metric counts.
+const KEYS = ['source', 'metric', 'segment', 'stat', 'op', 'value', 'minSample', 'kind'];
 const PCT = new Set(['rate', 'fail-rate', 'share']);
 
 export function measureProblems(m) {
@@ -42,6 +45,7 @@ export function measureProblems(m) {
   if (typeof m.value !== 'number' || !Number.isFinite(m.value)) out.push('A measure needs a number to compare with.');
   if (m.minSample !== undefined && (!Number.isInteger(m.minSample) || m.minSample < 1)) out.push('A measure\'s minimum sample must be a whole number of cases.');
   if (m.kind !== undefined && !['eval', 'production'].includes(m.kind)) out.push('A measure\'s kind must be eval or production.');
+  if (m.source !== undefined && (typeof m.source !== 'string' || !/^[a-z0-9][a-z0-9-]{0,59}$/.test(m.source))) out.push('A measure\'s source must be an evidence source id.');
   return out;
 }
 
@@ -65,11 +69,19 @@ const casesText = (n) => `${n} case${n === 1 ? '' : 's'}`;
 // segment, measured under its stream's current configuration (#119), of the
 // right kind when the measure names one.
 export function measuredEvidence(state, capabilityId, measure) {
+  // Authority Lab's own tests are read from the recorded run (#126).
+  if (measure.source === TESTS_SOURCE) {
+    const m = testMeasurements(state, capabilityId).find((x) => x.metric === measure.metric && (x.segment || null) === (measure.segment || null));
+    if (!m || (measure.kind && measure.kind !== 'eval')) return null;
+    const { date, label, ...measured } = m;
+    return { id: `tests:${capabilityId}#${m.metric}${m.segment ? `@${m.segment}` : ''}`, date, metric: label, sourceId: TESTS_SOURCE, measure: measured, external: { importId: `test run on ${date}`, kind: 'eval' } };
+  }
   const standing = importedStanding(state, capabilityId);
   const seg = measure.segment || null;
   const items = capData(state, capabilityId).evidence.filter((e) => e.external && e.measure
     && e.measure.metric === measure.metric && (e.measure.segment || null) === seg
     && (!measure.kind || e.external.kind === measure.kind)
+    && (!measure.source || sourceOfItem(e) === measure.source)
     && (standing.get(e.id) || {}).standing === 'current');
   return items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0] || null;
 }
@@ -167,4 +179,66 @@ export function importedRuleReading(state, capabilityId, rule) {
   const needed = m.minSample || (rule.window && rule.window.cases) || MIN_PRODUCTION_SAMPLE;
   const early = rule.threshold && rule.threshold.type === 'pct' && (sample === null || sample < needed);
   return { value: round(value), sample, needed, early, evidenceId: e.id, importId: e.external.importId };
+}
+
+// ---------------------------------------------------------------------------
+// Evidence coverage (#126): which rows have enough evidence to judge, apart
+// from whether they pass. "4 of 5 decision requirements have sufficient
+// evidence" is about coverage; "X of Y checks met" is readiness.
+// ---------------------------------------------------------------------------
+
+export const COVERAGE_WORDS = {
+  covered: 'Sufficient evidence',
+  stale: 'Stale',
+  insufficient: 'Needs more cases',
+  'no-data': 'No results yet',
+  'no-source': 'No source mapped',
+};
+
+const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+
+// One row's coverage. A row with no measure has no source mapped: a person
+// judges it, as before. Stale evidence is older than its source's freshness
+// window; it still counts (Paige, 2026-10-13), it's only flagged.
+export function rowCoverage(state, capabilityId, row) {
+  if (!row.measure) return { status: 'no-source', mapped: false };
+  const j = judgeMeasure(state, capabilityId, row.measure);
+  const source = row.measure.source ? findSource(state, row.measure.source) : null;
+  if (j.status === 'pending') return { status: 'no-data', mapped: true, judged: j, source };
+  if (j.status === 'insufficient' || j.status === 'too-early') return { status: 'insufficient', mapped: true, judged: j, source };
+  const item = capData(state, capabilityId).evidence.find((e) => e.id === j.evidenceId);
+  const src = source || (item ? findSource(state, sourceOfItem(item)) : null);
+  const fresh = src ? src.freshForDays : null;
+  const age = j.date ? daysBetween(j.date, state.today) : null;
+  const stale = fresh !== null && age !== null && age > fresh;
+  return { status: stale ? 'stale' : 'covered', mapped: true, judged: j, source: src, age, stale, passing: j.status === 'pass' };
+}
+
+export function evidenceCoverage(state, capabilityId) {
+  const reqs = requirementsNow(state, capabilityId).map((r) => ({ kind: 'requirement', id: r.id, label: r.text, row: r, ...rowCoverage(state, capabilityId, r) }));
+  const targets = targetsNow(state, capabilityId).map((c) => ({ kind: 'target', id: c.id, label: c.name, row: c, ...rowCoverage(state, capabilityId, c) }));
+  const count = (list, ...st) => list.filter((x) => st.includes(x.status)).length;
+  return {
+    requirements: reqs,
+    targets,
+    // Stale evidence still counts as evidence; it is flagged, not discarded.
+    sufficient: count(reqs, 'covered', 'stale'),
+    total: reqs.length,
+    mapped: reqs.filter((x) => x.mapped).length,
+    gaps: reqs.filter((x) => !['covered'].includes(x.status)),
+  };
+}
+
+// The coverage headline: "4 of 5 decision requirements have sufficient
+// evidence; Minimum 40 high-value cases still needs more cases (18 of 40)."
+export function coverageText(cov) {
+  if (!cov.total) return 'No decision requirements yet.';
+  const head = `${cov.sufficient} of ${cov.total} decision requirement${cov.total === 1 ? ' has' : 's have'} sufficient evidence`;
+  const gap = cov.gaps.find((g) => g.status === 'insufficient') || cov.gaps.find((g) => g.status === 'no-data') || cov.gaps.find((g) => g.status === 'no-source') || cov.gaps.find((g) => g.status === 'stale');
+  if (!gap) return `${head}.`;
+  const why = gap.status === 'insufficient' ? `still needs more cases (${gap.judged.text})`
+    : gap.status === 'no-data' ? 'has no results yet'
+      : gap.status === 'stale' ? `has stale evidence (${gap.age} days old)`
+        : 'has no evidence source mapped';
+  return `${head}; "${gap.label}" ${why}.`;
 }

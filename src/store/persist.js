@@ -13,6 +13,7 @@ import { startEmpty, setUpWorkspace, renameWorkspace } from './workspace.js';
 import { approveAction, rejectAction } from './queue.js';
 import { importEvidenceFiles } from './external.js';
 import { recordManualEvidence } from './sources.js';
+import { mapEvidence } from './configure.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
@@ -84,6 +85,7 @@ export const ACTIONS = {
   setRoiAssumptions,
   importEvidenceFiles: (state, files) => importEvidenceFiles(state, files).state,
   recordManualEvidence,
+  mapEvidence,
   reset,
 };
 

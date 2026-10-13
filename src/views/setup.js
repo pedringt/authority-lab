@@ -1,7 +1,6 @@
 import { html, badge, notice, selectField, person, fmtDate } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, RISK_OPTIONS, authorityLabel, decisionRequired, lastDecisionId, activePeople, workflowOf, defaultsFor } from '../store/index.js';
+import { getCapability, capData, current, versionList, actor, RISK_OPTIONS, authorityLabel, decisionRequired, lastDecisionId, activePeople, workflowOf, defaultsFor, performanceResultsSeen, evidenceCoverage, coverageText } from '../store/index.js';
 import { pickTemplate } from '../data/contract-templates.js';
-import { starterScenarios } from '../data/scenario-templates.js';
 
 // The three risk questions, answered in plain words. The stored values are
 // logic keys (RISK_OPTIONS), so only the labels change here.
@@ -80,12 +79,13 @@ export function addCapabilityView(state, query) {
   </form>`;
 }
 
-// The seven setup steps, shown as three stages. The steps, their order and
-// what gates what are unchanged; the stages only group them.
+// The setup steps, shown as three stages (#126, Paige 2026-10-13): Define;
+// Evidence (what good looks like, which evidence judges it, what's covered,
+// and filling the gaps, where tests are one way among several); Decide.
 export const SETUP_STAGES = [
   { id: 'define', title: 'Define', text: 'What it does, what could go wrong, and its boundaries.' },
-  { id: 'test', title: 'Test', text: 'What good looks like, and whether it gets there.' },
-  { id: 'decide', title: 'Decide', text: 'Who decides, the evidence, and the authority decision.' },
+  { id: 'evidence', title: 'Evidence', text: 'What good looks like, which evidence shows it, and what is still missing.' },
+  { id: 'decide', title: 'Decide', text: 'Who decides, and the authority decision.' },
 ];
 
 const EXPOSURE_WORD = { 'Internal only': 'internal', 'Customer-facing': 'customer-facing', 'Financial / consequential': 'financial' };
@@ -108,29 +108,31 @@ export function setupSteps(state, capabilityId) {
   const contractDone = versionList(state, capabilityId, 'contract').length > 0;
   const criteriaDone = versionList(state, capabilityId, 'criteria').length > 0 && versionList(state, capabilityId, 'requirements').length > 0;
   const stakeholdersDone = current(state, capabilityId, 'stakeholders').length > 0;
-  const scenariosDone = d.scenarios.length > 0;
-  const testsDone = Boolean(d.testRun.lastRun);
+  // Any measured result counts, from any source (#126): tests are one way.
+  const hasResults = performanceResultsSeen(state, capabilityId);
+  const cov = evidenceCoverage(state, capabilityId);
   const note = todayNote(state, cap);
   const draft = d.contractDraft && !d.contractDraft.finalizedAt;
   const template = pickTemplate(risk);
   const ruleCount = Object.values(template.sections).reduce((n, lines) => n + lines.length, 0);
   const defaults = defaultsFor(state, capabilityId);
-  const starters = starterScenarios(cap).length;
   const steps = [
     { id: 'define', stage: 'define', title: 'Say what it does and what could go wrong', done: true, text: `${cap.name} has an owner and a risk profile, and starts at ${authorityLabel(cap.authority)}.${note ? ` ${note}` : ''}`, link: `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: 'Risk profile' },
     { id: 'contract', stage: 'define', title: 'Set the boundaries', done: contractDone, text: contractDone ? 'What it may do on its own, when it asks a person, what it must never do, and when its autonomy is reduced automatically.' : `These are the default safety limits for this risk profile: ${plural(ruleCount, 'starter rule')} for a ${riskPhrase(risk)} capability. Review them, change what doesn't fit, then finalize.${draft ? ' You have a draft in progress.' : ''}`, link: `#/capabilities/${cap.id}/contract/build`, linkText: draft ? 'Continue the draft' : contractDone ? 'Rules' : 'Review the rules' },
-    { id: 'criteria', stage: 'test', title: 'Set what good looks like', done: criteriaDone, text: criteriaDone ? 'Targets say what good looks like. Decision requirements say what must be true before authority changes. Both lock when the first test runs.' : `For a ${riskPhrase(risk)} capability, we recommend these checks: ${plural(defaults.criteria.length, 'target')} and ${plural(defaults.requirements.length, 'decision requirement')}. They lock when the first test runs, so results can't move the bar.`, link: `#/capabilities/${cap.id}/criteria/edit`, linkText: criteriaDone ? 'Targets' : 'Review the checks' },
-    { id: 'stakeholders', stage: 'decide', title: 'Name who decides', done: stakeholdersDone, text: stakeholdersDone ? 'Their views are recorded with each authority decision, and they can approve changes.' : 'The people whose views are recorded with each authority decision; they can also approve changes. Name them before the first test run: once results are in, changing who is involved needs sign-off.', link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: stakeholdersDone ? 'Stakeholders' : 'Name the people' },
-    { id: 'scenarios', stage: 'test', title: 'Add test cases', done: scenariosDone, text: scenariosDone ? `${plural(d.scenarios.length, 'test case')} in the library.` : `We prepared ${plural(starters, 'starter test case')}: typical, ambiguous, adversarial, high-impact and edge cases. Review them and add your own.`, link: `#/capabilities/${cap.id}/scenarios/edit`, linkText: scenariosDone ? 'Test cases' : 'Review the test cases' },
-    { id: 'tests', stage: 'test', title: 'Run the tests', done: testsDone, text: `The first run produces the first evidence and locks the targets and decision requirements.${stakeholdersDone ? '' : ' Name who decides before this run.'}`, link: `#/capabilities/${cap.id}?tab=decide&show=tests`, linkText: 'Tests', needs: scenariosDone && criteriaDone },
-    { id: 'decision', stage: 'decide', title: 'Make the first authority decision', done: Boolean(lastDecisionId(state, cap.id) && cap.authority.level >= 2), text: note ? `Review the evidence, then decide. This is where what it already does today is reviewed and formally approved, one level at a time, starting with Draft (Level 2). A person decides; Authority Lab only recommends.` : 'Review the evidence, then decide. Usually a move to Draft (Level 2) for a small pilot. A person decides; Authority Lab only recommends.', link: decisionRequired(state, cap.id) ? `#/capabilities/${cap.id}/decision` : null, linkText: 'Authority decision', needs: testsDone, propose: testsDone && !decisionRequired(state, cap.id) && cap.authority.level < 2 ? cap.authority.level + 1 : null },
+    { id: 'criteria', stage: 'evidence', title: 'Set what good looks like', done: criteriaDone, text: criteriaDone ? 'Targets say what good looks like. Decision requirements say what must be true before authority changes. Both lock when the first results come in.' : `For a ${riskPhrase(risk)} capability, we recommend these checks: ${plural(defaults.criteria.length, 'target')} and ${plural(defaults.requirements.length, 'decision requirement')}. They lock when the first results come in, so results can't move the bar.`, link: `#/capabilities/${cap.id}/criteria/edit`, linkText: criteriaDone ? 'Targets' : 'Review the checks' },
+    { id: 'configure', stage: 'evidence', title: 'Configure evidence', done: criteriaDone && cov.total > 0 && cov.mapped === cov.total, text: cov.mapped === cov.total && cov.total ? 'Every decision requirement says which evidence judges it.' : `Choose which evidence judges each decision requirement: a connected source, Authority Lab tests, or a manual review. ${cov.total ? `${cov.mapped} of ${cov.total} chosen so far.` : ''}`, link: `#/capabilities/${cap.id}/evidence/configure`, linkText: 'Configure evidence', needs: criteriaDone },
+    { id: 'coverage', stage: 'evidence', title: 'Review evidence coverage', done: criteriaDone && cov.total > 0 && !cov.requirements.some((c) => c.status === 'no-source' || c.status === 'no-data'), text: criteriaDone ? `${coverageText(cov)}` : 'Once the checks are set, see which have enough evidence, which are stale, and which have none.', link: `#/capabilities/${cap.id}/evidence/configure`, linkText: 'Coverage', needs: criteriaDone },
+    { id: 'gaps', stage: 'evidence', optional: true, title: 'Fill the gaps', done: criteriaDone && cov.total > 0 && cov.sufficient === cov.total, text: 'Where evidence is missing: add test cases, record a review by hand, run a pilot, or have another source connected. Not every capability needs local tests: a connected eval can be enough.', link: `#/capabilities/${cap.id}/evidence/configure`, linkText: 'See the gaps', needs: criteriaDone },
+    { id: 'stakeholders', stage: 'decide', title: 'Name who decides', done: stakeholdersDone, text: stakeholdersDone ? 'Their views are recorded with each authority decision, and they can approve changes.' : 'The people whose views are recorded with each authority decision; they can also approve changes. Name them before the first results come in: after that, changing who is involved needs sign-off.', link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: stakeholdersDone ? 'Stakeholders' : 'Name the people' },
+    { id: 'decision', stage: 'decide', title: 'Make the first authority decision', done: Boolean(lastDecisionId(state, cap.id) && cap.authority.level >= 2), text: note ? `Review the evidence, then decide. This is where what it already does today is reviewed and formally approved, one level at a time, starting with Draft (Level 2). A person decides; Authority Lab only recommends.` : 'Review the evidence, then decide. Usually a move to Draft (Level 2) for a small pilot. A person decides; Authority Lab only recommends.', link: decisionRequired(state, cap.id) ? `#/capabilities/${cap.id}/decision` : null, linkText: 'Authority decision', needs: hasResults, propose: hasResults && !decisionRequired(state, cap.id) && cap.authority.level < 2 ? cap.authority.level + 1 : null },
   ];
   if (notDelegated) {
     return [steps[0], { id: 'not-delegated', stage: 'define', title: 'Not delegated, by design', done: true, text: 'This capability stays at Level 0 on purpose. Giving it any authority later needs a new decision.', link: `#/records/${lastDecisionId(state, cap.id) || ''}`, linkText: 'Decision record' }];
   }
   let nextFound = false;
   return steps.map((st) => {
-    const next = !st.done && !nextFound;
+    // An optional step is never the one thing to do next.
+    const next = !st.done && !st.optional && !nextFound;
     if (next) nextFound = true;
     return { ...st, next };
   });

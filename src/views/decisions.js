@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN } from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen} from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
@@ -251,10 +251,11 @@ function nowSentence(cap, rec) {
 }
 
 // Can a move one level up be proposed from here? Offered for the first moves
-// (up to Draft), once the tests have run and no review is pending, as before
-// the redesign. proposeAuthority still checks everything itself.
+// (up to Draft), once any measured evidence exists (#126: tests, an import or
+// a result recorded by hand) and no review is pending. proposeAuthority still
+// checks everything itself.
 function proposable(state, cap, d, review) {
-  return cap.status !== 'not-delegated' && cap.authority.level < 2 && Boolean(d.testRun.lastRun) && !review.any;
+  return cap.status !== 'not-delegated' && cap.authority.level < 2 && performanceResultsSeen(state, cap.id) && !review.any;
 }
 
 const proposeButton = (cap) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button>`;
@@ -293,7 +294,7 @@ function noDecisionView(state, cap, d, { runs }) {
   } else {
     const why = cap.status === 'not-delegated' ? 'This work is kept with people by design, so there is nothing to decide.'
       : n > 4 ? 'It already has the most autonomy there is.'
-        : !d.testRun.lastRun ? html`Run the tests first. Then a move to Level ${n}, ${levelName(n)}, can be proposed. <a href="${tests}">Go to the tests</a>`
+        : !performanceResultsSeen(state, cap.id) ? html`There is no evidence yet. Once there is some (a test run, a result recorded by hand, or results from a connected source), a move to Level ${n}, ${levelName(n)}, can be proposed. <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a>`
           : html`No one has proposed a move to Level ${n}, ${levelName(n)}, yet.`;
     lead = html`<div class="decide-start"><h2>No decision is open</h2><p>${why}</p></div>`;
   }

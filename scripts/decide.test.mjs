@@ -215,7 +215,8 @@ test('Decide after recording: what was decided, who and when, what now runs auto
 test('Decide with no decision open: what has to happen first, the evidence, and no form', () => {
   const s = initialState();
   const tc = decide(s, TC);
-  assert.match(tc, /<h2>No decision is open<\/h2><p>Run the tests first\. Then a move to Level 4, Broad Delegation, can be proposed\./);
+  // Its measured evidence (seeded) is enough to propose (#126): no in-app run needed.
+  assert.match(tc, /<h2>No decision is open<\/h2><p>No one has proposed a move to Level 4, Broad Delegation, yet\./);
   assert.match(tc, /<h2>What do we know\?<\/h2>/);
   assert.match(tc, /<p class="decide-big">Ready: all 5 checks met<\/p>/);
   assert.doesNotMatch(tc, /data-action="(authorize|select-option|propose-authority)"/);

@@ -19,6 +19,7 @@ import { workspaceSetupView, noCapabilitiesView } from './views/workspace.js';
 import { decisionBriefView } from './views/brief.js';
 import { welcomeView, guideView, GUIDE_STEPS } from './views/guide.js';
 import { sourcesView, recordEvidenceView } from './views/sources.js';
+import { configureEvidenceView } from './views/configure.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -156,6 +157,7 @@ function render() {
         view = capabilityView(state, sub, q, { runs: agentRuns });
         title = 'Decision';
       }
+      else if (sub && action === 'evidence' && parts[3] === 'configure') { view = configureEvidenceView(state, sub, query); title = 'Configure evidence'; }
       else if (sub && action === 'evidence' && parts[3] === 'record') { view = recordEvidenceView(state, sub, query); title = 'Record a result'; }
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
@@ -580,6 +582,21 @@ document.addEventListener('submit', (e) => {
     dispatchOr(here(), () => {
       store.dispatch('recordManualEvidence', capId, { by: actor(store.get(), capId), label: v('label'), kind: v('kind'), type: v('type'), passed: v('passed'), total: v('total'), value: v('value'), segment: v('segment'), severity: v('severity'), observedAt: v('observedAt'), note: v('note'), url: v('url') });
       location.hash = `#/capabilities/${capId}?tab=decide&show=all`;
+    });
+    return;
+  }
+  // Configure evidence (#126): map or unmap one row; after results, a proposal.
+  const mapForm = e.target.closest('[data-form="map-evidence"]');
+  if (mapForm) {
+    e.preventDefault();
+    const capId = mapForm.dataset.capability;
+    const f = new FormData(mapForm);
+    const v = (k) => (f.get(k) || '').toString();
+    const unmap = e.submitter && e.submitter.value === 'unmap';
+    const measure = unmap ? null : { source: v('source'), metric: v('metric'), segment: v('segment'), stat: v('stat'), minSample: v('minSample'), kind: v('kind') };
+    dispatchOr(here(), () => {
+      store.dispatch('mapEvidence', capId, { rowKind: mapForm.dataset.kind, rowId: mapForm.dataset.row, measure, by: actor(store.get(), capId), reason: v('reason') });
+      location.hash = `#/capabilities/${capId}/evidence/configure`;
     });
     return;
   }

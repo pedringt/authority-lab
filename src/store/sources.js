@@ -9,6 +9,7 @@
 // run on those two alone and connect systems later. Vendor names belong in
 // example data only.
 
+import * as seed from '../data/seed.js';
 import { getCapability, capData, logEvent } from './state.js';
 import { people, isActivePerson, snapshotPerson, requireActive } from './people.js';
 import { current } from './selectors.js';
@@ -31,7 +32,8 @@ export const CONNECTIONS = { connected: 'Connected', manual: 'Entered by people'
 export const TESTS_SOURCE = 'authority-lab-tests';
 export const MANUAL_SOURCE = 'manual-review';
 export const BUILT_IN_SOURCES = [
-  { id: TESTS_SOURCE, name: 'Authority Lab tests', kind: 'tests', connection: 'built-in', description: 'Test cases written and run in Authority Lab.', freshForDays: FRESH_DAYS.tests },
+  { id: TESTS_SOURCE, name: 'Authority Lab tests', kind: 'tests', connection: 'built-in', description: 'Test cases written and run in Authority Lab.', freshForDays: FRESH_DAYS.tests,
+    metrics: [{ metric: 'tests-passed', label: 'Tests passed', type: 'rate', segments: [] }, { metric: 'serious-test-failures', label: 'Serious test failures', type: 'count', segments: [] }] },
   { id: MANUAL_SOURCE, name: 'Manual review', kind: 'manual-review', connection: 'manual', description: 'A result a person records by hand: a review, an audit, a spot check.', freshForDays: FRESH_DAYS['manual-review'] },
 ];
 
@@ -131,4 +133,24 @@ export function recordManualEvidence(state, capabilityId, { by, label, kind, typ
     ...(url && String(url).trim() ? { reference: { url: String(url).trim(), label: 'Source document' } } : {}),
   };
   return importEvidence(state, envelope, { via: 'manual', sourceId: MANUAL_SOURCE, recordedBy: snapshotPerson(state, by) });
+}
+
+// The built-in tests source's results, read from the capability's recorded
+// test run (nothing is copied into the evidence list a second time): tests
+// passed, overall and by type of test case, and serious failures. Empty until
+// a run is recorded.
+export function testMeasurements(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (!d.testRun.lastRun || !d.scenarios.length) return [];
+  const sc = d.scenarios;
+  const groupName = (g) => (seed.SCENARIO_GROUPS.find((x) => x.id === g) || { name: g }).name;
+  const out = [
+    { metric: 'tests-passed', label: 'Tests passed', type: 'rate', passed: sc.filter((x) => x.pass).length, total: sc.length },
+    { metric: 'serious-test-failures', label: 'Serious test failures', type: 'count', value: sc.filter((x) => !x.pass && x.severity === 'High').length, total: sc.length, severity: 'high' },
+  ];
+  for (const g of [...new Set(sc.map((x) => x.group))]) {
+    const group = sc.filter((x) => x.group === g);
+    out.push({ metric: 'tests-passed', label: 'Tests passed', type: 'rate', passed: group.filter((x) => x.pass).length, total: group.length, segment: groupName(g) });
+  }
+  return out.map((m) => ({ ...m, date: d.testRun.lastRun }));
 }
