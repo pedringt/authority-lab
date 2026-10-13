@@ -17,6 +17,7 @@ export { SETTINGS, pilotStarted, needsSignoff, stakeholderMembershipChanged, sig
 export { simulateBreach, parseRestrictionLine, restrictionRules, ruleCrossed, monitoringStatus, breachRule, readingText, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion } from './monitoring.js';
 export { isHighOrFinancial, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact } from './coverage.js';
 export { STORAGE_KEY, createStore } from './persist.js';
+export { RECORD_SCHEMA, publishableRecord, replayPublished, applyPublishedRecords, isPublished } from './published.js';
 export { DEMO_WORKSPACE, BUILT_IN_WORKSPACES, findWorkspace, storageKeyFor, realToday, buildWorkspace, advanceToday } from './workspaces.js';
 export { startEmpty, setupPending, setUpWorkspace, MIN_FOUNDING_ADMINS, foundingRiskGap, renameWorkspace, namesAtRecord } from './workspace.js';
 export { TOOLS, systemsOf, enforcementTerms, checkAction, VERDICT_LABELS, RULE_KIND_LABELS, verdictLabel, ruleKindLabel, toolLabel, claimsText, claimPhrase } from './gate.js';

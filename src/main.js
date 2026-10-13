@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES} from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord} from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -25,10 +25,28 @@ import { configureEvidenceView } from './views/configure.js';
 // configuration. Each is its own store, saved under its own key.
 const WORKSPACE_KEY = 'authority-lab-workspace';
 const openWorkspace = findWorkspace((() => { try { return window.localStorage.getItem(WORKSPACE_KEY); } catch { return null; } })());
-const store = createStore({ storage: safeStorage(), key: storageKeyFor(openWorkspace.id), build: () => openWorkspace.build() });
-// A client workspace runs on the real calendar, so freshness is real.
-if (store.get().clientWorkspace) store.dispatch('advanceToday', realToday());
+// A client workspace shows its published record to everyone, read-only
+// (Paige, 2026-10-13). There are no accounts, so anyone may switch on "Try
+// changes in this browser"; what they do stays in their browser, marked as
+// not published. Only a committed record is the real one.
+const EDIT_KEY = `authority-lab-edit:${openWorkspace.id}`;
+const clientWs = openWorkspace.id !== DEMO_WORKSPACE;
+const editing = clientWs && (() => { try { return window.localStorage.getItem(EDIT_KEY) === '1'; } catch { return false; } })();
+// Read-only, a client workspace is rebuilt on every load and never saved.
+const store = createStore({ storage: !clientWs || editing ? safeStorage() : null, key: storageKeyFor(openWorkspace.id), build: () => openWorkspace.build() });
 const isClient = () => Boolean(store.get().clientWorkspace);
+const readOnly = () => isClient() && !editing;
+// What a read-only workspace still does by itself: take in committed evidence
+// and published records, keep its calendar, and let "Demo as" switch.
+const READ_ONLY_OK = new Set(['importEvidenceFiles', 'applyPublishedRecords', 'advanceToday', 'setActingAs', 'reset']);
+let readOnlyTried = false;
+const dispatchAny = store.dispatch;
+store.dispatch = (action, ...args) => {
+  if (readOnly() && !READ_ONLY_OK.has(action)) { readOnlyTried = true; render(); return; }
+  return dispatchAny(action, ...args);
+};
+// A client workspace runs on the real calendar, so freshness is real.
+if (isClient()) store.dispatch('advanceToday', realToday());
 const app = document.getElementById('app');
 const nav = document.getElementById('nav');
 const acting = document.getElementById('acting');
@@ -91,17 +109,43 @@ function loadExternalEvidence() {
     .then((files) => { externalFiles = files; applyExternalEvidence(); })
     .catch((err) => { externalProblems = [{ file: 'index.json', reason: `The list of evidence files couldn't be read (${err.message}).` }]; render(); });
 }
+// Published records (src/data/published-records/), replayed after the
+// evidence they rest on. A record that won't replay is listed, not trusted.
+let publishedFiles = null;
+let publishedProblems = [];
+function loadPublishedRecords() {
+  const base = 'src/data/published-records/';
+  fetch(`${base}index.json`, { cache: 'no-cache' })
+    .then((r) => { if (!r.ok) throw new Error(`index.json: ${r.status}`); return r.json(); })
+    .then((index) => Promise.all((index.files || []).map((file) => fetch(`${base}${file}`, { cache: 'no-cache' })
+      .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
+      .then((entry) => ({ file, entry }), (err) => ({ file, error: `couldn't be read (${err.message})` })))))
+    .then((files) => { publishedFiles = files; applyExternalEvidence(); })
+    .catch((err) => { publishedFiles = []; publishedProblems = [{ file: 'index.json', reason: `The list of published records couldn't be read (${err.message}).` }]; applyExternalEvidence(); });
+}
 function applyExternalEvidence() {
-  if (!externalFiles) return;
+  if (!externalFiles || !publishedFiles) return;
   const readable = externalFiles.filter((f) => f.envelope);
   const { results } = importEvidenceFiles(store.get(), readable);
   externalProblems = [...externalFiles.filter((f) => f.error).map((f) => ({ file: f.file, reason: f.error })), ...results.filter((r) => r.status === 'refused')];
   store.dispatch('importEvidenceFiles', readable);
+  const records = publishedFiles.filter((f) => f.entry);
+  const replay = applyPublishedRecords(store.get(), records);
+  publishedProblems = [...publishedFiles.filter((f) => f.error).map((f) => ({ file: f.file, reason: f.error })), ...replay.results.filter((r) => r.status === 'refused')];
+  store.dispatch('applyPublishedRecords', records);
   render();
 }
-const externalNotice = () => (externalProblems.length
+const externalNotice = () => html`${externalProblems.length
   ? notice('fail', `${externalProblems.length === 1 ? 'One evidence file' : `${externalProblems.length} evidence files`} couldn't be imported`, html`${externalProblems.map((p) => html`${p.file}: ${p.reason}<br>`)}`)
-  : '');
+  : ''}${publishedProblems.length
+  ? notice('fail', `${publishedProblems.length === 1 ? 'One published record' : `${publishedProblems.length} published records`} couldn't be replayed`, html`${publishedProblems.map((p) => html`${p.file}: ${p.reason}<br>`)}`)
+  : ''}`;
+
+// The banner on every page of a client workspace: what you're looking at, and
+// whether anything you do here is the real record.
+const workspaceBanner = () => (!isClient() ? '' : editing
+  ? notice('watch', 'Trying changes in this browser', html`Nothing you do here is published: the real ${openWorkspace.name} record is what's been committed to the repository. <button class="btn btn-sm" data-action="toggle-edit">Stop and show the published record</button>`)
+  : notice(readOnlyTried ? 'watch' : 'neutral', readOnlyTried ? 'That would change the published record' : `The published ${openWorkspace.name} record`, html`${readOnlyTried ? 'This workspace is read-only here. ' : ''}A real configuration, its evidence and the decisions published so far. To try something, use the Northstar demo, or <button class="btn btn-sm" data-action="toggle-edit">try changes in this browser</button> (they stay in this browser and aren't published).`));
 
 // Where an old address that named no capability should go.
 const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
@@ -246,7 +290,7 @@ function render() {
   const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale', 'set-rollout'].includes(document.activeElement.dataset.action)
     ? { action: document.activeElement.dataset.action, index: document.activeElement.dataset.index || '', field: document.activeElement.dataset.field || '', start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd }
     : null;
-  app.innerHTML = String(view);
+  app.innerHTML = String(html`${workspaceBanner()}${view}`);
   restoreForms(saved);
   if (focused && lastRoute === location.hash) {
     const el = [...app.querySelectorAll(`[data-action="${focused.action}"]`)].find((x) => (x.dataset.index || '') === focused.index && (x.dataset.field || '') === focused.field);
@@ -430,6 +474,14 @@ document.addEventListener('click', (e) => {
   if (action === 'row-remove') { btn.closest('tr').remove(); return; }
   // Start empty and Reset demo erase every record, so each asks first, inline.
   if (action === 'start-empty' || action === 'reset') askToErase(action);
+  if (action === 'toggle-edit') {
+    try { if (editing) window.localStorage.removeItem(EDIT_KEY); else window.localStorage.setItem(EDIT_KEY, '1'); } catch { /* storage blocked */ }
+    location.reload();
+  }
+  if (action === 'copy-publish') {
+    const ta = document.getElementById('publish-json');
+    if (ta) { ta.select(); try { navigator.clipboard.writeText(ta.value); btn.textContent = 'Copied'; } catch { /* select is enough */ } }
+  }
   if (action === 'switch-workspace') {
     try { window.localStorage.setItem(WORKSPACE_KEY, btn.dataset.workspace); } catch { /* storage blocked: the demo stays open */ }
     location.hash = '#/overview';
@@ -443,6 +495,7 @@ document.addEventListener('click', (e) => {
     closeEraseConfirm(false);
     store.dispatch(kind === 'start-empty' ? 'startEmpty' : 'reset');
     applyExternalEvidence();
+    readOnlyTried = false;
     stopSuite();
     setupDraft = null;
     location.hash = '#/overview';
@@ -781,3 +834,4 @@ store.subscribe(render);
 window.addEventListener('hashchange', render);
 render();
 loadExternalEvidence();
+loadPublishedRecords();
