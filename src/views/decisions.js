@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen} from '../store/index.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished} from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
@@ -101,6 +101,18 @@ function impactCard(cap, dec) {
   </div>`;
 }
 
+// In a client workspace, whether a record is the published one, and how to
+// publish one made in this browser (Paige, 2026-10-13): its inputs, to commit.
+function publishPanel(state, x) {
+  if (!state.clientWorkspace || x.authorizedBy === 'system' || x.sequence === 1) return '';
+  if (isPublished(x)) return notice('pass', 'Published', 'This decision is part of the published record: it was committed to the repository and replays on every load.');
+  let json = '';
+  try { json = JSON.stringify(publishableRecord(state, x.id), null, 2); } catch (e) { return notice('watch', 'Not published', e.message); }
+  return html`<section class="section publish-panel"><div class="notice notice-watch"><div class="notice-body"><strong>Not published: this decision exists only in this browser</strong><p>Nobody else sees it. To make it part of the real record, it has to be committed to the repository as a published record (\`src/data/published-records/\`), which only the workspace's owner can do. This is what gets committed: the decision's inputs and who made it. On load, it is replayed through the same checks.</p></div></div>
+    <textarea id="publish-json" class="publish-json" readonly rows="14">${json}</textarea>
+    <p><button class="btn btn-sm" data-action="copy-publish">Copy</button></p></section>`;
+}
+
 export function decisionRecordView(state, id) {
   const x = state.decisionRecords.find((r) => r.id === id);
   if (!x) return html`<div class="page-head"><h1>Record not found</h1></div>`;
@@ -116,6 +128,7 @@ export function decisionRecordView(state, id) {
     </div>
     <a class="btn btn-sm" href="#/records/${x.id}/brief">Decision brief (one page)</a>
   </div>
+  ${publishPanel(state, x)}
   ${auto ? notice('fail', `${(getCapability(state, x.capabilityId) || { name: 'This capability' }).name} was moved back to ${levelName(x.next.level)} after crossing a safety limit.`, 'No one made this change by hand. It followed a rule people agreed in advance ("Automation is pulled back if…"). People decide when autonomy expands; software pulls it back on its own when a limit is crossed. Formally, this is an automatic restriction.') : ''}
   ${auto && reviewForRecord(state, x.id) ? (() => { const rv = reviewForRecord(state, x.id); return notice('pass', `Reviewed by ${personAt(rv.byAt, rv.by).name} on ${fmtDate(rv.date)} (${rv.id})`, `What happened: ${rv.cause} What changed: ${rv.changes} The review is saved separately; this record stays as it was.`, { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'See the review' }); })() : auto && capData(state, cap.id).reviewRequired ? notice('watch', 'Not reviewed yet', 'The owner or a Risk approver needs to record what happened and what changed (the post-incident review) on the Monitoring tab. Until then the AI can\'t get more authority.', { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Record the review' }) : ''}
   <div class="card record">

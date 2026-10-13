@@ -14,6 +14,7 @@ import { approveAction, rejectAction } from './queue.js';
 import { importEvidenceFiles } from './external.js';
 import { recordManualEvidence } from './sources.js';
 import { advanceToday } from './workspaces.js';
+import { applyPublishedRecords } from './published.js';
 import { mapEvidence } from './configure.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
@@ -91,6 +92,7 @@ export const ACTIONS = {
   recordManualEvidence,
   mapEvidence,
   advanceToday,
+  applyPublishedRecords: (state, files) => applyPublishedRecords(state, files).state,
   reset,
 };
 

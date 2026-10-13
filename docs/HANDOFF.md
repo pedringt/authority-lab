@@ -13,7 +13,7 @@ Read this first, then `CLAUDE.md` (the working rules) and `docs/DECISIONS.md` (e
   - No State-specific code; a test checks this.
   - No fictional evidence: State shows "0 of 5 decision requirements have sufficient evidence" until its results arrive.
 - **Merging:** Paige must name the destination each time (CLAUDE.md, "How to work").
-- **#518, State's first evidence file, is in an open PR** (`delivery/state-eval-38411808397`), waiting for Paige. Later deliveries follow the same steps:
+- **#518, State's first evidence file, is on `main`** (#132, `f372cb9`). Later deliveries follow the same steps:
   - Take the envelope from a State AI quality check run's artifact (`authority-lab-evidence-<run>-<attempt>`, kept 90 days).
   - Commit it under `src/data/external-evidence/`, add it to `index.json`, and open a PR. CI checks it.
   - The first delivered run is the Oct 13 verification run, 38411808397 (16/16, staging).
@@ -65,5 +65,5 @@ Standing budget $25 per calendar month; October spend is $11.20 (`agent/runs/led
 
 ## What comes next
 
-1. Paige names where the #518 PR goes. Once it's live, State's Decide offers "Propose a move to Level 2"; the decision is Paige's to make.
+1. **Published records** (this work): State is read-only for visitors and shows only committed decisions. Paige recorded the Draft decision in her own browser on Oct 13; to publish it, she turns on "Try changes in this browser", opens the record, and its file is committed to `src/data/published-records/`.
 3. Later: #130 (judging across runs), #117 (runtime policy check), #105 (stakeholder tradeoff).

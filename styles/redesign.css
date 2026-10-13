@@ -383,3 +383,6 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .menu-item.is-current { font-weight: 600; }
 .menu-item.is-current::before { content: "✓ "; }
 .menu-item[hidden] { display: none; }
+
+/* Publishing a decision made in this browser (client workspaces). */
+.publish-json { width: 100%; font-family: var(--mono); font-size: 12px; padding: 8px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface); }

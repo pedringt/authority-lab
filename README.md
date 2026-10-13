@@ -70,7 +70,7 @@ Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/�
 
 An AI system that runs somewhere else can send evidence about one of its capabilities: one JSON envelope per run, committed to `src/data/external-evidence/` in a pull request and checked by CI. The site imports the committed files into the normal evidence list, labelled with their source. See [docs/EXTERNAL_EVIDENCE.md](docs/EXTERNAL_EVIDENCE.md).
 
-Settings → Workspace also opens **State**, the first real client: a configuration of State's interpretation step, judged only by State's own eval runs (no fictional data). Evidence sources (Settings → Evidence sources) show where a workspace's evidence comes from; the owner or a stakeholder can also record a result by hand. Each capability's **Configure evidence** maps sources to its checks and shows coverage; in the demo, Refund recommendation is judged by example (fictional) connected sources and a Risk review, and Monitor's Evidence line flags stale evidence and gaps.
+Settings → Workspace also opens **State**, the first real client: a configuration of State's interpretation step, judged only by State's own eval runs (no fictional data). Visitors see its published record read-only; decisions become part of it when their file is committed to `src/data/published-records/`. Evidence sources (Settings → Evidence sources) show where a workspace's evidence comes from; the owner or a stakeholder can also record a result by hand. Each capability's **Configure evidence** maps sources to its checks and shows coverage; in the demo, Refund recommendation is judged by example (fictional) connected sources and a Risk review, and Monitor's Evidence line flags stale evidence and gaps.
 
 ## Starting empty
 
