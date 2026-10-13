@@ -57,7 +57,7 @@ export function requireActive(state, key, what = 'act') {
 
 export function requireAdmin(state, key) {
   requireActive(state, key, 'change people or rights');
-  if (!isWorkspaceAdmin(state, key)) throw new Error(`${personRecord(state, key).name} isn't a workspace admin. Switch "Acting as" to a workspace admin to change people or rights.`);
+  if (!isWorkspaceAdmin(state, key)) throw new Error(`${personRecord(state, key).name} isn't a workspace admin. Switch "Demo as" to a workspace admin to change people or rights.`);
 }
 
 export function writeRoster(state, value, { author, reason, title, body, surfaced = false, meta = null }) {
@@ -151,9 +151,32 @@ export function describeRosterChange(state, pr) {
   return pr.grant ? `Make ${name} a ${RIGHT_NOUNS[pr.right]}` : `Remove ${name} as ${RIGHT_NOUNS[pr.right]}`;
 }
 
+// The founding roster (Paige, 2026-10-12: one person can start a workspace).
+// Until the workspace has ever had two active workspace admins, it is in its
+// founding state. The one exception that state allows (Paige, 2026-10-12) is
+// the smallest that breaks the deadlock: the sole admin may make ONE other
+// person a workspace admin without approval, recorded. Nothing else skips
+// approval: no other right, and never a right to yourself. Once the second
+// admin exists the founding state ends for good, and the two admins set up
+// Risk approvers and every other right through the normal process. The demo
+// starts with two admins, so it is never founding.
+export function foundingRoster(state) {
+  if (state.setupPending) return false;
+  const admins = (value) => Object.values(value || {}).filter((p) => p.active !== false && p.rights && p.rights.workspaceAdmin).length;
+  const versions = rosterVersions(state);
+  if (!versions.length) return false;
+  return versions.every((v) => admins(v.value) < 2);
+}
+
+// The just-in-time message for an approval nobody else can give yet: what to
+// add, and where.
+export const NEEDS_SECOND_ADMIN = 'Make someone else a workspace admin first: as the only admin, you can do that straight away. Then the two of you approve changes like this one.';
+
 // A rights grant or removal, or the deactivation of a rights holder: proposed
 // by an active workspace admin, approved by a different one. Nobody grants a
-// right to themselves. The last workspace admin cannot be removed or deactivated.
+// right to themselves. The last workspace admin cannot be removed or
+// deactivated. While the workspace is founding, making one other person a
+// workspace admin applies at once (see foundingRoster); nothing else does.
 export function proposeRosterChange(state, { kind, person, right, grant, by, reason } = {}) {
   requireAdmin(state, by);
   const roster = people(state);
@@ -175,14 +198,19 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
     throw new Error('Make someone else a workspace admin first. The workspace always needs at least one.');
   }
   if (openRosterProposal(state, person)) throw new Error(`A change for ${target.name} is already waiting for approval. Approve, reject or withdraw it first.`);
+  const isGrant = kind === 'rights' && Boolean(grant);
+  if (isGrant && right === 'workspaceAdmin' && foundingRoster(state)) return applyFoundingGrant(state, { person, right, by, reason: why });
   // Who can approve: a different workspace admin. For a grant, never the
   // person receiving the right. A Risk approver grant can also be approved by
   // an existing Risk approver, so a grant to an admin still has an approver.
-  const isGrant = kind === 'rights' && Boolean(grant);
   let eligible = activeAdmins(state).filter((k) => k !== by);
   if (isGrant && right === 'riskApprover') eligible = [...new Set([...eligible, ...Object.keys(activePeople(state)).filter((k) => isRiskApprover(state, k) && k !== by)])];
   if (isGrant) eligible = eligible.filter((k) => k !== person);
-  if (!eligible.length) throw new Error(isGrant && right === 'riskApprover' ? 'Nobody else can approve this. It needs another workspace admin or a Risk approver.' : 'Nobody else can approve this. Make someone else a workspace admin first.');
+  if (!eligible.length) {
+    // Just in time: a one-admin workspace is told what to add to approve this.
+    if (foundingRoster(state)) throw new Error(`You're the only workspace admin, and you can't approve your own change. ${NEEDS_SECOND_ADMIN}`);
+    throw new Error(isGrant && right === 'riskApprover' ? 'Nobody else can approve this. It needs another workspace admin or a Risk approver.' : 'Nobody else can approve this. Make someone else a workspace admin first.');
+  }
   const impact = rosterChangeImpact(state, { kind, person, right, grant });
   const pr = {
     id: `RP-${state.rosterProposals.length + 1}`,
@@ -212,6 +240,47 @@ export function proposeRosterChange(state, { kind, person, right, grant, by, rea
     capabilityId: null,
     link: `#/people?proposal=${pr.id}`,
   });
+}
+
+// A grant while the founding roster is open: recorded as a rights change that
+// took effect at once (status "founding", no approvals), plus the roster
+// version it wrote. Never to the person giving it (checked by the caller).
+function applyFoundingGrant(state, { person, right, by, reason }) {
+  const roster = people(state);
+  const target = roster[person];
+  const value = { ...roster, [person]: { ...target, rights: { ...target.rights, [right]: true } } };
+  const closes = right === 'workspaceAdmin';
+  let s = writeRoster(state, value, {
+    author: by,
+    reason,
+    surfaced: true,
+    title: `${target.name} is now a ${RIGHT_NOUNS[right]}`,
+    body: `${roster[by].name} gave ${target.name} the ${RIGHT_LABELS[right]} right while setting up the workspace's first people, so it took effect at once.${closes ? ' There are now two workspace admins: from here on, changing anyone\'s rights needs the other admin\'s approval.' : ''} ${reason}`,
+    meta: { change: { kind: 'grant', key: person, right }, founding: true },
+  });
+  const pr = {
+    id: `RP-${state.rosterProposals.length + 1}`,
+    kind: 'rights',
+    person,
+    impact: { capabilities: [], proposals: [], any: false },
+    right,
+    grant: true,
+    proposedBy: by,
+    proposedByAt: snapshotPerson(state, by),
+    personAt: snapshotPerson(state, person),
+    date: state.today,
+    reason,
+    eligible: [],
+    approvals: [],
+    status: 'founding',
+    founding: true,
+    rejection: null,
+    withdrawal: null,
+    appliedVersion: rosterVersions(s).length,
+    closedAt: state.today,
+  };
+  s = { ...s, rosterProposals: [...s.rosterProposals, pr] };
+  return s;
 }
 
 export function rosterApprovalEligibility(state, pr, personKey) {
@@ -292,4 +361,10 @@ export function setActingAs(state, personKey) {
   if (personKey && !people(state)[personKey]) throw new Error(`Unknown person: ${personKey}`);
   if (personKey && !isActivePerson(state, personKey)) throw new Error(`${people(state)[personKey].name} is deactivated and cannot act.`);
   return { ...state, actingAs: personKey || null };
+}
+
+// Just in time (redesign): when the only person in a workspace hits a step
+// that needs someone else, say what to add. Empty otherwise.
+export function soloHint(state) {
+  return Object.keys(activePeople(state)).length === 1 ? ' You\'re the only person in this workspace: add someone on People first.' : '';
 }

@@ -38,7 +38,7 @@ test('Status, Refund recommendation (a decision is open): the level in plain wor
   const h = page(s, RR);
   onePage(h, 'decision');
   const st = story(h);
-  assert.match(st, /<h2 class="st-title">Draft <span class="st-lvl">Level 2 of 5<\/span> <\/h2>/, 'plain name, quiet level, no badge when nothing is wrong');
+  assert.match(st, /<h2 class="st-title">Draft <span class="st-lvl">Level 2<\/span> <\/h2>/, 'plain name, quiet level, no badge when nothing is wrong');
   assert.match(st, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
   assert.match(st, /Why it&#39;s here<\/span><p>Moved to Draft on Sep 2 by Maya Chen \(expand autonomy\)\. The pilot that followed is done: 218 cases, 94% accurate\./);
   assert.match(st, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 checks are met; still open: high-value refund performance needs more evidence\./);
@@ -91,7 +91,7 @@ test('Status, Refund execution > $50 (restricted by a person): Recommend only, w
   const h = page(s, RX);
   onePage(h, 'held');
   const st = story(h);
-  assert.match(st, /<h2 class="st-title">Recommend only <span class="st-lvl">Level 1 of 5<\/span> <span class="badge badge-restricted">Restricted<\/span><\/h2>/);
+  assert.match(st, /<h2 class="st-title">Recommend only <span class="st-lvl">Level 1<\/span> <span class="badge badge-restricted">Restricted<\/span><\/h2>/);
   assert.equal(count(h, 'class="badge'), 1, 'one state badge on the page');
   assert.match(st, /Why it&#39;s here<\/span><p>Moved back from Draft on Sep 24 by Daniel Okafor \(reduce autonomy one level\)\. A retry executed a \$180 refund twice for one order\./);
   assert.match(st, /What happens next<\/span><p>Return to Draft requires a redesigned idempotency check and 100 clean executions in a replay environment\./);
@@ -105,7 +105,7 @@ test('Status, Account closure (not delegated): says so once, with what would reo
   const h = page(initialState(), AC);
   onePage(h, 'not-delegated');
   const st = story(h);
-  assert.match(st, /<h2 class="st-title">Observe <span class="st-lvl">Level 0 of 5<\/span> <\/h2>/);
+  assert.match(st, /<h2 class="st-title">Observe <span class="st-lvl">Level 0<\/span> <\/h2>/);
   assert.match(st, /What happens next<\/span><p>Nothing is planned: it isn&#39;t delegated, by design\./);
   assert.match(st, /Then<\/span><p>It can be reconsidered once this is true: a 30-day restore for closed accounts exists in production\./);
   // Once in the page's own words (stakeholders' recorded positions may say it too).
@@ -118,7 +118,7 @@ test('Status after expand-limits and a crossed safety limit: a review is needed,
   const asMaya = page(s, RR);
   onePage(asMaya, 'review');
   const st = story(asMaya);
-  assert.match(st, /<h2 class="st-title">Draft <span class="st-lvl">Level 2 of 5<\/span> <span class="badge badge-restricted">Needs review<\/span><\/h2>/);
+  assert.match(st, /<h2 class="st-title">Draft <span class="st-lvl">Level 2<\/span> <span class="badge badge-restricted">Needs review<\/span><\/h2>/);
   assert.match(st, /Why it&#39;s here<\/span><p>Moved back from Act within limits automatically on Oct 7\. It crossed a safety limit: 6% across the rolling 50-case window \(limit 5%\)\./);
   assert.match(st, /What happens next<\/span><p>A review of what happened comes before any more autonomy\. Daniel Okafor or Sofia Alvarez can record it\./, 'Maya authorized the expansion and is not a Risk approver');
   assert.match(st, /Then<\/span><p>After the review, a return to Act within limits can be proposed and decided again\./);
@@ -138,10 +138,10 @@ test('Status, a newly added capability: the setup stage as the one next statemen
   const h = page(s, id);
   onePage(h, 'setup');
   const st = story(h);
-  assert.match(st, /<h2 class="st-title">Recommend <span class="st-lvl">Level 1 of 5<\/span> <\/h2>/);
+  assert.match(st, /<h2 class="st-title">Recommend <span class="st-lvl">Level 1<\/span> <\/h2>/);
   assert.match(st, /Why it&#39;s here<\/span><p>Added by Priya Natarajan on Oct 7\. Starting at Recommend/);
-  assert.match(st, /What happens next<\/span><p>It&#39;s still being set up\. Next setup step: set the rules\./);
-  assert.deepEqual(nextLinks(h), [[`#/capabilities/${id}/setup?step=contract`, 'set the rules →']]);
+  assert.match(st, /What happens next<\/span><p>It&#39;s still being set up\. Next setup step: set the boundaries\./);
+  assert.deepEqual(nextLinks(h), [[`#/capabilities/${id}/setup?step=contract`, 'set the boundaries →']]);
   assert.match(h, /<b>Boundaries<\/b><span class="st-meta-text">No rules yet\.<\/span><a class="st-open" href="#\/capabilities\/order-status-lookup\/contract\/build">Set up rules →/);
   assert.match(h, /<b>People involved: 1<\/b><span class="st-meta-text">Only the owner, Priya Natarajan, so far\.<\/span>/);
   assert.doesNotMatch(h, /Needs your decision/);

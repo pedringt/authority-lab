@@ -3,6 +3,7 @@
 A prototype for deciding what an AI capability should be allowed to do, based on evidence. **AI interprets. Software enforces. Humans authorize.**
 
 Read before working:
+- `docs/HANDOFF.md`: where the work stands right now and what to pick up next. Read it first, then check it against `gh pr list`.
 - `docs/HOW_IT_WORKS.md`: the product, the screens and the rules as users see them.
 - `docs/DECISIONS.md`: every product decision with its reasoning, the roadmap and what's next. Check it before changing any rule.
 
