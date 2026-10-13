@@ -1,33 +1,120 @@
-// Decide: should the capability's overall authority change? The evidence that supports the decision lives here.
+// Decide: should we change what this capability is allowed to do? One
+// reading direction (redesign, 2026-10-12): what's being decided, what we
+// know, the recommendation, the person's decision, and one button to record
+// it. The full evidence views (tests, model runs, all evidence, targets,
+// requirements, pilot results) stay one link away, through `show=`.
 
 import { html, raw, section, badge, fmtDate, person, notice, empty, tabIntro } from '../ui.js';
-import { capData, readiness, authorityLabel, testSummary, current, criteriaLocked, criteriaSaved, decisionRequired, proposedAuthority, levelName, reviewNeeded, actor, gateSummary, gateEvents, GATE_SOURCES, readinessText } from '../store/index.js';
-import { scenarioTable } from './tests.js';
+import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce } from '../store/index.js';
+import { AGENT_RUNS_CAPABILITY } from '../data/seed.js';
+import { testsView } from './tests.js';
 import { emptyState } from './setup.js';
 import { proposalsList, amendLink } from './proposals.js';
 import { evidenceSourcesCard } from './scenarios.js';
+import { evidenceView } from './evidence.js';
+import { agentRunsView, runsSummary } from './agentruns.js';
 import { toolWords } from './cap-shared.js';
-import { optionLabel } from './cap-history.js';
+import { decisionWorkspaceView, barChangedNote, amendedNote } from './decisions.js';
 
-export function decisionTab(state, cap) {
+// The full evidence views under Decide, each with a way back.
+const SUB_VIEWS = ['results', 'all', 'requirements', 'targets', 'tests', 'runs'];
+
+export function decideTab(state, cap, query, show, { runs = null } = {}) {
+  const base = `#/capabilities/${cap.id}?tab=decide`;
+  if (!SUB_VIEWS.includes(show)) return decisionWorkspaceView(state, cap.id, query, { runs });
   const d = capData(state, cap.id);
-  const review = reviewNeeded(state, cap.id);
+  const inner = {
+    results: () => html`${evidenceTab(state, cap, d)}${gateActivityCard(state, cap)}`,
+    all: () => evidenceView(state, cap.id, query, { embedded: true }),
+    requirements: () => requirementsTab(state, cap),
+    targets: () => criteriaTab(state, cap),
+    tests: () => testsView(state, cap.id, query, { embedded: true }),
+    runs: () => agentRunsView(state, query, runs, { capabilityId: cap.id, embedded: true }),
+  }[show]();
+  return html`<p class="decide-back"><a href="${base}">← Back to the decision</a></p>${inner}`;
+}
+
+const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+
+// "Almost ready: 5 of 6 checks met", from the decision requirements.
+export function readyHeadline(r) {
+  if (!r.total) return 'Not ready yet: no checks set';
+  if (r.met === r.total) return `Ready: all ${plural(r.total, 'check')} met`;
+  if (r.total - r.met === 1) return `Almost ready: ${r.met} of ${r.total} checks met`;
+  return `Not ready yet: ${r.met} of ${r.total} checks met`;
+}
+
+// Were the bar's current versions set before the pilot started?
+function setBeforePilot(state, cap, d) {
+  if (!d.pilot || !d.pilot.started) return null;
+  const dates = ['criteria', 'requirements'].map((k) => (currentVersion(state, cap.id, k) || {}).date).filter(Boolean);
+  if (!dates.length) return null;
+  return dates.every((x) => x < d.pilot.started);
+}
+
+// One evidence line: a disclosure that opens in place.
+const line = (title, meta, inner) => html`<details class="decide-line"><summary><strong>${title}</strong><span class="decide-line-meta">${meta}</span><span class="decide-line-open" aria-hidden="true">View</span></summary><div class="decide-line-inner">${inner}</div></details>`;
+
+// What do we know? One headline, the top open gap, a serious problem if
+// there is one, then one line per kind of evidence, each opening in place
+// and linking to its full view. Shared by the open decision and the
+// no-decision state.
+export function whatWeKnow(state, cap, { runs = null } = {}) {
+  const d = capData(state, cap.id);
+  const base = `#/capabilities/${cap.id}?tab=decide`;
   const r = readiness(state, cap.id);
-  if (decisionRequired(state, cap.id)) {
-    const p = proposedAuthority(state, cap.id);
-    return html`<div class="card decision-entry">
-      <p class="eyebrow">Decision open</p>
-      <h2>Should ${cap.name} move to Level ${p.level}, ${levelName(p.level)}${p.limited ? ', with limits' : ''}?</h2>
-      <p>${readinessText(r)} ${r.unmet[0] ? `Still open: ${r.unmet[0].text}.` : ''}</p>
-      <a class="btn btn-primary" href="#/capabilities/${cap.id}/decision">Open the decision</a>
-    </div>`;
-  }
-  const canPropose = cap.status !== 'not-delegated' && cap.authority.level < 2 && d.testRun.lastRun && !review.any;
-  const last = state.decisionRecords.filter((x) => x.capabilityId === cap.id).at(-1);
-  return html`${review.any ? notice('restricted', 'A review comes first', 'No decision can open until someone records a review of what happened.', { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Record the review' }) : ''}
-    ${canPropose ? html`<div class="notice notice-neutral"><div class="notice-body"><strong>Ready for the first authority change</strong><p>The tests have run. You can now propose moving to Level ${cap.authority.level + 1}, ${levelName(cap.authority.level + 1)}. A person has to approve it, and the decision is recorded.</p></div><button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button></div>` : ''}
-    ${!review.any && !canPropose ? html`<p class="empty">No decision is open.</p>` : ''}
-    ${last ? html`<p class="muted small">Last decision: <a href="#/records/${last.id}">${optionLabel(last.option)}, ${fmtDate(last.date)}</a>. Every decision is in <a href="#/capabilities/${cap.id}?tab=history">History</a>.</p>` : ''}`;
+  const t = testSummary(state, cap.id);
+  const p = d.pilot;
+  const gap = r.unmet[0];
+  const serious = t.lastRun || t.status === 'complete' ? d.scenarios.filter((x) => !x.pass && x.severity === 'High') : [];
+  const reqs = current(state, cap.id, 'requirements');
+  const criteria = current(state, cap.id, 'criteria');
+  const before = setBeforePilot(state, cap, d);
+  const targetsOpen = criteria.filter((c) => c.status !== 'pass').length;
+
+  const checks = html`<p class="decide-line-lead">What needs to be true first.</p>
+    ${reqs.length ? requirementsList(state, cap.id) : html`<p class="muted">No decision requirements set yet.${criteriaSaved(state, cap.id) ? '' : html` <a href="#/capabilities/${cap.id}/criteria/edit">Set them</a>`}</p>`}
+    ${criteria.length ? html`<table class="table decide-targets"><thead><tr><th>Target</th><th>Goal</th><th>Now</th><th>Status</th></tr></thead>
+      <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}</td><td>${c.status === 'pending' ? html`<span class="muted">Not measured yet</span>` : TARGET_WORDS[c.status] || c.status}</td></tr>`)}</tbody></table>` : ''}
+    ${before === true ? html`<p class="muted small">Set before the pilot started, so the bar didn't move after the results came in.</p>` : before === false ? html`<p class="muted small">Changed after the pilot started. Every change is in <a href="#/capabilities/${cap.id}/versions?kind=criteria">history</a>.</p>` : ''}
+    <p class="small"><a href="${base}&show=requirements">Decision requirements</a> · <a href="${base}&show=targets">Targets</a></p>`;
+
+  const testsMeta = !t.total ? 'none yet'
+    : t.status === 'complete' ? `${t.passed} of ${t.total} passed today`
+      : t.lastRun ? `${t.recorded.passed} of ${t.total} passed` : 'not run yet';
+  const firstSentence = (text) => (String(text || '').match(/^.*?\.(\s|$)/) || [String(text || '')])[0].trim();
+  const tests = html`${serious.length ? html`<ul class="plain-list">${serious.map((x) => html`<li><strong>${x.name}</strong> <span class="muted small">(${x.id}, serious)</span>: ${firstSentence(x.explanation)}</li>`)}</ul>` : t.total && (t.lastRun || t.status === 'complete') ? html`<p>No serious failures.</p>` : ''}
+    <p class="small"><a href="${base}&show=tests">${t.total ? 'See every test and run the suite →' : 'Add tests →'}</a></p>`;
+
+  const pilot = p ? html`<p>${p.segments.map((x, i) => html`${i ? ' · ' : ''}<span class="${x.status === 'insufficient' || x.status === 'fail' ? 'decide-weak' : ''}">${x.name}: ${x.accuracy}% (${plural(x.cases, 'case')})</span>`)}</p>
+    <p class="small"><a href="${base}&show=results">Full pilot results and every logged action →</a></p>`
+    : html`<p class="muted">No pilot yet.</p><p class="small"><a href="${base}&show=results">Logged actions →</a></p>`;
+
+  const rs = runsSummary(runs, cap.id);
+  const hasRuns = rs || cap.id === AGENT_RUNS_CAPABILITY;
+  const modelRuns = html`<p>Real models handled fictional trap tickets, and every action they tried was checked against the rules. This site never calls a model: every run was recorded and approved.</p>
+    <p class="small"><a href="${base}&show=runs">See the model runs →</a></p>`;
+
+  const stakeholders = current(state, cap.id, 'stakeholders');
+  const stances = new Set(stakeholders.map((x) => x.stance));
+  const positions = html`<ul class="plain-list">${stakeholders.map((x) => html`<li><strong>${x.team}:</strong> ${x.position} <span class="muted small">(${person(x.person).name})</span></li>`)}</ul>
+    ${d.stakeholderSummary ? html`<p><strong>Agree:</strong> ${d.stakeholderSummary.consensus}</p><p><strong>Still disagree:</strong> ${d.stakeholderSummary.disagreement}</p>` : ''}`;
+
+  return html`<div class="decide-know">
+      <p class="decide-big">${readyHeadline(r)}</p>
+      ${gap ? html`<p>Still open: ${gap.text.charAt(0).toLowerCase()}${gap.text.slice(1)} (now ${gap.current}).</p>` : ''}
+      ${serious.length ? html`<p class="decide-serious">Serious test failure${serious.length === 1 ? '' : 's'}: ${serious.map((x, i) => html`${i ? '; ' : ''}${x.name}`)}.</p>` : ''}
+    </div>
+    ${barChangedNote(state, cap)}
+    ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}
+    <div class="decide-lines">
+      ${line('Checks', `${r.total ? `${r.met} of ${r.total} met` : 'none set'}${targetsOpen ? ` · ${plural(targetsOpen, 'target')} not met yet` : ''}`, checks)}
+      ${line('Tests', testsMeta, tests)}
+      ${line('Pilot results', p ? `${p.cases} cases, ${p.accuracy}% accurate` : 'none yet', pilot)}
+      ${hasRuns ? line('Model runs', rs ? `${plural(rs.runs, 'run')}, ${rs.gotThrough ? `${rs.gotThrough} got through` : 'nothing got through'}` : 'recorded, checked against the rules', modelRuns) : ''}
+      ${line('Stakeholder positions', !stakeholders.length ? 'none recorded' : stances.size > 1 ? 'not unanimous' : 'all agree', stakeholders.length ? positions : html`<p class="muted">No positions recorded yet.</p>`)}
+    </div>
+    <p class="small decide-all"><a href="${base}&show=all">All evidence →</a></p>`;
 }
 
 export function gateActivityCard(state, cap) {
@@ -99,16 +186,6 @@ export function requirementsList(state, capabilityId) {
     </li>`)}</ul>
     <p class="muted small"><strong>${r.met} of ${r.total}</strong> checks met.</p>
   </div>`;
-}
-
-export function testingTab(state, cap) {
-  const t = testSummary(state, cap.id);
-  if (!t.total) return emptyState(state, cap.id, 'No tests yet.', 'scenarios');
-  return html`
-    <p class="muted">${t.total} tests. ${t.status === 'complete'
-      ? html`Today's run: ${t.passed} of ${t.total} passed, ${t.highSeverity} serious failure${t.highSeverity === 1 ? '' : 's'}.`
-      : t.lastRun ? html`Last run ${fmtDate(t.lastRun)}: ${t.recorded.passed} of ${t.total} passed, ${t.recorded.highSeverity} serious failure${t.recorded.highSeverity === 1 ? '' : 's'}.` : 'Not run yet.'} <a href="#/capabilities/${cap.id}?tab=decide&show=tests">Run the tests or see all results</a>.</p>
-    ${scenarioTable(state, cap.id, { filter: 'failed', compact: true })}`;
 }
 
 export function evidenceTab(state, cap, d) {
