@@ -43,7 +43,7 @@ function safetyVerdict(state, cap, d, st) {
     return verdict('watch', 'Autonomy reduced', `${cap.name} was moved back to ${levelName(cap.authority.level)} after crossing a safety limit on ${fmtDate(m.breachedAt)}.${rv ? ` ${personAt(rv.byAt, rv.by).name} reviewed it on ${fmtDate(rv.date)}.` : ''} It stays at ${levelName(cap.authority.level)} until a change to its autonomy is approved in Decide.`);
   }
   if (crossed.length) return verdict('bad', 'Over a safety limit', `${crossed.map((r) => `"${r.text}"`).join(' ')} The latest reading is over the limit.`);
-  if (!st.rules.length) return verdict('neutral', 'Nothing to monitor yet', html`${cap.name}'s rules don't say when to reduce its autonomy, so nothing is checked automatically. Add a line under "Authority is reduced automatically when" in <a href="#/capabilities/${cap.id}?tab=status&show=rules">the rules</a>.`);
+  if (!st.rules.length) return verdict('neutral', 'Nothing to monitor yet', html`${cap.name}'s rules don't say when to reduce its autonomy, so nothing is checked automatically. Add a line under "Automation is pulled back if" in <a href="#/capabilities/${cap.id}?tab=status&show=rules">the rules</a>.`);
   if (!st.running) {
     const lowest = Math.min(...st.rules.map((r) => r.fallback));
     return verdict('neutral', 'Nothing to monitor yet', `${cap.name} is at ${levelName(cap.authority.level)}. Its safety limits start applying once it has more autonomy than ${levelName(lowest)}.`);
@@ -127,7 +127,7 @@ function safetyLimitsLine(state, cap, st) {
   const over = st.rules.filter((r) => r.crossed).length;
   const meta = over ? `${over} over the limit` : active.length ? `${plural(active.length, 'limit')}, all within range` : `none apply at ${levelName(cap.authority.level)} yet`;
   return line('Safety limits', meta, html`<table class="table mon-limits"><tbody>${st.rules.map((r) => html`<tr><td>${r.text}<div class="muted small">${effect(r)}</div></td><td class="mon-reading">${reading(r)}</td></tr>`)}</tbody></table>
-    <p class="muted small">From the rules, under "Authority is reduced automatically when". Checked automatically, so a problem is caught even if nobody is watching.</p>`);
+    <p class="muted small">From the rules, under "Automation is pulled back if". Checked automatically, so a problem is caught even if nobody is watching.</p>`);
 }
 
 // A compact summary of the gate log: what the automation tried to do.
@@ -179,14 +179,17 @@ function stillSafe(state, cap, d) {
 // Delivering value?
 // ---------------------------------------------------------------------------
 
-// Judging the rollout needs production numbers. While the actuals are still
-// the pilot's or other demo data, the verdict is neutral: too early, not failed.
+// Judging the rollout needs production evidence (Paige, 2026-10-12): while any
+// goal is still measured on pilot or demo numbers, or fewer production cases
+// are recorded than it needs (20 by default), the verdict is neutral: too
+// early, not failed.
 function valueJudgement(state, cap) {
   const { record, rows } = expectedVsActual(state, cap.id);
   const measured = rows.filter((r) => r.status !== 'not-measured');
   const met = rows.filter((r) => r.status === 'met').length;
-  const tooEarly = measured.some((r) => r.seeded);
-  return { record, rows, measured, met, tooEarly, notMet: tooEarly ? 0 : rows.filter((r) => r.status === 'not-met').length };
+  const tooEarly = measured.some((r) => !r.judged);
+  const sample = measured.reduce((acc, r) => (r.sample && r.sample.needed > acc.needed ? r.sample : acc), { needed: 0, have: 0 });
+  return { record, rows, measured, met, tooEarly, sample, pilot: measured.some((r) => r.seeded), notMet: rows.filter((r) => r.status === 'not-met' && r.judged).length };
 }
 
 function valueVerdict(cap, d, v) {
@@ -194,8 +197,11 @@ function valueVerdict(cap, d, v) {
   if (!v.rows.length) return verdict('neutral', 'No rollout goals to compare', 'The decision in force was approved before rollout goals were recorded. The next change to its autonomy will include them.');
   if (!v.measured.length) return verdict('neutral', 'Not measured yet', `None of the ${goals} has a measured number yet. We never guess.`);
   if (v.tooEarly) {
-    const day = d.monitoring && d.monitoring.windowDays ? `It's day ${d.monitoring.windowDays} of the rollout, and pilot numbers fill the gap until enough production cases come in.` : 'Pilot numbers fill the gap until enough production cases come in.';
-    return verdict('neutral', 'Too early to judge', `${v.met} of ${goals} met so far. ${day}`);
+    const cases = `${v.sample.have} of ${v.sample.needed} production cases recorded`;
+    const why = v.pilot
+      ? `${d.monitoring && d.monitoring.windowDays ? `It's day ${d.monitoring.windowDays} of the rollout. ` : ''}Pilot numbers fill the gap until enough production cases come in (${cases}).`
+      : `Goals are judged once enough production cases are recorded: ${cases}.`;
+    return verdict('neutral', 'Too early to judge', `${v.met} of ${goals} met so far. ${why}`);
   }
   const off = v.rows.filter((r) => r.status !== 'met').map((r) => r.metric);
   return verdict(off.length ? 'watch' : 'pass', `${v.met} of ${goals} on track`, off.length ? `Not on track yet: ${off.join('; ')}.` : 'Every goal set when autonomy was expanded is being met.');

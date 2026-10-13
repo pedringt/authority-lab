@@ -2,7 +2,7 @@
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionList, versionsInForce, performanceResultsSeen, readiness, decisionRequired } from './selectors.js';
-import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, requireActive } from './people.js';
+import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, requireActive, soloHint } from './people.js';
 import { amend } from './capabilities.js';
 import { SECTION_KEYS, contractValueChecks } from './contract.js';
 import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS } from './evidence.js';
@@ -339,17 +339,17 @@ export function signoffFeasibility(state, capabilityId, required, eligible, prop
   const cap = getCapability(state, capabilityId);
   const who = people(state)[proposedBy] ? people(state)[proposedBy].name : 'you';
   if (required.ownerOnly) {
-    if (!eligible.includes(cap.owner)) return { ok: false, reason: `Only the owner, ${people(state)[cap.owner].name}, can approve this, and they can't right now (they proposed it or aren't active). Ask another stakeholder to propose it.` };
+    if (!eligible.includes(cap.owner)) return { ok: false, reason: `Only the owner, ${people(state)[cap.owner].name}, can approve this, and they can't right now (they proposed it or aren't active). Ask another stakeholder to propose it${soloHint(state)}` };
     return { ok: true };
   }
   if (eligible.length < required.approvers) {
-    return { ok: false, reason: `This change needs ${required.approvers} approvers other than ${who}, but only ${eligible.length} stakeholder${eligible.length === 1 ? '' : 's'} can approve. Add stakeholders, or ask someone else to propose it.` };
+    return { ok: false, reason: `This change needs ${required.approvers} approvers other than ${who}, but only ${eligible.length} stakeholder${eligible.length === 1 ? '' : 's'} can approve. Add stakeholders, or ask someone else to propose it${soloHint(state)}` };
   }
   if (required.riskRequired && !eligible.some((k) => isRiskStakeholder(state, capabilityId, k))) {
-    return { ok: false, reason: `This needs a Risk approval, and no stakeholder other than ${who} holds the Risk approver right. Add a stakeholder who holds it (rights are set on People), or ask someone else to propose it.` };
+    return { ok: false, reason: `This needs a Risk approval, and no stakeholder other than ${who} holds the Risk approver right. Add a stakeholder who holds it (rights are set on People), or ask someone else to propose it${soloHint(state)}` };
   }
   if (required.riskRequired && required.approvers === 2 && eligible.length === 1) {
-    return { ok: false, reason: `This needs two approvers other than ${who}, but only one person can approve. Add a stakeholder, or ask someone else to propose it.` };
+    return { ok: false, reason: `This needs two approvers other than ${who}, but only one person can approve. Add a stakeholder, or ask someone else to propose it${soloHint(state)}` };
   }
   return { ok: true };
 }

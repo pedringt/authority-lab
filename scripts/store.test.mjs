@@ -593,7 +593,7 @@ test('whoever is acting is recorded as the authorizer, alongside the owner when 
 });
 
 test('"not delegated, by design" needs a rationale and is recorded as a decision', () => {
-  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /Say why the AI won't do this/);
+  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /Say why this stays with people/);
   const s = addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High', reversibility: 'Difficult to reverse' }, notDelegated: true, rationale: 'Deletion is irreversible and rare. A person does it.', by: 'daniel' });
   const c = s.capabilities[s.capabilities.length - 1];
   assert.equal(c.status, 'not-delegated');
@@ -1195,7 +1195,7 @@ test('a proposed contract must pass the builder checks before it can be submitte
   // Empty hard limits on a High-impact capability.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [], autoRestriction: [] }, by: 'priya', reason: 'Trying to drop the hard limits.' }), /can't be submitted yet\. Fix 2 problems/);
   // A contradiction.
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "The AI may" and "The AI must never". Keep it in one/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "Allowed" and "Never allowed". Keep it in one/);
   // An unmeasurable restriction rule.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, autoRestriction: ['Too many errors returns the capability to Draft.'] }, by: 'priya', reason: 'A vague rule.' }), /has no number/);
   // Value limit only under "must never" on a financial capability.
@@ -1617,7 +1617,7 @@ test('the roster is version 1 of the seed, with explicit rights; everything read
 
 test('only a workspace admin changes the roster, always with a reason; add, edit and deactivate write versions', () => {
   let s = initialState();
-  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: '' }), /Add a reason \(a few words\)/);
   assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: '', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' }), /name, a title and a team/);
   const before = s.activity.length;
@@ -1635,7 +1635,7 @@ test('only a workspace admin changes the roster, always with a reason; add, edit
   s = addPerson(s, { name: 'Omar Haddad', title: 'Analyst', team: 'Finance', by: 'jonas', reason: 'A second Omar.' });
   assert.ok(personRecord(s, 'omar-haddad-2'));
   // Edit name/title/team only.
-  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => editPerson(s, 'omar-haddad', { by: 'maya', reason: 'Nothing happened here.' }), /Nothing to save: the name, title and team are unchanged/);
   s = editPerson(s, 'omar-haddad', { title: 'Support Team Lead', by: 'maya', reason: 'Promoted to lead.' });
   assert.equal(personRecord(s, 'omar-haddad').role, 'Support Team Lead');
@@ -1730,7 +1730,7 @@ test('no team-based Risk logic remains in the store or the views', () => {
 test('rights are granted and removed through a proposal by an admin, approved by a different admin, never self-granted', () => {
   let s = initialState();
   assert.deepEqual(activeAdmins(s).sort(), ['jonas', 'maya']);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'riskApprover', grant: true, by: 'maya', reason: 'I want it.' }), /You can't grant a right to yourself/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: true, by: 'maya', reason: 'Already has it.' }), /Daniel Okafor is already a Risk approver/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: false, by: 'maya', reason: 'Never had it.' }), /Elena .* isn't a Risk approver/);
@@ -2310,12 +2310,16 @@ test('workspace setup records the workspace, the one workflow and the founding r
   assert.throws(() => setUpWorkspace(s, SETUP), /already set up/, 'setup happens once');
 });
 
-test('setup refuses an incomplete workspace and a founding roster with fewer than two admins', () => {
+// Rule change (Paige, 2026-10-12): one person can start a workspace. This test
+// used to refuse a founding roster with fewer than two people or two admins.
+test('setup refuses an incomplete workspace and a roster with no workspace admin setting it up; one admin is enough', () => {
   const e = startEmpty();
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workspace: { name: '' } }), /Name the workspace/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workflow: { name: '' } }), /Name the workflow/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]] }), /Add at least two people/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /Mark at least 2 people as workspace admins/, 'a lone admin could never grant a right');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [] }), /Add the person starting the workspace/);
+  assert.doesNotThrow(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]], by: 'Ana Ruiz' }), 'one person, the workspace admin, is enough');
+  assert.doesNotThrow(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]], by: 'Ana Ruiz' }), 'a lone admin may start it');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /isn't marked as a workspace admin/, 'whoever sets it up is still an admin');
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Ana Ruiz', title: 'Twin', team: 'X' }] }), /same name/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Dev', title: '', team: 'X' }] }), /name, a title and a team/);
 });
@@ -2372,10 +2376,13 @@ test('repro: People history never calls the first list "Seed roster", and a work
   assert.match(demo, /<h3>Demo starting list<\/h3>/);
 });
 
-test('setup notes, without blocking, when fewer than two Risk approvers are listed', () => {
+// Rule change (Paige, 2026-10-12): setup no longer shows a Risk approver note;
+// a Risk approver is asked for when a change first needs one.
+test('setup never needs a Risk approver; the founding count is still computed', () => {
   assert.equal(foundingRiskGap(FOUNDERS), 1);
   assert.equal(foundingRiskGap([...FOUNDERS, { name: 'Dev Patel', title: 'Risk Analyst', team: 'Risk', riskApprover: true }]), null);
   assert.doesNotThrow(() => setUpWorkspace(startEmpty(), SETUP), 'one Risk approver is allowed');
+  assert.doesNotThrow(() => setUpWorkspace(startEmpty(), { ...SETUP, people: FOUNDERS.slice(0, 2) }), 'and so is none');
 });
 
 // ---------------------------------------------------------------------------
@@ -2412,7 +2419,7 @@ test('repro: a rename reason with no final full stop still ends its sentence in 
 
 test('only an active workspace admin renames, and only with a reason and an actual change', () => {
   const s = initialState();
-  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/, 'a Risk approver is not enough');
+  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/, 'a Risk approver is not enough');
   assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'maya', reason: 'rename' }), /Add a reason for the change \(a sentence\)/);
   assert.throws(() => renameWorkspace(s, { workspace: { name: 'Northstar Support' }, workflow: { name: 'Customer Support Resolution' }, reason: 'No real change here.', by: 'maya' }), /Nothing to save: the names and descriptions are unchanged/);
   assert.throws(() => renameWorkspace(s, { ...RENAME, workspace: { name: ' ' }, by: 'maya' }), /Name the workspace/);
@@ -3966,7 +3973,7 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=rules'))), /<h3>Requires human review<\/h3>/);
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=approvals'))), /data-form="decide-action"/);
   // Status: the level, what it does now, the proposed level, the open gap, and whether it's ready, told once.
-  assert.match(page, /Draft <span class="st-lvl">Level 2 of 5<\/span>/);
+  assert.match(page, /Draft <span class="st-lvl">Level 2<\/span>/);
   assert.match(page, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
   assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 checks are met; still open: high-value refund performance needs more evidence\./);
   assert.match(page, /Then<\/span><p>Standard refunds up to \$50 would run without review\./);
@@ -3991,8 +3998,8 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   // Decide: the open decision.
   const dec = String(capabilityView(s, RR, new URLSearchParams('tab=decide')));
   assert.match(dec, /Should we expand autonomy for this capability\?/);
-  assert.match(dec, /<span class="muted small">Now<\/span><strong>Drafts\. A person approves every action\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
-  assert.match(dec, /<span class="muted small">Proposed<\/span><strong>Acts on its own within limits\. Everything else goes to a person\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
+  assert.match(dec, /<span class="muted small">Now<\/span><strong>Prepares the action\. A person approves every one\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
+  assert.match(dec, /<span class="muted small">Proposed<\/span><strong>Runs automatically within limits\. Everything else goes to human review\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
   // History: decisions, versions and the activity link.
   const hist = String(capabilityView(s, RR, new URLSearchParams('tab=history')));
   assert.match(hist, /Authority change #02/);
@@ -4331,7 +4338,7 @@ test('copy: an automatic restriction leads with what happened, then the formal t
   const s = simulateBreach(authorize(pendingRR(), RR), RR);
   const rec = s.decisionRecords.at(-1);
   const page = String(decisionRecordView(s, rec.id));
-  assert.match(page, /<strong>The AI was moved back to Draft after crossing a safety limit\.<\/strong>/);
+  assert.match(page, /<strong>Refund recommendation was moved back to Draft after crossing a safety limit\.<\/strong>/);
   assert.ok(page.indexOf('moved back to Draft') < page.indexOf('Formally, this is an automatic restriction'));
   const list = String(decisionWorkspaceView(s, RR));
   assert.match(list, /Refund recommendation was moved back to Draft after crossing a safety limit\. Autonomy can&#39;t expand again until someone records what happened/);

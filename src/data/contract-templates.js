@@ -3,11 +3,11 @@
 // summary. Everything here is deterministic. Nothing calls a model.
 
 export const CONTRACT_SECTIONS = [
-  ['may', 'The AI may'],
-  ['mustAsk', 'Ask a person for these cases'],
-  ['mustNever', 'The AI must never'],
-  ['escalation', 'Ask a person whenever this comes up'],
-  ['autoRestriction', 'Authority is reduced automatically when'],
+  ['may', 'Allowed'],
+  ['mustAsk', 'Requires human review, for these cases'],
+  ['mustNever', 'Never allowed'],
+  ['escalation', 'Requires human review, whenever this comes up'],
+  ['autoRestriction', 'Automation is pulled back if'],
 ];
 
 const BASE = {
