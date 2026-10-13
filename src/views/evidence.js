@@ -5,7 +5,7 @@ import { requirementsList, proposedChangeLabel } from './cap-decide.js';
 import { capabilityHeading, filterBar } from './tests.js';
 import { evidenceSourcesCard } from './scenarios.js';
 import { fromBadge, standingNote, provenanceDetails, configChangeNotices } from './provenance.js';
-import { importedStanding } from '../store/index.js';
+import { importedStanding, importedVerdicts } from '../store/index.js';
 
 const STATUSES = [['all', 'All statuses'], ['pass', 'Pass'], ['watch', 'Needs attention'], ['insufficient', 'Not enough data'], ['fail', 'Fail'], ['recorded', 'Not judged yet']];
 // The same words on the filter and on each item's badge.
@@ -24,7 +24,10 @@ export function evidenceView(state, capabilityId, query, { embedded = false } = 
   const risk = query.get('risk') || 'all';
 
   // Stored evidence plus what the gate log derives (A5), each labelled.
-  const all = [...d.evidence, ...gateEvidence(state, capabilityId)];
+  // An imported result takes the status of the targets and requirements that
+  // judge it (#120); one nothing judges stays "Not judged yet".
+  const verdicts = importedVerdicts(state, capabilityId);
+  const all = [...d.evidence.map((e) => (e.from === 'imported' && verdicts.has(e.id) ? { ...e, status: verdicts.get(e.id) } : e)), ...gateEvidence(state, capabilityId)];
   const seededIds = new Set(((seed.capabilityData[capabilityId] || {}).evidence || []).map((e) => e.id));
   const standing = importedStanding(state, capabilityId);
   const sources = [...new Set(all.map((e) => e.source))];

@@ -363,3 +363,4 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .provenance .kv { margin-top: 6px; grid-template-columns: 1fr; gap: 4px; }
 .provenance .kv > div { grid-template-columns: 100px 1fr; }
 .provenance .kv dd { overflow-wrap: anywhere; }
+.imported-segs { margin: 2px 0 6px 16px; }

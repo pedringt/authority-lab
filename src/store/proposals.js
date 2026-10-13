@@ -5,6 +5,7 @@ import { current, versionList, versionsInForce, performanceResultsSeen, readines
 import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, requireActive, soloHint } from './people.js';
 import { amend } from './capabilities.js';
 import { SECTION_KEYS, contractValueChecks } from './contract.js';
+import { requirementsNow, judgeMeasure } from './measures.js';
 import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS } from './evidence.js';
 
 // Assumption, not yet confirmed (decision 7): the same sign-off applies to
@@ -102,6 +103,12 @@ export function cleanContractValue(value) {
   if (!v.may.length && !v.mustAsk.length && !v.mustNever.length) throw new Error('Add at least one rule.');
   // The structured data section (A2) travels with the contract when present.
   if (value && Array.isArray(value.dataSeen)) v.dataSeen = [...new Set(value.dataSeen.map((f) => String(f).trim()).filter(Boolean))];
+  // Restriction lines measured from imported evidence (#120) keep their
+  // measure while the line itself is kept.
+  if (value && value.ruleMeasures && typeof value.ruleMeasures === 'object') {
+    const kept = Object.entries(value.ruleMeasures).filter(([line]) => v.autoRestriction.includes(line));
+    if (kept.length) v.ruleMeasures = Object.fromEntries(kept);
+  }
   return v;
 }
 
@@ -117,9 +124,22 @@ export function cleanAmendmentValue(state, capabilityId, kind, value) {
   if (missingCore.length) throw new Error(`These rows are required. You can change their numbers but not remove them: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
   const baseC = current(state, capabilityId, 'criteria');
   const baseR = current(state, capabilityId, 'requirements');
-  const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? { ...b, name: x.name, target: x.target, note: x.note } : x; });
-  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); return b ? { ...b, text: x.text } : x; });
+  const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? withMeasure({ ...b, name: x.name, target: x.target, note: x.note }, b, x, x.target, x.name) : x; });
+  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); return b ? withMeasure({ ...b, text: x.text }, b, x, x.text, x.text) : x; });
   return { criteria, requirements };
+}
+
+// A measured row (#120) keeps its measure when a person edits only the
+// words: the measure's number follows the wording's number, in the same
+// direction, so the two never disagree. A submitted measure is used as sent
+// (cleanCriteria has already checked it against the words).
+function withMeasure(row, base, submitted, words, label) {
+  if (submitted.measure) return { ...row, measure: submitted.measure };
+  if (!base.measure || base.measure.op === '=') return row;
+  const t = threshold(words);
+  const atLeast = base.measure.op === '>=' || base.measure.op === '>';
+  if (!t || t.atLeast !== atLeast) throw new Error(`"${label}" is measured (${base.measure.op} ${base.measure.value}), so its wording must keep a number in the same direction.`);
+  return { ...row, measure: { ...base.measure, value: t.n } };
 }
 
 // Re-evaluate a requirement's "met" when its threshold changed and the current
@@ -137,8 +157,10 @@ export function evaluateRequirement(req, baseReq) {
 export function proposalReadiness(state, capabilityId, proposal) {
   const now = readiness(state, capabilityId);
   if (!proposal || proposal.kind !== 'criteria') return { now, proposed: null };
-  const base = current(state, capabilityId, 'requirements');
+  const base = requirementsNow(state, capabilityId);
   const reqs = proposal.value.requirements.map((r) => {
+    // A proposed measure is judged against the evidence as it stands (#120).
+    if (r.measure) { const j = judgeMeasure(state, capabilityId, r.measure); return { ...r, current: j.text, met: j.status === 'pass' }; }
     const b = base.find((x) => x.id === r.id);
     const merged = { ...r, current: b ? b.current : r.current, met: b ? b.met : r.met, gap: b ? b.gap : r.gap };
     return { ...merged, met: evaluateRequirement(merged, b) };
@@ -180,6 +202,11 @@ export function tighteningOnly(base, next) {
       const b = before.find((x) => x.id === a.id);
       if (!b) return { ok: false, reason: `It adds "${label(a)}", and new rows always need approval.`, changes };
       for (const f of fixed) if (String(a[f] || '') !== String(b[f] || '')) return { ok: false, reason: `It changes the ${f} of "${label(b)}".`, changes };
+      // How a row is measured (#120) may change only in its number, which
+      // must move with the wording; anything else is a different bar.
+      const rest = (m) => (m ? JSON.stringify({ ...m, value: undefined }) : null);
+      if (rest(a.measure) !== rest(b.measure)) return { ok: false, reason: `It changes how "${label(b)}" is measured.`, changes };
+      if (a.measure && b.measure && a.measure.value !== b.measure.value && String(a[field] || '') === String(b[field] || '')) return { ok: false, reason: `It changes how "${label(b)}" is measured.`, changes };
       if (String(a[field] || '') === String(b[field] || '')) continue;
       const p = thresholdParts(b[field]);
       const q = thresholdParts(a[field]);
