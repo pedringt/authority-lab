@@ -167,7 +167,7 @@ function story(state, cap, d) {
   const base = `#/capabilities/${cap.id}`;
   const pulledBack = restricted || cap.status === 'review-required';
   return html`<section class="st-story" data-next="${next.kind}">
-    <h2 class="st-title">${title} <span class="st-lvl">Level ${level} of 5</span> ${state1}</h2>
+    <h2 class="st-title">${title} <span class="st-lvl">Level ${level}</span> ${state1}</h2>
     <p class="st-now">${levelSentence(cap, level, limitsInForce(state, cap), { notDelegated: cap.status === 'not-delegated' })}</p>
     <div class="st-chapters">
       ${why ? chapter('Why it\'s here', why) : ''}

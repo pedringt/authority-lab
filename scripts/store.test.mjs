@@ -1195,7 +1195,7 @@ test('a proposed contract must pass the builder checks before it can be submitte
   // Empty hard limits on a High-impact capability.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [], autoRestriction: [] }, by: 'priya', reason: 'Trying to drop the hard limits.' }), /can't be submitted yet\. Fix 2 problems/);
   // A contradiction.
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "The AI may" and "The AI must never". Keep it in one/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "Allowed" and "Never allowed". Keep it in one/);
   // An unmeasurable restriction rule.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, autoRestriction: ['Too many errors returns the capability to Draft.'] }, by: 'priya', reason: 'A vague rule.' }), /has no number/);
   // Value limit only under "must never" on a financial capability.
@@ -3973,7 +3973,7 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=rules'))), /<h3>Requires human review<\/h3>/);
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=approvals'))), /data-form="decide-action"/);
   // Status: the level, what it does now, the proposed level, the open gap, and whether it's ready, told once.
-  assert.match(page, /Draft <span class="st-lvl">Level 2 of 5<\/span>/);
+  assert.match(page, /Draft <span class="st-lvl">Level 2<\/span>/);
   assert.match(page, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
   assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 checks are met; still open: high-value refund performance needs more evidence\./);
   assert.match(page, /Then<\/span><p>Standard refunds up to \$50 would run without review\./);
@@ -4338,7 +4338,7 @@ test('copy: an automatic restriction leads with what happened, then the formal t
   const s = simulateBreach(authorize(pendingRR(), RR), RR);
   const rec = s.decisionRecords.at(-1);
   const page = String(decisionRecordView(s, rec.id));
-  assert.match(page, /<strong>The AI was moved back to Draft after crossing a safety limit\.<\/strong>/);
+  assert.match(page, /<strong>Refund recommendation was moved back to Draft after crossing a safety limit\.<\/strong>/);
   assert.ok(page.indexOf('moved back to Draft') < page.indexOf('Formally, this is an automatic restriction'));
   const list = String(decisionWorkspaceView(s, RR));
   assert.match(list, /Refund recommendation was moved back to Draft after crossing a safety limit\. Autonomy can&#39;t expand again until someone records what happened/);

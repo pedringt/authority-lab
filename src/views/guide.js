@@ -87,7 +87,7 @@ export function guideView(g, step) {
         : html`<div class="guide-panel"><p class="guide-rec"><strong>Recommended: expand autonomy within limits.</strong><br><span class="muted">Allow standard refunds up to $${c.maxValue} to run automatically. Keep high-value refunds under human review.</span></p>
           <ul class="guide-choices"><li class="is-on"><strong>Expand autonomy</strong> <span class="pill is-on">Within limits</span> <span class="pill">Broad autonomy</span></li><li>Keep current limits</li><li>Reduce autonomy</li><li>Pause and redesign</li></ul>
           <p class="small muted">Limits, rollout goals, the rollout plan and the reason are prefilled for the demo.</p>
-          <p><button class="btn btn-primary" data-action="guide-decide">Record decision as ${people(s).maya.name}</button></p></div>`}`;
+          <p><button class="btn btn-primary" data-action="guide-decide">Record decision as ${people(s)[cap.owner].name}</button></p></div>`}`;
   } else {
     const restricted = reviewNeeded(s, cap.id).restriction;
     const m = d.monitoring;

@@ -34,20 +34,29 @@ The tests cover the state transitions: running the suite, authorizing each decis
 
 ## Demo story
 
+A first visit opens a welcome page (`#/welcome`) with two paths: **Guided demo** (seven steps, `#/guide/1` to `#/guide/7`, on its own in-memory copy of the demo, so it never changes the workspace) and **Explore the finished workspace**. **Settings → Guided demo** opens it again. The story below is the workspace path.
+
 1. **Overview**: To do leads with the decision on Refund recommendation: 5 of 6 checks met, and high-value refunds are the gap. Approvals needed shows two refunds waiting for a person; Important results shows the thin high-value data (18 cases at 83%).
-2. **Capabilities → Refund recommendation → Rules**: what the AI may do, when it must ask a person, what it must never do, and when its authority is reduced automatically.
-3. **Evidence → Tests → Run tests**: 24 of 26 pass. H-04 (fraud flag present) is a high-severity miss.
-4. **Evidence → Results**: 218 pilot cases at 94%, but 18 high-value cases at 83%.
-5. **Summary → People involved**: Support Operations wants to expand; Risk wants high-value cases held.
-6. **Open the decision** (from the Overview, Summary or the Decision tab): choose **Expand with limits**, check the limits, the rollout plan and the expected impact (all prefilled for the demo), read what the option would mean, write why, and **Record decision**.
-7. **Decision record #04** is written with the evidence snapshot. Current authority on the Overview updates.
-8. **Monitoring → Still safe? → Simulate crossing the limit**: severe errors exceed 5% of the rolling 50; software moves the capability back to Draft ("The AI was moved back to Draft after crossing a safety limit."), creates an alert, an activity event and a restriction record, and locks expansion until a review is recorded.
-9. **Monitoring → Review what happened**: Refund recommendation is High impact, so switch **Acting as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changed, and **Save review**. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
+2. **Capabilities → Refund recommendation → Status**: what it can do now (Draft: refunds are prepared automatically, a person approves every one), why it's there and what happens next. **Boundaries** opens a one-line summary; **All rules** shows what is allowed, what requires human review, what is never allowed, and when automation is pulled back.
+3. **Decide → What do we know? → Tests → See every test and run the suite**, then **Run tests**: 24 of 26 pass. H-04 (fraud flag present) is a serious miss.
+4. **Decide → Pilot results**: 218 cases at 94%, but 18 high-value cases at 83%.
+5. **Decide → Stakeholder positions** (or **People involved** on Status): not unanimous. Support Operations wants to expand; Risk wants anything over $50 kept with a person.
+6. **Decide, Your decision**: choose **Expand autonomy → Within limits**, check the limits, what should improve and the rollout plan (all prefilled for the demo), write why, and **Record decision**.
+7. **Authority change #04** (`AC-04`) is written with the evidence snapshot. Current autonomy on the Overview updates to Act within limits.
+8. **Monitor → Still safe? → Simulate a safety-limit breach**: severe errors exceed 5% of the rolling 50; software moves the capability back to Draft, writes a restriction record, raises an alert and an activity event, and locks expansion until a review is recorded. The verdict reads "Autonomy reduced".
+9. **Monitor → Needs review**: Refund recommendation is High impact, so switch **Demo as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changes as a result, and **Save review**. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
 10. **Settings → Reset demo** (the gear at the top right) restores the seeded state.
 
 ## Where things are
 
-Three places across the top: **Overview** (To do, Approvals needed, Important results, Current authority), **Capabilities** and **Records** (decision records and the Activity history). **Acting as** stays in the header; **People**, **Workspace**, **Start empty** and **Reset demo** are in the **Settings** menu (the gear, top right). A capability has six tabs: **Summary**, **Rules**, **Evidence** (Results, All evidence, Decision requirements, Targets, Tests, Model runs), **Decision** (the decision and Approvals), **Monitoring** (Still safe? and Delivering value?) and **History**. Stakeholder positions show in Summary and on the decision; **Manage stakeholders** opens the editor. Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/…`, and old tabs such as `?tab=contract`, `?tab=criteria`, `?tab=testing`, `?tab=waiting`, `?tab=stakeholders`) still open the right place (`src/routes.js`). Each page opens with one sentence; the rest is behind **How this works**.
+A dark bar across the top holds three places: **Overview** (To do, Approvals needed, Important results, Current autonomy), **Capabilities** (one table, plus **Add capability**) and **Records** (Decisions and Activity). On the right sit **Demo as** (a demo stand-in for sign-in) and the **Settings** gear: **People**, **Workspace**, **Guided demo**, **Start empty** and **Reset demo**. A capability opens with a header panel and four tabs:
+
+- **Status**: what it can do now, why it's here, what happens next, then. **Needs your decision** lists single actions waiting for a person; one-line **Boundaries** and **People involved** follow. The full rules are at `?tab=status&show=rules`; every waiting action at `?tab=status&show=approvals`.
+- **Decide**: one flow (what are we deciding, what do we know, the recommendation, your decision, limits, what should improve, rollout plan, why, review and record). Full evidence views open with `show=tests`, `runs`, `all`, `targets`, `requirements` or `results`.
+- **Monitor**: **Still safe?** and **Delivering value?**, each leading with a verdict.
+- **History**: one timeline of records, reviews, test runs, proposed changes and versions.
+
+Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/…`, and old tabs such as `?tab=summary`, `?tab=rules`, `?tab=evidence`, `?tab=decision`, `?tab=monitoring`, `?tab=contract`, `?tab=criteria`, `?tab=waiting`) are rewritten to where they live now (`src/routes.js`).
 
 ## Standards
 
@@ -59,19 +68,19 @@ Three places across the top: **Overview** (To do, Approvals needed, Important re
 
 ## Starting empty
 
-**Settings → Start empty** (the gear at the top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). Setup comes first: name the workspace and its one workflow, record the founding roster (at least two workspace admins; rights are set directly only here, and governed from then on), and say which founding admin is setting it up. Then add the first capability. **Reset demo** brings Northstar back.
+**Settings → Start empty** (the gear at the top right) swaps the Northstar demo for a blank workspace, after confirming that it erases all records (Reset demo asks the same). **Start a workspace** comes first: your name and title (you become its workspace admin) and the names of the workspace and its one workflow. One person is enough; a second admin or a Risk approver is asked for the first time an approval needs one ("You're the only person in this workspace: add someone on People first."). Until the workspace has had two active workspace admins, the founding roster rule applies: the one admin's grant of a right to someone else takes effect at once, recorded as a founding change; giving yourself a right is refused, and removals and deactivating a rights holder still need approval (this rule awaits Paige's confirmation in DECISIONS). Then add the first capability. **Reset demo** brings Northstar back.
 
 ## Adding a capability
 
-**Capabilities → Add capability** defines a new capability (name, summary, owner), its risk profile, and its starting authority: Level 0, Level 1, or "Not delegated, by design" with a rationale. It writes the capability's first decision record and lands on its **Setup** checklist. Every tab is always visible; empty tabs say what is missing and link to the next setup step. The **Acting as** picker in the header (default: the capability owner) stands in for sign-in and is the author on records; only active people appear. Reset demo removes added capabilities.
+**Capabilities → Add capability** asks four questions: What does it do? (name, one sentence), Who owns it?, What happens if it gets this wrong? (the risk profile), and What does it do today? The last is context, not authority: "Nothing yet" and "Not something to delegate" (which needs a reason) start at Level 0; "Recommends", "Drafts for approval" and "Already acts in some cases" start at Level 1, and formalizing any existing autonomy is the first authority decision. It writes the capability's first decision record and lands on its **Setup** checklist, grouped in three stages: Define, Test, Decide. Every tab is always visible; empty tabs say what is missing and link to the next setup step. The **Demo as** picker in the header (default: the capability owner) stands in for sign-in and is the author on records; only active people appear. Reset demo removes added capabilities.
 
 ## Building the rules (the delegation contract)
 
-For a new capability, **Setup → Write the rules** starts from a template picked by the risk profile plus seeded keyword suggestions labelled "Suggested by AI". Each suggestion is accepted, edited or rejected on its own (no accept-all; rejections stay in the record), all five sections are confirmed (The AI may, Ask a person for these cases, The AI must never, Ask a person whenever this comes up, Authority is reduced automatically when), software checks block empty hard limits above Low impact, contradictions, restriction rules without a number or window, and financial capabilities without a value limit in "may" or "must ask", and a named person saves the rules (**Save rules**) as contract v1. Templates and suggestion rules live in `src/data/contract-templates.js`.
+For a new capability, **Setup → Set the boundaries** (**Review the rules**) starts from a template picked by the risk profile plus seeded keyword suggestions labelled "Suggested by AI". Each suggestion is accepted, edited or rejected on its own (no accept-all; rejections stay in the record), all five sections are confirmed (The AI may, Ask a person for these cases, The AI must never, Ask a person whenever this comes up, Authority is reduced automatically when), software checks block empty hard limits above Low impact, contradictions, restriction rules without a number or window, and financial capabilities without a value limit in "may" or "must ask", and a named person saves the rules (**Save rules**) as contract v1. Templates and suggestion rules live in `src/data/contract-templates.js`.
 
 ## Success criteria and evidence requirements (Targets and Decision requirements in the app)
 
-Setup step 3 (**Set targets**) opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Core rows (quality, severe errors, minimum cases) cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed change (**Propose a target change**, #7). Defaults live in `src/data/criteria-defaults.js`.
+Setup's **Set what good looks like** (**Review the checks**) opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Core rows (quality, severe errors, minimum cases) cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed change (**Propose a target change**, #7). Defaults live in `src/data/criteria-defaults.js`.
 
 ## Sign-off rules in one place
 
@@ -91,19 +100,19 @@ Locked criteria, and the contract once a pilot has started, change through a pro
 
 ## A new capability, end to end
 
-Expanding authority needs a pending proposal; restricting, suspending or redesigning does not, but still needs a named person, a rationale and a record. Status follows authority decisions only: In setup until a person authorizes the move to Draft, then Pilot. Each step must be real before the next: rules before targets, targets before tests, tests before a decision. The Setup page tracks them.
+Expanding authority needs a pending proposal; restricting, suspending or redesigning does not, but still needs a named person, a rationale and a record. Status follows authority decisions only: In setup until a person authorizes the move to Draft, then Pilot. Each step must be real before the next: rules before targets, targets before tests, tests before a decision. The Setup page tracks them in three stages (Define, Test, Decide).
 
-1. **Capabilities → Add capability**: name, summary, owner, risk profile, starting authority (Level 0 or 1). Writes the capability's first record.
-2. **Setup → Write the rules**: template plus suggestions, review each one, confirm the sections, **Save rules** (contract v1).
-3. **Setup → Set targets**: targets and decision requirements from the risk profile; save v1.
-4. **Setup → Name stakeholders**: the people whose positions will be recorded.
-5. **Setup → Open the library**: **Add 20 suggested cases** ("Suggested by AI") or write your own; **Save test cases**.
-6. **Evidence → Tests → Run tests**: results are simulated deterministically; the first run locks the targets.
-7. **Summary or Decision → Propose a move to Level 2**, then **Open the decision** and **Record decision**: the capability's second record, status Pilot.
+1. **Capabilities → Add capability**: the four questions; starts at Level 0 or 1. Writes the capability's first record.
+2. **Setup → Set the boundaries**: template plus suggestions, review each one, confirm the sections, **Save rules** (contract v1).
+3. **Setup → Set what good looks like**: targets and decision requirements from the risk profile; **Save targets** (v1).
+4. **Setup → Add test cases**: **Add 20 suggested cases** ("Suggested by AI") or write your own; **Save test cases**.
+5. **Setup → Run the tests** (Decide → Tests): results are simulated deterministically; the first run locks the targets.
+6. **Setup → Name who decides**: the people whose positions will be recorded (best before the first run: after it, changing who is involved needs sign-off).
+7. **Setup or Decide → Propose a move to Level N**, then **Record decision** in the Decide flow: the capability's second record; a move to Draft sets status Pilot.
 
 ## People and rights
 
-The roster lives in versioned state (`state.roster`), seeded from `src/data/seed.js`. Each person has a name, title, team, `active` flag and explicit rights `{ riskApprover, workspaceAdmin }`. Only a workspace admin changes the roster (add, edit, deactivate; never delete), always with a reason, as a new version. Granting or removing a right, or deactivating a rights holder, is a proposal by an admin approved by someone else (a different admin, or an existing Risk approver for a Risk approver grant); the recipient of a grant never approves it; the last admin cannot be removed. Deactivated people cannot act, propose, approve or be stakeholders. Seed admins: Maya Chen, Jonas Lindqvist. Seed Risk approvers: Daniel Okafor, Sofia Alvarez.
+The roster lives in versioned state (`state.roster`), seeded from `src/data/seed.js`. Each person has a name, title, team, `active` flag and explicit rights `{ riskApprover, workspaceAdmin }`. Only a workspace admin changes the roster (add, edit, deactivate; never delete), always with a reason, as a new version. Granting or removing a right, or deactivating a rights holder, is a proposal by an admin approved by someone else (a different admin, or an existing Risk approver for a Risk approver grant); the recipient of a grant never approves it; the last admin cannot be removed. The one exception is the founding roster (see Starting empty), which never applies to the demo because it starts with two admins. Deactivated people cannot act, propose, approve or be stakeholders. Seed admins: Maya Chen, Jonas Lindqvist. Seed Risk approvers: Daniel Okafor, Sofia Alvarez.
 
 ## Coverage warnings
 

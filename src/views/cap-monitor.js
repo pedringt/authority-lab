@@ -43,7 +43,7 @@ function safetyVerdict(state, cap, d, st) {
     return verdict('watch', 'Autonomy reduced', `${cap.name} was moved back to ${levelName(cap.authority.level)} after crossing a safety limit on ${fmtDate(m.breachedAt)}.${rv ? ` ${personAt(rv.byAt, rv.by).name} reviewed it on ${fmtDate(rv.date)}.` : ''} It stays at ${levelName(cap.authority.level)} until a change to its autonomy is approved in Decide.`);
   }
   if (crossed.length) return verdict('bad', 'Over a safety limit', `${crossed.map((r) => `"${r.text}"`).join(' ')} The latest reading is over the limit.`);
-  if (!st.rules.length) return verdict('neutral', 'Nothing to monitor yet', html`${cap.name}'s rules don't say when to reduce its autonomy, so nothing is checked automatically. Add a line under "Authority is reduced automatically when" in <a href="#/capabilities/${cap.id}?tab=status&show=rules">the rules</a>.`);
+  if (!st.rules.length) return verdict('neutral', 'Nothing to monitor yet', html`${cap.name}'s rules don't say when to reduce its autonomy, so nothing is checked automatically. Add a line under "Automation is pulled back if" in <a href="#/capabilities/${cap.id}?tab=status&show=rules">the rules</a>.`);
   if (!st.running) {
     const lowest = Math.min(...st.rules.map((r) => r.fallback));
     return verdict('neutral', 'Nothing to monitor yet', `${cap.name} is at ${levelName(cap.authority.level)}. Its safety limits start applying once it has more autonomy than ${levelName(lowest)}.`);
@@ -127,7 +127,7 @@ function safetyLimitsLine(state, cap, st) {
   const over = st.rules.filter((r) => r.crossed).length;
   const meta = over ? `${over} over the limit` : active.length ? `${plural(active.length, 'limit')}, all within range` : `none apply at ${levelName(cap.authority.level)} yet`;
   return line('Safety limits', meta, html`<table class="table mon-limits"><tbody>${st.rules.map((r) => html`<tr><td>${r.text}<div class="muted small">${effect(r)}</div></td><td class="mon-reading">${reading(r)}</td></tr>`)}</tbody></table>
-    <p class="muted small">From the rules, under "Authority is reduced automatically when". Checked automatically, so a problem is caught even if nobody is watching.</p>`);
+    <p class="muted small">From the rules, under "Automation is pulled back if". Checked automatically, so a problem is caught even if nobody is watching.</p>`);
 }
 
 // A compact summary of the gate log: what the automation tried to do.
