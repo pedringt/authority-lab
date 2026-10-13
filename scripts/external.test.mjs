@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import {
   initialState, capData, criteriaLocked, saveCriteria, defaultsFor, activityEvents, startEmpty, addCapability,
-  checkEvidence, importEvidence, importEvidenceFiles, evidenceImports, findImport, measurementText, canonicalEvidence, EVIDENCE_SCHEMA, createStore,
+  checkEvidence, importEvidence, importEvidenceFiles, evidenceImports, findImport, measurementText, canonicalEvidence, EVIDENCE_SCHEMA, createStore, BUILT_IN_WORKSPACES,
 } from '../src/store/index.js';
 import { setPeople } from '../src/ui.js';
 import { people } from '../src/store/index.js';
@@ -212,8 +212,15 @@ test('every committed evidence file is listed, valid, unique and imports cleanly
     assert.ok(!ids.has(env.id), `${file}: id ${env.id} is used twice`);
     ids.add(env.id);
   }
-  const { results } = importEvidenceFiles(initialState(), index.files.map((file) => ({ file, envelope: JSON.parse(readFileSync(new URL(file, dir), 'utf8')) })));
-  assert.deepEqual(results.filter((r) => r.status === 'refused'), []);
+  // Each file imports into exactly one built-in workspace (#121, #518): the one
+  // that has its capability. Elsewhere, it is skipped, never refused.
+  const files = index.files.map((file) => ({ file, envelope: JSON.parse(readFileSync(new URL(file, dir), 'utf8')) }));
+  const outcomes = BUILT_IN_WORKSPACES.map((w) => importEvidenceFiles(w.build({ today: '2026-10-13' }), files).results);
+  for (const [i, f] of files.entries()) {
+    const per = outcomes.map((r) => r[i].status);
+    assert.ok(!per.includes('refused'), `${f.file}: ${outcomes.map((r) => r[i].reason).filter(Boolean).join(' ')}`);
+    assert.equal(per.filter((x) => x === 'imported').length, 1, `${f.file} imports into exactly one built-in workspace`);
+  }
 });
 
 // ---------------------------------------------------------------------------

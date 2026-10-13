@@ -13,6 +13,8 @@ The site is static and never calls out, so evidence travels through git (Paige, 
 
 Retries are safe: the same envelope sent again, under the same id, is a no-op. The same id with different content is refused, because **imported evidence never changes**: a correction is new evidence with its own id.
 
+The first delivery (#518): `state-eval-review-gh-38411808397-1.json`, from State's review interpretation suite, copied unchanged from the run's `authority-lab-evidence-<run>-<attempt>` artifact. CI also checks that every file imports into exactly one built-in workspace.
+
 ## The envelope (`authority-lab-evidence/1`)
 
 ```json

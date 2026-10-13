@@ -101,6 +101,15 @@ test('State\'s real run is judged through the normal model: the approved bar, Dr
   assert.throws(() => proposeAuthority(s, ID, 3, { by: PAIGE }), /Level 3 needs evidence from real use/);
 });
 
+test('Decide doesn\'t call one person with no position "all agree"', async () => {
+  const { capabilityView } = await import('../src/views/capability.js');
+  const { setPeople } = await import('../src/ui.js');
+  const s = importEvidence(build(), REAL_RUN);
+  setPeople(people(s));
+  const h = String(capabilityView(s, ID, new URLSearchParams('tab=decide')));
+  assert.match(h, /<strong>Stakeholder positions<\/strong><span class="decide-line-meta">no positions yet<\/span>/);
+});
+
 test('the State envelope belongs to the State workspace only: elsewhere in the demo', () => {
   const { results } = importEvidenceFiles(initialState(), [{ file: 'state.json', envelope: REAL_RUN }]);
   assert.deepEqual(results.map((r) => r.status), ['elsewhere']);

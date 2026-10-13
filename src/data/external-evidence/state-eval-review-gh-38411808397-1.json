@@ -1,0 +1,127 @@
+{
+  "schema": "authority-lab-evidence/1",
+  "id": "state:eval:review:gh-38411808397-1",
+  "capabilityId": "interpret-incoming-project-evidence",
+  "source": {
+    "system": "State",
+    "capability": "Evidence interpretation",
+    "environment": "github-actions staging"
+  },
+  "kind": "eval",
+  "observedAt": "2026-10-13T14:15:49Z",
+  "config": {
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "prompt": "p-3c1347d6ec36",
+    "implementation": "c4c51185bac2",
+    "evalSet": "review-16-6fdace93940a"
+  },
+  "measurements": [
+    {
+      "metric": "scenarios-passed",
+      "label": "Scenarios passed",
+      "type": "rate",
+      "passed": 16,
+      "total": 16
+    },
+    {
+      "metric": "interpretation-quality",
+      "label": "Interpretation quality",
+      "type": "rate",
+      "passed": 16,
+      "total": 16
+    },
+    {
+      "metric": "high-severity-failures",
+      "label": "High-severity scenarios failed",
+      "type": "count",
+      "value": 0,
+      "total": 16,
+      "severity": "high"
+    },
+    {
+      "metric": "review-routing-misses",
+      "label": "Consequential evidence that missed Review",
+      "type": "count",
+      "value": 0,
+      "total": 12,
+      "severity": "high"
+    },
+    {
+      "metric": "unnecessary-reviews",
+      "label": "Reviews raised when none was needed",
+      "type": "count",
+      "value": 0,
+      "total": 4,
+      "severity": "low"
+    },
+    {
+      "metric": "errors",
+      "label": "Scenarios that errored",
+      "type": "count",
+      "value": 0,
+      "total": 16
+    },
+    {
+      "metric": "unsafe-direction-misses",
+      "label": "Unconfirmed things proposed as settled",
+      "type": "count",
+      "value": 0,
+      "total": 11,
+      "severity": "high"
+    },
+    {
+      "metric": "scenarios-passed",
+      "label": "Scenarios passed",
+      "type": "rate",
+      "passed": 10,
+      "total": 10,
+      "segment": "High-severity scenarios"
+    },
+    {
+      "metric": "scenarios-passed",
+      "label": "Scenarios passed",
+      "type": "rate",
+      "passed": 5,
+      "total": 5,
+      "segment": "Medium-severity scenarios"
+    },
+    {
+      "metric": "scenarios-passed",
+      "label": "Scenarios passed",
+      "type": "rate",
+      "passed": 1,
+      "total": 1,
+      "segment": "Low-severity scenarios"
+    },
+    {
+      "metric": "scenarios-passed",
+      "label": "Scenarios passed",
+      "type": "rate",
+      "passed": 5,
+      "total": 5,
+      "segment": "Stale or conflicting evidence"
+    },
+    {
+      "metric": "scenarios-passed",
+      "label": "Scenarios passed",
+      "type": "rate",
+      "passed": 9,
+      "total": 9,
+      "segment": "False certainty"
+    },
+    {
+      "metric": "scenarios-passed",
+      "label": "Scenarios passed",
+      "type": "rate",
+      "passed": 3,
+      "total": 3,
+      "segment": "Authority"
+    }
+  ],
+  "notes": "Controlled synthetic scenarios from State's review interpretation suite, read as a rate (RELEASE.md). Aggregates only.",
+  "reference": {
+    "url": "https://github.com/pedringt/ai-learning/actions/runs/38411808397/attempts/1",
+    "label": "GitHub Actions run 38411808397"
+  }
+}

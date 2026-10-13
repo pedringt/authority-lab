@@ -8,16 +8,16 @@ Read this first, then `CLAUDE.md` (the working rules) and `docs/DECISIONS.md` (e
   - the redesign (#106 to #113) and its review polish (#114);
   - the external evidence contract (#118, #119, #120: `src/store/external.js`, `src/store/measures.js`, `docs/EXTERNAL_EVIDENCE.md`);
   - the evidence-configuration model (#126: evidence sources, manual results, Configure evidence, coverage, the Evidence setup stage, Monitor's evidence signals, and the Northstar example).
-- **#121, State's workspace, is in an open PR, deliberately not merged.**
+- **#121, State's workspace, is on `main`** (merged with Paige's OK, `ab54dee`).
   - A second built-in workspace, built from configuration (`src/data/workspaces/state.js`) by the generic `buildWorkspace` (`src/store/workspaces.js`), plus a workspace switcher in the Settings menu.
   - No State-specific code; a test checks this.
   - No fictional evidence: State shows "0 of 5 decision requirements have sufficient evidence" until its results arrive.
-- **Merging:** Paige must name the destination each time (CLAUDE.md, "How to work"). Don't merge #121 or anything else until she does.
-- **Next: State #518, delivering State's evidence by hand.**
+- **Merging:** Paige must name the destination each time (CLAUDE.md, "How to work").
+- **#518, State's first evidence file, is in an open PR** (`delivery/state-eval-38411808397`), waiting for Paige. Later deliveries follow the same steps:
   - Take the envelope from a State AI quality check run's artifact (`authority-lab-evidence-<run>-<attempt>`, kept 90 days).
   - Commit it under `src/data/external-evidence/`, add it to `index.json`, and open a PR. CI checks it.
-  - Delivery waits until #121 is merged, because the capability only exists in the State workspace.
-  - The first candidate is the Oct 13 verification run, 38411808397 (16/16, staging). It's the fixture in `scripts/workspaces.test.mjs`.
+  - The first delivered run is the Oct 13 verification run, 38411808397 (16/16, staging).
+  - Decisions stay runtime records, never configuration (DECISIONS: "Configuration is the starting point").
 - **State side (pedringt/ai-learning):** #517 (the export) is on State's `staging`, not promoted. #519 to #522 are side issues it found.
 - **Known limit (#130):** a check is judged on the newest run only; State's own rule reads its suite across runs. Recorded, not built (Paige).
 
@@ -65,6 +65,5 @@ Standing budget $25 per calendar month; October spend is $11.20 (`agent/runs/led
 
 ## What comes next
 
-1. Paige reviews the #121 PR and names where it goes.
-2. #518: the first real State envelope, delivered by file.
+1. Paige names where the #518 PR goes. Once it's live, State's Decide offers "Propose a move to Level 2"; the decision is Paige's to make.
 3. Later: #130 (judging across runs), #117 (runtime policy check), #105 (stakeholder tradeoff).
