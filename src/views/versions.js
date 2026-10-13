@@ -60,9 +60,9 @@ export function versionsView(state, capabilityId, query) {
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>History</h1>
-      ${lede(html`Every change to ${cap.name}'s ${KIND_LABELS[kind].toLowerCase()}.`, 'Past versions can\'t be edited. Each decision record links to the version that was in use when it was made.')}
+      <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a> · <a href="#/capabilities/${cap.id}?tab=history">History</a></p>
+      <h1>${KIND_LABELS[kind]} versions</h1>
+      ${lede(html`Every version of ${cap.name}'s ${KIND_LABELS[kind].toLowerCase()}, newest first. Past versions can't be edited.`, 'Each decision record links to the version that was in use when it was made.')}
     </div>
   </div>
   ${tabs}

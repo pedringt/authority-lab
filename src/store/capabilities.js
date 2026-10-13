@@ -31,11 +31,34 @@ export const RISK_OPTIONS = {
   failureTypes: ['Wrong answer', 'Wrong action', 'Policy violation', 'Hallucination', 'Missing escalation', 'Excessive cost', 'User over-reliance', 'User rejection', 'Silent failure'],
 };
 
+// "What does it do today?" (Paige, 2026-10-12) is context, not authority. Each
+// answer maps to a starting level of 0 or 1; what it already does in the real
+// world is recorded on the first decision record, and formalizing it is the
+// first authority decision. Nothing starts above Level 1.
+export const TODAY = {
+  nothing: { level: 0, label: 'Nothing yet' },
+  recommends: { level: 1, label: 'Recommends' },
+  drafts: { level: 1, label: 'Drafts for approval', note: 'Today, this capability already drafts actions for people to approve. Authority Lab will start it at Recommend until that autonomy is reviewed and formally approved.' },
+  acts: { level: 1, label: 'Already acts in some cases', note: 'Today, this capability already acts automatically in some cases. Authority Lab will start it at Recommend until that autonomy is reviewed and formally approved.' },
+  'not-delegated': { level: 0, label: 'Not something to delegate', notDelegated: true },
+};
+
+// What could go wrong, when nobody picks: the failures every capability can
+// have, plus the ones its risk profile makes likely.
+export function defaultFailureTypes(risk = {}) {
+  const out = ['Wrong answer', 'Missing escalation', 'Silent failure'];
+  if (risk.exposure === 'Customer-facing') out.push('Hallucination', 'User over-reliance');
+  if (risk.exposure === 'Financial / consequential') out.push('Wrong action', 'Policy violation');
+  if (risk.impact === 'High' && !out.includes('Wrong action')) out.push('Wrong action');
+  return RISK_OPTIONS.failureTypes.filter((f) => out.includes(f));
+}
+
 // Add a capability (#4). Writes its first decision record (its starting
 // authority, or "not delegated, by design") and version 1 of its risk profile.
 // The contract, criteria, requirements and stakeholders get their first
-// versions when they are authored.
-export function addCapability(state, { name, summary, owner, risk, startingLevel, notDelegated = false, rationale = '', by } = {}) {
+// versions when they are authored. `today` (a TODAY key) sets the starting
+// level; without it, `startingLevel` and `notDelegated` do.
+export function addCapability(state, { name, summary, owner, risk, startingLevel, notDelegated: notDelegatedArg = false, today = null, rationale = '', by } = {}) {
   const cleanName = (name || '').trim();
   if (!cleanName) throw new Error('Give the capability a name.');
   if (!owner || !people(state)[owner]) throw new Error('Choose an owner.');
@@ -44,11 +67,16 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
   for (const k of ['impact', 'reversibility', 'exposure']) {
     if (!RISK_OPTIONS[k].includes(r[k])) throw new Error(RISK_MISSING[k]);
   }
-  const level = notDelegated ? 0 : Number(startingLevel);
+  if (today !== null && !TODAY[today]) throw new Error('Choose what it does today.');
+  const now = today ? TODAY[today] : null;
+  const notDelegated = now ? Boolean(now.notDelegated) : notDelegatedArg;
+  const level = now ? now.level : notDelegated ? 0 : Number(startingLevel);
   if (!notDelegated && ![0, 1].includes(level)) throw new Error('Starting authority must be Level 0 or Level 1.');
   const reason = (rationale || '').trim();
-  if (notDelegated && reason.length < 20) throw new Error('Say why the AI won\'t do this (a sentence or two).');
+  if (notDelegated && reason.length < 20) throw new Error('Say why this stays with people (a sentence or two).');
   const author = by && people(state)[by] ? by : owner;
+  const chosenFailures = (r.failureTypes || []).filter((f) => RISK_OPTIONS.failureTypes.includes(f));
+  const failureTypes = chosenFailures.length ? chosenFailures : defaultFailureTypes(r);
 
   let id = slugify(cleanName);
   if (getCapability(state, id)) {
@@ -66,9 +94,10 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     status: notDelegated ? 'not-delegated' : 'setup',
     definedOn: state.today,
     added: true,
+    ...(today ? { today } : {}),
   };
   const data = emptyCapabilityData();
-  data.versions.risk = [firstVersion({ impact: r.impact, reversibility: r.reversibility, exposure: r.exposure, failureTypes: (r.failureTypes || []).filter((f) => RISK_OPTIONS.failureTypes.includes(f)), note: (r.note || '').trim() || undefined }, { date: state.today, author })];
+  data.versions.risk = [firstVersion({ impact: r.impact, reversibility: r.reversibility, exposure: r.exposure, failureTypes, note: (r.note || '').trim() || undefined }, { date: state.today, author })];
 
   const number = state.decisionRecords.length + 1;
   const recordId = `AC-${String(number).padStart(2, '0')}`;
@@ -92,13 +121,17 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
       : level === 1
         ? 'Recommend. The AI may produce a recommendation for a person; it takes no action.'
         : 'Observe. The AI sees the work, but nothing it produces is used.',
-    rationale: reason || (level === 1
+    rationale: [now && now.note, reason || (level === 1
       ? 'Starting at Recommend so recommendations can be compared with what people decide before any authority is granted.'
-      : 'Starting at Observe. Authority is earned through evidence from this point.'),
+      : 'Starting at Observe. Authority is earned through evidence from this point.')].filter(Boolean).join(' '),
     evidenceSnapshot: ['No evidence yet. This is the starting point.'],
     openCondition: notDelegated
       ? 'Deliberately not delegated. Revisit only with a new decision.'
-      : 'Next: set the rules, targets and decision requirements, then run the first test.',
+      : now && now.note
+        ? 'Next: set the rules, targets and decision requirements, then run the first test. The first authority decision reviews what it already does today, one level at a time.'
+        : 'Next: set the rules, targets and decision requirements, then run the first test.',
+    // What it does in the real world today: context, never authority.
+    ...(now ? { context: { today, label: now.label, note: now.note || null } } : {}),
     conditions: null,
   };
 
@@ -111,7 +144,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
   s = logEvent(s, {
     kind: 'authority',
     title: notDelegated ? 'Capability added, not delegated by design' : `Capability added at ${authorityLabel(cap.authority)}`,
-    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${people(state)[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
+    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${people(state)[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`}${now && now.note ? ` ${now.note}` : ''} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
     capabilityId: id,
     link: `#/records/${recordId}`,
   });

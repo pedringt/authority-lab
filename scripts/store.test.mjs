@@ -593,7 +593,7 @@ test('whoever is acting is recorded as the authorizer, alongside the owner when 
 });
 
 test('"not delegated, by design" needs a rationale and is recorded as a decision', () => {
-  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /Say why the AI won't do this/);
+  assert.throws(() => addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High' }, notDelegated: true, rationale: 'short' }), /Say why this stays with people/);
   const s = addCapability(initialState(), { name: 'Account deletion', owner: 'daniel', risk: { ...LOW_RISK, impact: 'High', reversibility: 'Difficult to reverse' }, notDelegated: true, rationale: 'Deletion is irreversible and rare. A person does it.', by: 'daniel' });
   const c = s.capabilities[s.capabilities.length - 1];
   assert.equal(c.status, 'not-delegated');
@@ -1195,7 +1195,7 @@ test('a proposed contract must pass the builder checks before it can be submitte
   // Empty hard limits on a High-impact capability.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [], autoRestriction: [] }, by: 'priya', reason: 'Trying to drop the hard limits.' }), /can't be submitted yet\. Fix 2 problems/);
   // A contradiction.
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "The AI may" and "The AI must never". Keep it in one/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, may: [...c.may, 'Override a fraud restriction.'] }, by: 'priya', reason: 'Trying to contradict a hard limit.' }), /is under both "Allowed" and "Never allowed". Keep it in one/);
   // An unmeasurable restriction rule.
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, autoRestriction: ['Too many errors returns the capability to Draft.'] }, by: 'priya', reason: 'A vague rule.' }), /has no number/);
   // Value limit only under "must never" on a financial capability.
@@ -1617,7 +1617,7 @@ test('the roster is version 1 of the seed, with explicit rights; everything read
 
 test('only a workspace admin changes the roster, always with a reason; add, edit and deactivate write versions', () => {
   let s = initialState();
-  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'priya', reason: 'Joined the pilot team.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: 'Support Agent Lead', team: 'Support Operations', by: 'maya', reason: '' }), /Add a reason \(a few words\)/);
   assert.throws(() => addPerson(s, { name: 'Omar Haddad', title: '', team: 'Support Operations', by: 'maya', reason: 'Joined the pilot team.' }), /name, a title and a team/);
   const before = s.activity.length;
@@ -1635,7 +1635,7 @@ test('only a workspace admin changes the roster, always with a reason; add, edit
   s = addPerson(s, { name: 'Omar Haddad', title: 'Analyst', team: 'Finance', by: 'jonas', reason: 'A second Omar.' });
   assert.ok(personRecord(s, 'omar-haddad-2'));
   // Edit name/title/team only.
-  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => editPerson(s, 'omar-haddad', { by: 'priya', reason: 'Promoted to lead.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => editPerson(s, 'omar-haddad', { by: 'maya', reason: 'Nothing happened here.' }), /Nothing to save: the name, title and team are unchanged/);
   s = editPerson(s, 'omar-haddad', { title: 'Support Team Lead', by: 'maya', reason: 'Promoted to lead.' });
   assert.equal(personRecord(s, 'omar-haddad').role, 'Support Team Lead');
@@ -1730,7 +1730,7 @@ test('no team-based Risk logic remains in the store or the views', () => {
 test('rights are granted and removed through a proposal by an admin, approved by a different admin, never self-granted', () => {
   let s = initialState();
   assert.deepEqual(activeAdmins(s).sort(), ['jonas', 'maya']);
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/);
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: true, by: 'priya', reason: 'Finance should sign off.' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'maya', right: 'riskApprover', grant: true, by: 'maya', reason: 'I want it.' }), /You can't grant a right to yourself/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: true, by: 'maya', reason: 'Already has it.' }), /Daniel Okafor is already a Risk approver/);
   assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'elena', right: 'riskApprover', grant: false, by: 'maya', reason: 'Never had it.' }), /Elena .* isn't a Risk approver/);
@@ -2310,12 +2310,16 @@ test('workspace setup records the workspace, the one workflow and the founding r
   assert.throws(() => setUpWorkspace(s, SETUP), /already set up/, 'setup happens once');
 });
 
-test('setup refuses an incomplete workspace and a founding roster with fewer than two admins', () => {
+// Rule change (Paige, 2026-10-12): one person can start a workspace. This test
+// used to refuse a founding roster with fewer than two people or two admins.
+test('setup refuses an incomplete workspace and a roster with no workspace admin setting it up; one admin is enough', () => {
   const e = startEmpty();
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workspace: { name: '' } }), /Name the workspace/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, workflow: { name: '' } }), /Name the workflow/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]] }), /Add at least two people/);
-  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /Mark at least 2 people as workspace admins/, 'a lone admin could never grant a right');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [] }), /Add the person starting the workspace/);
+  assert.doesNotThrow(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0]], by: 'Ana Ruiz' }), 'one person, the workspace admin, is enough');
+  assert.doesNotThrow(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]], by: 'Ana Ruiz' }), 'a lone admin may start it');
+  assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [FOUNDERS[0], { ...FOUNDERS[1], workspaceAdmin: false }, FOUNDERS[2]] }), /isn't marked as a workspace admin/, 'whoever sets it up is still an admin');
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Ana Ruiz', title: 'Twin', team: 'X' }] }), /same name/);
   assert.throws(() => setUpWorkspace(e, { ...SETUP, people: [...FOUNDERS, { name: 'Dev', title: '', team: 'X' }] }), /name, a title and a team/);
 });
@@ -2372,10 +2376,13 @@ test('repro: People history never calls the first list "Seed roster", and a work
   assert.match(demo, /<h3>Demo starting list<\/h3>/);
 });
 
-test('setup notes, without blocking, when fewer than two Risk approvers are listed', () => {
+// Rule change (Paige, 2026-10-12): setup no longer shows a Risk approver note;
+// a Risk approver is asked for when a change first needs one.
+test('setup never needs a Risk approver; the founding count is still computed', () => {
   assert.equal(foundingRiskGap(FOUNDERS), 1);
   assert.equal(foundingRiskGap([...FOUNDERS, { name: 'Dev Patel', title: 'Risk Analyst', team: 'Risk', riskApprover: true }]), null);
   assert.doesNotThrow(() => setUpWorkspace(startEmpty(), SETUP), 'one Risk approver is allowed');
+  assert.doesNotThrow(() => setUpWorkspace(startEmpty(), { ...SETUP, people: FOUNDERS.slice(0, 2) }), 'and so is none');
 });
 
 // ---------------------------------------------------------------------------
@@ -2412,7 +2419,7 @@ test('repro: a rename reason with no final full stop still ends its sentence in 
 
 test('only an active workspace admin renames, and only with a reason and an actual change', () => {
   const s = initialState();
-  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /isn't a workspace admin. Switch "Acting as" to a workspace admin/, 'a Risk approver is not enough');
+  assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'daniel' }), /isn't a workspace admin. Switch "Demo as" to a workspace admin/, 'a Risk approver is not enough');
   assert.throws(() => renameWorkspace(s, { ...RENAME, by: 'maya', reason: 'rename' }), /Add a reason for the change \(a sentence\)/);
   assert.throws(() => renameWorkspace(s, { workspace: { name: 'Northstar Support' }, workflow: { name: 'Customer Support Resolution' }, reason: 'No real change here.', by: 'maya' }), /Nothing to save: the names and descriptions are unchanged/);
   assert.throws(() => renameWorkspace(s, { ...RENAME, workspace: { name: ' ' }, by: 'maya' }), /Name the workspace/);
@@ -3721,11 +3728,12 @@ test('B2: ROI assumptions change only as a new version, with author and reason; 
 test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded data labelled', () => {
   const s = expandedRRB2();
   const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(page, /Expected impact vs actual/);
+  // Expected vs actual is the rollout-goals table (redesign: Goal, Expected, So far).
+  assert.match(page, /<th>Goal<\/th><th>Expected<\/th><th>So far<\/th>/);
   assert.match(page, /8 points short of the target/);
-  assert.match(page, /Demo data \(pilot\)/);
+  assert.match(page, /42% <span class="muted small">\(pilot · demo data\)<\/span>/);
   assert.match(page, /Return on investment/);
-  assert.match(page, /Assumptions <span class="badge badge-neutral">Demo data<\/span>/);
+  assert.match(page, /Assumptions \(demo data\)/);
   assert.match(page, /data-form="roi-assumptions"/);
   assert.match(page, />Save<\/button>/);
   assert.match(page, /Changes are kept in history\./);
@@ -3886,7 +3894,7 @@ test('C2: adoption signals never block: the gate, the queue and authorizing beha
 
 test('C2: the Monitoring tab lists each warning with what, why and source, and says when the data is simulated', () => {
   const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(page, /How people are using it/);
+  assert.match(page, /How reviewers are using it/);
   assert.match(page, /Early warnings only\. They never block anything\./);
   assert.match(page, /Approvals may not be real reviews/);
   assert.match(page, /Reviewers are reversing more/);
@@ -3965,7 +3973,7 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=rules'))), /<h3>Requires human review<\/h3>/);
   assert.match(String(capabilityView(s, RR, new URLSearchParams('tab=status&show=approvals'))), /data-form="decide-action"/);
   // Status: the level, what it does now, the proposed level, the open gap, and whether it's ready, told once.
-  assert.match(page, /Draft <span class="st-lvl">Level 2 of 5<\/span>/);
+  assert.match(page, /Draft <span class="st-lvl">Level 2<\/span>/);
   assert.match(page, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
   assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 checks are met; still open: high-value refund performance needs more evidence\./);
   assert.match(page, /Then<\/span><p>Standard refunds up to \$50 would run without review\./);
@@ -3990,8 +3998,8 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   // Decide: the open decision.
   const dec = String(capabilityView(s, RR, new URLSearchParams('tab=decide')));
   assert.match(dec, /Should we expand autonomy for this capability\?/);
-  assert.match(dec, /<span class="muted small">Now<\/span><strong>Drafts\. A person approves every action\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
-  assert.match(dec, /<span class="muted small">Proposed<\/span><strong>Acts on its own within limits\. Everything else goes to a person\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
+  assert.match(dec, /<span class="muted small">Now<\/span><strong>Prepares the action\. A person approves every one\.<\/strong><span class="muted small">Level 2 · Draft<\/span>/);
+  assert.match(dec, /<span class="muted small">Proposed<\/span><strong>Runs automatically within limits\. Everything else goes to human review\.<\/strong><span class="muted small">Level 3 · Act Within Limits<\/span>/);
   // History: decisions, versions and the activity link.
   const hist = String(capabilityView(s, RR, new URLSearchParams('tab=history')));
   assert.match(hist, /Authority change #02/);
@@ -4004,14 +4012,17 @@ test('#95: Monitoring has a Still safe? view and a Delivering value? view; the s
   const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
   assert.match(health, /class="chip is-active"[^>]*>Still safe\?/);
   assert.match(health, /Safety limits/);
-  assert.doesNotMatch(health, /What the AI tried/, 'gate activity is evidence, under Evidence › Results');
-  assert.doesNotMatch(health, /Expected impact vs actual|Return on investment|How people are using it/);
-  // Three outcomes not met, two simulated adoption warnings: 5 on the Value chip.
-  assert.match(health, /show=value"[^>]*>Delivering value\? <span class="chip-count">5<\/span>/);
+  // Redesign: a compact summary of what the automation tried sits under Still safe?; the full table stays with the evidence in Decide.
+  assert.match(health, /What the automation tried/);
+  assert.doesNotMatch(health, /What the AI tried/, 'the full gate-activity table is evidence, under Decide');
+  assert.doesNotMatch(health, /So far<\/th>|Return on investment|How reviewers are using it/);
+  // Two simulated adoption warnings on the Value chip. The three outcomes not met are judged on pilot
+  // numbers, so they read "Too early to judge" and don't count as needing a look yet.
+  assert.match(health, /show=value"[^>]*>Delivering value\? <span class="chip-count">2<\/span>/);
   const value = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(value, /Expected impact vs actual/);
+  assert.match(value, /So far<\/th>/);
   assert.match(value, /Return on investment/);
-  assert.match(value, /How people are using it/);
+  assert.match(value, /How reviewers are using it/);
   assert.doesNotMatch(value, /Safety limits/);
 });
 
@@ -4110,33 +4121,35 @@ test('Agent runs: the site never calls a model, and each real recording links it
   assert.match(String(agentRunsView(s, new URLSearchParams('run=new.json'), { status: 'ready', runs: [fresh] })), /href="https:\/\/github\.com\/pedringt\/authority-lab\/commits\/main\/src\/data\/agent-runs\/new\.json">the commit that added it<\/a>/);
 });
 
-test('Overview: To do, Approvals needed, Important results, Current authority, in that order, each naming its capability and person', () => {
+test('Overview: To do, Approvals needed, Important results, Current autonomy, in that order, each naming its capability and person', () => {
   const s = initialState();
   setPeople(people(s));
   const out = String(overviewView(s));
   const at = (id) => out.indexOf(`id="${id}"`);
-  assert.ok(at('todo') > 0 && at('todo') < at('approvals') && at('approvals') < at('results') && at('results') < at('authority'), 'the four sections, in order');
+  assert.ok(at('todo') > 0 && at('todo') < at('approvals') && at('approvals') < at('results') && at('results') < at('autonomy'), 'the four sections, in order');
+  assert.match(out, /<h2>Current autonomy<\/h2>/);
   // To do: the pending decision leads, with how ready it is and who owns it.
-  assert.match(out, /Decide whether Refund recommendation can move to Level 3, Act Within Limits, with limits/);
-  assert.match(out, /Almost ready for a decision: 5 of 6 checks met\. Still open: High-value refund performance needs more evidence\./);
-  assert.match(out, /Owner: Maya Chen/);
-  assert.match(out, /href="#\/capabilities\/refund-recommendation\/decision">Open the decision/);
-  assert.match(out, /Meet the condition to move Refund execution &gt; \$50 back to Draft/);
-  assert.match(out, /Meet the open check: overall accuracy ≥ 90%/);
+  const todo = out.slice(at('todo'), at('approvals'));
+  assert.match(todo, /^[\s\S]*?<p class="ov-cap">Refund recommendation<\/p>\s*<p class="ov-title">Decide whether to expand autonomy within limits<\/p>/, 'the decision is the first to-do');
+  assert.match(todo, /5 of 6 checks met · high-value refund performance needs more evidence/);
+  assert.match(todo, /Owner: Maya Chen/);
+  assert.match(todo, /href="#\/capabilities\/refund-recommendation\?tab=decide">Review →/);
+  assert.match(todo, /Complete the requirements to return to Draft<\/p>\s*<p class="ov-sub">A redesigned idempotency check and 100 clean executions in a replay environment\./);
+  assert.match(todo, /Raise accuracy to 90%/);
   // Approvals: the waiting refunds, with who can approve.
-  assert.match(out, /2 refunds need a person to decide/);
-  assert.match(out, /Who can approve: Maya Chen, Priya Natarajan, Daniel Okafor, Sofia Alvarez or Elena Rossi\./);
-  assert.match(out, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=approvals">Review the refunds/, 'the approvals link opens the waiting actions under Status directly');
+  assert.match(out, /2 refunds need human review/);
+  assert.match(out, /Waiting since Oct 7 · the owner or any stakeholder can approve/);
+  assert.match(out, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=approvals">Review →/, 'the approvals link opens the waiting actions under Status directly');
   // Important results: only what changes authority.
-  assert.match(out, /Not enough data yet<\/span>/);
-  assert.match(out, /High-value refunds \(&gt; \$100\): 83% accurate, on only 18 cases\./);
-  assert.match(out, /Severe failure<\/span>/);
-  assert.match(out, /Moved back to Recommend on Sep 24 by Daniel Okafor\./);
-  // Current authority: every capability, in plain words, with what's next.
+  assert.match(out, /Under-tested<a/);
+  assert.match(out, /High-value refunds \(&gt; \$100\): 83% accurate on only 18 cases\./);
+  assert.match(out, /Severe miss<a/);
+  assert.match(out, /Returned to Recommend on Sep 24 by Daniel Okafor\./);
+  // Current autonomy: every capability, in plain words, with what's next.
   for (const c of s.capabilities) assert.ok(out.includes(`href="#/capabilities/${c.id}"><strong>`), c.name);
-  assert.match(out, /Ready for a decision<\/span><div class="ov-plain">Proposed: Level 3, Act Within Limits, with limits/);
+  assert.match(out, /<span class="badge badge-decision">Ready<\/span> to decide on expanding within limits/);
   assert.match(out, /Not delegated, by design/);
-  assert.match(out, /Drafts\. A person approves every action\./);
+  assert.match(out, /Prepares each refund; a person approves every one<div class="ov-level">Draft<\/div>/);
   // Gone from Overview: the metric grid, monitoring stats, the recommendation,
   // the disagreement, coverage explanations and the readiness breakdown.
   for (const gone of [/metric-grid/, /System recommendation/, /Stakeholder disagreement/, /evidence requirements satisfied/, /autonomous actions/, /Risk coverage/]) assert.doesNotMatch(out, gone);
@@ -4148,34 +4161,32 @@ test('Overview after an automatic restriction: the review comes first, the resul
   const out = String(overviewView(s));
   const todo = out.slice(out.indexOf('id="todo"'), out.indexOf('id="approvals"'));
   assert.match(todo, /^[\s\S]*?Review why Refund recommendation was moved back to Draft/, 'the review is the first to-do');
-  assert.ok(todo.indexOf('Review why Refund recommendation') < todo.indexOf('Meet the'), 'before the evidence to-dos');
-  assert.match(todo, /It can&#39;t get more authority until someone records what happened and what changes\./);
-  assert.match(todo, />Record the review</);
-  assert.doesNotMatch(todo, /Decide whether Refund recommendation/);
-  assert.match(out, /Moved back automatically<\/span>/);
+  assert.ok(todo.indexOf('Review why Refund recommendation') < todo.indexOf('Raise accuracy'), 'before the evidence to-dos');
+  assert.match(todo, />Record the review →</);
+  assert.doesNotMatch(todo, /Decide whether to expand/);
+  assert.match(out, /Moved back automatically<a/);
   // The crossing shows once: not again as a severe failure, and with no doubled brackets.
-  const results = out.slice(out.indexOf('id="results"'), out.indexOf('id="authority"'));
+  const results = out.slice(out.indexOf('id="results"'), out.indexOf('id="autonomy"'));
   assert.equal((results.match(/safety limit/gi) || []).length, 1, 'one result for the crossing');
-  assert.doesNotMatch(results, /Safety limit crossed<\/span>|Severe failure<\/span>[^<]*<div class="ov-text"><strong>Safety limit/);
-  assert.match(todo, /it crossed a safety limit: [^()]*\(limit 5%\)\. It went back to Draft automatically\./);
-  assert.match(out, /Review needed before it can get more authority/);
-  assert.match(out, /Moved back<\/span><div class="ov-plain">/);
+  assert.doesNotMatch(results, /Safety limit crossed<a|Severe miss<a[^<]*<\/a><\/p>\s*<div class="ov-text"><p class="ov-title">Safety limit/);
+  assert.match(todo, /Crossed a safety limit on Oct 7: [^()]*\(limit 5%\)</);
+  assert.match(out, /<span class="badge badge-restricted">Needs review<\/span> before any expansion/);
 });
 
 test('Overview approvals: a proposed change shows its kind, progress and the Risk approval it still needs', () => {
   let s = proposeAmendment(initialState(), RR, 'criteria', { value: { criteria: current(initialState(), RR, 'criteria'), requirements: loosenedRequirements(initialState()) }, by: 'priya', reason: REASON });
   setPeople(people(s));
   let out = String(overviewView(s));
-  assert.match(out, /Target change: Refund recommendation/);
-  assert.match(out, /0 of 2 approvals\.<\/strong> Risk approval still needed: Daniel Okafor or Sofia Alvarez\./);
-  assert.match(out, /Priya Natarajan proposed a change\./);
+  assert.match(out, /Review a proposed target change/);
+  assert.match(out, /0 of 2 approvals · Risk approval still needed: Daniel Okafor or Sofia Alvarez/);
+  assert.match(out, /Priya Natarajan proposed it on Oct 7:/);
   // A non-Risk approval first: Risk is still named as what's missing.
   s = approveProposal(s, RR, openProposal(s, RR, 'criteria').id, { by: 'maya' });
   out = String(overviewView(s));
-  assert.match(out, /1 of 2 approvals\.<\/strong> Risk approval still needed: Daniel Okafor or Sofia Alvarez\./);
+  assert.match(out, /1 of 2 approvals · Risk approval still needed: Daniel Okafor or Sofia Alvarez/);
   // Once Risk has approved, the change is done and leaves the list.
   s = approveProposal(s, RR, openProposal(s, RR, 'criteria').id, { by: 'daniel' });
-  assert.doesNotMatch(String(overviewView(s)), /Target change: Refund recommendation/);
+  assert.doesNotMatch(String(overviewView(s)), /Review a proposed target change/);
 });
 
 test('Overview with nothing outstanding says so in each section', () => {
@@ -4185,7 +4196,7 @@ test('Overview with nothing outstanding says so in each section', () => {
   const out = String(overviewView(s));
   assert.match(out, /Nothing to do right now\./);
   assert.match(out, /Nothing is waiting for approval\./);
-  assert.match(out, /No results are changing what the AI may do\./);
+  assert.match(out, /No results are changing any capability&#39;s autonomy\./);
   assert.match(out, /No change planned/);
 });
 
@@ -4327,7 +4338,7 @@ test('copy: an automatic restriction leads with what happened, then the formal t
   const s = simulateBreach(authorize(pendingRR(), RR), RR);
   const rec = s.decisionRecords.at(-1);
   const page = String(decisionRecordView(s, rec.id));
-  assert.match(page, /<strong>The AI was moved back to Draft after crossing a safety limit\.<\/strong>/);
+  assert.match(page, /<strong>Refund recommendation was moved back to Draft after crossing a safety limit\.<\/strong>/);
   assert.ok(page.indexOf('moved back to Draft') < page.indexOf('Formally, this is an automatic restriction'));
   const list = String(decisionWorkspaceView(s, RR));
   assert.match(list, /Refund recommendation was moved back to Draft after crossing a safety limit\. Autonomy can&#39;t expand again until someone records what happened/);

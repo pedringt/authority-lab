@@ -1,13 +1,14 @@
-import { html, raw, badge, notice, section, person, personAt, fmtDate, kv, lede, warningNotice } from '../ui.js';
-import { people, activePeople, actor, isWorkspaceAdmin, rosterVersions, isActivePerson, RIGHTS, RIGHT_LABELS, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf } from '../store/index.js';
+import { html, raw, badge, notice, section, person, personAt, fmtDate, kv, warningNotice, SWITCH_PERSON } from '../ui.js';
+import { people, actor, isWorkspaceAdmin, rosterVersions, RIGHTS, RIGHT_LABELS, openRosterProposal, rosterApprovalEligibility, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf, foundingRoster } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 // A right as it reads mid-sentence: "Make Jonas a Risk approver".
 const RIGHT_NOUNS = { riskApprover: 'Risk approver', workspaceAdmin: 'workspace admin' };
 const rightChange = (grant, right, name) => (grant ? `Make ${name} a ${RIGHT_NOUNS[right]}` : `Remove ${name} as ${RIGHT_NOUNS[right]}`);
 
-// The people roster (#22). Workspace admins add, edit and deactivate; nobody
-// deletes. Rights are shown here and changed through #23.
+// The people roster (#22). Primary view: a simple table of who can do what
+// (redesign, 2026-10-12). How approvals work is explained where it matters,
+// on the form or the refusal, not up front.
 export function peopleView(state, query) {
   const error = query.get('error');
   const acting = actor(state);
@@ -22,8 +23,8 @@ export function peopleView(state, query) {
   const focusProposal = query.get('proposal');
   const showInactive = query.get('inactive') === '1';
   const entries = Object.entries(roster).filter(([, p]) => showInactive || p.active !== false);
-  const admins = Object.values(roster).filter((p) => p.active !== false && p.rights && p.rights.workspaceAdmin).length;
-  const riskApprovers = Object.values(roster).filter((p) => p.active !== false && p.rights && p.rights.riskApprover).length;
+  const hasInactive = Object.values(roster).some((p) => p.active === false);
+  const solo = foundingRoster(state);
 
   const row = ([key, p]) => {
     if (editing === key && admin) {
@@ -40,10 +41,11 @@ export function peopleView(state, query) {
     }
     if (deactivating === key && admin) {
       const impact = rosterChangeImpact(state, { kind: 'deactivate', person: key });
+      const holdsRight = p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover);
       return html`<tr class="is-editing"><td colspan="5">
         ${impactNote(impact)}
         <form class="line-edit people-form" data-form="deactivate-person" data-person="${key}">
-          <span><strong>Deactivate ${p.name}?</strong> <span class="muted small">Their name stays on past records, but they can no longer act, propose, approve or be a stakeholder.${p.rights && (p.rights.workspaceAdmin || p.rights.riskApprover) ? ' Because they hold a right, another workspace admin must approve this.' : ''}</span></span>
+          <span><strong>Deactivate ${p.name}?</strong> <span class="muted small">Their name stays on past records, but they can no longer act, propose, approve or be a stakeholder.${holdsRight ? ' Because they hold a right, another workspace admin must approve this.' : ''}</span></span>
           <input type="text" name="reason" placeholder="Why are they being deactivated?" maxlength="200" aria-label="Reason" required>
           <button class="btn btn-sm btn-danger" type="submit">Deactivate</button>
           <a class="btn btn-sm btn-ghost" href="#/people">Cancel</a>
@@ -52,12 +54,18 @@ export function peopleView(state, query) {
     }
     if (rightPerson === key && RIGHT_LABELS[rightKey] && admin) {
       const impact = rosterChangeImpact(state, { kind: 'rights', person: key, right: rightKey, grant: rightGrant });
+      // Said just in time: who has to approve this, or why nobody needs to.
+      const how = rightGrant && solo && rightKey === 'workspaceAdmin'
+        ? 'You\'re the only workspace admin, so making a second one takes effect straight away. From then on, changing anyone\'s rights needs the other admin\'s approval.'
+        : rightGrant && solo
+          ? 'You\'re the only workspace admin, so nobody can approve this yet. Make someone else a workspace admin first; then the two of you set up Risk approvers.'
+        : `You're proposing this, so ${rightGrant && rightKey === 'riskApprover' ? 'another workspace admin or a current Risk approver' : 'another workspace admin'} must approve it${rightGrant ? `; ${p.name} can't approve their own grant` : ''}.`;
       return html`<tr class="is-editing"><td colspan="5">
         ${impactNote(impact)}
         <form class="line-edit people-form" data-form="propose-roster" data-person="${key}" data-right="${rightKey}" data-grant="${rightGrant ? '1' : '0'}">
-          <span><strong>${rightChange(rightGrant, rightKey, p.name)}</strong> <span class="muted small">You're proposing this as ${who.name}. Another workspace admin${rightGrant && rightKey === 'riskApprover' ? ' or a current Risk approver' : ''} must approve it${rightGrant ? `; ${p.name} can't approve it themselves` : ''}.</span></span>
+          <span><strong>${rightChange(rightGrant, rightKey, p.name)}</strong> <span class="muted small">${how}</span></span>
           <input type="text" name="reason" placeholder="Why this change?" maxlength="200" aria-label="Reason" required>
-          <button class="btn btn-sm btn-primary" type="submit">Send for approval</button>
+          <button class="btn btn-sm btn-primary" type="submit">${rightGrant && solo ? 'Save' : 'Send for approval'}</button>
           <a class="btn btn-sm btn-ghost" href="#/people">Cancel</a>
         </form>
       </td></tr>`;
@@ -69,15 +77,16 @@ export function peopleView(state, query) {
         <summary class="btn btn-sm" aria-label="Manage ${p.name}">Manage <span aria-hidden="true">▾</span></summary>
         <div class="menu-list">
           <a href="#/people?edit=${key}">Edit name, title or team</a>
-          ${RIGHTS.map(([r, label]) => html`<a href="#/people?person=${key}&right=${r}&grant=${holds(r) ? 0 : 1}">${holds(r) ? `Remove as ${RIGHT_NOUNS[r]}` : `Make ${RIGHT_NOUNS[r]}`}…</a>`)}
+          ${RIGHTS.map(([r]) => (key === acting && !holds(r) ? '' : html`<a href="#/people?person=${key}&right=${r}&grant=${holds(r) ? 0 : 1}">${holds(r) ? `Remove as ${RIGHT_NOUNS[r]}` : `Make ${RIGHT_NOUNS[r]}`}…</a>`))}
           <a class="menu-danger" href="#/people?deactivate=${key}">Deactivate…</a>
         </div>
       </details>` : '';
+    const yes = (r) => (holds(r) ? 'Yes' : html`<span class="muted">No</span>`);
     return html`<tr class="${p.active === false ? 'is-inactive' : ''}">
-      <td><strong>${p.name}</strong>${key === acting ? html` <span class="tag-acting">Acting now</span>` : ''}${p.active === false ? html` ${badge('neutral', 'Deactivated')}` : ''}</td>
-      <td>${p.role}</td>
-      <td>${p.team}</td>
-      <td><div class="rights-badges">${holds('workspaceAdmin') ? badge('decision', 'Workspace admin') : ''}${holds('riskApprover') ? badge('restricted', 'Risk approver') : ''}${pending ? html`<a class="badge badge-watch" href="#/people?proposal=${pending.id}">Awaiting approval</a>` : ''}</div></td>
+      <td><strong>${p.name}</strong>${key === acting ? html` <span class="muted small">(you)</span>` : ''}${p.active === false ? html` <span class="muted small">Deactivated</span>` : ''}${pending ? html`<div class="small"><a href="#/people?proposal=${pending.id}">Change waiting for approval</a></div>` : ''}</td>
+      <td>${p.role}<div class="muted small">${p.team}</div></td>
+      <td>${yes('riskApprover')}</td>
+      <td>${yes('workspaceAdmin')}</td>
       <td class="cell-manage">${manage}</td>
     </tr>`;
   };
@@ -88,39 +97,34 @@ export function peopleView(state, query) {
     <div>
       <p class="eyebrow">${workspaceOf(state).name}</p>
       <h1>People</h1>
-      ${lede('Everyone who can act in this workspace.', html`<strong>Workspace admins</strong> manage this list. <strong>Risk approvers</strong> give the Risk approval that high-impact and financial changes need. People are deactivated, never deleted, so past records still show who did what.`)}
     </div>
   </div>
-  ${error ? notice('fail', query.get('workspace') === 'edit' ? 'Could not change the workspace' : 'Could not update people', error) : ''}
-  ${workspaceSection(state, admin, who, query.get('workspace') === 'edit')}
+  ${error ? notice('fail', query.get('workspace') === 'edit' ? 'Could not change the workspace' : 'Could not update people', error, admin && /Make someone else a workspace admin first: as the only admin/.test(error) ? { link: '#/people?focus=add', linkText: 'Add person' } : {}) : ''}
   ${coverageWarnings(state).map((w) => warningNotice({ ...w, links: w.kind === 'coverage' ? [{ href: `#/capabilities/${w.capabilityId}/stakeholders/edit`, text: 'Manage stakeholders' }] : null }))}
-  ${admin ? '' : notice('neutral', `You're acting as ${who.name}, who isn't a workspace admin`, 'Only workspace admins can add, edit or deactivate people. To manage people, switch "Acting as" to an admin.')}
-  <div class="card progress-card"><div class="progress-facts">
-    <div><span class="fact-label">Active people</span><strong>${Object.keys(activePeople(state)).length}</strong></div>
-    <div><span class="fact-label">Workspace admins</span><strong>${admins}</strong></div>
-    <div><span class="fact-label">Risk approvers</span><strong>${riskApprovers}</strong></div>
-    <div><span class="fact-label">Changes</span><strong>${Math.max(rosterVersions(state).length - 1, 0)}</strong></div>
-  </div></div>
-  <div class="card table-card people-card"><table class="table table-people">
-    <thead><tr><th>Name</th><th>Title</th><th>Team</th><th>Rights</th><th><span class="sr-only">Manage</span></th></tr></thead>
+  ${admin ? '' : notice('neutral', `${who.name} isn't a workspace admin`, `Only workspace admins can add or change people. ${SWITCH_PERSON}`)}
+  <div class="table-card people-card"><table class="table table-people">
+    <thead><tr><th>Person</th><th>Role</th><th>Can approve Risk changes</th><th>Workspace admin</th><th><span class="sr-only">Manage</span></th></tr></thead>
     <tbody>${entries.map(row)}</tbody>
   </table></div>
-  <p class="muted small"><a href="#/people?inactive=${showInactive ? '0' : '1'}">${showInactive ? 'Hide' : 'Show'} deactivated people</a> · Changing someone's rights, or deactivating someone who holds one, needs a second person's approval: another workspace admin, or a current Risk approver for a new Risk approver. Nobody approves their own proposal or their own grant. There must always be at least one workspace admin.</p>
+  ${hasInactive ? html`<p class="muted small"><a href="#/people?inactive=${showInactive ? '0' : '1'}">${showInactive ? 'Hide' : 'Show'} deactivated people</a></p>` : ''}
   ${rosterProposals(state, acting, focusProposal)}
-  ${admin ? section('Add a person', html`<form class="setup-form" data-form="add-person"><div class="card">
+  ${admin ? section('Add a person', html`<form class="setup-form ${query.get('focus') === 'add' ? 'is-highlight' : ''}" data-form="add-person" id="add-person">
     <div class="three-col">
       <label class="field field-stack"><span>Name</span><input type="text" name="name" maxlength="60" required></label>
       <label class="field field-stack"><span>Title</span><input type="text" name="title" maxlength="80" required></label>
       <label class="field field-stack"><span>Team</span><input type="text" name="team" maxlength="40" required></label>
     </div>
     <label class="field field-stack"><span>Reason</span><input type="text" name="reason" maxlength="200" placeholder="Why they are being added" required></label>
-    <p class="muted small">Added by <strong>${who.name}</strong> (${who.role}). New people start with no rights; you can grant them afterwards.</p>
+    <p class="muted small">Added by <strong>${who.name}</strong>. New people start with no rights; give them one from Manage.${solo ? ' While you\'re the only workspace admin, making one other person an admin takes effect at once. Every other right needs approval.' : ''}</p>
     <button class="btn btn-primary" type="submit">Add person</button>
-  </div></form>`) : ''}
-  ${section('People history', html`${versions.map((v) => html`<article class="card version"><div class="version-head"><div><span class="eyebrow">${fmtDate(v.date)} · version ${v.version}</span><h3>${historyTitle(v)}</h3></div></div>
-    ${kv([['Date', fmtDate(v.date)], ['By', v.author ? html`${personAt(v.authorAt, v.author).name}${v.approvals ? html` · approved by ${v.approvals.map((a) => personAt(a.byAt, a.by).name).join(', ')}` : ''}` : 'Demo data'], ['Reason', v.reason]])}
+  </form>`, { id: 'add' }) : ''}
+  ${workspaceSection(state, admin, who, query.get('workspace') === 'edit')}
+  <details class="amendment people-history"><summary>People history (${versions.length} version${versions.length === 1 ? '' : 's'})</summary>
+    <p class="muted small">Changes are kept in history, with who made them and why. People are deactivated, never deleted, so past records still show who did what.</p>
+    ${versions.map((v) => html`<article class="version"><div class="version-head"><div><span class="eyebrow">${fmtDate(v.date)} · version ${v.version}</span><h3>${historyTitle(v)}</h3></div></div>
+    ${kv([['Date', fmtDate(v.date)], ['By', v.author ? html`${personAt(v.authorAt, v.author).name}${v.approvals ? html` · approved by ${v.approvals.map((a) => personAt(a.byAt, a.by).name).join(', ')}` : ''}${v.founding ? ' · took effect at once (first workspace admin)' : ''}` : 'Demo data'], ['Reason', v.reason]])}
     ${v.version > 1 ? html`<h4 class="version-sub">What changed</h4>${diffTable(flatten(v.before), flatten(v.value))}` : ''}
-  </article>`)}`, { subtitle: 'Changes are kept in history, with who made them and why.' })}`;
+  </article>`)}</details>`;
 }
 
 // The heading for a people version. Version 1 is either the demo's starting
@@ -166,18 +170,17 @@ function flatten(roster) {
 function rosterProposals(state, acting, focusId) {
   const list = state.rosterProposals.slice().reverse();
   if (!list.length) return '';
-  const roster = people(state);
   const describe = (pr) => (pr.kind === 'deactivate' ? `Deactivate ${personAt(pr.personAt, pr.person).name}` : rightChange(pr.grant, pr.right, personAt(pr.personAt, pr.person).name));
-  return section('Rights changes', html`${list.map((pr) => {
+  const card = (pr) => {
     const e = rosterApprovalEligibility(state, pr, acting);
-    const status = pr.status === 'open' ? badge('decision', 'Awaiting approval') : pr.status === 'approved' ? badge('pass', 'Approved') : pr.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected');
-    return html`<article class="card roster-proposal ${pr.id === focusId ? 'is-highlight' : ''}" id="${pr.id}">
+    const status = pr.status === 'open' ? badge('decision', 'Needs approval') : pr.status === 'approved' ? badge('pass', 'Approved') : pr.status === 'founding' ? html`<span class="muted small">Took effect at once</span>` : pr.status === 'withdrawn' ? html`<span class="muted small">Withdrawn</span>` : badge('fail', 'Rejected');
+    return html`<article class="roster-proposal ${pr.id === focusId ? 'is-highlight' : ''}" id="${pr.id}">
       <div class="version-head"><div><span class="eyebrow">${pr.id} · ${fmtDate(pr.date)}</span><h3>${describe(pr)}</h3></div><div>${status}</div></div>
       ${kv([
-        ['Proposed by', personAt(pr.proposedByAt, pr.proposedBy).name],
+        [pr.founding ? 'By' : 'Proposed by', personAt(pr.proposedByAt, pr.proposedBy).name],
         ['Reason', pr.reason],
         ...(pr.impact && pr.impact.any ? [['Effect on approvals', html`${pr.impact.capabilities.length ? html`${pr.impact.capabilities.map((c) => c.name).join(', ')} would have fewer than two Risk approvers. ` : ''}${pr.impact.proposals.length ? html`${pr.impact.proposals.map((x) => `The proposed change to ${x.name} (${x.id})`).join(', ')} could no longer be approved.` : ''}`]] : []),
-        ['Who can approve', pr.eligible.map((k) => person(k).name).join(', ') || 'Nobody'],
+        ...(pr.founding ? [['Why no approval', 'Given while there was only one workspace admin, as the first people in a workspace are.']] : [['Who can approve', pr.eligible.map((k) => person(k).name).join(', ') || 'Nobody']]),
         ...(pr.approvals.length ? [['Approved by', pr.approvals.map((a) => `${personAt(a.byAt, a.by).name}, ${fmtDate(a.date)}`).join('; ')]] : []),
         ...(pr.rejection ? [['Rejected', `${personAt(pr.rejection.byAt, pr.rejection.by).name}: ${pr.rejection.reason}`]] : []),
         ...(pr.withdrawal ? [['Withdrawn', `${personAt(pr.withdrawal.byAt, pr.withdrawal.by).name}: ${pr.withdrawal.reason}`]] : []),
@@ -189,7 +192,13 @@ function rosterProposals(state, acting, focusId) {
           : e.ok ? html`<form class="line-add reject-form" data-form="reject-roster" data-proposal="${pr.id}"><input type="text" name="reason" placeholder="Reason for rejecting…" aria-label="Rejection reason"><button class="btn btn-sm btn-danger" type="submit">Reject</button></form>` : ''}
       </div>` : ''}
     </article>`;
-  })}`, { subtitle: 'Giving or removing a right, and deactivating anyone who holds one. Someone other than the proposer approves each change.' });
+  };
+  const open = list.filter((pr) => pr.status === 'open');
+  // A closed change stays visible when a link points at it.
+  const closed = list.filter((pr) => pr.status !== 'open');
+  const focused = closed.some((pr) => pr.id === focusId);
+  return html`${open.length ? section('Rights changes waiting for approval', html`${open.map(card)}`) : ''}
+    ${closed.length ? html`<details class="amendment rights-history" ${focused ? raw('open') : ''}><summary>Past rights changes (${closed.length})</summary>${closed.map(card)}</details>` : ''}`;
 }
 
 // Shown on the propose-right and deactivate forms: what the change would do to
