@@ -1,9 +1,28 @@
-import * as seed from '../data/seed.js';
-import { html, raw, badge, notice, selectField, person, section, kv, lede } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, vagueNameWarning, RISK_OPTIONS, authorityLabel, readiness, decisionRequired, lastDecisionId, activePeople, workflowOf } from '../store/index.js';
+import { html, badge, notice, selectField, person, fmtDate } from '../ui.js';
+import { getCapability, capData, current, versionList, actor, RISK_OPTIONS, authorityLabel, decisionRequired, lastDecisionId, activePeople, workflowOf, defaultsFor } from '../store/index.js';
+import { pickTemplate } from '../data/contract-templates.js';
+import { starterScenarios } from '../data/scenario-templates.js';
 
-// Add a capability: define it, give it a risk profile, choose its starting
-// authority. One page, three sections, one submit. Nothing starts above Level 1.
+// The three risk questions, answered in plain words. The stored values are
+// logic keys (RISK_OPTIONS), so only the labels change here.
+export const RISK_ANSWERS = {
+  impact: [['Low', 'Minor: easy to live with'], ['Medium', 'Noticeable: it costs time or money to fix'], ['High', 'Serious: real harm or loss']],
+  reversibility: [['Easy to reverse', 'Yes, easily'], ['Recoverable with effort', 'Yes, with some effort'], ['Difficult to reverse', 'Hard or impossible to undo']],
+  exposure: [['Internal only', 'Only our own team'], ['Customer-facing', 'Customers'], ['Financial / consequential', 'Money, or something with legal or financial consequences']],
+};
+
+// "What does it do today?" Context, not authority: every answer starts the
+// capability at Level 0 or Level 1 (the store's TODAY map decides the level).
+export const TODAY_CHOICES = [
+  ['nothing', 'Nothing yet', 'People do this work today. It starts at Observe (Level 0): it watches, and nothing it produces is used.'],
+  ['recommends', 'Recommends', 'It suggests; a person decides. It starts at Recommend (Level 1).'],
+  ['drafts', 'Drafts for approval', 'It prepares the action and a person approves each one. It starts at Recommend (Level 1) until that is reviewed and formally approved.'],
+  ['acts', 'Already acts in some cases', 'It takes the action automatically in some cases. It starts at Recommend (Level 1) until that autonomy is reviewed and formally approved.'],
+  ['not-delegated', 'Not something to delegate', 'This stays with people, by design. It stays at Observe (Level 0), and the reason is recorded.'],
+];
+
+// Add a capability: four plain questions, one submit. Failure types and a
+// starting rationale are optional; nothing starts above Level 1.
 export function addCapabilityView(state, query) {
   const error = query.get('error');
   const acting = person(actor(state));
@@ -12,64 +31,102 @@ export function addCapabilityView(state, query) {
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${workflowOf(state).name}</p>
       <h1>Add a capability</h1>
-      ${lede('Add one thing the AI may eventually do on its own.', 'It starts at Level 0 (Observe) or Level 1 (Recommend). It gets more authority only after its rules, targets and tests are in place and someone records a decision.')}
+      <p class="lede">One piece of work that could earn more autonomy, like "Recommend a refund".</p>
     </div>
   </div>
   ${error ? notice('fail', 'Could not add the capability', error) : ''}
-  <form class="setup-form" data-form="add-capability" novalidate>
-    ${section('1. Describe it', html`<div class="card">
-      <label class="field field-stack"><span>Name</span><input name="name" type="text" required maxlength="80" placeholder="e.g. Order status lookup" data-action="check-name" autocomplete="off"></label>
+  <form class="setup-form onboard-form" data-form="add-capability" novalidate>
+    <div class="onboard-group">
+      <h2 class="onboard-q">What does it do?</h2>
+      <label class="field field-stack"><span>Name</span><input name="name" type="text" required maxlength="80" placeholder="e.g. Recommend a refund" data-action="check-name" autocomplete="off"></label>
       <p class="form-hint muted small" data-name-warning hidden></p>
-      <label class="field field-stack"><span>What it does</span><input name="summary" type="text" maxlength="160" placeholder="One sentence, e.g. Tells a customer where their order is, using the carrier feed."></label>
+      <label class="field field-stack"><span>In one sentence</span><input name="summary" type="text" maxlength="160" placeholder="e.g. Reviews refund requests and recommends whether to issue one."></label>
+    </div>
+
+    <div class="onboard-group">
+      <h2 class="onboard-q">Who owns it?</h2>
       ${selectField('owner', 'Owner', owners, actor(state), { action: 'choose-owner' })}
-      <p class="muted small">Choosing an owner also switches "Acting as" to them. The record shows whoever is acting when you add it as the person who authorized it. If that person isn't the owner, the record names both.</p>
-    </div>`, { subtitle: '"Handle refunds" is too broad. "Recommend a refund" is a capability: one action, small enough to have a single authority level.' })}
+      <p class="muted small">Choosing an owner also switches "Demo as" to them.</p>
+    </div>
 
-    ${section('2. Risk profile', html`<div class="card">
+    <div class="onboard-group">
+      <h2 class="onboard-q">What happens if it gets this wrong?</h2>
       <div class="three-col">
-        ${selectField('impact', 'How serious would a bad decision be?', RISK_OPTIONS.impact, '', { placeholder: 'Choose' })}
-        ${selectField('reversibility', 'Can it be undone?', RISK_OPTIONS.reversibility, '', { placeholder: 'Choose' })}
-        ${selectField('exposure', 'Who or what is affected?', RISK_OPTIONS.exposure, '', { placeholder: 'Choose' })}
+        ${selectField('impact', 'How serious would a bad decision be?', RISK_ANSWERS.impact, '', { placeholder: 'Choose' })}
+        ${selectField('reversibility', 'Can it be undone?', RISK_ANSWERS.reversibility, '', { placeholder: 'Choose' })}
+        ${selectField('exposure', 'Who or what is affected?', RISK_ANSWERS.exposure, '', { placeholder: 'Choose' })}
       </div>
-      <p class="fact-label">What could go wrong?</p>
-      <div class="check-grid">${RISK_OPTIONS.failureTypes.map((f) => html`<label class="check"><input type="checkbox" name="failureTypes" value="${f}"><span>${f}</span></label>`)}</div>
-      <label class="field field-stack"><span>Note (optional)</span><input name="riskNote" type="text" maxlength="200" placeholder="What a mistake would cost, and who would notice."></label>
-    </div>`, { subtitle: 'The riskier it is, the more evidence it needs before it gets more authority.' })}
+      <p class="muted small">The riskier it is, the more evidence it needs before it gets more autonomy.</p>
+    </div>
 
-    ${section('3. Starting authority', html`<div class="card">
-      <div class="option-list" role="radiogroup" aria-label="Starting authority">
-        <label class="option"><input type="radio" name="starting" value="0" checked><span class="option-body"><strong>Level 0 — Observe</strong><span class="muted small">The AI sees the work but produces nothing anyone acts on. The usual starting point.</span></span></label>
-        <label class="option"><input type="radio" name="starting" value="1"><span class="option-body"><strong>Level 1 — Recommend</strong><span class="muted small">The AI suggests; a person decides. Start here if the AI already makes useful suggestions and you want to compare them with what people decide.</span></span></label>
-        <label class="option"><input type="radio" name="starting" value="not-delegated"><span class="option-body"><strong>Not delegated, by design</strong><span class="muted small">The AI won't do this. It stays at Level 0 on purpose. Say why: this is recorded as a decision.</span></span></label>
+    <div class="onboard-group">
+      <h2 class="onboard-q">What does it do today?</h2>
+      <div class="option-list" role="radiogroup" aria-label="What does it do today?">
+        ${TODAY_CHOICES.map(([value, label, text]) => html`<label class="option"><input type="radio" name="today" value="${value}"><span class="option-body"><strong>${label}</strong><span class="muted small">${text}</span></span></label>`)}
       </div>
-      <label class="field field-stack"><span>Why this starting point? <span class="muted small">(required if not delegated)</span></span><textarea name="rationale" rows="3" placeholder="e.g. We want to compare its suggestions with agents' decisions first."></textarea></label>
-      <p class="muted small">This creates its first decision record, authorized by <strong>${acting.name}</strong> (${acting.role}) on ${seed.TODAY.replace(/(\d+)-(\d+)-(\d+)/, '$2/$3/$1')}. To record someone else, change "Acting as".</p>
-      <button class="btn btn-primary" type="submit">Add capability</button>
-    </div>`)}
+      <label class="field field-stack"><span>Why? <span class="muted small">(required if it stays with people)</span></span><textarea name="rationale" rows="2" placeholder="e.g. Deletion can't be undone and happens rarely. A person does it every time."></textarea></label>
+    </div>
+
+    <details class="onboard-more">
+      <summary>More detail (optional)</summary>
+      <p class="fact-label">What could go wrong?</p>
+      <p class="muted small">Leave these blank to use the defaults for its risk profile.</p>
+      <div class="check-grid">${RISK_OPTIONS.failureTypes.map((f) => html`<label class="check"><input type="checkbox" name="failureTypes" value="${f}"><span>${f}</span></label>`)}</div>
+      <label class="field field-stack"><span>Note</span><input name="riskNote" type="text" maxlength="200" placeholder="What a mistake would cost, and who would notice."></label>
+    </details>
+
+    <p class="muted small">This writes its first decision record, authorized by <strong>${acting.name}</strong> (${acting.role}) on ${fmtDate(state.today)}.</p>
+    <button class="btn btn-primary" type="submit">Add capability</button>
   </form>`;
 }
 
-// What a capability still needs before its first authority decision.
+// The seven setup steps, shown as three stages. The steps, their order and
+// what gates what are unchanged; the stages only group them.
+export const SETUP_STAGES = [
+  { id: 'define', title: 'Define', text: 'What it does, what could go wrong, and its boundaries.' },
+  { id: 'test', title: 'Test', text: 'What good looks like, and whether it gets there.' },
+  { id: 'decide', title: 'Decide', text: 'Who decides, the evidence, and the authority decision.' },
+];
+
+const EXPOSURE_WORD = { 'Internal only': 'internal', 'Customer-facing': 'customer-facing', 'Financial / consequential': 'financial' };
+const riskPhrase = (risk) => `${String(risk.impact || 'Medium').toLowerCase()}-impact ${EXPOSURE_WORD[risk.exposure] || 'internal'}`;
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// What it already does in the real world, recorded when it was added.
+function todayNote(state, cap) {
+  const first = state.decisionRecords.find((r) => r.capabilityId === cap.id);
+  return first && first.context && first.context.note ? first.context.note : null;
+}
+
+// What a capability still needs before its first authority decision. Each
+// step starts from a strong default to review rather than a blank page.
 export function setupSteps(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
   const d = capData(state, capabilityId);
   const notDelegated = cap.status === 'not-delegated';
+  const risk = current(state, capabilityId, 'risk');
   const contractDone = versionList(state, capabilityId, 'contract').length > 0;
   const criteriaDone = versionList(state, capabilityId, 'criteria').length > 0 && versionList(state, capabilityId, 'requirements').length > 0;
   const stakeholdersDone = current(state, capabilityId, 'stakeholders').length > 0;
   const scenariosDone = d.scenarios.length > 0;
   const testsDone = Boolean(d.testRun.lastRun);
+  const note = todayNote(state, cap);
+  const draft = d.contractDraft && !d.contractDraft.finalizedAt;
+  const template = pickTemplate(risk);
+  const ruleCount = Object.values(template.sections).reduce((n, lines) => n + lines.length, 0);
+  const defaults = defaultsFor(state, capabilityId);
+  const starters = starterScenarios(cap).length;
   const steps = [
-    { id: 'define', title: 'Define the capability', done: true, text: `${cap.name} has an owner, a risk profile and a starting authority of ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=rules`, linkText: 'Risk profile' },
-    { id: 'contract', title: 'Set the rules', done: contractDone, text: `What the AI may do, when it asks a person, what it must never do, and when its authority is reduced automatically. The starter rules are chosen from the risk profile.${d.contractDraft && !d.contractDraft.finalizedAt ? ' You have a draft in progress.' : ''}`, link: `#/capabilities/${cap.id}/contract/build`, linkText: d.contractDraft && !d.contractDraft.finalizedAt ? 'Continue the draft' : contractDone ? 'Rules' : 'Write the rules' },
-    { id: 'criteria', title: 'Set targets and decision requirements', done: criteriaDone, text: 'Targets say what good looks like. Decision requirements say what must be true before authority changes. Both lock when the first test runs, so results can\'t move the goalposts.', link: `#/capabilities/${cap.id}/criteria/edit`, linkText: criteriaDone ? 'Targets' : 'Set targets' },
-    { id: 'stakeholders', title: 'Name the stakeholders', done: stakeholdersDone, text: 'The people whose views are recorded with each authority decision. They are also who can approve changes.', link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: stakeholdersDone ? 'Stakeholders' : 'Name stakeholders' },
-    { id: 'scenarios', title: 'Write the scenario library', done: scenariosDone, text: 'Typical, ambiguous, adversarial, high-impact and edge cases. Twenty to thirty is enough to start, and there is a starter set you can add.', link: `#/capabilities/${cap.id}/scenarios/edit`, linkText: scenariosDone ? 'Scenario library' : 'Open the library' },
-    { id: 'tests', title: 'Run the test suite', done: testsDone, text: 'The first run produces the first evidence and locks the targets and decision requirements.', link: `#/capabilities/${cap.id}?tab=evidence&show=tests`, linkText: 'Tests', needs: scenariosDone && criteriaDone },
-    { id: 'decision', title: 'Decide the first authority change', done: Boolean(lastDecisionId(state, cap.id) && cap.authority.level >= 2), text: 'Usually a move to Draft (Level 2) for a small pilot. The owner decides; Authority Lab only recommends.', link: decisionRequired(state, cap.id) ? `#/capabilities/${cap.id}/decision` : null, linkText: 'Authority decision', needs: testsDone, propose: testsDone && !decisionRequired(state, cap.id) && cap.authority.level < 2 ? cap.authority.level + 1 : null },
+    { id: 'define', stage: 'define', title: 'Say what it does and what could go wrong', done: true, text: `${cap.name} has an owner and a risk profile, and starts at ${authorityLabel(cap.authority)}.${note ? ` ${note}` : ''}`, link: `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: 'Risk profile' },
+    { id: 'contract', stage: 'define', title: 'Set the boundaries', done: contractDone, text: contractDone ? 'What it may do on its own, when it asks a person, what it must never do, and when its autonomy is reduced automatically.' : `These are the default safety limits for this risk profile: ${plural(ruleCount, 'starter rule')} for a ${riskPhrase(risk)} capability. Review them, change what doesn't fit, then finalize.${draft ? ' You have a draft in progress.' : ''}`, link: `#/capabilities/${cap.id}/contract/build`, linkText: draft ? 'Continue the draft' : contractDone ? 'Rules' : 'Review the rules' },
+    { id: 'criteria', stage: 'test', title: 'Set what good looks like', done: criteriaDone, text: criteriaDone ? 'Targets say what good looks like. Decision requirements say what must be true before authority changes. Both lock when the first test runs.' : `For a ${riskPhrase(risk)} capability, we recommend these checks: ${plural(defaults.criteria.length, 'target')} and ${plural(defaults.requirements.length, 'decision requirement')}. They lock when the first test runs, so results can't move the bar.`, link: `#/capabilities/${cap.id}/criteria/edit`, linkText: criteriaDone ? 'Targets' : 'Review the checks' },
+    { id: 'stakeholders', stage: 'decide', title: 'Name who decides', done: stakeholdersDone, text: stakeholdersDone ? 'Their views are recorded with each authority decision, and they can approve changes.' : 'The people whose views are recorded with each authority decision; they can also approve changes. Name them before the first test run: once results are in, changing who is involved needs sign-off.', link: `#/capabilities/${cap.id}/stakeholders/edit`, linkText: stakeholdersDone ? 'Stakeholders' : 'Name the people' },
+    { id: 'scenarios', stage: 'test', title: 'Add test cases', done: scenariosDone, text: scenariosDone ? `${plural(d.scenarios.length, 'test case')} in the library.` : `We prepared ${plural(starters, 'starter test case')}: typical, ambiguous, adversarial, high-impact and edge cases. Review them and add your own.`, link: `#/capabilities/${cap.id}/scenarios/edit`, linkText: scenariosDone ? 'Test cases' : 'Review the test cases' },
+    { id: 'tests', stage: 'test', title: 'Run the tests', done: testsDone, text: `The first run produces the first evidence and locks the targets and decision requirements.${stakeholdersDone ? '' : ' Name who decides before this run.'}`, link: `#/capabilities/${cap.id}?tab=decide&show=tests`, linkText: 'Tests', needs: scenariosDone && criteriaDone },
+    { id: 'decision', stage: 'decide', title: 'Make the first authority decision', done: Boolean(lastDecisionId(state, cap.id) && cap.authority.level >= 2), text: note ? `Review the evidence, then decide. This is where what it already does today is reviewed and formally approved, one level at a time, starting with Draft (Level 2). A person decides; Authority Lab only recommends.` : 'Review the evidence, then decide. Usually a move to Draft (Level 2) for a small pilot. A person decides; Authority Lab only recommends.', link: decisionRequired(state, cap.id) ? `#/capabilities/${cap.id}/decision` : null, linkText: 'Authority decision', needs: testsDone, propose: testsDone && !decisionRequired(state, cap.id) && cap.authority.level < 2 ? cap.authority.level + 1 : null },
   ];
   if (notDelegated) {
-    return [steps[0], { id: 'not-delegated', title: 'Not delegated, by design', done: true, text: 'This capability stays at Level 0 on purpose. Giving it any authority later needs a new decision.', link: `#/records/${lastDecisionId(state, cap.id) || ''}`, linkText: 'Decision record' }];
+    return [steps[0], { id: 'not-delegated', stage: 'define', title: 'Not delegated, by design', done: true, text: 'This capability stays at Level 0 on purpose. Giving it any authority later needs a new decision.', link: `#/records/${lastDecisionId(state, cap.id) || ''}`, linkText: 'Decision record' }];
   }
   let nextFound = false;
   return steps.map((st) => {
@@ -89,23 +146,36 @@ export function setupView(state, capabilityId, query) {
   const steps = setupSteps(state, capabilityId);
   const focus = query.get('step');
   const done = steps.filter((s) => s.done).length;
+  const doneHref = (st) => (st.id === 'contract' ? `#/capabilities/${cap.id}?tab=status&show=rules` : st.id === 'criteria' ? `#/capabilities/${cap.id}?tab=decide&show=targets` : st.id === 'stakeholders' ? `#/capabilities/${cap.id}` : st.link);
+  const stepItem = (st) => html`<li class="setup-step ${st.done ? 'is-done' : ''} ${st.next ? 'is-next' : ''} ${focus === st.id ? 'is-focus' : ''}" id="step-${st.id}">
+    <div class="setup-step-head"><span class="req-mark" aria-hidden="true">${st.done ? '✓' : shown.indexOf(st) + 1}</span><strong>${st.title}</strong>${st.done ? html`<span class="muted small">Done</span>` : st.next ? badge('decision', 'Next') : ''}</div>
+    <p class="muted">${st.text}</p>
+    ${st.done && st.link ? html`<a href="${doneHref(st)}">${st.linkText}</a>` : ''}
+    ${st.done && st.id === 'decision' && lastDecisionId(state, cap.id) ? html`<a href="#/records/${lastDecisionId(state, cap.id)}">Decision record</a>` : ''}
+    ${!st.done && st.link && st.needs !== false ? html`<a class="btn btn-sm ${st.next ? 'btn-primary' : ''}" href="${st.link}">${st.linkText}</a>` : ''}
+    ${!st.done && st.propose ? html`<button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${st.propose}">Propose a move to Level ${st.propose}</button>` : ''}
+    ${!st.done && st.needs === false ? html`<p class="muted small">Finish the earlier steps first.</p>` : ''}
+  </li>`;
+  const stages = cap.status === 'not-delegated'
+    ? [{ ...SETUP_STAGES[0], steps }]
+    : SETUP_STAGES.map((stage) => ({ ...stage, steps: steps.filter((st) => st.stage === stage.id) }));
+  // Numbered in the order shown.
+  const shown = stages.flatMap((stage) => stage.steps);
   return html`<div class="page-head">
     <div>
       <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
       <h1>Setup</h1>
-      ${lede(html`${done} of ${steps.length} steps done.`, 'Work through these in order: rules before targets, targets before tests, tests before a decision.')}
+      <p class="lede">${done} of ${steps.length} steps done.</p>
     </div>
   </div>
-  <ol class="setup-steps">${steps.map((st, i) => html`<li class="card setup-step ${st.done ? 'is-done' : ''} ${st.next ? 'is-next' : ''} ${focus === st.id ? 'is-focus' : ''}" id="step-${st.id}">
-    <div class="setup-step-head"><span class="req-mark" aria-hidden="true">${st.done ? '✓' : i + 1}</span><strong>${st.title}</strong>${st.done ? badge('pass', 'Done') : st.next ? badge('decision', 'Next') : badge('neutral', 'Later')}</div>
-    <p class="muted">${st.text}</p>
-    ${st.done && st.link ? html`<a href="${st.id === 'contract' ? `#/capabilities/${cap.id}?tab=rules` : st.id === 'criteria' ? `#/capabilities/${cap.id}?tab=evidence&show=targets` : st.id === 'stakeholders' ? `#/capabilities/${cap.id}` : st.link}">${st.linkText}</a>` : ''}
-    ${st.done && st.id === 'decision' && lastDecisionId(state, cap.id) ? html`<a href="#/records/${lastDecisionId(state, cap.id)}">Decision record</a>` : ''}
-    ${!st.done && st.link && st.needs !== false ? html`<a class="btn btn-sm" href="${st.link}">${st.linkText}</a>` : ''}
-    ${!st.done && st.propose ? html`<button class="btn btn-sm btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${st.propose}">Propose a move to Level ${st.propose}</button>` : ''}
-    ${!st.done && st.soon ? html`<p class="muted small">Not available in this prototype yet: ${st.soon}.</p>` : ''}
-    ${!st.done && st.needs === false ? html`<p class="muted small">Finish the earlier steps first.</p>` : ''}
-  </li>`)}</ol>`;
+  <div class="setup-stages">${stages.map((stage, i) => {
+    const n = stage.steps.filter((st) => st.done).length;
+    return html`<section class="setup-stage ${n === stage.steps.length ? 'is-done' : ''}" id="stage-${stage.id}">
+      <div class="setup-stage-head"><h2><span class="muted">${i + 1}.</span> ${stage.title}</h2><span class="muted small">${n} of ${stage.steps.length} done</span></div>
+      <p class="muted small">${stage.text}</p>
+      <ol class="setup-steps">${stage.steps.map(stepItem)}</ol>
+    </section>`;
+  })}</div>`;
 }
 
 // The empty state for a capability tab: what is missing and where to go next.

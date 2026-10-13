@@ -153,7 +153,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
   ${section('What would change', html`<div class="card">${diff}</div>`)}
 
   ${p.status === 'open' ? section('Approval', html`<div class="card authorize">
-    <p class="eyebrow">Acting as ${who.name}, ${who.role}</p>
+    <p class="eyebrow">Demo as ${who.name}, ${who.role}</p>
     ${elig.ok
       ? html`<p>${who.name} can approve as ${roleLabel(elig.role)}.</p><button class="btn btn-primary" data-action="proposal-approve" data-capability="${cap.id}" data-proposal="${p.id}">Approve</button>`
       : html`<p class="muted">${elig.reason}</p>`}

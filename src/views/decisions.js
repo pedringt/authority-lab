@@ -1,7 +1,8 @@
 import * as seed from '../data/seed.js';
-import { html, raw, badge, section, notice, kv, authorityBadge, levelScale, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, versionsInForce, KIND_LABELS, VERSIONED_KINDS, current, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName } from '../store/index.js';
-import { requirementsList, optionLabel } from './capability.js';
+import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
+import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN } from '../store/index.js';
+import { whatWeKnow } from './cap-decide.js';
+import { optionLabel } from './cap-history.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -22,7 +23,7 @@ export function decisionsListView(state) {
   </div>
   ${pending.map((c) => notice('decision', `Decision needed: ${c.name}`, `Someone has proposed moving ${c.name} from ${authorityLabel(c.authority)} to ${authorityLabel(proposedAuthority(state, c.id))}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} checks met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
   ${state.capabilities.flatMap((c) => capData(state, c.id).proposals.filter((p) => p.status === 'open').map((p) => notice('watch', `Approval needed: ${c.name}`, `${person(p.proposedBy).name} proposed a ${KIND_NOUN[p.kind]} change. ${requirementLabel(p.required, p.approvals)}.`, { link: `#/capabilities/${c.id}/proposals/${p.id}`, linkText: 'Open' })))}
-  ${reviews.map((c) => notice('fail', `Review needed before ${c.name} gets more authority`, `The AI was moved back to ${levelName(c.authority.level)} after crossing a safety limit. Before it can get more authority again, the owner or a Risk approver needs to record what happened and what changed (the post-incident review).`, { link: `#/capabilities/${c.id}?tab=monitoring`, linkText: 'Record the review' }))}
+  ${reviews.map((c) => notice('fail', `Review needed before ${c.name} gets more authority`, `The AI was moved back to ${levelName(c.authority.level)} after crossing a safety limit. Before it can get more authority again, the owner or a Risk approver needs to record what happened and what changed (the post-incident review).`, { link: `#/capabilities/${c.id}?tab=monitor`, linkText: 'Record the review' }))}
   <div class="card table-card"><table class="table">
     <thead><tr><th>Record</th><th>Capability</th><th>Date</th><th>Change</th><th>Decision</th><th>Decided by</th></tr></thead>
     <tbody>${records.map((x) => html`<tr>
@@ -36,25 +37,22 @@ export function decisionsListView(state) {
   </table></div>`;
 }
 
-// The expected-impact rows for an expansion (B1): a metric and a target with
-// a number, up to four. Problems show inline; the Authorize button says why
-// it's disabled.
-// What still stands between the person and Authorize (#96): each step done
-// or not, with its first problem, linking to it. canAuthorize stays the only
-// judge: anything it refuses that no step explains is listed too.
+// What still stands between the person and recording (#96): each part of
+// the decision done or not, with its first problem. canAuthorize stays the
+// only judge: anything it refuses that no part explains is listed too.
 export function checklist(state, cap, dec, check) {
   const expanding = isExpansion(state, cap.id, dec.option);
   const oc = expanding ? outcomeChecks(dec.outcomes) : null;
   const rc = expanding ? rolloutChecks(state, dec.rollout) : null;
   const items = [
-    { href: '#decision-panel', label: 'Option', ok: Boolean(dec.option), why: 'Choose an option.' },
-    ...(dec.option === 'expand-limits' ? [{ href: '#step-conditions', label: 'Limits', ok: true, why: '' }] : []),
-    ...(expanding ? [{ href: '#step-rollout', label: 'Rollout plan', ok: rc.ok, why: rc.errors[0] }, { href: '#step-impact', label: 'Expected impact', ok: oc.ok, why: oc.errors[0] }] : []),
-    { href: '#step-rationale', label: 'Your reason', ok: rationaleOk(dec.rationale), why: 'Say why you\'re making this decision (a sentence or more).' },
+    { label: dec.option ? `Decision: ${plainChoice(state, cap, dec.option)}` : 'Decision', ok: Boolean(dec.option), why: 'Choose one under "Your decision".' },
+    ...(hasLimitsStep(state, cap, dec.option) ? [{ label: 'Limits', ok: true, why: '' }] : []),
+    ...(expanding ? [{ label: 'What should improve', ok: oc.ok, why: oc.errors[0] }, { label: 'Rollout plan', ok: rc.ok, why: rc.errors[0] }] : []),
+    { label: 'Your reason', ok: rationaleOk(dec.rationale), why: 'Say why you\'re making this decision (a sentence or more).' },
   ];
   const explained = items.some((i) => !i.ok);
   const extra = !check.ok && !explained ? html`<li class="check-item is-blocked"><span class="check-mark" aria-hidden="true">✗</span> ${check.reason}</li>` : '';
-  return html`<ul class="checklist" role="status" aria-label="Before you can decide">${items.map((i) => html`<li class="check-item ${i.ok ? 'is-done' : 'is-blocked'}"><span class="check-mark" aria-hidden="true">${i.ok ? '✓' : '✗'}</span> <a href="${i.href}">${i.label}</a>${i.ok ? '' : html`<span class="muted small">: ${i.why}</span>`}</li>`)}${extra}</ul>`;
+  return html`<ul class="checklist decide-review" role="status" aria-label="Before you record">${items.map((i) => html`<li class="check-item ${i.ok ? 'is-done' : 'is-blocked'}"><span class="check-mark" aria-hidden="true">${i.ok ? '✓' : '✗'}</span> <strong>${i.label}</strong>${i.ok ? '' : html`<span class="muted small">: ${i.why}</span>`}</li>`)}${extra}</ul>`;
 }
 
 // The rollout plan for an expansion (C1): every field required.
@@ -71,7 +69,7 @@ function rolloutCard(state, cap, dec) {
       ${field('feedbackChannel', 'Feedback channel', html`<input type="text" maxlength="120" value="${p.feedbackChannel || ''}" placeholder="e.g. #refund-ai-feedback" ${attrs('feedbackChannel')}>`)}
     </div>
     ${field('scope', 'Scope: where it starts', html`<textarea rows="3" maxlength="300" placeholder="e.g. UK refunds under $50, weekdays only" ${attrs('scope')}>${p.scope || ''}</textarea>`)}
-    ${field('reviewerNotes', 'What reviewers need to know (the people checking the AI\'s work)', html`<textarea rows="4" maxlength="600" ${attrs('reviewerNotes')}>${p.reviewerNotes || ''}</textarea>`)}
+    ${field('reviewerNotes', 'What reviewers need to know (the people checking the automated work)', html`<textarea rows="4" maxlength="600" ${attrs('reviewerNotes')}>${p.reviewerNotes || ''}</textarea>`)}
     ${dec.rolloutPrefilled ? html`<p class="muted small"><strong>Prefilled for the demo.</strong> Edit it before you decide.</p>` : ''}
     ${rc.ok ? '' : html`<ul class="form-error plain-list">${rc.errors.map((e) => html`<li>${e}</li>`)}</ul>`}
   </div>`;
@@ -117,8 +115,8 @@ export function decisionRecordView(state, id) {
     </div>
     <a class="btn btn-sm" href="#/records/${x.id}/brief">Decision brief (one page)</a>
   </div>
-  ${auto ? notice('fail', `The AI was moved back to ${levelName(x.next.level)} after crossing a safety limit.`, 'No one made this change by hand. It followed a rule people agreed in advance ("Authority is reduced automatically when…"). People decide when the AI gets more authority; Authority Lab can take authority away on its own when a limit is crossed. Formally, this is an automatic restriction.') : ''}
-  ${auto && reviewForRecord(state, x.id) ? (() => { const rv = reviewForRecord(state, x.id); return notice('pass', `Reviewed by ${personAt(rv.byAt, rv.by).name} on ${fmtDate(rv.date)} (${rv.id})`, `What happened: ${rv.cause} What changed: ${rv.changes} The review is saved separately; this record stays as it was.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'See the review' }); })() : auto && capData(state, cap.id).reviewRequired ? notice('watch', 'Not reviewed yet', 'The owner or a Risk approver needs to record what happened and what changed (the post-incident review) on the Monitoring tab. Until then the AI can\'t get more authority.', { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' }) : ''}
+  ${auto ? notice('fail', `${(getCapability(state, x.capabilityId) || { name: 'This capability' }).name} was moved back to ${levelName(x.next.level)} after crossing a safety limit.`, 'No one made this change by hand. It followed a rule people agreed in advance ("Automation is pulled back if…"). People decide when autonomy expands; software pulls it back on its own when a limit is crossed. Formally, this is an automatic restriction.') : ''}
+  ${auto && reviewForRecord(state, x.id) ? (() => { const rv = reviewForRecord(state, x.id); return notice('pass', `Reviewed by ${personAt(rv.byAt, rv.by).name} on ${fmtDate(rv.date)} (${rv.id})`, `What happened: ${rv.cause} What changed: ${rv.changes} The review is saved separately; this record stays as it was.`, { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'See the review' }); })() : auto && capData(state, cap.id).reviewRequired ? notice('watch', 'Not reviewed yet', 'The owner or a Risk approver needs to record what happened and what changed (the post-incident review) on the Monitoring tab. Until then the AI can\'t get more authority.', { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Record the review' }) : ''}
   <div class="card record">
     <div class="record-change">
       <div><span class="fact-label">Previous</span>${x.previous ? authorityBadge(x.previous) : html`<span class="muted">None (new capability)</span>`}</div>
@@ -173,7 +171,7 @@ function recordNames(state, record) {
 // The bar as it changed since this decision opened (roadmap item 8): every
 // newer version of the criteria or requirements, each changed row marked
 // stricter, looser or changed, with who did it and how it was approved.
-function barChangedNote(state, cap) {
+export function barChangedNote(state, cap) {
   const changes = barChangesSinceDecisionOpened(state, cap.id);
   if (!changes.length) return '';
   const word = { stricter: 'made stricter', looser: 'made easier to meet', changed: 'changed', added: 'added', removed: 'removed' };
@@ -192,114 +190,226 @@ export function amendedNote(state, record) {
   return notice('watch', 'Targets changed after results were seen', `This decision was judged against targets or checks that changed after the results were in. Check that the change was justified. ${amended.map((a) => `${person(a.author).name} changed the ${KIND_NOUN[a.kind] === 'target' ? 'targets' : 'decision requirements'} (v${a.version}): ${a.reason}`).join(' ')}`, { link: `#/capabilities/${cap.id}/versions?kind=${amended[0].kind}&version=${amended[0].version}`, linkText: 'See the change' });
 }
 
-export function decisionWorkspaceView(state, capabilityId, query = new URLSearchParams()) {
+// ---------------------------------------------------------------------------
+// The Decide tab (redesign, 2026-10-12): one reading direction and one action
+// at the end. canAuthorize stays the only judge of whether it can be recorded.
+// ---------------------------------------------------------------------------
+
+const optionName = (option) => (seed.DECISION_OPTIONS.find((o) => o.id === option) || { name: option }).name;
+const familyOf = (option) => ({ expand: 'expand', 'expand-limits': 'expand', hold: 'hold', restrict: 'reduce', suspend: 'reduce', redesign: 'redesign' }[option] || null);
+
+// Limits only mean something from Act within limits up; a move to Draft or
+// below has a person approving every action anyway.
+function hasLimitsStep(state, cap, option) {
+  return option === 'expand-limits' && nextAuthority(option, cap.authority, proposedAuthority(state, cap.id)).level >= 3;
+}
+
+// The person's words for a recorded option, from where it would move.
+function plainOption(option, previous, next) {
+  switch (option) {
+    case 'expand-limits': return next.level < 3 ? `Expand autonomy, to ${levelName(next.level)}` : 'Expand autonomy, within limits';
+    case 'expand': return next.level < 3 ? `Expand autonomy, to ${levelName(next.level)}` : 'Expand autonomy, broadly';
+    case 'hold': return 'Keep current limits';
+    case 'restrict': return `Reduce autonomy one level, to ${levelName(next.level)}`;
+    case 'suspend': return 'Reduce autonomy all the way, to Observe';
+    case 'redesign': return 'Pause and redesign';
+    default: return optionLabel(option);
+  }
+}
+
+export function plainChoice(state, cap, option) {
+  return plainOption(option, cap.authority, nextAuthority(option, cap.authority, proposedAuthority(state, cap.id)));
+}
+
+const RECOMMENDED = { 'expand-limits': 'expand autonomy within limits', expand: 'expand autonomy broadly', hold: 'keep current limits', restrict: 'reduce autonomy one level', suspend: 'reduce autonomy all the way, to Observe', redesign: 'pause and redesign' };
+
+const join = (items) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
+const upper = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// What runs automatically now, and what still needs human review, once a
+// decision is recorded. From the record, never from the open decision.
+function nowSentence(cap, rec) {
+  const noun = actionNoun(cap);
+  const c = rec.conditions;
+  const prefix = rec.option === 'hold' ? 'No change. ' : rec.next.level < rec.previous.level ? `Autonomy reduced to ${levelName(rec.next.level)}. ` : '';
+  if (rec.next.level === 3 && c) {
+    const caps = [c.maxDailyTotal != null ? `$${c.maxDailyTotal}` : null, c.maxDailyCount != null ? `${c.maxDailyCount} ${noun}` : null].filter(Boolean);
+    const review = ['larger', ...(c.noFraudFlag ? ['fraud-flagged'] : []), ...(c.noChargeback ? ['chargeback'] : []), ...(c.policyClear ? ['unclear-policy'] : [])];
+    return `${prefix}Standard ${noun} up to $${c.maxValue} now run automatically${caps.length ? `, capped at ${caps.join(' and ')} a day` : ''}. Everything else, including ${join(review)} cases, still needs human review.`;
+  }
+  const by = [
+    'Nothing runs automatically, and nothing is produced. People do all the work.',
+    'Nothing runs automatically. Suggestions only: a person decides and acts on every case.',
+    `Nothing runs automatically. ${upper(noun)} are drafted, and a person approves every one before anything happens.`,
+    `${upper(noun)} within the approved limits run automatically. Everything else needs human review.`,
+    `Most ${noun} now run automatically. Anything the rules send to a person still needs human review.`,
+  ];
+  return `${prefix}${by[rec.next.level] || ''}`;
+}
+
+// Can a move one level up be proposed from here? Offered for the first moves
+// (up to Draft), once the tests have run and no review is pending, as before
+// the redesign. proposeAuthority still checks everything itself.
+function proposable(state, cap, d, review) {
+  return cap.status !== 'not-delegated' && cap.authority.level < 2 && Boolean(d.testRun.lastRun) && !review.any;
+}
+
+const proposeButton = (cap) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button>`;
+
+function recordedView(state, cap, rec) {
+  const who = personAt(rec.authorizedByAt, rec.authorizedBy);
+  const expanded = rec.next.level > rec.previous.level;
+  return html`<div class="decide-flow">
+    <div class="decide-recorded" role="status">
+      <p class="decide-big">Decision recorded: ${plainOption(rec.option, rec.previous, rec.next)}</p>
+      <p class="muted">${who.name} · ${fmtDate(rec.date)}</p>
+      <p>${nowSentence(cap, rec)}</p>
+      <p class="small"><a href="#/records/${rec.id}">See the decision record</a></p>
+    </div>
+    <p class="next-step"><a href="#/capabilities/${cap.id}?tab=monitor">${expanded ? 'Next: monitor the rollout →' : 'Next: check it in Monitor →'}</a></p>
+  </div>`;
+}
+
+function noDecisionView(state, cap, d, { runs }) {
+  const review = reviewNeeded(state, cap.id);
+  const records = state.decisionRecords.filter((x) => x.capabilityId === cap.id);
+  const last = records.at(-1);
+  if (d.decision.recordId && last && last.id === d.decision.recordId && !review.any) return recordedView(state, cap, last);
+  const n = cap.authority.level + 1;
+  const tests = `#/capabilities/${cap.id}?tab=decide&show=tests`;
+  let lead;
+  if (review.any) {
+    // Said once here; Monitor holds the review itself.
+    lead = notice('restricted', 'A review comes first', review.restriction
+      ? `${cap.name} was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Autonomy can't expand again until someone records what happened and what changed.`
+      : 'A safety rule was crossed. Autonomy can\'t expand until someone records what happened and what changed.', { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Record the review' });
+  } else if (proposable(state, cap, d, review)) {
+    lead = html`<div class="decide-start"><h2>Ready to propose Level ${n}, ${levelName(n)}</h2>
+      <p>${LEVEL_PLAIN[n]} A named person makes the call, and the decision is recorded.</p>
+      ${proposeButton(cap)}</div>`;
+  } else {
+    const why = cap.status === 'not-delegated' ? 'This work is kept with people by design, so there is nothing to decide.'
+      : n > 4 ? 'It already has the most autonomy there is.'
+        : !d.testRun.lastRun ? html`Run the tests first. Then a move to Level ${n}, ${levelName(n)}, can be proposed. <a href="${tests}">Go to the tests</a>`
+          : html`No one has proposed a move to Level ${n}, ${levelName(n)}, yet.`;
+    lead = html`<div class="decide-start"><h2>No decision is open</h2><p>${why}</p></div>`;
+  }
+  return html`<div class="decide-flow">
+    ${lead}
+    <section class="decide-step"><h2>What do we know?</h2>${whatWeKnow(state, cap, { runs })}</section>
+    ${last ? html`<p class="muted small">Last decision: <a href="#/records/${last.id}">${optionLabel(last.option)}, ${fmtDate(last.date)}</a>. Every decision is in <a href="#/capabilities/${cap.id}?tab=history">History</a>.</p>` : ''}
+  </div>`;
+}
+
+// The Decide tab's body: the open decision as one flow, the decision just
+// recorded, or what has to happen before there is one. Kept under its old
+// name; #/capabilities/<id>/decision renders the Decide tab.
+export function decisionWorkspaceView(state, capabilityId, query = new URLSearchParams(), { runs = null } = {}) {
   const cap = getCapability(state, capabilityId);
-  if (!cap) return html`<div class="page-head"><h1>Capability not found</h1></div>`;
+  if (!cap) return html`<p class="empty">We couldn't find that capability.</p>`;
   const d = capData(state, capabilityId);
-  const r = readiness(state, capabilityId);
+  if (!decisionRequired(state, capabilityId)) return noDecisionView(state, cap, d, { runs });
+
   const dec = d.decision;
-
-  const pending = decisionRequired(state, capabilityId);
   const proposed = proposedAuthority(state, capabilityId);
-  if (dec.recordId && !pending) {
-    const rec = state.decisionRecords.find((x) => x.id === dec.recordId);
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/records">Decisions</a></p><h1>Authority decision</h1><p class="lede">This decision was made on ${fmtDate(rec.date)}. See the record: <a href="#/records/${rec.id}">Authority change #${String(rec.number).padStart(2, '0')}</a>.</p></div></div>
-      ${d.reviewRequired
-        ? notice('fail', 'Review needed', `After this decision, the AI was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Record what happened and what changed (the post-incident review) before giving it more authority again.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Record the review' })
-        : notice('pass', 'Decision recorded', `${cap.name} is at ${authorityLabel(cap.authority)}. To try the decision again, use Reset demo.`, { link: `#/capabilities/${cap.id}?tab=monitoring`, linkText: 'Monitoring' })}`;
-  }
-
-  if (!pending) {
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/records">Decisions</a></p><h1>Authority decision</h1><p class="lede">Nothing to decide right now. ${cap.name} is at ${authorityLabel(cap.authority)}, and no one has proposed a change.</p></div></div>`;
-  }
-
   const check = canAuthorize(state, capabilityId);
   const rec = d.recommendation;
-  // A compact radio list: one line per option, its description as a tooltip.
-  const options = seed.DECISION_OPTIONS.map((o) => html`<label class="option-row ${dec.option === o.id ? 'is-selected' : ''} ${rec && o.id === rec.option ? 'is-recommended' : ''}" title="${o.description}">
-    <input type="radio" name="decision-option" value="${o.id}" ${dec.option === o.id ? raw('checked') : ''} data-action="select-option" data-capability="${cap.id}">
-    <span class="option-row-name">${o.name}</span>${rec && o.id === rec.option ? html`<span class="badge badge-neutral">Recommended</span>` : ''}
-  </label>`);
-  const chosen = seed.DECISION_OPTIONS.find((o) => o.id === dec.option);
-
-  const c = dec.conditions;
+  const authorizer = person(actor(state, cap.id));
   const noun = actionNoun(cap);
-  const conditions = dec.option === 'expand-limits' ? html`<div class="card conditions">
-    <p class="eyebrow">Limits</p>
-    <p>The AI can act on its own only when all of these are true. Everything else goes to a person to approve.</p>
-    <div class="condition-grid">
+  const cur = cap.authority.level;
+  const oneUp = proposed.level === cur + 1;
+  const fam = familyOf(dec.option);
+  const expanding = isExpansion(state, cap.id, dec.option);
+  const limits = hasLimitsStep(state, cap, dec.option);
+  const c = dec.conditions;
+
+  let n = 0;
+  const step = (title, body, { id, sub } = {}) => html`<section class="decide-step"${id ? html` id="${id}"` : ''}><p class="decide-step-n">Step ${++n}</p><h2>${title}</h2>${sub ? html`<p class="muted small decide-step-sub">${sub}</p>` : ''}${body}</section>`;
+
+  // Step 1: the change, as behaviour first and level second.
+  const side = (label, level, limited, cls) => html`<div class="decide-${cls}"><span class="muted small">${label}</span><strong>${LEVEL_PLAIN[level]}</strong><span class="muted small">Level ${level} · ${levelName(level)}${limited && level !== 3 ? ' (limited)' : ''}</span></div>`;
+  const change = html`<div class="decide-change">${side('Now', cur, cap.authority.limited, 'from')}<span class="decide-arrow" aria-hidden="true">→</span>${side('Proposed', proposed.level, proposed.limited, 'to')}</div>`;
+
+  // Step 3: the recommendation, in the person's words.
+  const recConditions = (seed.capabilityData[cap.id] || {}).defaultConditions || c;
+  const recDetail = rec && rec.option === 'expand-limits'
+    ? `Allow standard ${noun} up to $${recConditions.maxValue} to run automatically. Keep high-value ${noun} under human review.`
+    : rec ? rec.summary : '';
+  const recommendation = rec ? html`<div class="decide-rec">
+    <p><strong>Recommended: ${RECOMMENDED[rec.option] || optionName(rec.option).toLowerCase()}.</strong></p>
+    <p>${recDetail}</p>
+    <p class="muted small">Worked out from the evidence. You decide.</p>
+    ${rec.rationale && rec.rationale.length ? html`<details class="how"><summary>How it was worked out</summary><ul class="plain-list">${rec.rationale.map((x) => html`<li>${x}</li>`)}</ul></details>` : ''}
+  </div>` : '';
+
+  // Step 4: four plain choices. Expand and Reduce ask a second question;
+  // nothing is chosen for the person. Each final choice says which recorded
+  // option it is. A choice that isn't open says why, right there.
+  const leaf = (option, label) => html`<label class="decide-leaf"><input type="radio" name="decision-option" value="${option}" data-action="select-option" data-capability="${cap.id}" ${dec.option === option ? raw('checked') : ''}><span>${label}</span><span class="decide-maps">recorded as “${optionName(option)}”</span></label>`;
+  const choice = (key, title, desc, { option = null, subs = null, hint = '', note = '', disabled = false } = {}) => html`<div class="decide-choice ${fam === key ? 'is-on' : ''} ${disabled ? 'is-disabled' : ''}">
+    <label class="decide-choice-main"><input type="radio" class="decide-family" name="decide-family" value="${option || key}" data-family="${key}" ${option ? raw(`data-action="select-option" data-capability="${cap.id}"`) : ''} ${fam === key ? raw('checked data-stored') : ''} ${disabled ? raw('disabled') : ''}><span><strong>${title}</strong><span class="decide-choice-desc">${desc}</span></span></label>
+    ${option ? html`<span class="decide-maps">recorded as “${optionName(option)}”</span>` : ''}
+    ${subs ? html`<div class="decide-sub" role="radiogroup" aria-label="${title}: which">${subs}</div><p class="decide-hint">${hint}</p>` : ''}
+    ${note ? html`<p class="decide-note">${note}</p>` : ''}
+  </div>`;
+  const expandChoice = !oneUp
+    ? choice('expand', 'Expand autonomy', 'Let more of this work run automatically.', { disabled: true, note: `Not available: this decision was opened for Level ${proposed.level}, but ${cap.name} is now at Level ${cur}. Expanding goes one level at a time, so Level ${cur + 1} has to be proposed instead.` })
+    : proposed.level < 3
+      ? choice('expand', 'Expand autonomy', `Move to ${levelName(proposed.level)}: ${LEVEL_PLAIN[proposed.level]}`, { option: 'expand', note: d.reviewRequired ? 'Not available until the review after the automatic restriction is recorded.' : '' })
+      : choice('expand', 'Expand autonomy', `Let more of this work run automatically, at Level ${proposed.level}.`, {
+        subs: html`${leaf('expand-limits', 'Within limits')}${leaf('expand', 'Broad autonomy')}`,
+        hint: 'Choose one: within limits, or broad autonomy.',
+        note: d.reviewRequired ? 'Not available until the review after the automatic restriction is recorded.' : '',
+      });
+  const reduceChoice = cur === 0
+    ? choice('reduce', 'Reduce autonomy', 'Move it down the ladder.', { disabled: true, note: 'Not available: it is already at Observe, the lowest level.' })
+    : choice('reduce', 'Reduce autonomy', 'Move it down the ladder.', {
+      subs: html`${leaf('restrict', `One level down${cur > 1 ? `, to ${levelName(cur - 1)}` : ''}`)}${leaf('suspend', 'All the way back to Observe')}`,
+      hint: cur === 1 ? 'Choose one. From Recommend, both end at Observe; the record keeps which you chose.' : 'Choose how far: one level down, or all the way back to Observe.',
+    });
+  const choices = html`<div class="decide-choices">
+    ${expandChoice}
+    ${choice('hold', 'Keep current limits', `Stay at ${levelName(cur)} while more evidence comes in.`, { option: 'hold' })}
+    ${reduceChoice}
+    ${choice('redesign', 'Pause and redesign', 'Stop all automation while it is reworked and tested again.', { option: 'redesign' })}
+  </div>`;
+  const next = dec.option ? nextAuthority(dec.option, cap.authority, proposed) : null;
+  const preview = !dec.option ? ''
+    : limits ? html`<p class="decide-means"><strong>What this would mean:</strong> ${conditionsPreview(c, cap)}</p>`
+      : html`<p class="decide-means"><strong>What this would mean:</strong> ${scopeText(dec.option, c, cap, next)}${next.level !== cur || next.limited !== cap.authority.limited ? html` <span class="muted small">${cap.name} would move from ${authorityLabel(cap.authority)} to ${authorityLabel(next)}.</span>` : ''}</p>`;
+
+  // Limits: when the automation may act on its own.
+  const conditions = limits ? html`<div class="condition-grid">
       <label class="field"><span>Maximum amount (each)</span><span class="input-prefix">$<input type="number" min="5" max="500" step="5" value="${c.maxValue}" data-action="set-condition" data-capability="${cap.id}" data-key="maxValue"></span></label>
       <label class="field"><span>Daily total (all customers)</span><span class="input-prefix">$<input type="number" min="0" max="100000" step="50" value="${c.maxDailyTotal ?? ''}" data-action="set-condition" data-capability="${cap.id}" data-key="maxDailyTotal"></span></label>
-      <label class="field"><span>Daily number (all customers)</span><span class="input-suffix"><input type="number" min="0" max="10000" step="1" value="${c.maxDailyCount ?? ''}" data-action="set-condition" data-capability="${cap.id}" data-key="maxDailyCount"> ${actionNoun(cap)}</span></label>
+      <label class="field"><span>Daily number (all customers)</span><span class="input-suffix"><input type="number" min="0" max="10000" step="1" value="${c.maxDailyCount ?? ''}" data-action="set-condition" data-capability="${cap.id}" data-key="maxDailyCount"> ${noun}</span></label>
       <label class="field"><span>Minimum confidence <span class="muted small">(model-reported, not verified)</span></span><span class="input-suffix"><input type="number" min="50" max="99" step="1" value="${c.minConfidence}" data-action="set-condition" data-capability="${cap.id}" data-key="minConfidence">%</span></label>
       <label class="check"><input type="checkbox" ${c.noFraudFlag ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="noFraudFlag"><span>No fraud flag on the account</span></label>
       <label class="check"><input type="checkbox" ${c.policyClear ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="policyClear"><span>Policy eligibility is clear (no exception needed)</span></label>
       <label class="check"><input type="checkbox" ${c.noChargeback ? raw('checked') : ''} data-action="set-condition" data-capability="${cap.id}" data-key="noChargeback"><span>No active chargeback</span></label>
     </div>
-    <p class="muted small">Once the daily total or number is reached, further ${noun} go to a person. Confidence is what the AI reports about itself: Authority Lab checks it against your minimum but can't verify it, and a high score never lets an action through on its own. The summary in Step 1 updates as you change these.</p>
-  </div>` : '';
-  const conditionWarnings = dec.option === 'expand-limits' ? html`
-    ${!c.noFraudFlag ? notice('fail', 'Fraud-flagged accounts would be handled without a person.', 'Your rules say the AI must ask a person about fraud-flagged accounts. Those cases would still be stopped, but your limits should match your rules: tick "No fraud flag on the account".') : ''}
-    ${c.maxValue > 100 ? notice('watch', 'This is above the $100 limit in your rules.', r.unmet.length ? `The check "${r.unmet[0].text}" isn't met yet (currently ${r.unmet[0].current}).` : '') : ''}` : '';
-  const preview = !dec.option
-    ? html`<p class="muted">Choose an option to see what it would allow.</p>`
-    : dec.option === 'expand-limits'
-      ? html`<p>${conditionsPreview(c, cap)}</p>`
-      : html`<p>${scopeText(dec.option, c, cap, nextAuthority(dec.option, cap.authority, proposed))}</p><p class="muted small">${cap.name} would move from ${authorityLabel(cap.authority)} to ${authorityLabel(nextAuthority(dec.option, cap.authority, proposed))}.</p>`;
+    <p class="muted small">Once the daily total or number is reached, further ${noun} go to a person. Confidence is model-reported: it is checked against your minimum but can't be verified, and a high score never lets an action through on its own.</p>
+    ${!c.noFraudFlag ? notice('fail', 'Fraud-flagged accounts would be handled without a person.', 'Your rules send fraud-flagged accounts to a person. Those cases would still be stopped, but your limits should match your rules: tick "No fraud flag on the account".') : ''}
+    ${c.maxValue > 100 ? notice('watch', 'This is above the $100 limit in your rules.', readiness(state, cap.id).unmet.length ? `The check "${readiness(state, cap.id).unmet[0].text}" isn't met yet (currently ${readiness(state, cap.id).unmet[0].current}).` : '') : ''}` : '';
 
-  const criteria = current(state, cap.id, 'criteria');
-  const stakeholders = current(state, cap.id, 'stakeholders');
-  const criteriaRows = criteria.map((s) => html`<tr><td>${s.name}</td><td>${s.target}</td><td>${s.current}</td><td>${badge(s.status)}</td></tr>`);
-  const stakeholderTone = { 'expand': 'watch', 'expand-limits': 'pass', 'hold': 'insufficient' };
-  const authorizer = person(actor(state, cap.id));
+  const reason = html`<label class="field field-stack"><span class="sr-only">Your reason</span><textarea rows="4" aria-label="Your reason" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>`;
 
-  return html`<div class="page-head">
-    <div>
-      <p class="eyebrow"><a href="#/records">Decisions</a> · <a href="#/capabilities/${cap.id}">${cap.name}</a></p>
-      <h1>Should ${cap.name} get more authority?</h1>
-      ${lede('You\'re deciding whether this AI should get more authority. Review the evidence, set any limits, and record why you\'re comfortable with the change.', rec ? 'Authority Lab summarizes the evidence and suggests an option. You make the decision, and your name goes on the record.' : null)}
-    </div>
-  </div>
-  <div class="card">${levelScale(cap.authority, proposed)}</div>
+  const record = html`${checklist(state, cap, dec, check)}
+    <button class="btn btn-primary decide-record" data-action="authorize" data-capability="${cap.id}" ${check.ok ? '' : raw('disabled')}>Record decision as ${authorizer.name}</button>
+    <p class="muted small">${dec.option ? html`Recorded as “${optionName(dec.option)}”, with your name (${authorizer.name}, ${authorizer.role}), your reason and this evidence.` : 'Your name, your reason and this evidence are recorded with the decision.'} Records can't be edited.</p>`;
 
-  <div class="decision-grid">
-    <div class="decision-main">
-      ${!dec.option ? html`<div class="card step-hint"><p><strong>Step 1:</strong> choose an option. The steps it needs will appear here.</p></div>` : ''}
-      ${conditions ? section('Step 2 · Limits', conditions, { id: 'step-conditions', subtitle: 'When the AI may act on its own. Anything outside these limits goes to a person.' }) : ''}
-      ${isExpansion(state, cap.id, dec.option) ? section('Step 3 · Rollout plan', rolloutCard(state, cap, dec), { id: 'step-rollout', subtitle: 'Who runs the rollout, where it starts, and when you\'ll check how it\'s going. It is saved with the decision and can\'t be changed after you decide.' }) : ''}
-      ${isExpansion(state, cap.id, dec.option) ? section('Step 4 · Expected impact', impactCard(cap, dec), { id: 'step-impact', subtitle: `What should improve if we make this change? Set ${OUTCOMES_MIN}–${OUTCOMES_MAX} measurable targets now. We'll compare them with the actual results after rollout. They can't be changed after you decide.` }) : ''}
-      <details class="context" open><summary>Evidence, recommendation and stakeholder positions</summary>
-      ${section('Evidence', html`
-        ${barChangedNote(state, cap)}
-        ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}
-        ${criteriaRows.length ? html`<div class="card table-card"><table class="table"><thead><tr><th>Measure</th><th>Target</th><th>Current</th><th>Status</th></tr></thead><tbody>${criteriaRows}</tbody></table></div>` : ''}
-        ${requirementsList(state, cap.id)}`, { subtitle: r.total ? `Ready for a decision? ${r.met} of ${r.total} checks met.${r.unmet.length ? ` Not yet met: ${r.unmet.map((u) => u.text.toLowerCase()).join('; ')}.` : ''}` : 'No decision requirements set yet.' })}
-
-      ${rec ? section('Recommendation', html`<div class="card recommendation">
-        <p class="rec-summary">${rec.summary}</p>
-        <ul class="plain-list">${rec.rationale.map((x) => html`<li>${x}</li>`)}</ul>
-        <p class="muted small">${rec.caveat}</p>
-      </div>`, { subtitle: 'Worked out from the evidence. You decide.' }) : ''}
-
-      ${stakeholders.length ? section('Stakeholder positions', html`<div class="card"><ul class="position-list">${stakeholders.map((s) => html`<li><span class="position-team">${s.team}</span>${badge(stakeholderTone[s.stance] || 'neutral', s.position)}<span class="muted small">${person(s.person).name}</span></li>`)}</ul>
-        ${d.stakeholderSummary ? html`<p><strong>Where people agree:</strong> ${d.stakeholderSummary.consensus}</p>
-        <p><strong>Still disagree on:</strong> ${d.stakeholderSummary.disagreement} <a href="#/capabilities/${cap.id}?tab=summary">All positions</a></p>` : ''}</div>`) : ''}
-      </details>
-    </div>
-
-    <div class="decision-side">
-      <div class="card decision-panel" id="decision-panel">
-        <p class="eyebrow">Step 1 · Choose an option</p>
-        <div class="option-rows" role="radiogroup" aria-label="Decision options">${options}</div>
-        <p class="muted small">You can also give the AI less authority.</p>
-        <div class="preview"><span class="fact-label">${chosen ? html`What this would mean: <strong>${chosen.name}</strong>` : 'What this would mean'}</span>${preview}</div>
-        ${conditionWarnings}
-        <label class="field field-stack" id="step-rationale"><span>Step 5 · Why are you making this decision?</span><textarea rows="4" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>
-        <p class="muted small">You're deciding as <strong>${authorizer.name}</strong>, ${authorizer.role}. This changes what the AI can do for real customers. Your decision, your reason and the evidence above are saved as a permanent record.</p>
-        ${query.get('error') ? notice('fail', 'Couldn\'t record the decision', query.get('error')) : ''}
-        ${checklist(state, cap, dec, check)}
-        <button class="btn btn-primary btn-block" data-action="authorize" data-capability="${cap.id}" ${check.ok ? '' : raw('disabled')}>Record decision</button>
-      </div>
+  return html`<div class="decide-flow">
+    <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded.</p></div>
+    ${step('What are we deciding?', change)}
+    ${step('What do we know?', whatWeKnow(state, cap, { runs }))}
+    ${rec ? step('Recommendation', recommendation) : ''}
+    ${step('Your decision', html`${choices}<p class="decide-pending">Finish your choice above to continue.</p><div class="decide-after-means">${preview}</div>`, { id: 'decide-choice' })}
+    <div class="decide-after">
+      ${limits ? step('Limits', conditions, { sub: `${upper(noun)} run automatically only when all of these are true. Anything else goes to human review.` }) : ''}
+      ${expanding ? step('What should improve?', impactCard(cap, dec), { sub: `${OUTCOMES_MIN}–${OUTCOMES_MAX} measurable goals, compared with real results after rollout. They can't be changed after you decide.` }) : ''}
+      ${expanding ? step('Rollout plan', rolloutCard(state, cap, dec), { sub: 'Who runs the rollout, where it starts, and when it is reviewed. Saved with the decision; it can\'t be changed afterwards.' }) : ''}
+      ${step('Why are you making this decision?', reason)}
+      ${step('Review and record', record)}
     </div>
   </div>`;
 }

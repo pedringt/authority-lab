@@ -243,7 +243,7 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
     title: 'Rules saved',
     body: `${cap.name} rules saved by ${people(state)[by].name}. ${version.reason}`,
     capabilityId,
-    link: `#/capabilities/${capabilityId}?tab=rules`,
+    link: `#/capabilities/${capabilityId}?tab=status&show=rules`,
   });
   return s;
 }

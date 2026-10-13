@@ -1,16 +1,17 @@
-// The Overview's four lists (simplification pass, 2026-10-12): to do,
-// approvals needed, important results, and current authority. Pure; every
-// item names its capability and, where there is one, the person it waits on.
+// The Overview's four lists (simplification pass, 2026-10-12; redesign the
+// same day): to do, approvals needed, important results, and current
+// autonomy. Pure; every item names its capability and, where there is one,
+// the person it waits on.
 //
 // Each list only reads what the rest of the store already decides. Nothing
 // here changes what the gate allows or who may approve.
 
 import { getCapability, capData } from './state.js';
 import { decisionRequired, proposedAuthority, readiness, levelName } from './selectors.js';
-import { people, isRiskApprover, openRosterProposal } from './people.js';
+import { people, isRiskApprover, openRosterProposal, rosterApprovalEligibility, actor } from './people.js';
 import { coverageWarnings } from './coverage.js';
 import { waitingActions, queueApprovers, describe } from './queue.js';
-import { namedStakeholders } from './proposals.js';
+import { namedStakeholders, approvalEligibility } from './proposals.js';
 import { reviewNeeded } from './monitoring.js';
 import { expectedVsActual } from './value.js';
 
@@ -18,9 +19,9 @@ import { expectedVsActual } from './value.js';
 export const LEVEL_PLAIN = [
   'Watches only. A person does all the work.',
   'Suggests. A person decides and acts.',
-  'Drafts. A person approves every action.',
-  'Acts on its own within limits. Everything else goes to a person.',
-  'Handles most cases on its own. A person handles the exceptions.',
+  'Prepares the action. A person approves every one.',
+  'Runs automatically within limits. Everything else goes to human review.',
+  'Handles most cases automatically. A person handles the exceptions.',
 ];
 
 const nameOf = (state, key) => (people(state)[key] || {}).name || key;
@@ -46,68 +47,102 @@ export function readinessText(r) {
   return `${r.met} of ${r.total} checks met.`;
 }
 
-// Concrete next actions, most urgent first.
+// A requirement as concrete work, parsed from its text and current value:
+// "Minimum 40 high-value refund cases" at 18 is "Collect 22 more high-value
+// refund cases"; "Overall accuracy ≥ 90%" at 88% is "Raise accuracy to 90%".
+// Anything it can't read falls back to "Meet: <requirement>".
+const num = (v) => { const m = String(v ?? '').replace(/,/g, '').match(/^\s*(-?\d+(?:\.\d+)?)\s*%?\s*$/); return m ? Number(m[1]) : null; };
+const metricWord = (text) => text.replace(/^overall\s+/i, '').replace(/^./, (c) => c.toLowerCase());
+export function requirementWork(req) {
+  const text = String(req.text || '').trim();
+  const now = num(req.current);
+  let m = text.match(/^(?:minimum|at least)\s+(\d[\d,]*)\s+(.+)$/i);
+  if (m && now != null) {
+    const target = Number(m[1].replace(/,/g, ''));
+    if (target > now) return { title: `Collect ${target - now} more ${m[2]}`, status: `${now} of ${target} collected`, short: `${now} of ${target} ${m[2]}` };
+  }
+  m = text.match(/^(.+?)\s*(≥|>=|≤|<=)\s*(\d+(?:\.\d+)?)\s*(%?)$/);
+  if (m && now != null) {
+    const target = `${m[3]}${m[4]}`;
+    const up = m[2] === '≥' || m[2] === '>=';
+    return { title: `${up ? 'Raise' : 'Bring'} ${metricWord(m[1])} ${up ? 'to' : 'down to'} ${target}`, status: `Currently ${req.current}`, short: `${metricWord(m[1])} ${req.current}, needs ${target}` };
+  }
+  return { title: `Meet: ${text.replace(/^./, (c) => c.toLowerCase())}`, status: req.current != null && req.current !== '' ? `Now: ${req.current}` : '', short: null };
+}
+
+// "Return to Draft requires a redesigned check." → "A redesigned check."
+const conditionText = (text) => String(text || '').replace(/^(?:a\s+)?return(?:ing)?\s+to\s+[\w ]+?\s+requires\s+/i, '').replace(/^./, (c) => c.toUpperCase());
+const shortGap = (gap) => firstSentence(gap.gap || '').replace(/[.!?]$/, '').replace(/^./, (c) => c.toLowerCase()) || requirementWork(gap).short || gap.text;
+const expandWords = (p) => (p.level >= 4 ? 'broadly' : p.level === 3 ? 'within limits' : `to ${levelName(p.level)}`);
+
+// Concrete next actions, most urgent first. Each item is one work row: the
+// capability, one title saying the work, one supporting line, the owner and
+// whether it's for the person in "Demo as" (mine). Only the first item, when
+// it is a review or an open decision, is emphasized.
 export function overviewTodos(state, { fmt = (d) => d } = {}) {
+  const me = actor(state);
   const out = [];
   for (const cap of state.capabilities) {
-    const owner = nameOf(state, cap.owner);
+    const row = (item) => out.push({ capabilityId: cap.id, cap: cap.name, owner: cap.owner, ownerName: nameOf(state, cap.owner), mine: cap.owner === me, ...item });
     const link = (q = '') => `#/capabilities/${cap.id}${q}`;
     const review = reviewNeeded(state, cap.id);
     const auto = automaticRestriction(state, cap.id);
     if (review.restriction && auto) {
-      out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
+      row({ kind: 'review', urgent: true,
         title: `Review why ${cap.name} was moved back to ${levelName(auto.next.level)}`,
-        why: `On ${fmt(auto.date)} it crossed a safety limit: ${capData(state, cap.id).monitoring.reading}. It went back to ${levelName(auto.next.level)} automatically. It can't get more authority until someone records what happened and what changes.`,
-        who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitoring') });
+        sub: `Crossed a safety limit on ${fmt(auto.date)}: ${capData(state, cap.id).monitoring.reading}`,
+        action: 'Record the review', href: link('?tab=monitor') });
     } else if (review.incidents.length) {
-      out.push({ kind: 'review', urgent: true, capabilityId: cap.id, cap: cap.name,
-        title: `Review ${review.incidents.length === 1 ? 'an incident' : `${review.incidents.length} incidents`} on ${cap.name}`,
-        why: 'A safety limit was crossed but authority didn\'t change. Record what happened before the capability can get more authority.',
-        who: `Owner: ${owner}`, action: 'Record the review', href: link('?tab=monitoring') });
+      row({ kind: 'review', urgent: true,
+        title: `Review ${review.incidents.length === 1 ? 'an incident' : `${review.incidents.length} incidents`}`,
+        sub: 'A safety limit was crossed; autonomy didn\'t change. A review comes before any expansion.',
+        action: 'Record the review', href: link('?tab=monitor') });
     }
     if (decisionRequired(state, cap.id)) {
-      const p = proposedAuthority(state, cap.id);
       const r = readiness(state, cap.id);
-      const gap = r.unmet[0];
-      out.push({ kind: 'decision', lead: true, capabilityId: cap.id, cap: cap.name,
-        title: `Decide whether ${cap.name} can move to Level ${p.level}, ${levelName(p.level)}${p.limited ? ', with limits' : ''}`,
-        why: `${r.met === r.total ? 'Ready for a decision' : r.total - r.met === 1 ? 'Almost ready for a decision' : 'Not ready yet'}: ${readinessText(r).toLowerCase()}${gap ? ` Still open: ${firstSentence(gap.gap || gap.text)}` : ''}`,
-        who: `Owner: ${owner}`, action: 'Open the decision', href: link('/decision') });
+      row({ kind: 'decision',
+        title: `Decide whether to expand autonomy ${expandWords(proposedAuthority(state, cap.id))}`,
+        sub: [readinessText(r).replace(/\.$/, ''), r.unmet[0] ? shortGap(r.unmet[0]) : ''].filter(Boolean).join(' · '),
+        action: 'Review', href: link('?tab=decide') });
     }
     const held = personRestriction(state, cap.id);
     if (held && held.openCondition && cap.status === 'restricted') {
-      out.push({ kind: 'condition', capabilityId: cap.id, cap: cap.name,
-        title: `Meet the condition to move ${cap.name} back to ${levelName(held.previous.level)}`,
-        why: held.openCondition,
-        who: `Owner: ${owner}`, action: 'Open the capability', href: link() });
+      row({ kind: 'condition',
+        title: `Complete the requirements to return to ${levelName(held.previous.level)}`,
+        sub: conditionText(held.openCondition),
+        action: 'Open', href: link('?tab=status') });
     } else if (cap.status !== 'not-delegated' && !review.any) {
       const r = readiness(state, cap.id);
       const gap = r.unmet[0];
       if (gap && cap.authority.level < 4) {
-        out.push({ kind: 'evidence', capabilityId: cap.id, cap: cap.name,
-          title: `Meet the open check: ${gap.text.replace(/^./, (c) => c.toLowerCase())}`,
-          why: `${firstSentence(gap.gap || gap.text)} Now: ${gap.current}. ${readinessText(r)}`,
-          who: `Owner: ${owner}`, action: 'See the evidence', href: link('?tab=evidence') });
+        const w = requirementWork(gap);
+        row({ kind: 'evidence', title: w.title,
+          sub: [w.status, readinessText(r).replace(/\.$/, '')].filter(Boolean).join(' · '),
+          action: 'Open', href: link('?tab=status') });
       }
     }
   }
   for (const w of coverageWarnings(state)) {
     const cap = getCapability(state, w.capabilityId);
+    const base = { capabilityId: cap.id, cap: cap.name, owner: cap.owner, ownerName: nameOf(state, cap.owner), mine: cap.owner === me };
     if (w.kind === 'coverage') {
-      out.push({ kind: 'coverage', capabilityId: cap.id, cap: cap.name,
-        title: `Add a second Risk approver to ${cap.name}`,
-        why: 'Bigger changes here need two approvers, one of them from Risk. There aren\'t enough people with the Risk approver right on this capability to cover that.',
-        who: `Owner: ${nameOf(state, cap.owner)}`, action: 'Manage stakeholders', href: `#/capabilities/${cap.id}/stakeholders/edit` });
+      out.push({ ...base, kind: 'coverage',
+        title: 'Add a second Risk approver',
+        sub: 'Bigger changes here need two approvers, one from Risk, and too few stakeholders hold the Risk approver right.',
+        action: 'Manage stakeholders', href: `#/capabilities/${cap.id}/stakeholders/edit` });
     } else {
       const p = capData(state, cap.id).proposals.find((x) => x.id === w.proposalId);
-      out.push({ kind: 'stuck', capabilityId: cap.id, cap: cap.name,
-        title: `This change to ${cap.name} can no longer be approved`,
-        why: 'The people who could approve it have changed since it was proposed. Withdraw it and propose it again.',
-        who: p ? `Proposed by ${nameOf(state, p.proposedBy)}` : '', action: 'Open the change', href: w.link });
+      out.push({ ...base, kind: 'stuck', ...(p ? { owner: p.proposedBy, ownerName: nameOf(state, p.proposedBy), mine: p.proposedBy === me, ownerRole: 'Proposed by' } : {}),
+        title: 'Withdraw and re-propose a change that can no longer be approved',
+        sub: 'The people who could approve it have changed since it was proposed.',
+        action: 'Open', href: w.link });
     }
   }
-  const rank = { review: 0, decision: 1, stuck: 2, condition: 3, coverage: 4, evidence: 5 };
-  return out.sort((a, b) => rank[a.kind] - rank[b.kind]);
+  // Evidence work on a capability with an open decision sits next to it.
+  const rank = { review: 0, decision: 1, stuck: 2, evidence: 3, condition: 4, coverage: 5 };
+  const deciding = new Set(out.filter((t) => t.kind === 'decision').map((t) => t.capabilityId));
+  const sorted = out.map((t, i) => [t, i]).sort(([a, i], [b, j]) => rank[a.kind] - rank[b.kind] || (deciding.has(b.capabilityId) - deciding.has(a.capabilityId)) || i - j).map(([t]) => t);
+  return sorted.map((t, i) => ({ ...t, emphasis: i === 0 && (t.kind === 'review' || t.kind === 'decision') }));
 }
 
 const CHANGE_KIND = { contract: 'Rule change', criteria: 'Target change', stakeholders: 'Stakeholder change' };
@@ -127,8 +162,21 @@ export function stillNeeded(state, capabilityId, p) {
   return `Who can approve: ${list(eligible.map((k) => nameOf(state, k)))}.`;
 }
 
-// Anything waiting on a named person to say yes or no.
+// What a waiting action is, briefly: "$180 on ORD-5005, over $100" (the
+// first rule that asks for a person, beyond the level itself).
+function waitingText(x) {
+  const a = x.call.args || {};
+  const what = x.call.tool === 'issue_refund' ? `$${a.amount} on ${a.orderId}` : describe(x);
+  const ask = (x.findings || []).find((f) => f.rule && f.rule.kind === 'must-ask');
+  const why = ask ? ask.rule.text.replace(/[.!?]$/, '').replace(/^(?:refunds?|actions?)\s+/i, '').replace(/^./, (c) => c.toLowerCase()) : '';
+  return why ? `${what}, ${why}` : what;
+}
+
+// Anything waiting on a named person to say yes or no. Each item is one work
+// row, like a to-do: the capability, a title, one supporting line, then who
+// it waits on (mine: the person in "Demo as" can approve it).
 export function overviewApprovals(state, { fmt = (d) => d } = {}) {
+  const me = actor(state);
   const out = [];
   for (const cap of state.capabilities) {
     const waiting = waitingActions(state, cap.id);
@@ -136,19 +184,22 @@ export function overviewApprovals(state, { fmt = (d) => d } = {}) {
       const refunds = waiting.every((x) => x.call.tool === 'issue_refund');
       const noun = refunds ? (waiting.length === 1 ? 'refund needs' : 'refunds need') : (waiting.length === 1 ? 'action needs' : 'actions need');
       const oldest = waiting.map((x) => x.date).sort()[0];
+      const approvers = queueApprovers(state, cap.id);
+      const others = approvers.filter((k) => k !== cap.owner);
       out.push({ kind: 'actions', capabilityId: cap.id, cap: cap.name,
-        title: `${waiting.length} ${noun} a person to decide`,
-        why: `${waiting.slice(0, 3).map((x) => describe(x).replace(/^a /, '')).join(', ')}${waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''}. ${cap.authority.level <= 2 ? `The AI is at ${levelName(cap.authority.level)}, so every action needs a person.` : 'They fell outside the AI\'s approved limits, so they weren\'t processed automatically.'}`,
-        who: `Who can approve: ${list(queueApprovers(state, cap.id).map((k) => nameOf(state, k)))}.`,
-        since: `Waiting since ${fmt(oldest)}`, action: refunds ? 'Review the refunds' : 'Review the actions', href: `#/capabilities/${cap.id}?tab=decision&show=approvals` });
+        title: `${waiting.length} ${noun} human review`,
+        sub: `${waiting.slice(0, 3).map(waitingText).join(' · ')}${waiting.length > 3 ? ` · and ${waiting.length - 3} more` : ''}`,
+        meta: [`Waiting since ${fmt(oldest)}`, others.length ? 'the owner or any stakeholder can approve' : `only the owner, ${nameOf(state, cap.owner)}, can approve`],
+        mine: approvers.includes(me),
+        action: 'Review', href: `#/capabilities/${cap.id}?tab=status&show=approvals` });
     }
     for (const p of capData(state, cap.id).proposals.filter((x) => x.status === 'open')) {
       out.push({ kind: 'change', capabilityId: cap.id, cap: cap.name,
-        title: `${CHANGE_KIND[p.kind] || 'Proposed change'}: ${cap.name}`,
-        why: `${nameOf(state, p.proposedBy)} proposed a change. ${p.reason}`,
-        progress: [p.approvals.length, p.required.approvers],
-        who: stillNeeded(state, cap.id, p),
-        since: p.date ? `Proposed ${fmt(p.date)}` : '', action: 'Review the change', href: `#/capabilities/${cap.id}/proposals/${p.id}` });
+        title: `Review a proposed ${(CHANGE_KIND[p.kind] || 'change').toLowerCase()}`,
+        sub: `${nameOf(state, p.proposedBy)} proposed it${p.date ? ` on ${fmt(p.date)}` : ''}: ${firstSentence(p.reason)}`,
+        meta: [`${p.approvals.length} of ${p.required.approvers} approval${p.required.approvers === 1 ? '' : 's'}`, stillNeeded(state, cap.id, p).replace(/\.$/, '')],
+        mine: approvalEligibility(state, cap.id, p, me).ok,
+        action: 'Review', href: `#/capabilities/${cap.id}/proposals/${p.id}` });
     }
   }
   const rp = openRosterProposal(state);
@@ -156,68 +207,93 @@ export function overviewApprovals(state, { fmt = (d) => d } = {}) {
     const target = nameOf(state, rp.person);
     out.push({ kind: 'people', capabilityId: null, cap: 'People',
       title: rp.kind === 'deactivate' ? `Deactivate ${target}` : `${rp.grant ? 'Give' : 'Remove'} ${target} ${rp.grant ? 'the' : 'from the'} ${rp.right === 'riskApprover' ? 'Risk approver' : 'workspace admin'} right`,
-      why: `${nameOf(state, rp.proposedBy)} proposed this. ${rp.reason || ''}`.trim(),
-      who: `Who can approve: ${list(rp.eligible.map((k) => nameOf(state, k)))}.`,
-      since: '', action: 'Review the change', href: `#/people?proposal=${rp.id}` });
+      sub: `${nameOf(state, rp.proposedBy)} proposed it${rp.reason ? `: ${firstSentence(rp.reason)}` : '.'}`,
+      meta: [`Who can approve: ${list(rp.eligible.map((k) => nameOf(state, k)))}`],
+      mine: rosterApprovalEligibility(state, rp, me).ok,
+      action: 'Review', href: `#/people?proposal=${rp.id}` });
   }
   return out;
 }
 
 // Results that block, cause or call into question an authority level. Never
 // a metrics feed: adoption warnings, ROI and gate counts stay in Monitoring.
+// Each is a short kind label, what happened, and one line of what it means.
 export function importantResults(state, { fmt = (d) => d } = {}) {
   const out = [];
   for (const cap of state.capabilities) {
     const d = capData(state, cap.id);
     const auto = automaticRestriction(state, cap.id);
+    const add = (r) => out.push({ capabilityId: cap.id, cap: cap.name, ...r });
     if (auto && d.reviewRequired) {
-      out.push({ tone: 'restricted', label: 'Moved back automatically', capabilityId: cap.id, cap: cap.name,
-        text: `${cap.name} crossed a safety limit: ${d.monitoring.reading}.`,
-        so: `It was moved back to ${levelName(auto.next.level)} on ${fmt(auto.date)}. A review comes before any more authority.` });
+      add({ tone: 'restricted', label: 'Moved back automatically',
+        text: `Crossed a safety limit: ${d.monitoring.reading}.`,
+        so: `Returned to ${levelName(auto.next.level)} on ${fmt(auto.date)}. A review comes before any expansion.` });
     }
     const held = personRestriction(state, cap.id);
     if (held && cap.status === 'restricted') {
-      out.push({ tone: 'restricted', label: 'Moved back', capabilityId: cap.id, cap: cap.name,
-        text: `Moved back to ${levelName(held.next.level)} on ${fmt(held.date)} by ${nameOf(state, held.authorizedBy)}.`,
-        so: held.openCondition || firstSentence(held.rationale) });
+      add({ tone: 'restricted', label: 'Moved back',
+        text: `Returned to ${levelName(held.next.level)} on ${fmt(held.date)} by ${nameOf(state, held.authorizedBy)}.`,
+        so: firstSentence(held.rationale) || held.openCondition });
     }
     for (const s of (d.pilot && d.pilot.segments) || []) {
       if (s.status !== 'insufficient') continue;
-      out.push({ tone: 'insufficient', label: 'Not enough data yet', capabilityId: cap.id, cap: cap.name,
-        text: `${s.name}: ${s.accuracy}% accurate, on only ${s.cases} cases.`,
-        so: 'These cases stay with a person. Any move to more authority would leave them out.' });
+      add({ tone: 'insufficient', label: 'Under-tested',
+        text: `${s.name}: ${s.accuracy}% accurate on only ${s.cases} cases.`,
+        so: 'These cases stay under human review; any expansion would leave them out.' });
     }
-    // A safety limit that moved the AI back is already the result above; one
-    // that opened an incident without moving it is its own result.
+    // A safety limit that moved the capability back is already the result
+    // above; one that opened an incident without moving it is its own result.
     for (const e of d.evidence.filter((x) => x.source === 'Incident' && x.status === 'fail' && x.risk === 'High' && !(x.safetyLimit && auto && d.reviewRequired))) {
-      const sentences = (String(e.detail || '').replace(/^Scenario [A-Z]-\d+:\s*/, '').match(/[^.!?]+[.!?]+/g) || [e.detail || '']).map((x) => x.trim());
-      out.push({ tone: 'fail', label: e.safetyLimit ? 'Safety limit crossed' : 'Severe failure', capabilityId: cap.id, cap: cap.name,
-        text: e.metric.replace(/^[A-Z]+-\d+:\s*/, '').replace(/^./, (c) => c.toUpperCase()) + '.',
-        so: sentences.slice(0, 2).join(' ').replace(/^./, (c) => c.toUpperCase()) });
+      const sentences = (String(e.detail || '').replace(/^Scenario [A-Z]-\d+:\s*/, '').match(/[^.!?]+[.!?]+/g) || []).map((x) => x.trim());
+      const metric = e.metric.replace(/^[A-Z]+-\d+:\s*/, '').replace(/^./, (c) => c.toUpperCase()) + '.';
+      const what = (sentences[0] || '').replace(/^./, (c) => c.toUpperCase());
+      // Already the cause given under "Moved back": shown once.
+      if (what && out.some((r) => r.capabilityId === cap.id && r.so === what)) continue;
+      add({ tone: 'fail', label: e.safetyLimit ? 'Safety limit crossed' : 'Severe miss',
+        text: what || metric,
+        so: sentences[0] ? sentences[1] || metric : '' });
     }
-    for (const r of expectedVsActual(state, cap.id).rows.filter((x) => x.status === 'not-met')) {
-      out.push({ tone: 'fail', label: 'Expected outcome missed', capabilityId: cap.id, cap: cap.name,
+    // Only a goal judged on enough production evidence counts as missed.
+    for (const r of expectedVsActual(state, cap.id).rows.filter((x) => x.status === 'not-met' && x.judged)) {
+      add({ tone: 'fail', label: 'Expected outcome missed',
         text: `${r.metric}: ${r.actualText}. The decision expected ${r.target}.`,
-        so: 'That calls the case for the current authority into question.' });
+        so: 'That calls the case for the current autonomy into question.' });
     }
   }
   return out;
 }
 
-// One row per capability: the authority now, in plain words, and what's next.
+// What a capability handles now, in plain words: behaviour first, the level
+// name is secondary. Uses the capability's own noun when it has one.
+export function handlesNow(cap) {
+  const many = cap.actionNoun || '';
+  const one = many.replace(/s$/, '');
+  const limits = cap.authority.limited ? ' within its daily limits' : ' within limits';
+  return [
+    'No automation; a person does all the work',
+    `Suggests${many ? ` ${many}` : ''}; a person decides and acts`,
+    one ? `Prepares each ${one}; a person approves every one` : 'Prepares the work; a person approves every action',
+    `Handles ${many || 'cases'} on its own${limits}; everything else goes to human review`,
+    `Handles most ${many || 'cases'} on its own; a person handles the exceptions`,
+  ][cap.authority.level] || LEVEL_PLAIN[cap.authority.level] || '';
+}
+
+// One row per capability: what it handles now, and what's next. Only three
+// states earn a badge in "next": Ready, Restricted and Needs review.
 export function authorityRows(state) {
   return state.capabilities.map((cap) => {
     const r = readiness(state, cap.id);
     const review = reviewNeeded(state, cap.id);
     const held = personRestriction(state, cap.id);
     let next;
-    if (review.restriction) next = { tone: 'restricted', text: 'Review needed before it can get more authority' };
-    else if (decisionRequired(state, cap.id)) { const p = proposedAuthority(state, cap.id); next = { tone: 'decision', text: 'Ready for a decision', detail: `Proposed: Level ${p.level}, ${levelName(p.level)}${p.limited ? ', with limits' : ''}` }; }
-    else if (cap.status === 'not-delegated') next = { tone: 'neutral', text: 'Not delegated, by design' };
-    else if (held && cap.status === 'restricted') next = { tone: 'restricted', text: 'Held until a condition is met' };
-    else if (r.total && r.met < r.total) next = { tone: 'insufficient', text: `Not yet: ${r.met} of ${r.total} checks met` };
-    else next = { tone: 'neutral', text: 'No change planned' };
-    return { capabilityId: cap.id, cap: cap.name, authority: cap.authority, plain: LEVEL_PLAIN[cap.authority.level], movedBack: Boolean(review.restriction), next };
+    if (review.restriction) next = { badge: ['restricted', 'Needs review'], text: 'before any expansion' };
+    else if (decisionRequired(state, cap.id)) { const p = proposedAuthority(state, cap.id); next = { badge: ['decision', 'Ready'], text: `to decide on expanding ${p.level >= 4 ? 'broadly' : p.level === 3 ? 'within limits' : `to ${levelName(p.level)}`}` }; }
+    else if (cap.status === 'not-delegated') next = { text: 'Not delegated, by design' };
+    else if (held && cap.status === 'restricted') next = { badge: ['restricted', 'Restricted'], text: `until it meets the requirements to return to ${levelName(held.previous.level)}` };
+    else if (review.any) next = { badge: ['restricted', 'Needs review'], text: 'an incident is open' };
+    else if (r.total && r.met < r.total) { const w = requirementWork(r.unmet[0]); next = { text: w.short ? w.short.replace(/^./, (c) => c.toUpperCase()) : `${r.met} of ${r.total} checks met` }; }
+    else next = { text: 'No change planned' };
+    return { capabilityId: cap.id, cap: cap.name, authority: cap.authority, plain: handlesNow(cap),
+      level: `${levelName(cap.authority.level)}${cap.authority.limited ? ', with limits' : ''}`, movedBack: Boolean(review.restriction), next };
   });
 }
-

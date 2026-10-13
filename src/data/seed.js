@@ -614,37 +614,37 @@ export const evidenceItems = [
     id: 'EV-02', source: 'Pilot outcomes', metric: 'Decision accuracy', value: '94% across 218 cases',
     status: 'pass', risk: 'High', segment: 'All', date: '2026-10-06',
     detail: 'Reviewer-judged correctness against policy. Standard refunds 97%, policy exceptions 92%, high-value 83%, fraud-signaled 95%.',
-    link: '#/capabilities/refund-recommendation?tab=evidence',
+    link: '#/capabilities/refund-recommendation?tab=decide&show=results',
   },
   {
     id: 'EV-03', source: 'Pilot outcomes', metric: 'High-value accuracy', value: '83% across 18 cases',
     status: 'insufficient', risk: 'High', segment: 'High-value', date: '2026-10-06',
     detail: 'Too few cases to draw a conclusion either way. Two of the three severe errors in the pilot were in this segment. The evidence requirement is 40 cases.',
-    link: '#/capabilities/refund-recommendation?tab=evidence',
+    link: '#/capabilities/refund-recommendation?tab=decide&show=results',
   },
   {
     id: 'EV-04', source: 'Human review', metric: 'Override rate', value: '24 overridden (11%)',
     status: 'pass', risk: 'Medium', segment: 'All', date: '2026-10-06',
     detail: 'A further 26 recommendations (12%) were edited before approval. Reviewed, edited and overridden are tracked separately.',
-    link: '#/capabilities/refund-recommendation?tab=evidence',
+    link: '#/capabilities/refund-recommendation?tab=decide&show=results',
   },
   {
     id: 'EV-05', source: 'Pilot outcomes', metric: 'Severe error rate', value: '1.4% (3 of 218)',
     status: 'pass', risk: 'High', segment: 'All', date: '2026-10-06',
     detail: 'All three were caught by the reviewer before any action. Two were in the high-value segment.',
-    link: '#/capabilities/refund-recommendation?tab=evidence',
+    link: '#/capabilities/refund-recommendation?tab=decide&show=results',
   },
   {
     id: 'EV-06', source: 'Operational metrics', metric: 'Resolution time', value: '42% faster',
     status: 'watch', risk: 'Low', segment: 'All', date: '2026-10-06',
     detail: 'Median 31 to 18 minutes. Short of the 50% target. Approval wait is the largest remaining component.',
-    link: '#/capabilities/refund-recommendation?tab=criteria',
+    link: '#/capabilities/refund-recommendation?tab=decide&show=targets',
   },
   {
     id: 'EV-07', source: 'Cost', metric: 'AI cost per case', value: '$0.08',
     status: 'pass', risk: 'Low', segment: 'All', date: '2026-10-06',
     detail: 'Model plus retrieval. Well under the $0.20 ceiling. Reviewer time is tracked separately under review burden.',
-    link: '#/capabilities/refund-recommendation?tab=criteria',
+    link: '#/capabilities/refund-recommendation?tab=decide&show=targets',
   },
   {
     id: 'EV-08', source: 'Incident', metric: 'INC-01: fraud escalation missed', value: 'High severity, mitigated',
@@ -656,19 +656,19 @@ export const evidenceItems = [
     id: 'EV-09', source: 'User feedback', metric: 'Agent feedback', value: 'Fewer repetitive review tasks',
     status: 'pass', risk: 'Low', segment: 'All', date: '2026-10-05',
     detail: 'Survey of the 9 pilot agents. 8 said the recommendation saved time on standard cases; 3 said they read the reasoning less closely by week two. The second point is being watched as an over-reliance signal.',
-    link: '#/capabilities/refund-recommendation?tab=stakeholders',
+    link: '#/capabilities/refund-recommendation?tab=status',
   },
   {
     id: 'EV-10', source: 'Stakeholder assessment', metric: 'Risk position', value: 'More high-value evidence requested',
     status: 'watch', risk: 'High', segment: 'High-value', date: '2026-10-06',
     detail: 'Risk does not support autonomous decisions above $50 on current evidence and asked for at least 40 high-value cases.',
-    link: '#/capabilities/refund-recommendation?tab=stakeholders',
+    link: '#/capabilities/refund-recommendation?tab=status',
   },
   {
     id: 'EV-11', source: 'Human review', metric: 'Recommendation acceptance', value: '78%',
     status: 'pass', risk: 'Medium', segment: 'All', date: '2026-10-06',
     detail: 'Acceptance is not correctness. In a 40-case blind sample, 96% of accepted recommendations matched an independent reviewer.',
-    link: '#/capabilities/refund-recommendation?tab=criteria',
+    link: '#/capabilities/refund-recommendation?tab=decide&show=targets',
   },
   {
     id: 'EV-12', source: 'Automated tests', metric: 'Wrong policy version', value: 'Medium severity, fix deployed',
@@ -754,9 +754,9 @@ export const decisionRecords = [
 
 export const activity = [
   { id: 'ACT-10', date: '2026-10-06', kind: 'review', surfaced: true, title: 'Stakeholder review completed',
-    body: 'Five positions recorded. Risk requested continued approval for high-value cases.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=stakeholders' },
+    body: 'Five positions recorded. Risk requested continued approval for high-value cases.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=status' },
   { id: 'ACT-09', date: '2026-10-05', kind: 'milestone', surfaced: true, title: 'Pilot threshold reached',
-    body: '200 pilot cases completed. Evidence requirements for the Level 3 decision became evaluable.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=evidence' },
+    body: '200 pilot cases completed. Evidence requirements for the Level 3 decision became evaluable.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=decide&show=results' },
   { id: 'ACT-08', date: '2026-10-04', kind: 'mitigation', surfaced: true, title: 'Software gate added for fraud-flagged accounts',
     body: 'Engineering added an enforcement rule: no automatic action when a fraud flag is present, regardless of the AI recommendation. INC-01 marked mitigated.', capabilityId: 'refund-recommendation', link: '#/evidence' },
   { id: 'ACT-07', date: '2026-10-03', kind: 'failure', surfaced: true, title: 'High-severity failure identified',
@@ -768,7 +768,7 @@ export const activity = [
   { id: 'ACT-04', date: '2026-09-02', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Refund recommendation moved from Recommend to Draft. Authorized by Maya Chen.', capabilityId: 'refund-recommendation', link: '#/records/AC-02' },
   { id: 'ACT-03', date: '2026-09-02', kind: 'criteria', surfaced: false, title: 'Targets set',
-    body: 'Seven targets and six decision requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=evidence&show=targets' },
+    body: 'Seven targets and six decision requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=decide&show=targets' },
   { id: 'ACT-02', date: '2026-08-19', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Ticket classification moved from Draft to Act Within Limits. Authorized by Priya Natarajan.', capabilityId: 'ticket-classification', link: '#/records/AC-01' },
   { id: 'ACT-01', date: '2026-08-12', kind: 'decision', surfaced: true, title: 'Account closure kept at Observe',
@@ -935,7 +935,7 @@ const matureCapabilities = {
       { team: 'Risk', person: 'sofia', stance: 'expand-limits', position: 'Expand with the misroute rule', quote: 'Agreed, provided the misroute rule is enforced by software and not by someone noticing.', date: '2026-08-18' },
     ],
     evidence: [
-      { id: 'EV-TC-01', source: 'Operational metrics', metric: 'Misroute rate since expansion', value: '3.1% across 1,840 tickets', status: 'pass', risk: 'Low', segment: 'All', date: '2026-09-28', detail: 'Tickets re-queued by an agent after automatic assignment. Legal and safety tickets are gated and are not in this figure.', link: '#/capabilities/ticket-classification?tab=criteria' },
+      { id: 'EV-TC-01', source: 'Operational metrics', metric: 'Misroute rate since expansion', value: '3.1% across 1,840 tickets', status: 'pass', risk: 'Low', segment: 'All', date: '2026-09-28', detail: 'Tickets re-queued by an agent after automatic assignment. Legal and safety tickets are gated and are not in this figure.', link: '#/capabilities/ticket-classification?tab=decide&show=targets' },
     ],
   },
   'response-drafting': {
@@ -979,7 +979,7 @@ const matureCapabilities = {
       { team: 'Engineering', person: 'jonas', stance: 'undecided', position: 'No position yet', quote: '', date: '2026-10-02' },
     ],
     evidence: [
-      { id: 'EV-RD-01', source: 'Pilot outcomes', metric: 'Draft quality', value: '88% across 412 drafts', status: 'watch', risk: 'Medium', segment: 'All', date: '2026-10-02', detail: '61% sent with light edits, 39% needed a rewrite or a factual fix. Two drafts quoted an outdated return window; both were caught by agents before sending.', link: '#/capabilities/response-drafting?tab=criteria' },
+      { id: 'EV-RD-01', source: 'Pilot outcomes', metric: 'Draft quality', value: '88% across 412 drafts', status: 'watch', risk: 'Medium', segment: 'All', date: '2026-10-02', detail: '61% sent with light edits, 39% needed a rewrite or a factual fix. Two drafts quoted an outdated return window; both were caught by agents before sending.', link: '#/capabilities/response-drafting?tab=decide&show=targets' },
     ],
   },
   'refund-execution-high-value': {
@@ -1024,7 +1024,7 @@ const matureCapabilities = {
     ],
     evidence: [
       { id: 'EV-RX-01', source: 'Incident', metric: 'Duplicate execution', value: 'High severity, open', status: 'fail', risk: 'High', segment: 'All', date: '2026-09-24', detail: 'A retry executed a $180 refund twice for one order. The idempotency check did not hold. Authority was restricted to Recommend in AC-03; return to Draft requires a redesigned check and 100 clean replayed executions.', link: '#/records/AC-03' },
-      { id: 'EV-RX-02', source: 'Operational metrics', metric: 'Executions since Sep 1', value: '96, 1 duplicate', status: 'pass', risk: 'High', segment: 'All', date: '2026-09-24', detail: '95 correct executions. Amounts, orders and destinations matched the approved recommendations.', link: '#/capabilities/refund-execution-high-value?tab=criteria' },
+      { id: 'EV-RX-02', source: 'Operational metrics', metric: 'Executions since Sep 1', value: '96, 1 duplicate', status: 'pass', risk: 'High', segment: 'All', date: '2026-09-24', detail: '95 correct executions. Amounts, orders and destinations matched the approved recommendations.', link: '#/capabilities/refund-execution-high-value?tab=decide&show=targets' },
     ],
   },
   'account-closure': {

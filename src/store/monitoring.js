@@ -3,7 +3,7 @@
 
 import { getCapability, capData, updateCap, closeOpenProposal } from './state.js';
 import { versionsInForce, authorityLabel, current, currentVersion, levelName } from './selectors.js';
-import { people, snapshotPerson, isActivePerson, isRiskApprover } from './people.js';
+import { people, snapshotPerson, isActivePerson, isRiskApprover, soloHint } from './people.js';
 import { isHighOrFinancial } from './coverage.js';
 import { gateMetricOf, gateReading } from './gatelog.js';
 
@@ -134,9 +134,9 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
   const ruleReadings = { ...(d.ruleReadings || {}), [rule.text]: value };
 
   if (rule.kind === 'incident') {
-    const evidence = [{ id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `A safety limit was crossed: "${rule.text}". ${errors.join(' ')} This limit opens an incident; authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...d.evidence];
-    const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed: incident opened', body: `${cap.name}: ${errors.join(' ')} Authority didn't change.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` }, ...state.activity];
-    const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `A safety limit was crossed: ${cap.name}`, body: `${incidentId}: ${errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitoring` };
+    const evidence = [{ id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `A safety limit was crossed: "${rule.text}". ${errors.join(' ')} This limit opens an incident; authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitor` }, ...d.evidence];
+    const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed: incident opened', body: `${cap.name}: ${errors.join(' ')} Authority didn't change.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitor` }, ...state.activity];
+    const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `A safety limit was crossed: ${cap.name}`, body: `${incidentId}: ${errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitor` };
     const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: errors }] });
     return { ...s, activity, alerts: [alert, ...state.alerts] };
   }
@@ -175,11 +175,11 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
     capabilityId: cap.id,
     title: movedBack(next.level),
     body: `${cap.name} crossed a safety limit (${reading}). Someone needs to review what happened before it can get more authority again.`,
-    link: `#/capabilities/${cap.id}?tab=monitoring`,
+    link: `#/capabilities/${cap.id}?tab=monitor`,
   };
   const activity = [
     { id: `ACT-${Date.now()}-b`, date: state.today, kind: 'restriction', surfaced: true, title: movedBack(next.level), body: `${cap.name} crossed a safety limit (${reading}) and moved from ${authorityLabel(previous)} to ${authorityLabel(next)} automatically. Someone needs to review what happened before it can get more authority again.`, capabilityId: cap.id, link: `#/records/${id}` },
-    { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed', body: `${cap.name}: ${reading}. ${errors.length} error${errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitoring` },
+    { id: `ACT-${Date.now()}-a`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed', body: `${cap.name}: ${reading}. ${errors.length} error${errors.length === 1 ? '' : 's'} recorded.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitor` },
     ...state.activity,
   ];
   const evidence = [
@@ -242,10 +242,10 @@ export function reviewEligibility(state, capabilityId, personKey) {
   if (!p) return { ok: false, reason: 'Choose who is acting.' };
   if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and can't record a review.` };
   const risk = isRiskApprover(state, personKey);
-  if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so only a Risk approver can record this review. ${p.name} isn't a Risk approver.` };
+  if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so only a Risk approver can record this review. ${p.name} isn't a Risk approver.${soloHint(state)}` };
   if (personKey !== cap.owner && !risk) return { ok: false, reason: `Only the owner (${people(state)[cap.owner].name}) or a Risk approver can record this review.` };
   const expansion = restrictedExpansion(state, capabilityId);
-  if (expansion && expansion.authorizedBy === personKey) return { ok: false, reason: `${p.name} approved the authority that was just reduced (${expansion.id}), so someone else needs to review it.` };
+  if (expansion && expansion.authorizedBy === personKey) return { ok: false, reason: `${p.name} approved the authority that was just reduced (${expansion.id}), so someone else needs to review it.${soloHint(state)}` };
   return { ok: true, reason: null };
 }
 
@@ -292,7 +292,7 @@ export function recordReview(state, capabilityId, { by, whatHappened, cause, cha
     title: 'Review recorded',
     body: `${who.name} reviewed ${[review.restrictionRecordId ? `the move back to ${levelName(cap.authority.level)} (${review.restrictionRecordId})` : null, review.incidentIds.length ? review.incidentIds.join(', ') : null].filter(Boolean).join(' and ')} on ${cap.name}. Cause: ${fields.cause} ${cap.name} stays at ${authorityLabel(cap.authority)} until a proposed change is approved.`,
     capabilityId: cap.id,
-    link: `#/capabilities/${cap.id}?tab=monitoring`,
+    link: `#/capabilities/${cap.id}?tab=monitor`,
   }, ...s.activity];
   return { ...s, capabilities, activity, alerts: s.alerts.filter((a) => a.capabilityId !== cap.id) };
 }

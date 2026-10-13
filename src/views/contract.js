@@ -22,7 +22,7 @@ export function contractBuilderView(state, capabilityId, query) {
 
   if (versionList(state, capabilityId, 'contract').length) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Set up rules</h1><p class="lede">${cap.name} already has rules. To change them, propose a rule change; it needs approval.</p></div></div>
-      ${notice('neutral', 'Rules are already set', 'See them on the capability\'s Rules tab, where you can also propose a change.', { link: `#/capabilities/${cap.id}?tab=rules`, linkText: 'See rules' })}`;
+      ${notice('neutral', 'Rules are already set', 'See them on the capability\'s Rules tab, where you can also propose a change.', { link: `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: 'See rules' })}`;
   }
 
   if (!draft) {
@@ -80,12 +80,12 @@ export function contractBuilderView(state, capabilityId, query) {
       <div><span class="fact-label">Sections confirmed</span><strong>${confirmedCount} of ${SECTION_KEYS.length}</strong></div>
       <div><span class="fact-label">Suggestions to review</span><strong>${pending}</strong></div>
       <div><span class="fact-label">Issues to fix</span><strong>${blocks.length}</strong></div>
-      <div><span class="fact-label">Acting as</span><strong>${acting.name}</strong></div>
+      <div><span class="fact-label">Demo as</span><strong>${acting.name}</strong></div>
     </div>
   </div>
   <div class="contract-builder">${sections}</div>
 
-  ${section('Checks', html`<div class="card">${checks.length ? html`<ul class="check-list">${checks.map((c) => html`<li>${badge(c.level === 'block' ? 'fail' : 'watch', c.level === 'block' ? 'Must fix' : 'Warning')} ${c.text}${c.section ? html` <span class="muted">(${SECTION_LABELS[c.section]})</span>` : ''}</li>`)}</ul>` : html`<p class="muted">All checks passed.</p>`}</div>`, { subtitle: 'You can\'t save until these are fixed: an empty "The AI must never" or "Authority is reduced automatically when" section (unless impact is Low), rules that contradict each other, safety limits without a number or time period, and a financial capability without a spending limit.' })}
+  ${section('Checks', html`<div class="card">${checks.length ? html`<ul class="check-list">${checks.map((c) => html`<li>${badge(c.level === 'block' ? 'fail' : 'watch', c.level === 'block' ? 'Must fix' : 'Warning')} ${c.text}${c.section ? html` <span class="muted">(${SECTION_LABELS[c.section]})</span>` : ''}</li>`)}</ul>` : html`<p class="muted">All checks passed.</p>`}</div>`, { subtitle: 'You can\'t save until these are fixed: an empty "Never allowed" or "Automation is pulled back if" section (unless impact is Low), rules that contradict each other, safety limits without a number or time period, and a financial capability without a spending limit.' })}
 
   ${section('Save the rules', html`
     <div class="card">

@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion } from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -15,8 +15,9 @@ import { proposeView, proposalView } from './views/proposals.js';
 import { stakeholdersEditorView } from './views/stakeholders.js';
 import { scenariosEditorView } from './views/scenarios.js';
 import { peopleView } from './views/people.js';
-import { workspaceSetupView, noCapabilitiesView, founderOptions, riskGapNote } from './views/workspace.js';
+import { workspaceSetupView, noCapabilitiesView } from './views/workspace.js';
 import { decisionBriefView } from './views/brief.js';
+import { welcomeView, guideView, GUIDE_STEPS } from './views/guide.js';
 
 const store = createStore({ storage: safeStorage() });
 const app = document.getElementById('app');
@@ -62,11 +63,33 @@ function loadAgentRuns() {
     ]))
     .then((all) => { setTicketDefinitions(all.filter((x) => x.definitions).flatMap((x) => x.definitions)); agentRuns = { status: 'ready', runs: all.filter((x) => !x.definitions) }; })
     .catch((err) => { agentRuns = { status: 'error', runs: [], error: err.message }; })
-    .then(() => { const { parts, query } = parseRoute(); if (parts[0] === 'capabilities' && query.get('show') === 'runs') render(); });
+    .then(() => { const { parts, query } = parseRoute(); if (parts[0] === 'capabilities' && query.get('tab') === 'decide') render(); });
 }
 
 // Where an old address that named no capability should go.
 const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
+
+// The guided demo (redesign) runs on its own copy of the demo state, in
+// memory only, so it never touches the workspace. Its "Demo as" is its own.
+let guide = null;
+function newGuide() {
+  const state = initialState();
+  return { state, capabilityId: focusCapability(state).id, role: focusCapability(state).owner, tested: false, decided: null, breached: false };
+}
+const guideDo = {
+  runTests() { let s = startTestRun(guide.state, guide.capabilityId); for (let i = 0; i < 200 && capData(s, guide.capabilityId).testRun.status === 'running'; i++) s = advanceTestRun(s, guide.capabilityId); guide = { ...guide, state: s, tested: true }; },
+  decide() { const owner = getCapability(guide.state, guide.capabilityId).owner; const s = authorize(selectDecision(guide.state, guide.capabilityId, 'expand-limits'), guide.capabilityId, { by: owner }); guide = { ...guide, state: s, decided: s.decisionRecords.at(-1).id }; },
+  breach() { guide = { ...guide, state: simulateBreach(guide.state, guide.capabilityId), breached: true }; },
+};
+// Opening a later step directly does the earlier steps' actions first.
+function guideAt(step) {
+  if (!guide) guide = newGuide();
+  if (step > 5 && !guide.tested) guideDo.runTests();
+  if (step > 6 && !guide.decided) guideDo.decide();
+  return guide;
+}
+const WELCOMED = 'authority-lab-welcomed';
+const welcomed = () => { try { return window.localStorage.getItem(WELCOMED) === '1'; } catch { return true; } };
 
 function parseRoute() {
   const hash = canonicalHash(location.hash || '#/overview', { focus: focusId() });
@@ -79,6 +102,8 @@ function render() {
   // An old address is rewritten in place, without adding a history entry.
   const canon = canonicalHash(location.hash, { focus: focusId() });
   if (location.hash && canon !== location.hash) history.replaceState(null, '', canon);
+  // A first visit opens on the welcome choice (redesign), once.
+  if (!welcomed() && (!location.hash || location.hash === '#/' || location.hash === '#/overview') && !setupPending(store.get())) history.replaceState(null, '', '#/welcome');
   const state = store.get();
   setPeople(people(state));
   setToday(state.today);
@@ -94,7 +119,14 @@ function render() {
   else switch (root) {
     case 'capabilities':
       if (sub === 'new') { view = addCapabilityView(state, query); title = 'Add a capability'; }
-      else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub, query); title = 'Decision'; }
+      else if (sub && action === 'decision') {
+        // The decision lives in the capability's Decide tab (redesign).
+        const q = new URLSearchParams(query);
+        q.set('tab', 'decide');
+        q.delete('show');
+        view = capabilityView(state, sub, q, { runs: agentRuns });
+        title = 'Decision';
+      }
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Set up rules'; }
@@ -104,7 +136,8 @@ function render() {
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Propose a change'; }
       else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed change'; }
       else if (sub) {
-        if (query.get('tab') === 'evidence' && query.get('show') === 'runs') loadAgentRuns();
+        // Decide summarizes the recorded model runs; its runs view lists them.
+        if (query.get('tab') === 'decide' && (!query.get('show') || query.get('show') === 'runs')) loadAgentRuns();
         view = capabilityView(state, sub, query, { runs: agentRuns });
         title = getCapability(state, sub)?.name || 'Capability';
       }
@@ -122,6 +155,8 @@ function render() {
       break;
     }
     case 'people': view = peopleView(state, query); title = 'People'; break;
+    case 'welcome': view = welcomeView(); title = 'Welcome'; break;
+    case 'guide': { const n = Math.min(Math.max(Number(sub) || 1, 1), GUIDE_STEPS.length); view = guideView(guideAt(n), n); title = `Guided demo: ${GUIDE_STEPS[n - 1]}`; break; }
     default: view = empty ? noCapabilitiesView(state, 'Overview') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
@@ -136,7 +171,8 @@ function render() {
   if (setupPending(state)) { nav.innerHTML = ''; acting.innerHTML = ''; }
   else nav.innerHTML = String(html`${NAV.map(([k, label]) => html`<a class="nav-link ${root === k || (!root && k === 'overview') ? 'is-active' : ''}" href="#/${k}" ${root === k ? 'aria-current="page"' : ''}>${label}${counts[k] ? html`<span class="nav-count ${state.alerts.length && k === 'overview' ? 'is-alert' : ''}">${counts[k]}</span>` : ''}</a>`)}`);
 
-  // "Acting as" picker. Default is the owner of the capability in context.
+  // "Demo as" picker (redesign): a demo control, marked as one. Default is the
+  // owner of the capability in context.
   const contextCap = root === 'capabilities' && sub && sub !== 'new' ? sub : null;
   const current = actor(state, contextCap);
   const focus = focusCapability(state);
@@ -145,9 +181,14 @@ function render() {
   const defaultName = (roster[defaultOwner] || roster[current] || {}).name || 'Nobody yet';
   // A demo control: a real version would know who is signed in. Only active
   // people can be chosen.
-  if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo only. In a real product you'd be signed in. Switch people here to see how proposing, approving and deciding work for each role.">
-    <span class="acting-label">Acting as</span>
-    <select data-action="set-acting" aria-label="Demo: acting as">
+  const inGuide = root === 'guide';
+  if (inGuide && guide) {
+    // The guided demo's own role, on its own copy of the demo.
+    acting.innerHTML = String(html`<label class="acting" title="Demo only. Switch people here to see how approvals work."><span class="acting-label">Demo as</span>
+      <select data-action="set-acting" aria-label="Demo as">${Object.entries(activePeople(guide.state)).map(([k, p]) => html`<option value="${k}" ${guide.role === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}</select></label>`);
+  } else if (!setupPending(state)) acting.innerHTML = String(html`<label class="acting" title="Demo only. In a real product you'd be signed in. Switch people here to see how proposing, approving and deciding work for each role.">
+    <span class="acting-label">Demo as</span>
+    <select data-action="set-acting" aria-label="Demo as">
       <option value="" ${state.actingAs ? '' : 'selected'}>${defaultName}${defaultOwner ? ' (owner)' : ''}</option>
       ${Object.entries(activePeople(state)).map(([k, p]) => html`<option value="${k}" ${state.actingAs === k ? 'selected' : ''}>${p.name} · ${p.role}</option>`)}
     </select>
@@ -276,12 +317,21 @@ document.addEventListener('click', (e) => {
   const action = btn.dataset.action;
   const capId = btn.dataset.capability;
   if (action === 'run-tests') { const route = here(); dispatchOr(route, () => { runSuite(capId); clearErrorOn(route, 'error'); }); }
+  // The welcome choice is remembered, so it shows once.
+  if (action === 'welcomed') { try { window.localStorage.setItem(WELCOMED, '1'); } catch { /* storage blocked: it shows again next visit */ } }
+  // The guided demo acts on its own copy of the demo state.
+  if (action === 'guide-run-tests' || action === 'guide-decide' || action === 'guide-breach') {
+    guideAt(1);
+    guideDo[{ 'guide-run-tests': 'runTests', 'guide-decide': 'decide', 'guide-breach': 'breach' }[action]]();
+    render();
+    return;
+  }
   if (action === 'simulate-breach') store.dispatch('simulateBreach', capId);
   if (action === 'authorize') {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
-      const rec = capData(store.get(), capId).decision.recordId;
-      location.hash = `#/records/${rec}`;
+      // Land on Decide, which says what was decided and points to Monitor.
+      location.hash = `#/capabilities/${capId}?tab=decide`;
     });
   }
   const builder = () => `#/capabilities/${capId}/contract/build`;
@@ -294,7 +344,7 @@ document.addEventListener('click', (e) => {
   if (action === 'section-unconfirm') tryDispatch(() => store.dispatch('confirmSection', capId, btn.dataset.section, false));
   if (action === 'contract-finalize') {
     tryDispatch(() => store.dispatch('finalizeContract', capId, { by: actor(store.get(), capId) }));
-    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=rules`;
+    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=status&show=rules`;
   }
   if (action === 'starter-add') {
     const route = `#/capabilities/${capId}/scenarios/edit`;
@@ -344,7 +394,11 @@ document.addEventListener('change', (e) => {
   const capId = el.dataset.capability;
   // Heading capability selector and filter dropdowns: each option is a route.
   if (el.dataset.action === 'navigate') { location.hash = el.value; return; }
-  if (el.dataset.action === 'set-acting') { store.dispatch('setActingAs', el.value || null); return; }
+  if (el.dataset.action === 'set-acting') {
+    if (parseRoute().parts[0] === 'guide' && guide) { guide = { ...guide, role: el.value }; render(); return; }
+    store.dispatch('setActingAs', el.value || null);
+    return;
+  }
   if (el.dataset.action === 'choose-owner') { store.dispatch('setActingAs', el.value || null); return; }
   if (el.dataset.action === 'select-option') store.dispatch('selectDecision', capId, el.value);
   if (el.dataset.action === 'set-condition') {
@@ -363,6 +417,15 @@ function readCriteriaRows(form) {
 }
 
 document.addEventListener('submit', (e) => {
+  const guideReview = e.target.closest('[data-form="guide-review"]');
+  if (guideReview && guide) {
+    e.preventDefault();
+    const f = new FormData(guideReview);
+    const text = String(f.get('whatHappened') || '').trim();
+    guide = { ...guide, state: recordReview(guide.state, guide.capabilityId, { by: guide.role, whatHappened: text, cause: 'Return status was not checked before refunding.', changes: 'Check return status before any automatic refund.' }) };
+    render();
+    return;
+  }
   const personForm = e.target.closest('[data-form="add-person"], [data-form="edit-person"], [data-form="deactivate-person"]');
   if (personForm) {
     e.preventDefault();
@@ -431,7 +494,7 @@ document.addEventListener('submit', (e) => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) });
       const after = capData(store.get(), capId).proposals;
-      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=summary`;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=status`;
     });
     return;
   }
@@ -441,7 +504,7 @@ document.addEventListener('submit', (e) => {
     const capId = parseRoute().parts[1];
     const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
     const scenarios = [...scForm.querySelectorAll('[data-rows="scenarios"] tr')].map((tr) => ({ id: val(tr, 'sc-id') || undefined, source: val(tr, 'sc-source'), group: val(tr, 'sc-group'), name: val(tr, 'sc-name'), situation: val(tr, 'sc-situation'), expected: val(tr, 'sc-expected') }));
-    dispatchOr(`#/capabilities/${capId}/scenarios/edit`, () => { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}?tab=evidence&show=tests`; });
+    dispatchOr(`#/capabilities/${capId}/scenarios/edit`, () => { store.dispatch('saveScenarios', capId, { scenarios, by: actor(store.get(), capId) }); location.hash = `#/capabilities/${capId}?tab=decide&show=tests`; });
     return;
   }
   const withdrawForm = e.target.closest('[data-form="withdraw-proposal"]');
@@ -495,7 +558,8 @@ document.addEventListener('submit', (e) => {
     const reason = new FormData(decideForm).get('reason');
     const decision = e.submitter && e.submitter.value === 'reject' ? 'rejectAction' : 'approveAction';
     const item = (store.get().actionQueue || []).find((x) => x.id === id);
-    const route = `#/capabilities/${item ? item.capabilityId : ''}?tab=decision&show=approvals`;
+    // Stay where the decision was made: Status or the full approvals list.
+    const route = here();
     dispatchOr(route, () => { store.dispatch(decision, id, { by: actor(store.get(), item && item.capabilityId), reason }); clearErrorOn(route, 'error'); render(); });
     return;
   }
@@ -515,14 +579,13 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const val = (el, name) => (el.querySelector(`[name="${name}"]`) || {}).value || '';
     const draft = {
-      by: val(wsForm, 'ws-by'),
-      workspace: { name: val(wsForm, 'ws-name'), description: val(wsForm, 'ws-description') },
-      workflow: { name: val(wsForm, 'wf-name'), description: val(wsForm, 'wf-description') },
-      people: [...wsForm.querySelectorAll('[data-rows="founders"] tr')].map((tr) => ({ name: val(tr, 'p-name'), title: val(tr, 'p-title'), team: val(tr, 'p-team'), workspaceAdmin: tr.querySelector('[name="p-admin"]').checked, riskApprover: tr.querySelector('[name="p-risk"]').checked })),
+      workspace: { name: val(wsForm, 'ws-name') },
+      workflow: { name: val(wsForm, 'wf-name') },
+      founder: { name: val(wsForm, 'f-name'), title: val(wsForm, 'f-title') },
     };
     // Keep what was typed if setup is refused; drop it once it goes through.
     setupDraft = draft;
-    dispatchOr('#/overview', () => { store.dispatch('setUpWorkspace', draft); setupDraft = null; location.hash = '#/overview'; render(); });
+    dispatchOr('#/overview', () => { store.dispatch('setUpWorkspace', draft); setupDraft = null; location.hash = '#/capabilities/new'; render(); });
     return;
   }
   const critForm = e.target.closest('[data-form="save-criteria"]');
@@ -532,7 +595,7 @@ document.addEventListener('submit', (e) => {
     const { criteria, requirements } = readCriteriaRows(critForm);
     dispatchOr(`#/capabilities/${capId}/criteria/edit`, () => {
       store.dispatch('saveCriteria', capId, { criteria, requirements, by: actor(store.get(), capId), reason: critForm.reason.value });
-      location.hash = `#/capabilities/${capId}?tab=evidence&show=targets`;
+      location.hash = `#/capabilities/${capId}?tab=decide&show=targets`;
     });
     return;
   }
@@ -553,7 +616,6 @@ document.addEventListener('submit', (e) => {
   if (!form) return;
   e.preventDefault();
   const f = new FormData(form);
-  const starting = f.get('starting');
   dispatchOr('#/capabilities/new', () => {
     const before = store.get().capabilities.length;
     store.dispatch('addCapability', {
@@ -561,8 +623,8 @@ document.addEventListener('submit', (e) => {
       summary: f.get('summary'),
       owner: f.get('owner'),
       risk: { impact: f.get('impact'), reversibility: f.get('reversibility'), exposure: f.get('exposure'), failureTypes: f.getAll('failureTypes'), note: f.get('riskNote') },
-      startingLevel: starting === 'not-delegated' ? 0 : Number(starting),
-      notDelegated: starting === 'not-delegated',
+      // "What does it do today?": context that sets a starting level of 0 or 1.
+      today: f.get('today') || '',
       rationale: f.get('rationale'),
       by: actor(store.get()),
     });
@@ -570,29 +632,6 @@ document.addEventListener('submit', (e) => {
     location.hash = `#/capabilities/${added.id}/setup`;
   });
 });
-
-// The setup form's "Who is setting this up?" list and Risk approver note follow
-// the roster rows as they are edited.
-function readFounders(form) {
-  const val = (el, name) => (el.querySelector(`[name="${name}"]`) || {}).value || '';
-  return [...form.querySelectorAll('[data-rows="founders"] tr')].map((tr) => ({ name: val(tr, 'p-name'), workspaceAdmin: tr.querySelector('[name="p-admin"]').checked, riskApprover: tr.querySelector('[name="p-risk"]').checked }));
-}
-function refreshSetupForm(form) {
-  const people = readFounders(form);
-  const select = form.querySelector('[data-founders]');
-  const chosen = select.value;
-  select.innerHTML = String(founderOptions(people, chosen));
-  const note = form.querySelector('[data-risk-gap]');
-  const text = riskGapNote(people);
-  note.textContent = text;
-  note.hidden = !text;
-}
-for (const type of ['input', 'change', 'click']) {
-  document.addEventListener(type, (e) => {
-    const form = e.target.closest && e.target.closest('[data-form="setup-workspace"]');
-    if (form && !e.target.matches('[data-founders]')) queueMicrotask(() => refreshSetupForm(form));
-  });
-}
 
 document.addEventListener('input', (e) => {
   const nameEl = e.target.closest('[data-action="check-name"]');

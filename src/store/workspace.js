@@ -1,7 +1,9 @@
 // The empty-workspace path (roadmap item 7): start from a blank workspace, then
-// set up the workspace, its one workflow and the founding roster before
-// anything else. The founding roster is recorded directly as roster version 1,
-// the way the seed is; every rights change after it is governed.
+// set up the workspace, its one workflow and the person starting it before
+// anything else. That person is recorded directly as roster version 1, the way
+// the seed is. Until a second workspace admin exists they complete the founding
+// roster just in time (see foundingRoster in people.js); after that, every
+// rights change is governed.
 
 import { initialState, clone } from './state.js';
 import { personKey, snapshotPerson, people, requireAdmin } from './people.js';
@@ -40,43 +42,52 @@ export function setupPending(state) {
   return Boolean(state.setupPending);
 }
 
-// At least two workspace admins: a rights change needs a different admin to
-// approve it, so one admin could never grant anyone a right.
-export const MIN_FOUNDING_ADMINS = 2;
+// One person can start a workspace (Paige, 2026-10-12): the person starting it
+// is its first workspace admin. A second admin or a Risk approver is asked for
+// only when an approval actually needs one (see proposeRosterChange).
+export const MIN_FOUNDING_ADMINS = 1;
 
-// `by` is the name of the founding workspace admin setting the workspace up:
-// the person who acted, recorded as the author of roster version 1.
-export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = [], by = '' } = {}) {
+// `founder` is the person starting the workspace ({ name, title, team? }): they
+// become its first workspace admin and the author of roster version 1. The
+// older form, a `people` list plus `by` (the name of a listed workspace admin
+// who is setting it up), still works; either way nobody else is required.
+export function setUpWorkspace(state, { workspace = {}, workflow = {}, founder = null, people = [], by = '' } = {}) {
   if (!state.setupPending) throw new Error('This workspace is already set up.');
   const ws = { name: String(workspace.name || '').trim(), description: String(workspace.description || '').trim() };
   const wf = { name: String(workflow.name || '').trim(), description: String(workflow.description || '').trim() };
   if (ws.name.length < 2) throw new Error('Name the workspace.');
   if (wf.name.length < 2) throw new Error('Name the workflow.');
-  const rows = people
+  const listed = founder
+    ? [{ ...founder, team: String(founder.team || '').trim() || ws.name, workspaceAdmin: true }, ...people]
+    : people;
+  if (founder && !String(founder.name || '').trim()) throw new Error('Add your name.');
+  if (founder && !String(founder.title || '').trim()) throw new Error('Add your title.');
+  const rows = listed
     .map((p) => ({ name: String(p.name || '').trim(), title: String(p.title || '').trim(), team: String(p.team || '').trim(), workspaceAdmin: Boolean(p.workspaceAdmin), riskApprover: Boolean(p.riskApprover) }))
     .filter((p) => p.name || p.title || p.team);
   if (rows.some((p) => !p.name || !p.title || !p.team)) throw new Error('Every person needs a name, a title and a team.');
-  if (rows.length < 2) throw new Error('Add at least two people.');
+  if (!rows.length) throw new Error('Add the person starting the workspace.');
   const keys = rows.map((p) => personKey(p.name));
   if (new Set(keys).size !== keys.length) throw new Error('Two people have the same name. Make each name distinct.');
   const admins = rows.filter((p) => p.workspaceAdmin);
-  if (admins.length < MIN_FOUNDING_ADMINS) throw new Error(`Mark at least ${MIN_FOUNDING_ADMINS} people as workspace admins. After setup, changing anyone's rights needs a second admin's approval.`);
 
-  const byKey = personKey(by);
+  const byKey = founder ? keys[0] : personKey(by);
   if (!byKey) throw new Error('Choose who is setting this up.');
   if (!admins.some((p) => personKey(p.name) === byKey)) throw new Error(`${String(by).trim()} isn't marked as a workspace admin. Choose a workspace admin to set this up.`);
   const value = Object.fromEntries(rows.map((p, i) => [keys[i], { name: p.name, role: p.title, team: p.team, active: true, rights: { riskApprover: p.riskApprover, workspaceAdmin: p.workspaceAdmin } }]));
-  const founder = byKey;
   const rosterState = { roster: { versions: [{ value }] } };
-  const version = { version: 1, date: state.today, author: founder, authorAt: snapshotPerson(rosterState, founder), reason: 'People added when the workspace was set up.', afterEvidence: false, before: null, value: clone(value) };
+  const version = { version: 1, date: state.today, author: byKey, authorAt: snapshotPerson(rosterState, byKey), reason: 'People added when the workspace was set up.', afterEvidence: false, before: null, value: clone(value) };
   const riskNames = rows.filter((p) => p.riskApprover).map((p) => p.name);
+  const alone = rows.length === 1;
   const event = {
     id: `ACT-${Date.now()}-w`,
     date: state.today,
     kind: 'milestone',
     surfaced: true,
     title: 'Workspace set up',
-    body: `${value[founder].name} set up ${ws.name} for the ${wf.name} workflow with ${rows.length} people. Workspace admins: ${admins.map((p) => p.name).join(', ')}. Risk approvers: ${riskNames.length ? riskNames.join(', ') : 'none yet'}. From now on, changing anyone's rights needs a second admin's approval.`,
+    body: alone
+      ? `${value[byKey].name} set up ${ws.name} for the ${wf.name} workflow and is its workspace admin. Another person is asked for when an approval first needs one.`
+      : `${value[byKey].name} set up ${ws.name} for the ${wf.name} workflow with ${rows.length} people. Workspace admins: ${admins.map((p) => p.name).join(', ')}. Risk approvers: ${riskNames.length ? riskNames.join(', ') : 'none yet'}.${admins.length > 1 ? ' From now on, changing anyone\'s rights needs a second admin\'s approval.' : ''}`,
     capabilityId: null,
     link: '#/people',
   };
@@ -86,14 +97,14 @@ export function setUpWorkspace(state, { workspace = {}, workflow = {}, people = 
     workspace: { id: slug(ws.name, 'workspace'), ...ws },
     workflow: { id: slug(wf.name, 'workflow'), ...wf },
     roster: { versions: [version] },
-    actingAs: founder,
+    actingAs: byKey,
     activity: [event, ...state.activity],
   };
 }
 
-// Fewer than two Risk approvers is allowed at setup (warnings never block), but
-// High-impact and Financial changes can't be signed off until the right is
-// granted through a governed proposal.
+// How many Risk approvers a founding list names, when fewer than two. Setup no
+// longer asks for any (a Risk approver is asked for when a change first needs
+// one); kept for the store's public API.
 export function foundingRiskGap(people = []) {
   const n = people.filter((p) => p && p.riskApprover && String(p.name || '').trim()).length;
   return n < 2 ? n : null;

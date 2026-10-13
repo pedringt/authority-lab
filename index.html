@@ -6,6 +6,7 @@
   <title>Authority Lab</title>
   <meta name="description" content="Prototype: test an AI workflow before giving it more authority. AI interprets. Software enforces. Humans authorize.">
   <link rel="stylesheet" href="styles/app.css">
+  <link rel="stylesheet" href="styles/redesign.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f2937'/%3E%3Cpath d='M9 17l5 5 9-11' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -17,8 +18,9 @@
         <span class="brand-sep" aria-hidden="true">/</span>
         <span class="brand-ws" id="brand-ws">Northstar Support</span>
       </div>
+      <!-- One quiet global row (redesign): brand, the three places, then the demo controls. -->
+      <nav class="nav" id="nav" aria-label="Primary"></nav>
       <div class="demo-controls" role="group" aria-label="Demo controls">
-        <span class="acting-demo" title="Demo data only. No real customers, money or model calls.">Demo</span>
         <div id="acting"></div>
         <span class="demo-sep" aria-hidden="true"></span>
         <span class="demo-date" id="demo-date">Oct 7</span>
@@ -29,6 +31,7 @@
             <p class="menu-label">Settings</p>
             <a class="menu-item" href="#/people">People</a>
             <a class="menu-item" href="#/people?focus=workspace">Workspace</a>
+            <a class="menu-item" href="#/welcome">Guided demo</a>
             <p class="menu-label">Demo</p>
             <button class="menu-item" data-action="start-empty" title="Replace the Northstar demo with a blank workspace. Use Reset demo to bring Northstar back.">Start empty</button>
             <button class="menu-item" data-action="reset" title="Bring back the original Northstar demo">Reset demo</button>
@@ -42,7 +45,6 @@
         </span>
       </div>
     </div>
-    <nav class="nav" id="nav" aria-label="Primary"></nav>
   </header>
   <main class="app" id="app" tabindex="-1"></main>
   <footer class="foot">

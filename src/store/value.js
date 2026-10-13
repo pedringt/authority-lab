@@ -88,11 +88,32 @@ function bound(target, metric) {
 
 const fmt = (v, unit) => (unit === '$' ? `$${Number(v).toFixed(2)}` : unit === '%' ? `${Math.round(v * 10) / 10}%` : unit === 'h' ? `${Math.round(v)} h` : `${v}`);
 
+// A rollout goal is judged only on production evidence (Paige, 2026-10-12):
+// until enough production cases are recorded, it's too early to say whether
+// it's met or missed. The default is 20 cases; a goal that names its own
+// sample ("… across at least 50 refunds") uses that instead. Production cases
+// are actions logged in this session or in a recorded real-model run, never
+// seeded demo data or a scripted dry run.
+export const MIN_PRODUCTION_CASES = 20;
+const PRODUCTION_SOURCES = ['session', 'recorded'];
+
+export function productionCases(state, capabilityId) {
+  return gateEvents(state, capabilityId).filter((e) => PRODUCTION_SOURCES.includes(e.source) && ['allowed', 'escalated', 'blocked'].includes(categoryOf(e))).length;
+}
+
+// A goal's own sample requirement, if its wording names one.
+export function goalSample(outcome) {
+  const m = `${outcome.metric || ''} ${outcome.target || ''}`.match(/\b(?:at least|minimum(?: of)?|across|over|after)\s+(\d[\d,]*)\s+(?:production\s+)?(?:cases|refunds|tickets|actions|orders|requests)\b/i);
+  return m ? Number(m[1].replace(/,/g, '')) : MIN_PRODUCTION_CASES;
+}
+
 // Each expected outcome on the record in force, with the matching actual,
-// its source, and whether it's met.
+// its source, whether it's met, and whether there's enough production
+// evidence to judge it yet (`judged`; `sample` says how much is needed).
 export function expectedVsActual(state, capabilityId) {
   const rec = grantingRecord(state, capabilityId);
   if (!rec) return { record: null, rows: [] };
+  const have = productionCases(state, capabilityId);
   const rows = (rec.expectedOutcomes || []).map((o) => {
     const metric = recogniseMetric(o.metric);
     if (!metric) return { ...o, metric: o.metric, measured: null, status: 'not-measured', note: 'We don\'t measure this yet.' };
@@ -104,8 +125,10 @@ export function expectedVsActual(state, capabilityId) {
     const b = bound(o.target, metric);
     const met = b === 'max' ? actual.value <= target : actual.value >= target;
     const gap = Math.round((actual.value - target) * 100) / 100;
+    const needed = goalSample(o);
     return {
-      ...o, measuredAs: metric.label, unit: metric.unit, target: o.target, targetValue: target, bound: b,
+      ...o, sample: { needed, have }, judged: !actual.seeded && have >= needed,
+      measuredAs: metric.label, unit: metric.unit, target: o.target, targetValue: target, bound: b,
       actual: actual.value, actualText: fmt(actual.value, metric.unit), source: actual.source, seeded: actual.seeded,
       // A gap on a percentage is in points: 42% against 50% is 8 points short.
       status: met ? 'met' : 'not-met', gapText: met ? 'Met' : `${metric.unit === '%' ? `${Math.round(Math.abs(gap) * 10) / 10} points` : fmt(Math.abs(gap), metric.unit)} ${b === 'max' ? 'over' : 'short of'} the target`,
@@ -164,7 +187,7 @@ export function setRoiAssumptions(state, capabilityId, values, { by, reason } = 
   const cap = getCapability(state, capabilityId);
   const s = updateCap(state, capabilityId, (d) => ({ ...d, roiAssumptions: [...(d.roiAssumptions || []), version] }));
   // Its own kind, so Activity doesn't show it as a change to the bar.
-  return logEvent(s, { kind: 'roi-assumptions', surfaced: true, title: `ROI assumptions changed (version ${version.version}): ${cap.name}`, body: `${people(state)[by].name} changed the ROI assumptions: ${ROI_FIELDS.filter((f) => !prev || prev.values[f.key] !== next[f.key]).map((f) => `${f.label.toLowerCase()} ${prev ? `${prev.values[f.key]} → ` : ''}${next[f.key]}`).join('; ')}. Reason: ${why}`, capabilityId, link: `#/capabilities/${capabilityId}?tab=monitoring&show=value` });
+  return logEvent(s, { kind: 'roi-assumptions', surfaced: true, title: `ROI assumptions changed (version ${version.version}): ${cap.name}`, body: `${people(state)[by].name} changed the ROI assumptions: ${ROI_FIELDS.filter((f) => !prev || prev.values[f.key] !== next[f.key]).map((f) => `${f.label.toLowerCase()} ${prev ? `${prev.values[f.key]} → ` : ''}${next[f.key]}`).join('; ')}. Reason: ${why}`, capabilityId, link: `#/capabilities/${capabilityId}?tab=monitor&show=value` });
 }
 
 // The ROI, a month at a time. AI cost applies to every case; the human time

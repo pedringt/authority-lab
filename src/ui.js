@@ -198,7 +198,7 @@ export function warningNotice(w) {
 
 // Shown after a reason someone can't do something: the demo's person picker
 // is in the header. One string, so it follows the header if that changes.
-export const SWITCH_PERSON = 'Choose who you\'re acting as at the top of the page.';
+export const SWITCH_PERSON = 'For the demo, switch people in "Demo as" at the top.';
 
 export function empty(text) {
   return html`<p class="empty">${text}</p>`;
