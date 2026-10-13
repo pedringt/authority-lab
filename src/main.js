@@ -94,7 +94,14 @@ function render() {
   else switch (root) {
     case 'capabilities':
       if (sub === 'new') { view = addCapabilityView(state, query); title = 'Add a capability'; }
-      else if (sub && action === 'decision') { view = decisionWorkspaceView(state, sub, query); title = 'Decision'; }
+      else if (sub && action === 'decision') {
+        // The decision lives in the capability's Decide tab (redesign).
+        const q = new URLSearchParams(query);
+        q.set('tab', 'decide');
+        q.delete('show');
+        view = capabilityView(state, sub, q, { runs: agentRuns });
+        title = 'Decision';
+      }
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
       else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Set up rules'; }
@@ -281,8 +288,8 @@ document.addEventListener('click', (e) => {
   if (action === 'authorize') {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
-      const rec = capData(store.get(), capId).decision.recordId;
-      location.hash = `#/records/${rec}`;
+      // Land on Decide, which says what was decided and points to Monitor.
+      location.hash = `#/capabilities/${capId}?tab=decide`;
     });
   }
   const builder = () => `#/capabilities/${capId}/contract/build`;
