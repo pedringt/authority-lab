@@ -331,6 +331,8 @@ function renderWorkspaceMenu() {
   const startEmpty = document.querySelector('[data-action="start-empty"]');
   if (startEmpty) startEmpty.hidden = isClient();
   const resetBtn = document.querySelector('[data-action="reset"]');
+  const label = document.getElementById('demo-label');
+  if (label) label.textContent = isClient() ? 'This workspace' : 'Demo';
   const note = document.querySelector('.menu-note');
   if (note) note.textContent = isClient() ? `${openWorkspace.name} is a real configuration: no fictional data, and nothing here calls a model.` : 'Demo data only. No real customers, money or model calls.';
   if (resetBtn) { resetBtn.textContent = isClient() ? 'Reset workspace' : 'Reset demo'; resetBtn.title = isClient() ? `Bring ${openWorkspace.name} back to its configuration` : 'Bring back the original Northstar demo'; }

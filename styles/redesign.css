@@ -382,3 +382,4 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 /* Workspace switcher (#121). */
 .menu-item.is-current { font-weight: 600; }
 .menu-item.is-current::before { content: "✓ "; }
+.menu-item[hidden] { display: none; }
