@@ -45,8 +45,52 @@
 /* Decide ------------------------------------------------------------------ */
 
 /* Monitor ----------------------------------------------------------------- */
+.mon { max-width: 860px; }
+.mon-verdict { border-left: 4px solid var(--pass); padding: 4px 0 4px 16px; margin: 8px 0 0; }
+.mon-verdict.is-bad { border-left-color: var(--restr); }
+.mon-verdict.is-watch { border-left-color: var(--watch); }
+.mon-verdict.is-neutral { border-left-color: var(--border-strong); }
+.mon-verdict-title { display: block; font-size: 20px; font-weight: 700; color: var(--text); }
+.mon-verdict p { color: var(--text-2); margin: 2px 0 0; max-width: 72ch; }
+.mon-stats { display: flex; flex-wrap: wrap; gap: 8px 30px; margin-top: 18px; font-size: 13.5px; color: var(--muted); }
+.mon-stats strong { display: block; font-size: 20px; color: var(--text); }
+.mon-stats-note { margin: 6px 0 0; }
+.mon-block { margin-top: 24px; }
+.mon-block h2 { font-size: 16px; margin: 0 0 8px; }
+.mon-review .review-form { max-width: 620px; }
+.mon-review .review-form .field { margin-bottom: 10px; }
+.mon-limits td { vertical-align: top; }
+.mon-reading { white-space: nowrap; }
+.mon-goals { margin-top: 16px; overflow-x: auto; }
+.mon-sub { font-weight: 600; margin: 12px 0 4px; }
+.mon-signal { border-top: 1px solid var(--border); padding: 8px 0; }
+.mon-signal p { margin: 2px 0; }
+.mon-roi-edit { margin-top: 10px; }
+.mon-rollout { margin: 14px 0 0; }
+.mon-demo { margin-top: 28px; border: 1px dashed var(--watch-bd); background: var(--watch-bg); border-radius: var(--radius); padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.mon-demo p { margin: 0; flex: 1 1 280px; }
+.mon-demo-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--watch); }
+
+/* One-line disclosures, shared by Monitor and History */
+.mh-lines { margin-top: 24px; border-bottom: 1px solid var(--border); }
+.mh-line { border-top: 1px solid var(--border); padding: 9px 4px; }
+.mh-line > summary { cursor: pointer; list-style: none; display: flex; gap: 10px; align-items: baseline; font-size: 14px; }
+.mh-line > summary::-webkit-details-marker { display: none; }
+.mh-line > summary strong { font-weight: 600; }
+.mh-line-meta { color: var(--muted); }
+.mh-line-open { margin-left: auto; color: var(--link); font-size: 13.5px; }
+.mh-line[open] > summary .mh-line-open::after { content: ' (hide)'; }
+.mh-line-inner { padding: 10px 0 4px; font-size: 14px; }
 
 /* History ----------------------------------------------------------------- */
+.hist-timeline { list-style: none; margin: 8px 0 0 6px; padding: 0; border-left: 2px solid var(--border); max-width: 860px; }
+.hist-item { position: relative; padding: 0 0 18px 18px; }
+.hist-item::before { content: ''; position: absolute; left: -7px; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border-strong); }
+.hist-item.is-key::before { border-color: var(--accent); background: var(--accent); }
+.hist-item.is-bad::before { border-color: var(--restr); background: var(--restr); }
+.hist-when { font-size: 12.5px; color: var(--muted); }
+.hist-sub { margin-top: 2px; max-width: 72ch; }
+.hist-activity { margin-top: 14px; }
 
 /* Overview ---------------------------------------------------------------- */
 

@@ -3720,11 +3720,12 @@ test('B2: ROI assumptions change only as a new version, with author and reason; 
 test('B2: the Monitoring tab shows expected vs actual and the ROI, with seeded data labelled', () => {
   const s = expandedRRB2();
   const page = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(page, /Expected impact vs actual/);
+  // Expected vs actual is the rollout-goals table (redesign: Goal, Expected, So far).
+  assert.match(page, /<th>Goal<\/th><th>Expected<\/th><th>So far<\/th>/);
   assert.match(page, /8 points short of the target/);
-  assert.match(page, /Demo data \(pilot\)/);
+  assert.match(page, /42% <span class="muted small">\(pilot · demo data\)<\/span>/);
   assert.match(page, /Return on investment/);
-  assert.match(page, /Assumptions <span class="badge badge-neutral">Demo data<\/span>/);
+  assert.match(page, /Assumptions \(demo data\)/);
   assert.match(page, /data-form="roi-assumptions"/);
   assert.match(page, />Save<\/button>/);
   assert.match(page, /Changes are kept in history\./);
@@ -3885,7 +3886,7 @@ test('C2: adoption signals never block: the gate, the queue and authorizing beha
 
 test('C2: the Monitoring tab lists each warning with what, why and source, and says when the data is simulated', () => {
   const page = String(capabilityView(initialState(), RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(page, /How people are using it/);
+  assert.match(page, /How reviewers are using it/);
   assert.match(page, /Early warnings only\. They never block anything\./);
   assert.match(page, /Approvals may not be real reviews/);
   assert.match(page, /Reviewers are reversing more/);
@@ -3998,14 +3999,17 @@ test('#95: Monitoring has a Still safe? view and a Delivering value? view; the s
   const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
   assert.match(health, /class="chip is-active"[^>]*>Still safe\?/);
   assert.match(health, /Safety limits/);
-  assert.doesNotMatch(health, /What the AI tried/, 'gate activity is evidence, under Evidence › Results');
-  assert.doesNotMatch(health, /Expected impact vs actual|Return on investment|How people are using it/);
-  // Three outcomes not met, two simulated adoption warnings: 5 on the Value chip.
-  assert.match(health, /show=value"[^>]*>Delivering value\? <span class="chip-count">5<\/span>/);
+  // Redesign: a compact summary of what the automation tried sits under Still safe?; the full table stays with the evidence in Decide.
+  assert.match(health, /What the automation tried/);
+  assert.doesNotMatch(health, /What the AI tried/, 'the full gate-activity table is evidence, under Decide');
+  assert.doesNotMatch(health, /So far<\/th>|Return on investment|How reviewers are using it/);
+  // Two simulated adoption warnings on the Value chip. The three outcomes not met are judged on pilot
+  // numbers, so they read "Too early to judge" and don't count as needing a look yet.
+  assert.match(health, /show=value"[^>]*>Delivering value\? <span class="chip-count">2<\/span>/);
   const value = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring&show=value')));
-  assert.match(value, /Expected impact vs actual/);
+  assert.match(value, /So far<\/th>/);
   assert.match(value, /Return on investment/);
-  assert.match(value, /How people are using it/);
+  assert.match(value, /How reviewers are using it/);
   assert.doesNotMatch(value, /Safety limits/);
 });
 
