@@ -113,7 +113,7 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
       ${importedLine(state, cap, base, line)}
       ${line('Pilot results', p ? `${p.cases} cases, ${p.accuracy}% accurate` : 'none yet', pilot)}
       ${hasRuns ? line('Model runs', rs ? `${plural(rs.runs, 'run')}, ${rs.gotThrough ? `${rs.gotThrough} got through` : 'nothing got through'}` : 'recorded, checked against the rules', modelRuns) : ''}
-      ${line('Stakeholder positions', !stakeholders.length ? 'none recorded' : stances.size > 1 ? 'not unanimous' : 'all agree', stakeholders.length ? positions : html`<p class="muted">No positions recorded yet.</p>`)}
+      ${line('Stakeholder positions', !stakeholders.length ? 'none recorded' : stakeholders.every((x) => !x.stance || x.stance === 'undecided') ? 'no positions yet' : stances.size > 1 ? 'not unanimous' : 'all agree', stakeholders.length ? positions : html`<p class="muted">No positions recorded yet.</p>`)}
     </div>
     <p class="small decide-all"><a href="${base}&show=all">All evidence →</a></p>`;
 }
