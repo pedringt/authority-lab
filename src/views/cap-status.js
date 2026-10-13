@@ -232,7 +232,7 @@ function waitingSection(state, cap) {
   if (!waiting.length) return '';
   const by = actor(state, cap.id);
   return html`<section class="st-section st-waiting">
-    <h2>Needs your decision <span class="st-n">${waitingNoun(waiting)}</span></h2>
+    <h2>Needs a decision <span class="st-n">${waitingNoun(waiting)}</span></h2>
     <div class="st-rows">${waiting.map((x) => actionRow(state, x, by))}</div>
     <p class="small muted st-after">${decidingLine(state, cap, waiting, by)} <a href="#/capabilities/${cap.id}?tab=status&show=approvals">All waiting actions →</a></p>
   </section>`;
@@ -263,7 +263,7 @@ export function waitingTab(state, cap, query) {
     ${error ? notice('fail', 'Couldn\'t save your decision', error) : ''}
     ${tabIntro(intro, `${approvers.length ? `Who can approve: ${approvers.join(', ')} (the owner and named stakeholders who are active).` : `Nobody can approve yet: ${cap.name} has no active owner or stakeholders. Add one under Manage stakeholders.`} The capability can ask but can never approve its own request. When someone approves, the action is checked against the rules again before it runs; if anything has changed since it was asked (authority was reduced, a limit was reached or the order is now blocked), it doesn't run, and the reason is saved. Only one request per order can wait at a time, and at most ${QUEUE_LIMIT} for this capability. Past that, new requests are blocked and an incident is opened.`)}
     <section class="st-section st-waiting">
-      <h2>Needs your decision <span class="st-n">${n ? waitingNoun(waiting) : 'none'}</span></h2>
+      <h2>Needs a decision <span class="st-n">${n ? waitingNoun(waiting) : 'none'}</span></h2>
       ${n ? html`<div class="st-rows">${waiting.map((x) => actionRow(state, x, by))}</div><p class="small muted st-after">${decidingLine(state, cap, waiting, by)}</p>` : html`<p class="empty">Nothing needs approval.</p>`}
     </section>
     ${decided.length ? html`<section class="st-section"><h2>Decided <span class="st-n">${decided.length}</span></h2><div class="st-rows">${decided.map(decidedRow)}</div></section>` : ''}`;

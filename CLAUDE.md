@@ -41,7 +41,7 @@ When you change anything near these rules, write a test that tries to get around
 ## How to work
 
 - One issue per branch and PR. The PR description is your report: what changed, the test count, screenshots for UI work (on the `pr-screenshots` branch, not `main`), and anything you weren't sure about.
-- **You may merge on your own** only housekeeping with no behaviour change, and only when CI is green, the test count is the same or higher, and no existing test changed except import paths.
-- **Leave open for Paige** anything visible to users, anything touching a governance rule, and anything you're unsure about.
+- **For now, `main` is the testing ground (Paige, 2026-10-12):** merge your own PRs to `main` once CI is green and the test count is the same or higher, including visible changes. Batch them, because every merge to `main` is a deploy.
+- **Still stop for Paige** on anything that needs a product decision, anything that weakens or reinterprets a governance rule, paid model runs, and anything you're unsure about. Leave those PRs open.
 - Stop and ask when something needs a product decision. Don't decide it and carry on.
 - Production deploys from `main` (Vercel), so `main` must always be releasable. **Only merges to `main` deploy.** `vercel.json` turns off deployments for every other branch (`git.deploymentEnabled`), because Paige's plan limits deploys. Batch work so `main` takes as few merges as practical, and check a branch locally instead of expecting a preview link.

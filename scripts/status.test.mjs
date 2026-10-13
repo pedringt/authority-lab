@@ -53,7 +53,7 @@ test('Status, Refund recommendation (a decision is open): the level in plain wor
 test('Status: the actions waiting for a person, as rows with the approve/reject form, and who is approving', () => {
   const s = initialState();
   const h = page(s, RR);
-  assert.match(h, /<h2>Needs your decision <span class="st-n">2 refunds<\/span><\/h2>/);
+  assert.match(h, /<h2>Needs a decision <span class="st-n">2 refunds<\/span><\/h2>/);
   for (const x of waitingActions(s, RR)) {
     assert.match(h, new RegExp(`<form class="st-act" data-form="decide-action" data-id="${x.id}">\\s*<input type="text" name="reason"`), x.id);
   }
@@ -65,11 +65,14 @@ test('Status: the actions waiting for a person, as rows with the approve/reject 
   // Someone who can't decide sees why, just in time, and how to switch people.
   const asJonas = page(setActingAs(s, 'jonas'), RR);
   assert.doesNotMatch(asJonas, /data-form="decide-action"/);
+  // The heading is neutral, so it never says "your" decision to someone who can't make it (review, 2026-10-12).
+  assert.match(asJonas, /<h2>Needs a decision <span class="st-n">2 refunds<\/span><\/h2>/);
+  assert.doesNotMatch(asJonas, /Needs your decision/);
   assert.match(asJonas, /Jonas Lindqvist isn&#39;t the owner or a named stakeholder of Refund recommendation\. For the demo, switch people in &quot;Demo as&quot; at the top\./);
   // A Risk stakeholder can approve too, and the page says it's them.
   assert.match(page(setActingAs(s, 'daniel'), RR), /Approving as <strong>Daniel Okafor<\/strong>; a reason is required\./);
   // Nothing waiting: no section at all.
-  assert.doesNotMatch(page(s, RX), /Needs your decision/);
+  assert.doesNotMatch(page(s, RX), /Needs a decision/);
 });
 
 test('Status: boundaries and people are one line each, opened on demand', () => {
@@ -144,7 +147,7 @@ test('Status, a newly added capability: the setup stage as the one next statemen
   assert.deepEqual(nextLinks(h), [[`#/capabilities/${id}/setup?step=contract`, 'set the boundaries →']]);
   assert.match(h, /<b>Boundaries<\/b><span class="st-meta-text">No rules yet\.<\/span><a class="st-open" href="#\/capabilities\/order-status-lookup\/contract\/build">Set up rules →/);
   assert.match(h, /<b>People involved: 1<\/b><span class="st-meta-text">Only the owner, Priya Natarajan, so far\.<\/span>/);
-  assert.doesNotMatch(h, /Needs your decision/);
+  assert.doesNotMatch(h, /Needs a decision/);
 });
 
 test('Status › Rules: Allowed, Requires human review (two groups), Never allowed, pulled back if, data and risk, every line kept', () => {
@@ -168,17 +171,24 @@ test('Status › Approvals: the same rows, and decided actions below with who de
   const [first, second] = waitingActions(s, RR).map((x) => x.id);
   s = rejectAction(s, first, { by: 'maya', reason: 'Item was never returned.' });
   const h = page(s, RR, 'tab=status&show=approvals');
-  assert.match(h, /<h2>Needs your decision <span class="st-n">1 refund<\/span><\/h2>/);
+  assert.match(h, /<h2>Needs a decision <span class="st-n">1 refund<\/span><\/h2>/);
   assert.match(h, new RegExp(`data-form="decide-action" data-id="${second}"`));
   assert.doesNotMatch(h, new RegExp(`data-form="decide-action" data-id="${first}"`), 'a decided action has no form');
   assert.match(h, /<h2>Decided <span class="st-n">1<\/span><\/h2>/);
-  assert.ok(h.indexOf('Needs your decision') < h.indexOf('<h2>Decided'), 'decided ones below');
+  assert.ok(h.indexOf('Needs a decision') < h.indexOf('<h2>Decided'), 'decided ones below');
   assert.match(h, /<dt>Reason<\/dt><dd>Item was never returned\.<\/dd>/);
   assert.match(h, /<dt>Decided by<\/dt><dd>Maya Chen, Oct 7<\/dd>/);
   // The Status page shows only what still waits.
-  assert.match(page(s, RR), /Needs your decision <span class="st-n">1 refund<\/span>/);
+  assert.match(page(s, RR), /Needs a decision <span class="st-n">1 refund<\/span>/);
   // Once nothing waits, the Status section disappears and Approvals says so.
   s = approveAction(s, second, { by: 'daniel', reason: 'Policy exception is documented.' });
-  assert.doesNotMatch(page(s, RR), /Needs your decision/);
+  assert.doesNotMatch(page(s, RR), /Needs a decision/);
   assert.match(page(s, RR, 'tab=status&show=approvals'), /Nothing needs approval\./);
+});
+
+test('The autonomy ladder names the level for screen readers, not a count (review, 2026-10-12)', async () => {
+  const { ladder } = await import('../src/views/overview.js');
+  assert.match(String(ladder(3)), /role="img" aria-label="Level 3, Act Within Limits"/);
+  assert.match(String(ladder(0, 1)), /aria-label="Level 0, Observe"/);
+  for (let l = 0; l <= 4; l++) assert.doesNotMatch(String(ladder(l)), / of 4/);
 });
