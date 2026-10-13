@@ -8,6 +8,7 @@ import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionsInForce, performanceResultsSeen, testSummary } from './selectors.js';
 import { people, requireActive } from './people.js';
 import { amend } from './capabilities.js';
+import { measureProblems } from './measures.js';
 
 export function startTestRun(state, capabilityId) {
   const d = capData(state, capabilityId);
@@ -46,6 +47,7 @@ export function finishTestRun(state, capabilityId) {
     status: summary.highSeverity ? 'watch' : summary.failed ? 'watch' : 'pass',
     date: state.today,
     runOn: state.today,
+    from: 'workspace',
     detail,
   };
   const evidence = existing ? d.evidence.map((e) => (e === existing ? item : e)) : [item, ...d.evidence];
@@ -105,6 +107,22 @@ export function defaultsFor(state, capabilityId) {
 
 export const slugId = (text, i) => (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `item-${i + 1}`;
 
+// A measured row (#120) says its bar in words too, and the two must agree,
+// so a person reading the row sees the bar software checks and the tightening
+// rule (which reads the words) sees the same number.
+function cleanMeasure(measure, words, what) {
+  if (measure === undefined || measure === null) return {};
+  const problems = measureProblems(measure);
+  if (problems.length) throw new Error(`${what}: ${problems.join(' ')}`);
+  if (measure.op !== '=') {
+    const t = threshold(words);
+    if (!t) throw new Error(`${what} is measured, so its wording has to name the number too (for example "≥ ${measure.value}").`);
+    const atLeast = measure.op === '>=' || measure.op === '>';
+    if (t.atLeast !== atLeast || t.n !== measure.value) throw new Error(`${what} says "${words}" but its measure checks ${measure.op} ${measure.value}. Make them agree.`);
+  }
+  return { measure: { ...measure } };
+}
+
 export function cleanCriteria(items) {
   if (!Array.isArray(items) || !items.length) throw new Error('Add at least one target.');
   const seen = new Set();
@@ -115,7 +133,7 @@ export function cleanCriteria(items) {
     let id = c.id || slugId(name, i);
     while (seen.has(id)) id = `${id}-${i + 1}`;
     seen.add(id);
-    return { id, name, target, current: c.current || 'Not yet measured', status: c.status || 'pending', note: (c.note || '').trim(), source: c.source || 'Written by hand' };
+    return { id, name, target, current: c.current || 'Not yet measured', status: c.status || 'pending', note: (c.note || '').trim(), source: c.source || 'Written by hand', ...cleanMeasure(c.measure, target, `Target "${name}"`) };
   });
 }
 
@@ -128,7 +146,7 @@ export function cleanRequirements(items) {
     let id = r.id || slugId(text, i);
     while (seen.has(id)) id = `${id}-${i + 1}`;
     seen.add(id);
-    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand' };
+    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
   });
 }
 

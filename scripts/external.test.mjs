@@ -215,3 +215,110 @@ test('every committed evidence file is listed, valid, unique and imports cleanly
   const { results } = importEvidenceFiles(initialState(), index.files.map((file) => ({ file, envelope: JSON.parse(readFileSync(new URL(file, dir), 'utf8')) })));
   assert.deepEqual(results.filter((r) => r.status === 'refused'), []);
 });
+
+// ---------------------------------------------------------------------------
+// #119: provenance and version context
+// ---------------------------------------------------------------------------
+
+import { evidenceFrom, evidenceStreams, importedStanding, externalSnapshot, configChanges, selectDecision, authorize, startTestRun, advanceTestRun } from '../src/store/index.js';
+import { decisionRecordView } from '../src/views/decisions.js';
+
+const RR = 'refund-recommendation';
+const run = (n, over = {}) => envelope({ id: `acme:eval:run-${n}`, ...over });
+const evView = (s, id = TC) => { setPeople(people(s)); return String(evidenceView(s, id, new URLSearchParams(), { embedded: true })); };
+
+test('every evidence item says where it came from: demo data, this workspace, imported, or calculated', () => {
+  let s = importEvidence(initialState(), envelope());
+  // A test run in this workspace.
+  s = startTestRun(s, RR);
+  for (let i = 0; i < 200 && capData(s, RR).testRun.status === 'running'; i++) s = advanceTestRun(s, RR);
+  const rr = capData(s, RR).evidence;
+  assert.equal(evidenceFrom(rr.find((e) => e.id === 'EV-02')), 'seeded');
+  assert.equal(evidenceFrom(rr.find((e) => e.source === 'Automated tests')), 'workspace', 'a test run replaces the seeded item and is this workspace\'s');
+  assert.equal(evidenceFrom(capData(s, TC).evidence.find((e) => e.from === 'imported')), 'imported');
+  // Saved state from before `from` existed: the seed's ids decide.
+  assert.equal(evidenceFrom({ id: 'EV-02' }, new Set(['EV-02'])), 'seeded');
+  assert.equal(evidenceFrom({ id: 'EV-02', runOn: '2026-10-07' }, new Set(['EV-02'])), 'workspace');
+  assert.equal(evidenceFrom({ id: 'EV-99' }, new Set(['EV-02'])), 'workspace');
+  assert.equal(evidenceFrom({ id: 'X', derived: true }), 'calculated');
+  // On screen: seeded demo evidence can't be mistaken for an import.
+  const h = evView(s, RR);
+  assert.match(h, /<h3>Decision accuracy<\/h3><span class="badge badge-neutral">Demo data<\/span>/);
+  assert.match(h, /<h3>Tests passed<\/h3><span class="badge badge-neutral">Recorded in this workspace<\/span>/);
+  assert.doesNotMatch(h, /Imported from/);
+  assert.match(evView(s), /<h3>Classification quality<\/h3><span class="badge badge-imported" title="Sent by Acme; checked and imported\. It can't be edited\.">Imported from Acme<\/span>/);
+});
+
+test('an imported result shows its source, run, versions and link behind "Where this came from"', () => {
+  const h = evView(importEvidence(initialState(), envelope()));
+  const at = h.indexOf('<details class="provenance">');
+  const d = h.slice(at, h.indexOf('</details>', at) + 10);
+  assert.match(d, /<summary>Where this came from<\/summary>/);
+  assert.match(d, /<dt>Source<\/dt><dd>Acme · Classifier \(staging\)<\/dd>/);
+  assert.match(d, /<dt>Run<\/dt><dd>acme:eval:run-0001 · eval · <a href="https:\/\/example\.com\/runs\/0001" target="_blank" rel="noopener">Run 0001<\/a><\/dd>/);
+  assert.match(d, /<dt>Configuration<\/dt><dd>Provider Example · Model model-a · Prompt p-3 · Implementation abc1234 · Eval set es-2<\/dd>/);
+  assert.match(d, /<dt>Metric<\/dt><dd>latency-p95<\/dd>/, "the first card shown");
+  // Seeded evidence has no such disclosure.
+  assert.doesNotMatch(evView(initialState(), RR), /Where this came from/);
+});
+
+test('a changed configuration is surfaced, and its earlier results are shown but never blended in', () => {
+  let s = importEvidence(initialState(), run(1, { observedAt: '2026-10-01' }));
+  s = importEvidence(s, run(2, { observedAt: '2026-10-05', config: { provider: 'Example', model: 'model-b', prompt: 'p-3', evalSet: 'es-2', implementation: 'abc1234' } }));
+  const [st] = evidenceStreams(s, TC);
+  assert.equal(st.latest.id, 'acme:eval:run-2');
+  assert.deepEqual(st.change.changes, [{ key: 'model', label: 'Model', from: 'model-a', to: 'model-b' }]);
+  const standing = importedStanding(s, TC);
+  assert.equal(standing.get('acme:eval:run-1#quality').standing, 'other-config');
+  assert.equal(standing.get('acme:eval:run-2#quality').standing, 'current');
+  const h = evView(s);
+  assert.match(h, /Acme Classifier: the eval configuration changed/);
+  assert.match(h, /From run acme:eval:run-2 \(Oct 5\): Model model-a → model-b\. Earlier results are kept and shown, but only results from the current configuration count toward targets\./);
+  assert.match(h, /Earlier configuration<\/span> Measured under a different configuration \(Model model-b → model-a\)|Earlier configuration<\/span> Measured under a different configuration \(Model model-a → model-b\)/);
+  // A run that arrives late, dated before the newest, doesn't take over.
+  const late = importEvidence(s, run(0, { observedAt: '2026-09-28', config: { model: 'model-z' } }));
+  assert.equal(evidenceStreams(late, TC)[0].latest.id, 'acme:eval:run-2');
+  assert.equal(importedStanding(late, TC).get('acme:eval:run-0#quality').standing, 'other-config');
+});
+
+test('a version reported on one side only counts as a change; eval and production are compared separately', () => {
+  assert.deepEqual(configChanges({ model: 'a', prompt: 'p' }, { model: 'a' }), [{ key: 'prompt', label: 'Prompt', from: 'p', to: 'not reported' }]);
+  assert.deepEqual(configChanges({}, {}), []);
+  let s = importEvidence(initialState(), run(1));
+  s = importEvidence(s, run(2, { kind: 'production', config: { model: 'model-a' } }));
+  const streams = evidenceStreams(s, TC);
+  assert.deepEqual(streams.map((x) => x.kind), ['eval', 'production']);
+  assert.ok(streams.every((x) => !x.change), 'a production run without an eval set is no change to the eval stream');
+  assert.equal(importedStanding(s, TC).get('acme:eval:run-1#quality').standing, 'current');
+});
+
+test('under the same configuration, a newer run replaces an older result for the same metric and segment only', () => {
+  let s = importEvidence(initialState(), run(1, { observedAt: '2026-10-01' }));
+  s = importEvidence(s, run(2, { observedAt: '2026-10-04', measurements: [{ metric: 'quality', type: 'rate', passed: 48, total: 50 }] }));
+  const st = importedStanding(s, TC);
+  assert.deepEqual(st.get('acme:eval:run-1#quality'), { standing: 'superseded', by: 'acme:eval:run-2', stream: 'Acme|Classifier|eval' });
+  assert.equal(st.get('acme:eval:run-2#quality').standing, 'current');
+  // run-2 didn't measure these, so run-1's still count.
+  assert.equal(st.get('acme:eval:run-1#severe-failures').standing, 'current');
+  assert.equal(st.get('acme:eval:run-1#quality@ambiguous-tickets').standing, 'current');
+  assert.match(evView(s), /Replaced<\/span> A newer run \(acme:eval:run-2\) has this result, so this one doesn't count toward targets\./);
+});
+
+test('a decision record keeps the imported evidence and configuration in force when it was made', () => {
+  let s = importEvidence(initialState(), run(1, { capabilityId: RR, observedAt: '2026-10-01' }));
+  s = importEvidence(s, run(2, { capabilityId: RR, observedAt: '2026-10-05', config: { model: 'model-b' } }));
+  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual(JSON.parse(JSON.stringify(rec.externalEvidence)), [{ system: 'Acme', capability: 'Classifier', kind: 'eval', runs: [{ id: 'acme:eval:run-2', observedAt: '2026-10-05', reference: { url: 'https://example.com/runs/0001', label: 'Run 0001' } }], config: { model: 'model-b' }, excluded: 4 }]);
+  assert.ok(Object.isFrozen(rec.externalEvidence[0].config));
+  // Later evidence doesn't rewrite it.
+  const later = importEvidence(s, run(3, { capabilityId: RR, observedAt: '2026-10-07', config: { model: 'model-c' } }));
+  assert.deepEqual(later.decisionRecords.at(-1).externalEvidence, rec.externalEvidence);
+  setPeople(people(later));
+  const h = String(decisionRecordView(later, rec.id));
+  assert.match(h, /<dt>Imported evidence<\/dt><dd><ul class="plain-list"><li><strong>Acme Classifier<\/strong> \(eval\): 1 run, latest Oct 5 · <a href="https:\/\/example\.com\/runs\/0001" target="_blank" rel="noopener">Run 0001<\/a>\. <span class="muted">Model model-b\.<\/span> 4 results from an earlier configuration left out\.<\/li><\/ul><\/dd>/);
+  // A record with no imported evidence doesn't mention it.
+  const plain = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  assert.equal(plain.decisionRecords.at(-1).externalEvidence, undefined);
+  assert.equal(externalSnapshot(initialState(), RR).length, 0);
+});

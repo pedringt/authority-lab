@@ -6,6 +6,7 @@ import { versionsInForce, authorityLabel, current, currentVersion, levelName } f
 import { people, snapshotPerson, isActivePerson, isRiskApprover, soloHint } from './people.js';
 import { isHighOrFinancial } from './coverage.js';
 import { gateMetricOf, gateReading } from './gatelog.js';
+import { importedRuleReading } from './measures.js';
 
 // Restriction rules come from the contract's "Automatic restriction" lines
 // (the contract wins, decided 2026-10-08). A line names its threshold, its
@@ -66,8 +67,11 @@ export function monitoringStatus(state, capabilityId) {
   const rules = restrictionRules(state, capabilityId).map((r) => {
     // Rules the gate log can measure read it (A5); others read their readings.
     const fromGate = gateMetricOf(r) ? gateReading(state, capabilityId, r) : null;
-    const value = fromGate !== null ? fromGate : Object.hasOwn(readings, r.text) ? readings[r.text] : null;
-    return { ...r, value, measured: value !== null, crossed: r.active && ruleCrossed(r, value), fromGate: fromGate !== null };
+    // Rules bound to imported production evidence read it (#120); a
+    // percentage reading below its minimum sample is shown, never crossed.
+    const imported = fromGate === null ? importedRuleReading(state, capabilityId, r) : null;
+    const value = fromGate !== null ? fromGate : imported ? imported.value : Object.hasOwn(readings, r.text) ? readings[r.text] : null;
+    return { ...r, value, measured: value !== null, crossed: r.active && !(imported && imported.early) && ruleCrossed(r, value), fromGate: fromGate !== null, imported };
   });
   return { running: rules.some((r) => r.active), rules };
 }
@@ -134,7 +138,7 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
   const ruleReadings = { ...(d.ruleReadings || {}), [rule.text]: value };
 
   if (rule.kind === 'incident') {
-    const evidence = [{ id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `A safety limit was crossed: "${rule.text}". ${errors.join(' ')} This limit opens an incident; authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitor` }, ...d.evidence];
+    const evidence = [{ id: evidenceId, from: 'workspace', source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'All', date: state.today, detail: `A safety limit was crossed: "${rule.text}". ${errors.join(' ')} This limit opens an incident; authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitor` }, ...d.evidence];
     const activity = [{ id: `ACT-${Date.now()}-i`, date: state.today, kind: 'failure', surfaced: true, title: 'A safety limit was crossed: incident opened', body: `${cap.name}: ${errors.join(' ')} Authority didn't change.`, capabilityId: cap.id, link: `#/capabilities/${cap.id}?tab=monitor` }, ...state.activity];
     const alert = { id: `ALERT-${Date.now()}`, date: state.today, severity: 'medium', capabilityId: cap.id, title: `A safety limit was crossed: ${cap.name}`, body: `${incidentId}: ${errors.join(' ')} Authority stays at ${authorityLabel(cap.authority)}.`, link: `#/capabilities/${cap.id}?tab=monitor` };
     const s = updateCap(state, capabilityId, { evidence, ruleReadings, ruleIncidents: [...(d.ruleIncidents || []), { rule: rule.text, date: state.today, incidentId, evidenceId, errors: errors }] });
@@ -183,7 +187,7 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
     ...state.activity,
   ];
   const evidence = [
-    { id: evidenceId, source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} The AI was moved back to ${levelName(next.level)} automatically.`, link: `#/records/${id}` },
+    { id: evidenceId, from: 'workspace', source: 'Incident', safetyLimit: true, metric: `${incidentId}: safety limit crossed`, value: reading, status: 'fail', risk: 'High', segment: 'Standard', date: state.today, detail: `${errors.join(' ')} The AI was moved back to ${levelName(next.level)} automatically.`, link: `#/records/${id}` },
     ...d.evidence,
   ];
   const capabilities = state.capabilities.map((c) => (c.id === cap.id ? { ...c, authority: next, status: 'review-required' } : c));
@@ -212,6 +216,22 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
 
 // What a review would close: the review lock after an automatic restriction,
 // and any rule incident not yet reviewed.
+// After an import: if a rule measured from imported production evidence now
+// applies and is crossed, the capability is restricted through the shared
+// breach flow, once, like a gate-measured rule. Software pulls authority back;
+// evidence never adds any.
+export function enforceImportedRules(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (!getCapability(state, capabilityId) || (d.monitoring && d.monitoring.breached) || d.reviewRequired) return state;
+  for (const rule of monitoringStatus(state, capabilityId).rules) {
+    if (!rule.imported || !rule.crossed) continue;
+    if (rule.kind === 'incident' && (d.ruleIncidents || []).some((x) => x.rule === rule.text)) continue;
+    const errors = [`${rule.imported.importId}: ${rule.value}${rule.threshold && rule.threshold.type === 'pct' ? '%' : ''}${rule.imported.sample !== null ? ` across ${rule.imported.sample} production cases` : ''}, imported from the source system.`];
+    return applyBreach(state, capabilityId, rule, { value: rule.value, errors });
+  }
+  return state;
+}
+
 export function reviewNeeded(state, capabilityId) {
   const d = capData(state, capabilityId);
   const incidents = (d.ruleIncidents || []).filter((x) => !x.reviewId);

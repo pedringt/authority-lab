@@ -14,6 +14,7 @@
 // project's documents can't ride along in a free-text field.
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
+import { enforceImportedRules } from './monitoring.js';
 
 export const EVIDENCE_SCHEMA = 'authority-lab-evidence/1';
 export const EVIDENCE_KINDS = ['eval', 'production'];
@@ -191,7 +192,7 @@ export function importEvidence(state, env, { via = 'file' } = {}) {
   const items = itemsFor(env);
   const record = { id: env.id, importedOn: state.today, via, envelope: canonicalEvidence(env) };
   const s = updateCap(state, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
-  return logEvent(s, {
+  const logged = logEvent(s, {
     kind: 'evidence-imported',
     surfaced: true,
     title: `Evidence imported from ${env.source.system}`,
@@ -199,6 +200,8 @@ export function importEvidence(state, env, { via = 'file' } = {}) {
     capabilityId: cap.id,
     link: `#/capabilities/${cap.id}?tab=decide&show=all`,
   });
+  // A production result can cross a safety limit bound to it (#120).
+  return env.kind === 'production' ? enforceImportedRules(logged, cap.id) : logged;
 }
 
 // Import a batch of committed envelopes. Never throws: each one is imported,
@@ -222,4 +225,101 @@ export function importEvidenceFiles(state, files) {
     }
   }
   return { state: s, results };
+}
+
+// ---------------------------------------------------------------------------
+// Provenance and comparability (#119)
+// ---------------------------------------------------------------------------
+
+// Where a piece of evidence came from, for every item in a capability's list.
+// Items stamped before `from` existed fall back on the seed's ids.
+export const FROM_LABELS = { seeded: 'Demo data', workspace: 'Recorded in this workspace', imported: 'Imported', calculated: 'Calculated from logged actions' };
+export function evidenceFrom(e, seededIds = null) {
+  if (e.from) return e.from;
+  if (e.derived) return 'calculated';
+  if (!e.runOn && seededIds && seededIds.has(e.id)) return 'seeded';
+  return 'workspace';
+}
+
+const configText = (v) => (v === undefined ? 'not reported' : v);
+
+// What changed between two configurations, key by key. A version reported on
+// one side and not the other counts as a change: nobody can say it's the same.
+export function configChanges(from = {}, to = {}) {
+  const keys = CONFIG_KEYS.filter((k) => from[k] !== undefined || to[k] !== undefined);
+  return keys.filter((k) => from[k] !== to[k]).map((k) => ({ key: k, label: CONFIG_LABELS[k], from: configText(from[k]), to: configText(to[k]) }));
+}
+export const changesText = (changes) => changes.map((c) => `${c.label} ${c.from} → ${c.to}`).join(', ');
+
+// The imports of one capability grouped into streams: one per source system,
+// source capability and kind (an eval's eval-set version means nothing for
+// production, so the two are compared separately). The newest run, by date and
+// then by import sequence, sets the stream's current configuration.
+export function evidenceStreams(state, capabilityId) {
+  const imports = evidenceImports(state, capabilityId).map((x, seq) => ({ ...x, seq }));
+  const groups = new Map();
+  for (const x of imports) {
+    const e = x.envelope;
+    const key = `${e.source.system}|${e.source.capability}|${e.kind}`;
+    if (!groups.has(key)) groups.set(key, { key, system: e.source.system, capability: e.source.capability, kind: e.kind, runs: [] });
+    groups.get(key).runs.push(x);
+  }
+  return [...groups.values()].map((g) => {
+    const runs = g.runs.slice().sort((a, b) => (a.envelope.observedAt === b.envelope.observedAt ? a.seq - b.seq : a.envelope.observedAt < b.envelope.observedAt ? -1 : 1));
+    const latest = runs.at(-1);
+    const config = latest.envelope.config || {};
+    const sameConfig = (x) => !configChanges(x.envelope.config || {}, config).length;
+    // The last change of configuration: the newest run before the current
+    // configuration began, and what changed.
+    const firstCurrent = runs.findIndex((x, i) => runs.slice(i).every(sameConfig));
+    const before = firstCurrent > 0 ? runs[firstCurrent - 1] : null;
+    return {
+      ...g,
+      runs,
+      latest,
+      config,
+      currentRuns: runs.filter(sameConfig),
+      change: before ? { since: runs[firstCurrent].envelope.observedAt.slice(0, 10), runId: runs[firstCurrent].id, previousRunId: before.id, changes: configChanges(before.envelope.config || {}, config) } : null,
+    };
+  });
+}
+
+// Whether each imported item counts: `current` (the newest result for its
+// metric and segment under the stream's current configuration), `superseded`
+// (a newer run under the same configuration replaced it) or `other-config`
+// (it describes a different configuration, so it's shown but never blended
+// into a verdict).
+export function importedStanding(state, capabilityId) {
+  const out = new Map();
+  for (const st of evidenceStreams(state, capabilityId)) {
+    const current = new Set(st.currentRuns.map((x) => x.id));
+    const newest = new Map();
+    for (const x of st.currentRuns) for (const m of x.envelope.measurements) newest.set(`${m.metric}|${m.segment || ''}`, x.id);
+    for (const x of st.runs) {
+      for (const m of x.envelope.measurements) {
+        const id = `${x.id}#${m.metric}${m.segment ? `@${m.segment.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''}`;
+        if (!current.has(x.id)) out.set(id, { standing: 'other-config', changes: configChanges(x.envelope.config || {}, st.config), stream: st.key });
+        else {
+          const by = newest.get(`${m.metric}|${m.segment || ''}`);
+          out.set(id, by === x.id ? { standing: 'current', stream: st.key } : { standing: 'superseded', by, stream: st.key });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// The imported evidence a decision rests on, frozen onto the record: each
+// stream's runs under its current configuration, that configuration, and how
+// many results from other configurations were left out.
+export function externalSnapshot(state, capabilityId) {
+  const standing = importedStanding(state, capabilityId);
+  return evidenceStreams(state, capabilityId).map((st) => ({
+    system: st.system,
+    capability: st.capability,
+    kind: st.kind,
+    runs: st.currentRuns.map((x) => ({ id: x.id, observedAt: x.envelope.observedAt, reference: x.envelope.reference || null })),
+    config: { ...st.config },
+    excluded: [...standing.values()].filter((v) => v.stream === st.key && v.standing === 'other-config').length,
+  }));
 }

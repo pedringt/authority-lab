@@ -3,6 +3,7 @@ import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person,
 import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN } from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
+import { externalRecordList } from './provenance.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -130,6 +131,8 @@ export function decisionRecordView(state, id) {
       ['Scope', x.scope],
       ['Rationale', x.rationale],
       ['Evidence at the time', html`<ul class="plain-list">${x.evidenceSnapshot.map((e) => html`<li>${e}</li>`)}</ul>`],
+      // #119: imported evidence in force, with the configuration it describes.
+      ...(x.externalEvidence && x.externalEvidence.length ? [['Imported evidence', externalRecordList(x.externalEvidence)]] : []),
       ['Still to resolve', x.openCondition],
       // B1: what an expansion was expected to achieve, fixed on the record.
       ...(x.expectedOutcomes && x.expectedOutcomes.length

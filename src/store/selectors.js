@@ -3,6 +3,7 @@
 
 import * as seed from '../data/seed.js';
 import { VERSIONED_KINDS, getCapability, capData } from './state.js';
+import { requirementsNow } from './measures.js';
 
 // The workspace and workflow from state. Saved state from before they moved
 // into state falls back to the seed.
@@ -166,8 +167,9 @@ export function authorityLabel(auth, { short = false } = {}) {
   return auth.limited ? `${base} (limited)` : base;
 }
 
+// Requirements bound to a measure are judged from imported evidence (#120).
 export function readiness(state, capabilityId) {
-  const reqs = current(state, capabilityId, 'requirements');
+  const reqs = requirementsNow(state, capabilityId);
   const met = reqs.filter((r) => r.met).length;
   return { met, total: reqs.length, unmet: reqs.filter((r) => !r.met) };
 }
