@@ -93,18 +93,28 @@ test('a one-person workspace adds a capability and takes it all the way to its f
 test('a roster change that needs a second approver is refused just in time, naming what to add', () => {
   let s = solo();
   s = addPerson(s, { name: 'Ben Okoro', title: 'Ops Lead', team: 'Operations', by: 'ana-ruiz', reason: 'Joins the pilot.' });
-  s = proposeRosterChange(s, { kind: 'rights', person: 'ben-okoro', right: 'riskApprover', grant: true, by: 'ana-ruiz', reason: 'Ben covers Risk sign-off.' });
-  assert.equal(isRiskApprover(s, 'ben-okoro'), true, 'founding roster: a right Ana gives someone else takes effect at once');
-  // Taking it away, or deactivating someone holding it, needs another admin.
-  const JIT = /You're the only workspace admin, and you can't approve your own change\. Add a second workspace admin to approve this\. People → Add person\./;
-  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'ben-okoro', right: 'riskApprover', grant: false, by: 'ana-ruiz', reason: 'Changed my mind.' }), JIT);
-  assert.throws(() => deactivatePerson(s, 'ben-okoro', { by: 'ana-ruiz', reason: 'Left the company.' }), JIT);
+  // The founding exception covers only making a second admin (Paige, 2026-10-12):
+  // a sole admin can't hand out any other right without approval.
+  const JIT = /You're the only workspace admin, and you can't approve your own change\. Make someone else a workspace admin first: as the only admin, you can do that straight away\. Then the two of you approve changes like this one\./;
+  assert.throws(() => proposeRosterChange(s, { kind: 'rights', person: 'ben-okoro', right: 'riskApprover', grant: true, by: 'ana-ruiz', reason: 'Ben covers Risk sign-off.' }), JIT);
+  assert.equal(isRiskApprover(s, 'ben-okoro'), false, 'no Risk approver right without approval');
+  assert.equal(s.rosterProposals.length, 0, 'nothing applied or opened');
   // The People page shows the refusal with a link to where to add someone.
-  const msg = 'You\'re the only workspace admin, and you can\'t approve your own change. Add a second workspace admin to approve this. People → Add person.';
+  const msg = "You're the only workspace admin, and you can't approve your own change. Make someone else a workspace admin first: as the only admin, you can do that straight away. Then the two of you approve changes like this one.";
   const page = render(s, () => String(peopleView(s, q(`error=${encodeURIComponent(msg)}`))));
-  assert.match(page, /Add a second workspace admin to approve this/);
+  assert.match(page, /Make someone else a workspace admin first/);
   assert.match(page, /<a class="notice-link" href="#\/people\?focus=add">Add person<\/a>/);
   assert.match(page, /data-form="add-person"/);
+  // The Risk approver form says so before anyone submits it.
+  const riskForm = render(s, () => text(peopleView(s, q('person=ben-okoro&right=riskApprover&grant=1'))));
+  assert.match(riskForm, /You're the only workspace admin, so nobody can approve this yet\. Make someone else a workspace admin first; then the two of you set up Risk approvers\./);
+  // Making Ben the second admin is the one thing that applies at once.
+  s = proposeRosterChange(s, { kind: 'rights', person: 'ben-okoro', right: 'workspaceAdmin', grant: true, by: 'ana-ruiz', reason: 'A second admin.' });
+  assert.equal(isWorkspaceAdmin(s, 'ben-okoro'), true);
+  // After that, taking a right away or deactivating a rights holder needs the other admin.
+  s = proposeRosterChange(s, { kind: 'rights', person: 'ben-okoro', right: 'workspaceAdmin', grant: false, by: 'ana-ruiz', reason: 'Changed my mind.' });
+  assert.ok(openRosterProposal(s, 'ben-okoro'), 'a proposal, not applied');
+  assert.equal(isWorkspaceAdmin(s, 'ben-okoro'), true);
 });
 
 test('once a second workspace admin exists, rights changes are governed again and the other admin approves', () => {
@@ -182,7 +192,7 @@ test('the People page: Person, Role, Can approve Risk changes, Workspace admin, 
   let s = solo();
   s = addPerson(s, { name: 'Ben Okoro', title: 'Ops Lead', team: 'Operations', by: 'ana-ruiz', reason: 'Joins the pilot.' });
   const soloForm = render(s, () => text(peopleView(s, q('person=ben-okoro&right=workspaceAdmin&grant=1'))));
-  assert.match(soloForm, /You're the only workspace admin, so this takes effect straight away\./);
+  assert.match(soloForm, /You're the only workspace admin, so making a second one takes effect straight away\. From then on, changing anyone's rights needs the other admin's approval\./);
   // Nobody is offered a right for themselves.
   const own = render(s, () => String(peopleView(s, q())));
   assert.ok(!own.includes('person=ana-ruiz&amp;right=riskApprover&amp;grant=1') && !own.includes('person=ana-ruiz&right=riskApprover&grant=1'));

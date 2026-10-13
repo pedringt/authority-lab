@@ -179,14 +179,17 @@ function stillSafe(state, cap, d) {
 // Delivering value?
 // ---------------------------------------------------------------------------
 
-// Judging the rollout needs production numbers. While the actuals are still
-// the pilot's or other demo data, the verdict is neutral: too early, not failed.
+// Judging the rollout needs production evidence (Paige, 2026-10-12): while any
+// goal is still measured on pilot or demo numbers, or fewer production cases
+// are recorded than it needs (20 by default), the verdict is neutral: too
+// early, not failed.
 function valueJudgement(state, cap) {
   const { record, rows } = expectedVsActual(state, cap.id);
   const measured = rows.filter((r) => r.status !== 'not-measured');
   const met = rows.filter((r) => r.status === 'met').length;
-  const tooEarly = measured.some((r) => r.seeded);
-  return { record, rows, measured, met, tooEarly, notMet: tooEarly ? 0 : rows.filter((r) => r.status === 'not-met').length };
+  const tooEarly = measured.some((r) => !r.judged);
+  const sample = measured.reduce((acc, r) => (r.sample && r.sample.needed > acc.needed ? r.sample : acc), { needed: 0, have: 0 });
+  return { record, rows, measured, met, tooEarly, sample, pilot: measured.some((r) => r.seeded), notMet: rows.filter((r) => r.status === 'not-met' && r.judged).length };
 }
 
 function valueVerdict(cap, d, v) {
@@ -194,8 +197,11 @@ function valueVerdict(cap, d, v) {
   if (!v.rows.length) return verdict('neutral', 'No rollout goals to compare', 'The decision in force was approved before rollout goals were recorded. The next change to its autonomy will include them.');
   if (!v.measured.length) return verdict('neutral', 'Not measured yet', `None of the ${goals} has a measured number yet. We never guess.`);
   if (v.tooEarly) {
-    const day = d.monitoring && d.monitoring.windowDays ? `It's day ${d.monitoring.windowDays} of the rollout, and pilot numbers fill the gap until enough production cases come in.` : 'Pilot numbers fill the gap until enough production cases come in.';
-    return verdict('neutral', 'Too early to judge', `${v.met} of ${goals} met so far. ${day}`);
+    const cases = `${v.sample.have} of ${v.sample.needed} production cases recorded`;
+    const why = v.pilot
+      ? `${d.monitoring && d.monitoring.windowDays ? `It's day ${d.monitoring.windowDays} of the rollout. ` : ''}Pilot numbers fill the gap until enough production cases come in (${cases}).`
+      : `Goals are judged once enough production cases are recorded: ${cases}.`;
+    return verdict('neutral', 'Too early to judge', `${v.met} of ${goals} met so far. ${why}`);
   }
   const off = v.rows.filter((r) => r.status !== 'met').map((r) => r.metric);
   return verdict(off.length ? 'watch' : 'pass', `${v.met} of ${goals} on track`, off.length ? `Not on track yet: ${off.join('; ')}.` : 'Every goal set when autonomy was expanded is being met.');
