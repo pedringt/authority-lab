@@ -133,9 +133,11 @@ The information architecture and product model must stabilize first.
 
 ## First implementation phase
 
-Start with **data-model and setup foundations**, not UI polish.
+Start with **#137 — Product reset Phase 1: data-model and setup foundations**.
 
-The first implementation issue should only make the underlying product able to represent the reset concepts while preserving existing behavior where possible.
+#137 is intentionally blocked by the reset documentation PR #136. Do not start implementation until #136 is available on the branch Paige tells you to work from.
+
+Phase 1 only makes the underlying product able to represent the reset concepts while preserving existing behavior where possible. It is **not** approval to continue into setup UI, generative UI, Proposal/Decision redesign, Monitor redesign or visual polish.
 
 See `docs/IMPLEMENTATION_PLAN.md`.
 
