@@ -38,6 +38,19 @@ Every capability has one Owner. No authority change may be approved without one.
 ## Impact never overrides safety
 Time savings, cost savings or adoption do not justify ignoring risk, failed requirements or insufficient evidence.
 
+## Every core workflow has a lightweight path
+A team must be able to reach and record a defensible authority decision without enterprise software. Every core evidence and governance workflow should support a native manual, upload or lightweight path.
+
+Integrations improve convenience, automation and confidence. They do not unlock the basic product.
+
+If Authority Lab claims a Boundary is technically enforced, that claim must come from real enforcement evidence or integration. A documented/manual Boundary must not be presented as technically enforced.
+
+## Stay centered on authority decisions
+Authority Lab is not primarily an AI inventory, compliance dashboard, vendor-risk system or observability platform. Those systems may feed it. The product remains centered on what a capability should be allowed to do, why, and what evidence would justify changing that permission.
+
+## Material changes can invalidate evidence
+Changes to models, prompts, tools, permissions, workflow, scope, users, data or operating context may reduce the relevance of earlier Evidence. Monitoring should make this visible and trigger re-evaluation rather than silently carrying old evidence forward.
+
 ## Provider-neutral by design
 Authority Lab may use one model provider in the prototype, but the product model must not assume a specific vendor. Model/provider/version belong in technical provenance and evaluation.
 
