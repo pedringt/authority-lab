@@ -80,6 +80,8 @@ Boundaries may be conditional and should cover:
 
 Use plain behavioral language rather than implementation language.
 
+Boundaries are the user-facing expression of controls. Where possible, distinguish a Boundary that is merely documented from one that Authority Lab can verify is technically enforced.
+
 ## 7. Requirements
 
 Prompt: **What must be true before we would consider giving it more authority?**
@@ -131,6 +133,12 @@ Authority Lab presents the setup back in plain language:
 
 The user explicitly confirms the setup.
 
+The review may summarize the relationship as:
+
+**Risk informs Authority. Authority is constrained by Boundaries. Together they define the operating envelope.**
+
+Residual Risk does not need to become another setup screen. It becomes important later when a Proposal asks whether the risk remaining after Boundaries and other controls is acceptable for a proposed Authority.
+
 ## Optional during setup
 
 Impact can be configured during a pilot if a baseline already exists, but it should not block first-time setup.
@@ -145,3 +153,21 @@ At every step, optional Help may provide:
 - deeper explanation on request.
 
 AI guidance remains advisory.
+
+## Lightweight / small-team path
+
+Every setup and evidence step must remain usable without enterprise infrastructure.
+
+A small team should be able to:
+- define test cases directly in Authority Lab;
+- conduct manual reviews;
+- upload CSV/JSON or other simple result files;
+- record incidents manually;
+- enter pilot/production metrics manually with source labels;
+- record reviewer positions and decisions directly;
+- add policies/requirements without a GRC platform;
+- maintain Authority Lab's own History/audit trail.
+
+Built-in evals should be lightweight and sufficient to support authority decisions, not an attempt to replace a full evaluation platform.
+
+Integrations are optional accelerators. They may automate evidence delivery, monitoring or enforcement verification, but the absence of enterprise tooling must not prevent use of the core workflow.
