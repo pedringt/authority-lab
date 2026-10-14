@@ -7,8 +7,10 @@ These are the working user-facing terms. They may change after real use.
 | Context | The product, workflow or business process around a capability | Authority Lab plain-language concept |
 | Capability | One specific thing AI is being asked to do | Common industry usage |
 | Authority | How independently the capability is allowed to operate | Common but fuzzy; Authority Lab gives it a precise product meaning |
-| Boundaries | Conditions and limits on Authority | Authority Lab plain-language term; closest to controls, guardrails and operating constraints |
+| Boundaries | Conditions and limits on Authority | Authority Lab plain-language term; a user-facing kind of control |
+| Controls | Mechanisms used to reduce or manage Risk | Standard governance/compliance term; usually represented through Boundaries, Requirements or technical enforcement rather than a separate setup step |
 | Risk | Overall downside exposure | Standard industry term |
+| Residual Risk | Risk remaining after Boundaries and other controls are applied | Standard risk-management term; primarily used during Proposal/Decision review |
 | Severity | How serious a relevant failure would be | Standard/common risk term |
 | Likelihood | How likely a relevant failure appears to be | Standard risk term |
 | Requirements | What must be true before an authority change should be considered | Plain-language label; closest to acceptance, go/no-go or control criteria |
@@ -29,7 +31,8 @@ These are the working user-facing terms. They may change after real use.
 ## Related established terms
 
 - **Human oversight:** standard industry term for human review and intervention.
-- **Controls:** standard governance/compliance term for mechanisms that constrain or reduce risk.
+- **Controls:** standard governance/compliance term for mechanisms that constrain or reduce risk; Authority Lab usually exposes them through plainer concepts such as Boundaries and Requirements.
+- **Material change:** a change to the model, prompt, tools, permissions, workflow, scope, users, data or environment that may make earlier Evidence less applicable.
 - **Guardrails:** common but broad term for behavioral or technical limits.
 - **Acceptance criteria / go-no-go criteria:** closest established terms to Requirements.
 - **Performance threshold / evaluation threshold:** closest established terms to Targets.
