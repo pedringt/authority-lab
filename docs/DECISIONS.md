@@ -2,6 +2,36 @@
 
 The product decisions behind Authority Lab, why they were made, and what's next. Newest decisions are at the end of each section. When a PR changes or implements one of these, update this file in the same PR.
 
+## Product reset direction — 2026-10-14
+
+Authority Lab is in a product reset, not a code reset. The reset docs are the current source of truth for product direction:
+
+- `docs/PRODUCT_MODEL.md`
+- `docs/PRODUCT_PRINCIPLES.md`
+- `docs/SETUP_FLOW.md`
+- `docs/V1_SCOPE.md`
+- `docs/TEMPLATES.md`
+- `docs/AI_ASSISTANCE.md`
+- `docs/GLOSSARY.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+Where those docs conflict with older **interface/setup wording**, the reset direction wins. Existing governance/safety invariants remain in force unless Paige explicitly changes them.
+
+Current explicit changes include:
+- user-facing **Boundaries** replaces Rules as the main concept/section;
+- user-facing **Requirements** replaces Decision requirements;
+- Targets are required only when a Requirement needs a measurable bar;
+- People are presented primarily as Owner / Reviewers / Stakeholders, with complex approval policy underneath;
+- existing capabilities get a current-state/effective-authority baseline;
+- Coverage sufficiency comes from explicit rules/deterministic checks, while AI may only flag blind spots;
+- Residual Risk is reviewed at Proposal/Decision time;
+- material changes may make prior Evidence less applicable and trigger re-evaluation;
+- every core workflow needs a lightweight/manual path for smaller organizations;
+- generative UI is a v1 presentation requirement, but it cannot alter deterministic authority rules;
+- visual redesign is paused until the product model and information architecture stabilize.
+
+Earlier redesign mockups and interface directions remain historical context only. Do not implement them as the current target unless Paige explicitly re-approves them.
+
 ## Principle
 
 **AI interprets. Software enforces. Humans authorize.** The AI reads cases and recommends. Software applies the limits and can pull authority back automatically. Only a named person can give the AI more authority.
