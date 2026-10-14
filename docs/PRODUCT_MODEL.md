@@ -26,6 +26,8 @@ The conditions and limits on that authority.
 
 Boundaries define what is allowed, what requires human review and what is prohibited. They may be conditional.
 
+In the formal governance/technical layer, Boundaries are a kind of **control**: a mechanism used to reduce or manage risk. Authority Lab keeps "Boundaries" as the primary user-facing term rather than adding a separate setup step called Controls.
+
 ### Risk
 Overall downside exposure if the capability fails or behaves incorrectly.
 
@@ -34,6 +36,11 @@ Risk combines:
 - **Likelihood:** how likely the relevant failure appears to be.
 
 Unknown is a valid likelihood state when evidence is insufficient.
+
+### Residual Risk
+The downside risk that remains after relevant Boundaries and other controls are in place.
+
+Residual Risk is primarily a Proposal/Decision concept rather than a first-time setup burden. A decision should be able to show the initial Risk, the controls that reduce it, the remaining Risk, and the human judgment about whether that remaining Risk is acceptable for the proposed Authority.
 
 ### Requirements
 What must be true before an authority change should be considered.
@@ -79,7 +86,9 @@ The Decision keeps the proposal, outcome, rationale, evidence available at the t
 ### Monitor
 Ongoing checking of whether current Authority is still justified.
 
-Monitoring can surface new evidence, degradation, incidents, boundary violations, stale evidence, model/version changes, reviewer disagreement and unexpected operational effects. Monitoring may trigger attention or a new Proposal, but never changes Authority by itself.
+Monitoring can surface new evidence, degradation, incidents, boundary violations, stale evidence, reviewer disagreement and unexpected operational effects. It also watches for **material changes** such as a model or prompt change, new tool permissions, new workflow, expanded capability scope, new user population, new jurisdiction, new data type or changed Boundary.
+
+A material change can make earlier Evidence less applicable. Authority Lab should therefore trigger re-evaluation of whether existing Evidence still supports the current Authority. Monitoring may trigger attention or a new Proposal, but never changes Authority by itself.
 
 ### History
 The audit trail of meaningful authority-related events.
@@ -121,3 +130,5 @@ Authority Lab is useful for:
 - ongoing production review after a pilot succeeds.
 
 The product should create value for a one-time pilot even if a team never adopts it as a permanent governance system.
+
+Authority Lab is centered on **capability authority decisions**. It should integrate with inventory, compliance, observability, evaluation and enterprise governance systems where useful without expanding into a general-purpose AI inventory/GRC platform.
