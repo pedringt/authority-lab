@@ -1,69 +1,170 @@
-# Handoff: where Authority Lab stands (2026-10-13)
+# Handoff: Authority Lab product reset (2026-10-14)
 
-Read this first, then `CLAUDE.md` (the working rules) and `docs/DECISIONS.md` (every product rule, with the "Redesign (2026-10-12, Paige)" entry at the top of the Interface section). Verify the live state with `gh pr list` and `git log origin/main -3` before trusting anything here.
+## Read this first
 
-## Right now: State is onboarded as the first real client (PR open, not merged)
+Authority Lab is in a **product reset**, not a code reset.
 
-- **On `main`:**
-  - the redesign (#106 to #113) and its review polish (#114);
-  - the external evidence contract (#118, #119, #120: `src/store/external.js`, `src/store/measures.js`, `docs/EXTERNAL_EVIDENCE.md`);
-  - the evidence-configuration model (#126: evidence sources, manual results, Configure evidence, coverage, the Evidence setup stage, Monitor's evidence signals, and the Northstar example).
-- **#121, State's workspace, is on `main`** (merged with Paige's OK, `ab54dee`).
-  - A second built-in workspace, built from configuration (`src/data/workspaces/state.js`) by the generic `buildWorkspace` (`src/store/workspaces.js`), plus a workspace switcher in the Settings menu.
-  - No State-specific code; a test checks this.
-  - No fictional evidence: State shows "0 of 5 decision requirements have sufficient evidence" until its results arrive.
-- **Merging:** Paige must name the destination each time (CLAUDE.md, "How to work").
-- **#518, State's first evidence file, is on `main`** (#132, `f372cb9`). Later deliveries follow the same steps:
-  - Take the envelope from a State AI quality check run's artifact (`authority-lab-evidence-<run>-<attempt>`, kept 90 days).
-  - Commit it under `src/data/external-evidence/`, add it to `index.json`, and open a PR. CI checks it.
-  - The first delivered run is the Oct 13 verification run, 38411808397 (16/16, staging).
-  - Decisions stay runtime records, never configuration (DECISIONS: "Configuration is the starting point").
-- **State side (pedringt/ai-learning):** #517 (the export) is on State's `staging`, not promoted. #519 to #522 are side issues it found.
-- **Known limit (#130):** a check is judged on the newest run only; State's own rule reads its suite across runs. Recorded, not built (Paige).
+The existing implementation contains useful governance/evidence/enforcement mechanics. Do not throw them away or start a visual rewrite.
 
-Tests: `npm test` 345 pass, `npm test --prefix agent` 46 pass.
+Read in this order:
 
-## Reference material Paige approved (claude.ai artifacts, private to Paige)
+1. `CLAUDE.md` — non-negotiable working rules and governance invariants.
+2. `docs/PRODUCT_MODEL.md`
+3. `docs/PRODUCT_PRINCIPLES.md`
+4. `docs/SETUP_FLOW.md`
+5. `docs/V1_SCOPE.md`
+6. `docs/TEMPLATES.md`
+7. `docs/AI_ASSISTANCE.md`
+8. `docs/GLOSSARY.md`
+9. `docs/IMPLEMENTATION_PLAN.md`
+10. `docs/DECISIONS.md` — existing mechanics/history.
 
-- Redesign mockup (the approved target): https://claude.ai/artifact/MJjyZUmDJ4hfjgwfNBcjKy
-- Copy audit (terms and wording rules): https://claude.ai/artifact/PWZJsUjKsNymyPcT8121q5
-- Earlier simplification mockup (superseded): https://claude.ai/artifact/FrGwuVKKoT43f7rsn4wcBf
+Then inspect the repo/current PR state before coding.
 
-## Decisions made in this stretch (all in DECISIONS.md)
+## Why this reset happened
 
-- Four capability tabs; single actions waiting for a person live on Status, Decide is only about overall authority.
-- Four decision choices: Expand autonomy (then explicitly Within limits or Broad autonomy), Keep current limits, Reduce autonomy (one level down, or back to Observe), Pause and redesign. The record keeps the exact option.
-- One person can start a workspace. **Founding roster:** a sole founding admin may make ONE other person a workspace admin without approval, recorded; nothing else skips approval.
-- "What does it do today?" is context; new capabilities start at Level 1 at most.
-- **Minimum production sample:** rollout goals are "Too early to judge" until 20 production cases (session or recorded real-model actions; never seeded or dry-run), or the number a goal names; an unjudged goal is never shown as missed.
-- "Recommendation" (was "System recommendation"), with "Worked out from the evidence. You decide." (also in CLAUDE.md).
-- Language: capability, automation, autonomy, human review; no anthropomorphic "the AI…". Levels are secondary except in onboarding, the decision flow and a quiet label.
-- A7 live run mode: decided not to build (#71 closed).
+The prototype accumulated useful mechanics, but the product experience got ahead of Paige's product understanding. The reset reconstructs Authority Lab from the outside in.
 
-## Small things noted but not changed (mention to Paige if relevant)
+The central job is now explicit:
 
-- Setup shows "Name who decides" under the Decide stage, though people are still named before the first test run (order and gating unchanged).
-- Decide's "Propose a move to Level N" is still offered only below Level 2, as before.
-- Coverage warnings ("add a second Risk approver") appear on the Overview, not on the capability page.
-- Model runs call temptation tickets "trap" tickets.
-- Seeded activity entries and any demo state saved in a visitor's browser keep older wording until Reset demo.
-- Old `.ov-*` rules in `styles/app.css` are unused since the Overview rewrite.
-- `ladder()` in `src/views/overview.js` (the five-square autonomy ladder) is exported but rendered nowhere today; its screen-reader label was fixed anyway in the review polish.
-- Mobile layout is low priority for this project (Paige); don't chase phone widths.
+> Help a person responsible for AI use in a domain they understand decide what an AI capability should be allowed to do now, why, and what evidence would justify changing that authority later.
 
-## How the work is organised
+AI/Claude may build mechanics, explain tradeoffs and suggest options. **Product decisions belong to Paige unless explicitly delegated.**
 
-- Views: `src/views/capability.js` is the frame; tabs are `cap-status.js`, `cap-decide.js`, `cap-monitor.js`, `cap-history.js`, shared helpers in `cap-shared.js`. Overview: `overview.js` + `src/store/overview.js`. Guided demo: `src/views/guide.js` (state lives in `src/main.js`, `guide`/`guideDo`).
-- Styles: `styles/app.css` plus `styles/redesign.css` (one section per area).
-- Tests: `scripts/store.test.mjs` plus per-area files `scripts/{status,decide,monitor,overview,setup,guide}.test.mjs`; agent tests in `agent/`.
-- Screenshots for PRs go on the `pr-screenshots` branch (never merged), referenced by raw.githubusercontent.com URLs.
-- Local preview: `python3 -m http.server 8140`. A first visit redirects to `#/welcome`; set `localStorage['authority-lab-welcomed'] = '1'` to skip it.
+Do not silently fill in consequential setup choices because the answer looks obvious.
 
-## Paid model runs (unchanged rules, see CLAUDE.md)
+## Current product direction
 
-Standing budget $25 per calendar month; October spend is $11.20 (`agent/runs/ledger.md`). Paige OKs the plan, adds the `run-models` label herself and approves each run in GitHub. Claude never adds the label, approves a deployment, or reads the key. No paid runs are planned.
+Authority Lab should support:
+- product people and AI consultants;
+- client-side/domain experts who may not be AI experts;
+- engineers when they are the accountable operator;
+- small teams with little/no enterprise infrastructure;
+- larger organizations with integrations and formal approval rules.
 
-## What comes next
+It should support both guided self-service and expert-led use.
 
-1. **Published records** (this work): State is read-only for visitors and shows only committed decisions. Paige recorded the Draft decision in her own browser on Oct 13; to publish it, she turns on "Try changes in this browser", opens the record, and its file is committed to `src/data/published-records/`.
-3. Later: #130 (judging across runs), #117 (runtime policy check), #105 (stakeholder tradeoff).
+The product must create value for a one-time pilot and continue to work for ongoing production use.
+
+## Core lifecycle
+
+Context
+→ Capability
+→ Risk
+→ Authority
+→ Boundaries
+→ Requirements + Targets where needed
+→ Evidence + Coverage
+→ People
+→ Proposal
+→ Decision
+→ Monitor
+→ History / Impact
+→ new Proposal/Decision when conditions change
+
+Existing capabilities also need a baseline of what is actually happening today.
+
+## Important terminology changes
+
+Use in ordinary user-facing product language:
+- **Boundaries**, not Rules as the main section/concept.
+- **Requirements**, not Decision requirements.
+- Targets only where a measurable bar is appropriate.
+- Owner / Reviewers / Stakeholders as the simple people model.
+
+Formal concepts such as controls, residual risk and enforcement can appear in deeper/technical layers.
+
+Do not rename internal fields only for cosmetic consistency.
+
+## What stays
+
+Preserve and reuse:
+- capability-level governance;
+- existing authority ladder and one-level expansion rule;
+- immutable records;
+- human authorization;
+- external/manual evidence;
+- provenance;
+- monitoring and restriction;
+- post-incident review;
+- gate/enforcement;
+- waiting-for-person mechanics;
+- approval safeguards;
+- State workspace;
+- expected-impact and rollout mechanics where they still fit.
+
+## What changes
+
+Primary reset work:
+- richer hybrid Context intake;
+- planned vs existing path;
+- baseline/effective authority;
+- simpler default Risk model;
+- Boundaries as user-facing controls;
+- Requirements separate from optional Targets;
+- explicit Coverage semantics;
+- simpler People surface with approval-policy rigor underneath;
+- Proposal/Decision centered on exact authority change and residual risk;
+- Monitor centered on whether current Authority remains justified;
+- material-change revalidation;
+- lightweight/manual paths for small organizations;
+- consistent Unknown/unresolved states;
+- exceptions/overrides/retirement;
+- generative UI later as presentation only.
+
+## What is parked
+
+Do not work on these during the reset unless Paige explicitly reopens them:
+- Question Investigator;
+- additional agent/runtime expansion;
+- broad GRC/inventory/compliance-platform features;
+- more visual redesign;
+- previously explored State-like redesign directions.
+
+## Design status
+
+**Visual redesign is paused.**
+
+Earlier design artifacts and redesign notes in old handoffs/DECISIONS are historical context, not a current instruction to implement a visual target.
+
+Do not start from old mockups.
+
+The information architecture and product model must stabilize first.
+
+## First implementation phase
+
+Start with **data-model and setup foundations**, not UI polish.
+
+The first implementation issue should only make the underlying product able to represent the reset concepts while preserving existing behavior where possible.
+
+See `docs/IMPLEMENTATION_PLAN.md`.
+
+Do not continue into later phases just because Phase 1 is green. Each phase should remain a controlled scope.
+
+## State as a reality check
+
+State remains the first real client workspace.
+
+Do not add State-specific product code. Its configuration/evidence should continue to exercise generic Authority Lab behavior.
+
+Also evaluate changes against a small-team scenario with no enterprise tooling.
+
+## Existing repo status to preserve
+
+On `main`, the prototype already includes:
+- external evidence ingestion;
+- evidence configuration/coverage;
+- State workspace;
+- decision records;
+- monitoring/restriction;
+- runtime enforcement/gate mechanics.
+
+Known historical issue #130 remains about judging across runs vs newest run only. Do not opportunistically fold it into the reset unless the current issue specifically calls for it.
+
+## Working discipline
+
+- One issue per branch/PR.
+- Stop for product decisions.
+- No opportunistic cleanup.
+- No paid model runs without Paige's approval and the required budget/call details.
+- No merge/deploy/promotion without Paige explicitly naming the destination.
