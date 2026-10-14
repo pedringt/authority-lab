@@ -18,7 +18,9 @@ Authority Lab uses AI to reduce blank-page effort, improve focus and teach good 
 - compare candidate models/configurations;
 - organize information for a current Proposal or Decision;
 - generate temporary decision-focused UI;
-- suggest questions to ask stakeholders.
+- suggest questions to ask stakeholders;
+- flag material changes that may make prior Evidence less applicable;
+- suggest possible residual-risk concerns after Boundaries and other controls are applied.
 
 ## AI may not
 
@@ -32,7 +34,9 @@ Authority Lab uses AI to reduce blank-page effort, improve focus and teach good 
 - approve a Proposal;
 - make a Decision;
 - hide consequential failed, stale or insufficient evidence;
-- bulk-apply consequential configuration.
+- bulk-apply consequential configuration;
+- declare Residual Risk acceptable on behalf of the Owner;
+- treat a manually documented Boundary as technically enforced without verification.
 
 ## Coverage assistance
 
