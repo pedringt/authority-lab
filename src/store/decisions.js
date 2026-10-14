@@ -125,6 +125,17 @@ export function setRationale(state, capabilityId, rationale) {
   return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rationale } }));
 }
 
+// Residual Risk (#137): the Risk left once the Boundaries and other controls
+// are in place, as the person deciding sees it. Optional in Phase 1: when set
+// it goes on the decision record and never changes; it is never required to
+// authorize and software never sets it (Proposal/Decision is Phase 4).
+export const RESIDUAL_RISK_LEVELS = ['Low', 'Moderate', 'High', 'Unknown'];
+export function setResidualRisk(state, capabilityId, { level, note } = {}) {
+  if (level === null) return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, residualRisk: null } }));
+  if (!RESIDUAL_RISK_LEVELS.includes(level)) throw new Error(`Residual risk must be one of: ${RESIDUAL_RISK_LEVELS.join(', ')}.`);
+  return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, residualRisk: { level, note: String(note || '').trim() } } }));
+}
+
 // Expected impact (roadmap item 9, B1, #72). Authorizing an expansion (any
 // decision that raises the level) needs 2 to 4 expected outcomes, each a
 // metric with a numeric target. They go on the decision record and never
@@ -318,6 +329,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     // C1: how the expansion goes into service, fixed from here on.
     rolloutPlan: next.level > previous.level ? deepFreeze({ ...rolloutChecks(state, d.decision.rollout).plan, ownerAt: snapshotPerson(state, d.decision.rollout.owner) }) : null,
     ...(next.level > previous.level && d.decision.rolloutPrefilled ? { rolloutPrefilled: true } : {}),
+    // #137: recorded only when the person deciding gave one.
+    ...(d.decision.residualRisk ? { residualRisk: deepFreeze({ ...d.decision.residualRisk, by, byAt: snapshotPerson(state, by) }) } : {}),
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
@@ -359,7 +372,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'If more than 5% of the last 50 cases have a severe error, the AI is moved back to Draft automatically.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
-  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null }, monitoring });
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null, residualRisk: null }, monitoring });
   s = { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
   // A restrict, suspend or redesign decided while a proposal to expand was
   // open closes that proposal too, and says so.
@@ -392,7 +405,7 @@ export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   if (!performanceResultsSeen(state, capabilityId)) throw new Error('There is no evidence yet. Run the tests, record a result, or have a connected source send results, then propose more authority.');
   if (target >= 3 && !realUseEvidence(state, capabilityId)) throw new Error('Level 3 needs evidence from real use: a pilot at Draft, or production results from a connected source or recorded by hand.');
   const d = capData(state, capabilityId);
-  let s = updateCap(state, capabilityId, { decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, residualRisk: null, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
   return logEvent(s, {
     kind: 'decision',
     title: `More authority proposed: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,

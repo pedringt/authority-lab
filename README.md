@@ -86,7 +86,7 @@ For a new capability, **Setup → Set the boundaries** (**Review the rules**) st
 
 ## Success criteria and evidence requirements (Targets and Decision requirements in the app)
 
-Setup's **Set what good looks like** (**Review the checks**) opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Core rows (quality, severe errors, minimum cases) cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed change (**Propose a target change**, #7). Defaults live in `src/data/criteria-defaults.js`.
+Setup's **Set what good looks like** (**Review the checks**) opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Targets are optional and may be "Needs decision" (#137); the minimum-cases row cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed change (**Propose a target change**, #7). Defaults live in `src/data/criteria-defaults.js`.
 
 ## Sign-off rules in one place
 

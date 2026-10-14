@@ -3,6 +3,7 @@
 import { clone, emptyCapabilityData, VERSIONED_KINDS, firstVersion, getCapability, capData, updateCap, logEvent } from './state.js';
 import { currentVersion, performanceResultsSeen, authorityLabel } from './selectors.js';
 import { people, isActivePerson, snapshotPerson } from './people.js';
+import { cleanLikelihoodScale } from './risk.js';
 
 // A non-blocking warning when a capability name reads like more than one
 // action or like a whole process.
@@ -97,7 +98,9 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     ...(today ? { today } : {}),
   };
   const data = emptyCapabilityData();
-  data.versions.risk = [firstVersion({ impact: r.impact, reversibility: r.reversibility, exposure: r.exposure, failureTypes, note: (r.note || '').trim() || undefined }, { date: state.today, author })];
+  // Likelihood and Scale (#137) are optional here; without them Likelihood
+  // reads as Unknown.
+  data.versions.risk = [firstVersion({ impact: r.impact, reversibility: r.reversibility, exposure: r.exposure, failureTypes, note: (r.note || '').trim() || undefined, ...cleanLikelihoodScale({ likelihood: r.likelihood, scale: r.scale }) }, { date: state.today, author })];
 
   const number = state.decisionRecords.length + 1;
   const recordId = `AC-${String(number).padStart(2, '0')}`;

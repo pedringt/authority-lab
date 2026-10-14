@@ -6,7 +6,7 @@ import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, r
 import { amend } from './capabilities.js';
 import { SECTION_KEYS, contractValueChecks } from './contract.js';
 import { requirementsNow, judgeMeasure } from './measures.js';
-import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS, carryMeasure, unchangedMeasuresDropped } from './evidence.js';
+import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, checkTargetLinks, isUnresolvedTarget, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS, carryMeasure, unchangedMeasuresDropped } from './evidence.js';
 
 // Assumption, not yet confirmed (decision 7): the same sign-off applies to
 // contract edits once a pilot has started. One named setting so it can be
@@ -27,10 +27,12 @@ export function needsSignoff(state, capabilityId, kind) {
   throw new Error(`Unknown amendment kind: ${kind}`);
 }
 
-// Membership (who) and team labels are governed; position, stance and
-// reasoning are not.
+// Membership (who), team labels and roles are governed; position, stance
+// and reasoning are not.
 export function stakeholderMembershipChanged(before, after) {
-  const key = (list) => list.map((st) => `${st.person}|${st.team}`).sort().join(',');
+  // A role change (Stakeholder <-> Reviewer) changes who must give input, so
+  // it is governed like membership (#137).
+  const key = (list) => list.map((st) => `${st.person}|${st.team}|${peopleRoleOf(st)}`).sort().join(',');
   return key(before) !== key(after);
 }
 
@@ -125,8 +127,17 @@ export function cleanAmendmentValue(state, capabilityId, kind, value) {
   const baseC = current(state, capabilityId, 'criteria');
   const baseR = current(state, capabilityId, 'requirements');
   const unmeasured = ({ measure, ...rest }) => rest;
-  const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? carryMeasure({ ...unmeasured(b), name: x.name, target: x.target, note: x.note, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.target, x.name) : x; });
-  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); return b ? carryMeasure({ ...unmeasured(b), text: x.text, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text) : x; });
+  // What the person edits on a target: its name, bar, note, and the
+  // requirement it judges. A bar newly set where it said "Needs decision"
+  // starts unmeasured; a bar newly cleared to "Needs decision" is unresolved.
+  const edited = (x, b) => {
+    const { bar, requirement, ...rest } = unmeasured(b);
+    const status = isUnresolvedTarget(x) ? { bar: x.bar, status: x.status, current: x.current } : isUnresolvedTarget(b) ? { status: 'pending', current: 'Not yet measured' } : {};
+    return { ...rest, name: x.name, target: x.target, note: x.note, ...status, ...(x.requirement ? { requirement: x.requirement } : {}) };
+  };
+  const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? carryMeasure({ ...edited(x, b), ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.target, x.name) : x; });
+  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); if (!b) return x; const { kind, ...bRest } = unmeasured(b); return carryMeasure({ ...bRest, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text); });
+  checkTargetLinks(criteria, requirements);
   return { criteria, requirements };
 }
 
@@ -179,8 +190,8 @@ export function thresholdParts(text) {
 export function tighteningOnly(base, next) {
   const changes = [];
   const kinds = [
-    ['criteria', 'target', (x) => x.name, ['name', 'note']],
-    ['requirements', 'text', (x) => x.text, []],
+    ['criteria', 'target', (x) => x.name, ['name', 'note', 'requirement', 'bar']],
+    ['requirements', 'text', (x) => x.text, ['kind']],
   ];
   for (const [kind, field, label, fixed] of kinds) {
     const before = base[kind] || [];
@@ -455,7 +466,7 @@ export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
     // where the threshold changed and the value is a number.
     const requirements = proposalReadiness(s, capabilityId, proposal).proposed.requirements;
     const criteria = proposal.value.criteria;
-    s = amend(s, capabilityId, 'criteria', { value: criteria, author: proposal.proposedBy, reason: proposal.reason, meta: { ...meta, deviations: deviations('criteria', criteria, (x) => x.target) }, silent: true });
+    s = amend(s, capabilityId, 'criteria', { value: criteria, author: proposal.proposedBy, reason: proposal.reason, meta: { ...meta, deviations: deviations('criteria', criteria, (x) => x.target), ...(criteria.length ? {} : { noTargets: true }) }, silent: true });
     s = amend(s, capabilityId, 'requirements', { value: requirements, author: proposal.proposedBy, reason: proposal.reason, meta: { ...meta, deviations: deviations('requirements', requirements, (x) => x.text) }, silent: true });
     applied.criteria = versionsInForce(s, capabilityId).criteria;
     applied.requirements = versionsInForce(s, capabilityId).requirements;
@@ -537,9 +548,17 @@ export function cleanStakeholders(state, stakeholders) {
     seen.add(person);
     const stance = STANCES.some(([k]) => k === st.stance) ? st.stance : 'undecided';
     const position = (st.position || '').trim() || (STANCES.find(([k]) => k === stance) || [])[1] || 'No position yet';
-    return { team, person, stance, position, quote: (st.quote || '').trim(), date: st.date || state.today };
+    // Reviewer (input required) or Stakeholder (involved, consulted) (#137).
+    // An entry without a role is a Stakeholder (Paige, 2026-10-14: existing
+    // entries stay Stakeholders; Reviewers start empty).
+    if (st.role !== undefined && !Object.hasOwn(PEOPLE_ROLES, st.role)) throw new Error(`Stakeholder ${i + 1}: the role must be Reviewer or Stakeholder.`);
+    return { team, person, stance, position, quote: (st.quote || '').trim(), date: st.date || state.today, ...(st.role === 'reviewer' ? { role: 'reviewer' } : {}) };
   });
 }
+
+// The two named roles on a capability, besides its one Owner (#137).
+export const PEOPLE_ROLES = { reviewer: 'Reviewer', stakeholder: 'Stakeholder' };
+export const peopleRoleOf = (entry) => (entry && entry.role === 'reviewer' ? 'reviewer' : 'stakeholder');
 
 // Save the stakeholder list. Before performance results exist every save is a
 // direct new version. After that, a change to who is listed or to a team

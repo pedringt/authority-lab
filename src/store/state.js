@@ -38,6 +38,10 @@ export function emptyCapabilityData() {
     contractDraft: null,
     // Proposed amendments awaiting or past sign-off (#7). Never removed.
     proposals: [],
+    // What it actually does today (#137), one entry per version. Never edited.
+    baseline: [],
+    // Material changes (#137). Append-only.
+    materialChanges: [],
     // Versioned objects (decision 2). Each entry is a list of versions; the
     // current value is the last one. Versions are never edited.
     versions: { contract: [], criteria: [], requirements: [], risk: [], stakeholders: [] },
@@ -178,7 +182,7 @@ export function closeOpenProposal(state, capabilityId, previous, next) {
   const d = capData(state, capabilityId);
   const p = d && d.decision && d.decision.proposed;
   if (!p || !(next.level < previous.level)) return state;
-  const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false, rollout: {}, rolloutPrefilled: false } }));
+  const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false, rollout: {}, rolloutPrefilled: false, residualRisk: null } }));
   const cap = getCapability(state, capabilityId);
   return logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name} dropped from Level ${previous.level} to Level ${next.level}, so the proposed move to Level ${p.level} no longer applies. To expand again, propose a move to Level ${next.level + 1}.`, capabilityId, link: `#/capabilities/${capabilityId}/decision` });
 }

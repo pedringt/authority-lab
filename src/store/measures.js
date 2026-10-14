@@ -115,22 +115,38 @@ export function judgeMeasure(state, capabilityId, measure) {
   return { ...base, status: ok ? 'pass' : 'fail', text: actualText, needed };
 }
 
-export const MEASURE_WORDS = { pass: 'Met', fail: 'Not met', 'too-early': 'Too early to judge', insufficient: 'Not enough data', pending: 'No results yet' };
+export const MEASURE_WORDS = { pass: 'Met', fail: 'Not met', 'too-early': 'Too early to judge', insufficient: 'Not enough data', pending: 'No results yet', 'needs-decision': 'Needs decision' };
 
 // The targets as they stand now: a row with a measure takes its "now" and
 // status from the imported evidence; other rows are as stored.
 export function targetsNow(state, capabilityId) {
   return current(state, capabilityId, 'criteria').map((c) => {
+    // No bar yet (#137): unresolved, never pass or fail.
+    if (c.bar === 'needs-decision') return { ...c, status: 'needs-decision', current: 'No bar set yet' };
     if (!c.measure) return c;
     const j = judgeMeasure(state, capabilityId, c.measure);
     return { ...c, current: j.text, status: j.status, judged: j };
   });
 }
 
-// The decision requirements as they stand now: met only on a pass.
+// The decision requirements as they stand now: met only on a pass. A
+// requirement judged by a Target whose bar still needs a decision (#137) is
+// unresolved: not met, because nobody has said what "met" is, and never
+// described as a failed result.
 export function requirementsNow(state, capabilityId) {
-  return current(state, capabilityId, 'requirements').map((r) => {
-    if (!r.measure) return r;
+  const unresolved = current(state, capabilityId, 'criteria').filter((c) => c.bar === 'needs-decision' && c.requirement);
+  return current(state, capabilityId, 'requirements').map((row) => {
+    const r = judgedRequirement(state, capabilityId, row);
+    const open = unresolved.filter((c) => c.requirement === r.id);
+    if (!open.length) return r;
+    const gap = `${open.map((c) => `"${c.name}"`).join(' and ')} ${open.length === 1 ? 'has' : 'have'} no bar yet: it needs a decision. This isn't a failed result.`;
+    return { ...r, met: false, unresolved: true, gap: r.met || !r.gap ? gap : `${r.gap} Also, ${gap.charAt(0).toLowerCase()}${gap.slice(1)}` };
+  });
+}
+
+function judgedRequirement(state, capabilityId, r) {
+  if (!r.measure) return r;
+  {
     const j = judgeMeasure(state, capabilityId, r.measure);
     // A row's own explanation of its gap, written by a person, is kept while
     // the gap is open; the generated sentence is the fallback.
@@ -140,7 +156,7 @@ export function requirementsNow(state, capabilityId) {
         : j.status === 'pending' ? 'No imported results measure this yet.'
           : `${MEASURE_WORDS[j.status]}: ${j.text}.`;
     return { ...r, current: j.text, met: j.status === 'pass', gap, judged: j };
-  });
+  }
 }
 
 // How each current imported result reads against the rows bound to it, for

@@ -48,6 +48,17 @@ export const stateWorkspace = {
     summary: 'Interprets each new piece of project Evidence and prepares proposed Current State changes and Questions for a person to decide in Review.',
     risk: { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Internal only', failureTypes: ['Wrong answer', 'Hallucination', 'Missing escalation', 'Silent failure', 'User over-reliance'] },
     today: 'drafts',
+    // What it actually does today (#137): recorded, not inferred. Effective
+    // authority is Draft because State's own design says so (facts above,
+    // checked Oct 13, and docs/DECISIONS.md "What State is"): every proposal
+    // and Review is prepared automatically and a person decides each one.
+    // The declared level stays Recommend until a person formally approves Draft.
+    baseline: {
+      lifecycle: 'in-use',
+      effective: { level: 2, note: 'State prepares every proposed Current State change and Question automatically, and a person decides each one in Review: Draft in practice.' },
+      fields: { humanInvolvement: 'A person decides every proposed Current State change and Question in Review. Nothing authoritative is written without them.' },
+      reason: 'What State does today, from its configuration.',
+    },
     rules: {
       may: [
         'Interpret incoming project Evidence and classify what it may mean.',
