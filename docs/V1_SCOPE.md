@@ -52,7 +52,11 @@ Targets are required where a Requirement is meaningfully measurable.
 - human-confirmed consequential configuration;
 - provider-neutral data model;
 - technical drill-down;
-- plain-language presentation layer.
+- plain-language presentation layer;
+- native lightweight/manual paths for core evidence, incidents, monitoring, reviewer input and Impact tracking;
+- lightweight built-in eval configuration plus manual/file/external evidence paths;
+- residual-risk review during Proposal/Decision;
+- material-change detection/review that can invalidate or downgrade prior Evidence.
 
 ## Generative UI in v1
 
@@ -86,6 +90,7 @@ A full-record path must always be available.
 - vendor-risk management;
 - automated legal/compliance conclusions;
 - organization-wide policy authoring;
-- giant enterprise risk registers.
+- giant enterprise risk registers;
+- replacing dedicated enterprise evaluation, observability, GRC or AI-inventory platforms.
 
 Authority Lab's job remains narrow: help people decide what an AI capability should be allowed to do, understand why, and revisit that decision as evidence changes.
