@@ -13,7 +13,7 @@ import {
   baselineNow, authorityBaseline, recordBaseline, baselineVersions, LIFECYCLE,
   recordContext, suggestContext, reviewContextFact, contextNow, confirmedContext, contextVersions,
   recordMaterialChange, materialChanges, MATERIAL_CHANGE_AREAS,
-  riskView, overallRisk, assessRisk, OVERALL_RISK_TABLE, LIKELIHOODS,
+  riskView, overallRisk, assessRisk, OVERALL_RISK_TABLE, LIKELIHOODS, SCALES, SEVERITY_LABELS,
   boundaries, BOUNDARY_CATEGORIES, actsThroughGate,
   selectDecision, setRationale, setResidualRisk, authorize, publishableRecord,
   findWorkspace, isCoverageRule, isUnresolvedTarget, createStore, STORAGE_KEY,
@@ -107,12 +107,22 @@ test('overall Risk follows the fixed table and says how it got there', () => {
   for (const [sev, row] of Object.entries(OVERALL_RISK_TABLE)) for (const [lik, want] of Object.entries(row)) {
     const r = overallRisk(sev, lik);
     assert.equal(r.overall, want);
-    assert.match(r.why, new RegExp(`${sev} Severity and ${lik} Likelihood give ${want}`));
+    assert.match(r.why, new RegExp(`${SEVERITY_LABELS[sev]} Severity and ${lik} Likelihood give ${want}`));
   }
-  const s = assessRisk(initialState(), TC, { likelihood: 'Medium', scale: 'Many cases', by: 'priya', reason: 'From last month\'s audit.' });
+  // Paige's table (R1 A): the standard 3x3, cell by cell.
+  assert.deepEqual(OVERALL_RISK_TABLE, {
+    Low: { Low: 'Low', Moderate: 'Low', High: 'Moderate' },
+    Medium: { Low: 'Low', Moderate: 'Moderate', High: 'High' },
+    High: { Low: 'Moderate', Moderate: 'High', High: 'High' },
+  });
+  assert.deepEqual(LIKELIHOODS, ['Low', 'Moderate', 'High', 'Unknown']);
+  assert.deepEqual(SCALES, ['One case', 'Many cases', 'Systemic', 'Unknown']);
+  assert.equal(overallRisk('High', 'Low').overall, 'Moderate', 'Severity alone never decides it');
+  assert.match(overallRisk('Medium', 'Moderate').why, /^Moderate Severity and Moderate Likelihood give Moderate overall Risk/);
+  const s = assessRisk(initialState(), TC, { likelihood: 'Moderate', scale: 'Many cases', by: 'priya', reason: 'From last month\'s audit.' });
   const v = riskView(s, TC);
-  assert.deepEqual([v.likelihood, v.likelihoodRecorded, v.scale], ['Medium', true, 'Many cases']);
-  assert.equal(v.overall, OVERALL_RISK_TABLE[v.severity].Medium);
+  assert.deepEqual([v.likelihood, v.likelihoodRecorded, v.scale], ['Moderate', true, 'Many cases']);
+  assert.equal(v.overall, OVERALL_RISK_TABLE[v.severity].Moderate);
   assert.equal(versionList(s, TC, 'risk').length, 2, 'a new version of the risk profile');
   assert.equal(currentVersion(s, TC, 'risk').before.likelihood, undefined, 'the earlier version is unchanged');
   assert.match(s.activity[0].body, /fixed table/);

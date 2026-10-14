@@ -17,22 +17,29 @@ import { amend } from './capabilities.js';
 // The same values as RISK_OPTIONS.impact (written out: capabilities.js
 // imports this module).
 export const RISK_SEVERITIES = ['Low', 'Medium', 'High'];
-export const LIKELIHOODS = ['Low', 'Medium', 'High', 'Unknown'];
+export const LIKELIHOODS = ['Low', 'Moderate', 'High', 'Unknown'];
 export const SCALES = ['One case', 'Many cases', 'Systemic', 'Unknown'];
 export const OVERALL_RISKS = ['Low', 'Moderate', 'High', 'Unknown'];
 
-// Severity -> Likelihood -> overall Risk.
+// Severity is stored as Low / Medium / High (existing logic keys), and reads
+// as Low / Moderate / High so it matches Likelihood and overall Risk.
+export const SEVERITY_LABELS = { Low: 'Low', Medium: 'Moderate', High: 'High' };
+
+// The standard 3x3 (Paige, 2026-10-14, R1 A): Severity -> Likelihood ->
+// overall Risk. High Severity with Low Likelihood is still Moderate;
+// Severity alone never decides it.
 export const OVERALL_RISK_TABLE = {
-  Low: { Low: 'Low', Medium: 'Low', High: 'Moderate' },
-  Medium: { Low: 'Low', Medium: 'Moderate', High: 'High' },
-  High: { Low: 'Moderate', Medium: 'High', High: 'High' },
+  Low: { Low: 'Low', Moderate: 'Low', High: 'Moderate' },
+  Medium: { Low: 'Low', Moderate: 'Moderate', High: 'High' },
+  High: { Low: 'Moderate', Moderate: 'High', High: 'High' },
 };
 
 export function overallRisk(severity, likelihood) {
   if (!RISK_SEVERITIES.includes(severity)) return { overall: 'Unknown', why: 'Severity hasn\'t been set, so overall Risk is Unknown.' };
-  if (!LIKELIHOODS.includes(likelihood) || likelihood === 'Unknown') return { overall: 'Unknown', why: `Severity is ${severity}, but Likelihood is Unknown, so overall Risk is Unknown. Unknown is never treated as Low.` };
+  const sev = SEVERITY_LABELS[severity];
+  if (!LIKELIHOODS.includes(likelihood) || likelihood === 'Unknown') return { overall: 'Unknown', why: `Severity is ${sev}, but Likelihood is Unknown, so overall Risk is Unknown. Unknown is never treated as Low.` };
   const overall = OVERALL_RISK_TABLE[severity][likelihood];
-  return { overall, why: `${severity} Severity and ${likelihood} Likelihood give ${overall} overall Risk (fixed table).` };
+  return { overall, why: `${sev} Severity and ${likelihood} Likelihood give ${overall} overall Risk (fixed table).` };
 }
 
 // The Risk as the reset shows it, read from the current risk profile.
@@ -41,6 +48,7 @@ export function riskView(state, capabilityId) {
   const likelihood = LIKELIHOODS.includes(r.likelihood) ? r.likelihood : 'Unknown';
   return {
     severity: r.impact || null,
+    severityLabel: SEVERITY_LABELS[r.impact] || null,
     likelihood,
     likelihoodRecorded: LIKELIHOODS.includes(r.likelihood),
     reversibility: r.reversibility || null,
