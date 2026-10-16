@@ -17,6 +17,7 @@ import { capData, getCapability } from './state.js';
 import { current } from './selectors.js';
 import { importedStanding, measurementSample } from './external.js';
 import { sourceOfItem, findSource, testMeasurements, TESTS_SOURCE, FRESH_DAYS } from './sources.js';
+import { isCoverageRule } from './evidence.js';
 import { feedbackMeasurements, FEEDBACK_SOURCE, judgmentsFor, openCriticalIncidents, isIncidentRequirement, VERDICTS } from './lightweight.js';
 
 // The default minimum production sample before a production result is judged
@@ -271,7 +272,8 @@ function personJudged(state, capabilityId, row) {
     return withResult({ ...row, met: false, current: 'Judged unknown', gap: why, judgments: counting.map((j) => j.id) }, 'unknown', why);
   }
   if (row.met) return withResult(row, 'met', `Met: ${row.current}.${note}`);
-  const why = row.gap || `No evidence yet. The Owner or a Reviewer can record a judgment.${note}`;
+  const how = /\d/.test(row.text) ? (isCoverageRule(row) ? 'choose which results it counts' : 'record a result, upload a file, or choose its evidence') : 'the Owner or a Reviewer can record a judgment';
+  const why = row.gap || `No evidence yet: ${how}.${note}`;
   return withResult({ ...row, gap: why }, 'no-evidence', why);
 }
 
@@ -288,7 +290,7 @@ function judgedRequirement(state, capabilityId, r) {
         : j.status === 'pending' ? 'No results measure this yet.'
           : `${MEASURE_WORDS[j.status]}: ${j.text}.`;
     const from = j.combined > 1 ? ` (${j.combined} compatible results combined)` : '';
-    const why = j.status === 'pass' ? `Met: ${j.text}${from}, from ${j.label}.` : `${gap}${from && j.status !== 'conflicting' ? from : ''}`;
+    const why = j.status === 'pass' ? `Met: ${j.text}${from || `, from ${j.label}`}.` : `${gap}${from && j.status !== 'conflicting' ? from : ''}`;
     return withResult({ ...r, current: j.text, met: j.status === 'pass', gap, judged: j, ...(j.status === 'conflicting' ? { conflicting: true } : {}) }, RESULT_OF[j.status] || 'no-evidence', why);
   }
 }
@@ -349,6 +351,7 @@ export const COVERAGE_WORDS = {
   'no-source': 'No source mapped',
   'needs-decision': 'Needs decision',
   judged: 'Judged by a person',
+  incident: 'Open incident on record',
   unknown: 'Unknown',
   conflicting: 'Conflicting evidence',
 };
@@ -365,6 +368,7 @@ export function rowCoverage(state, capabilityId, row) {
     // A person's judgment, or an open critical incident, is the evidence for
     // a Requirement with no metric (#142).
     const st = row.result && row.result.status;
+    if (row.incidentsOpen) return { status: 'incident', mapped: false };
     if (st === 'met' || st === 'not-met') return { status: 'judged', mapped: false };
     if (st === 'unknown' || st === 'conflicting') return { status: st, mapped: false };
     return { status: 'no-source', mapped: false };
@@ -393,10 +397,10 @@ export function evidenceCoverage(state, capabilityId) {
     requirements: reqs,
     targets,
     // Stale evidence still counts as evidence; it is flagged, not discarded.
-    sufficient: count(reqs, 'covered', 'stale', 'judged'),
+    sufficient: count(reqs, 'covered', 'stale', 'judged', 'incident'),
     total: reqs.length,
     mapped: reqs.filter((x) => x.mapped).length,
-    gaps: reqs.filter((x) => !['covered', 'judged'].includes(x.status)),
+    gaps: reqs.filter((x) => !['covered', 'judged', 'incident'].includes(x.status)),
   };
 }
 

@@ -153,6 +153,18 @@ The **activity history** is an audit-style timeline: pilot started, failure foun
 
 ---
 
+### Collecting evidence without integrations (#142)
+
+A small team with no eval, observability or data stack can collect everything an authority decision needs inside Authority Lab. A capability's **Evidence** page (Configure evidence) lists each Requirement and Target with its evidence, its coverage and its **Result**: Met, Not met, Unknown, Conflicting, Not enough evidence, No evidence yet or Needs decision, each with the reason. Only Met counts toward readiness.
+
+- **Test cases record real outcomes.** Outside the Northstar demo, Authority Lab never runs anything: the team runs each case through its real AI and uses **Record outcome** (Pass / Fail with severity / Unable to judge, what happened, an optional link). The latest outcome per case feeds the built-in tests source; Unable to judge is left out of the rate. Only the demo simulates, labelled as such.
+- **Record result** on a Requirement or Target with a number records a result by hand or **uploads** a CSV/JSON file: one row per case with an `outcome` column (totalled by Authority Lab), already-totalled rows (`passed`/`total`, or `value`), or an evidence envelope. The first result links the row to manual results; after results exist, linking a row needs approval, as before. An upload stays in this browser and keeps its file name, source label, who imported it, and its dates and case counts.
+- **Record judgment** on a Requirement with no number (Met / Not met / Unknown, with a reason). The Owner's and Reviewers' latest judgments decide it; a Stakeholder's is input only.
+- **Incidents, feedback and Impact** are recorded on their own page. An open (or under-review) **critical** incident makes "No unresolved critical incidents" Not met; resolving it removes the blocker but doesn't show the Requirement met. Feedback judges nothing unless a row is mapped to the Feedback source (share of positive feedback, judged like real use). Impact is informational.
+- **Results combine when compatible.** Results recorded by hand or uploaded for the same row, segment, evidence mode, kind of measurement and configuration, inside the 90-day window, add up: three reviews of 10 cases count as 30. A single value never combines. Connected sources keep their own rule (the newest run under the current configuration).
+- **Disagreement is Conflicting.** When two current results judge the same row and one says met while another says not, or the Owner and a Reviewer disagree, the row is Conflicting: never a pass, and the page names the evidence that disagrees. Stale results don't create a conflict.
+- Recorded outcomes, Met/Not met judgments and incidents count as results, so they lock the bar like a test run or an import; Unknown judgments, feedback and Impact don't. Nothing here is ever edited: a correction is a new record.
+
 ### Setting up a new capability: the setup flow (#139)
 
 Setup follows the reset's order, with related steps sharing a screen: **Context** → **Starting point and capability** → (if already in use) **What it does today** → **Risk and authority** → **Boundaries** → **Requirements and Targets** → **Evidence** → **People** → **Review and confirm**. The capability's **Setup** page lists the steps and where each stands.

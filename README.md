@@ -66,6 +66,10 @@ Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/â
 
 `agent/` is an MCP server that gives a model the tools to look up orders, issue refunds and escalate to a person. Every call goes through the gate and the data filter in `src/store/`. It's separate from the static app: it has its own pinned dependencies and is never deployed. See [agent/README.md](agent/README.md) to run it with Claude Code or Claude Desktop.
 
+## Evidence without integrations
+
+A small team can collect evidence entirely inside Authority Lab (#142): record each test case's real outcome, record or upload results against a Requirement or Target, judge Requirements that have no number, and log incidents, feedback and Impact. Compatible results add up; disagreement shows as Conflicting; every Requirement says why it is Met, Not met, Unknown, Conflicting or short of evidence. Only the Northstar demo simulates test results. See `docs/HOW_IT_WORKS.md`, "Collecting evidence without integrations".
+
 ## Evidence from other systems
 
 An AI system that runs somewhere else can send evidence about one of its capabilities: one JSON envelope per run, committed to `src/data/external-evidence/` in a pull request and checked by CI. The site imports the committed files into the normal evidence list, labelled with their source. See [docs/EXTERNAL_EVIDENCE.md](docs/EXTERNAL_EVIDENCE.md).

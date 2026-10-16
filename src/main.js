@@ -9,6 +9,7 @@ import { decisionsListView, decisionWorkspaceView, decisionRecordView } from './
 import { activityView } from './views/activity.js';
 import { versionsView } from './views/versions.js';
 import { setupView } from './views/setup.js';
+import { judgeView, logView } from './views/lightweight.js';
 import { contextView, startView, capabilityStepView, todayStepView, riskStepView, setupHubView, reviewView } from './views/setupflow.js';
 import { contractBuilderView } from './views/contract.js';
 import { criteriaEditorView } from './views/criteria.js';
@@ -217,6 +218,8 @@ function render() {
       }
       else if (sub && action === 'evidence' && parts[3] === 'configure') { view = configureEvidenceView(state, sub, query); title = 'Configure evidence'; }
       else if (sub && action === 'evidence' && parts[3] === 'record') { view = recordEvidenceView(state, sub, query); title = 'Record a result'; }
+      else if (sub && action === 'evidence' && parts[3] === 'judge') { view = judgeView(state, sub, query); title = 'Record a judgment'; }
+      else if (sub && action === 'evidence' && parts[3] === 'log') { view = logView(state, sub, query); title = 'Incidents, feedback and Impact'; }
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
       else if (sub && action === 'setup') { view = getCapability(state, sub) && getCapability(state, sub).setup ? setupHubView(state, sub, query) : setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Boundaries'; }
@@ -325,7 +328,8 @@ function captureForms() {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = {};
     for (const el of form.elements) {
-      if (!el.name) continue;
+      // A file input can't be set back (#142): it is never captured or restored.
+      if (!el.name || el.type === 'file') continue;
       if (el.type === 'checkbox' || el.type === 'radio') values[`${el.name}=${el.value}`] = el.checked;
       else values[el.name] = el.value;
     }
@@ -340,7 +344,7 @@ function restoreForms(saved) {
     if (values && form.dataset.form === 'save-criteria') for (const el of form.querySelectorAll('[name="use-suggestion"]')) { if (`use-suggestion=${el.value}` in values) el.checked = values[`use-suggestion=${el.value}`]; }
     if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts') continue;
     for (const el of form.elements) {
-      if (!el.name) continue;
+      if (!el.name || el.type === 'file') continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
       else if (el.name in values) el.value = values[el.name];
     }
@@ -682,9 +686,43 @@ document.addEventListener('submit', (e) => {
     const capId = evForm.dataset.capability;
     const f = new FormData(evForm);
     const v = (k) => (f.get(k) || '').toString();
+    const fields = { by: actor(store.get(), capId), label: v('label'), kind: v('kind'), type: v('type'), passed: v('passed'), total: v('total'), value: v('value'), segment: v('segment'), severity: v('severity'), observedAt: v('observedAt'), note: v('note'), url: v('url') };
     dispatchOr(here(), () => {
-      store.dispatch('recordManualEvidence', capId, { by: actor(store.get(), capId), label: v('label'), kind: v('kind'), type: v('type'), passed: v('passed'), total: v('total'), value: v('value'), segment: v('segment'), severity: v('severity'), observedAt: v('observedAt'), note: v('note'), url: v('url') });
+      // From a Requirement or Target row (#142): the row's own metric.
+      if (evForm.dataset.row) { store.dispatch('recordResult', capId, { ...fields, label: undefined, rowKind: evForm.dataset.rowKind, rowId: evForm.dataset.row }); location.hash = `#/capabilities/${capId}/evidence/configure`; return; }
+      store.dispatch('recordManualEvidence', capId, fields);
       location.hash = `#/capabilities/${capId}?tab=decide&show=all`;
+    });
+    return;
+  }
+  // The lightweight evidence path (#142): outcomes, judgments, incidents,
+  // feedback, Impact and uploads. Each is recorded once, as entered.
+  const lwForm = e.target.closest('[data-form="record-outcome"], [data-form="record-judgment"], [data-form="record-incident"], [data-form="incident-status"], [data-form="record-feedback"], [data-form="record-impact"], [data-form="upload-evidence"]');
+  if (lwForm) {
+    e.preventDefault();
+    const capId = lwForm.dataset.capability;
+    const f = new FormData(lwForm);
+    const v = (k) => (f.get(k) || '').toString();
+    const by = actor(store.get(), capId);
+    const route = here();
+    const done = (to) => { if (to) location.hash = to; else { clearErrorOn(route, 'error'); render(); } };
+    const kind = lwForm.dataset.form;
+    if (kind === 'upload-evidence') {
+      const file = f.get('file');
+      if (!file || !file.name) { dispatchOr(route, () => { throw new Error('Choose a file.'); }); return; }
+      const reader = new FileReader();
+      reader.onload = () => dispatchOr(route, () => { store.dispatch('uploadEvidence', capId, { rowKind: lwForm.dataset.rowKind, rowId: lwForm.dataset.row, fileName: file.name, content: String(reader.result || ''), sourceLabel: v('sourceLabel'), kind: v('kind'), by }); done(`#/capabilities/${capId}/evidence/configure`); });
+      reader.onerror = () => dispatchOr(route, () => { throw new Error(`${file.name} couldn't be read.`); });
+      reader.readAsText(file);
+      return;
+    }
+    dispatchOr(route, () => {
+      if (kind === 'record-outcome') { store.dispatch('recordOutcome', capId, lwForm.dataset.scenario, { result: v('result'), severity: v('severity') || undefined, happened: v('happened'), reference: v('reference'), by }); done(); }
+      if (kind === 'record-judgment') { store.dispatch('recordJudgment', capId, lwForm.dataset.row, { verdict: v('verdict'), rationale: v('rationale'), reference: v('reference'), by }); done(`#/capabilities/${capId}/evidence/configure`); }
+      if (kind === 'record-incident') { store.dispatch('recordIncident', capId, { what: v('what'), severity: v('severity'), status: v('status'), date: v('date'), reference: v('reference'), by }); done(); }
+      if (kind === 'incident-status') { store.dispatch('setIncidentStatus', capId, lwForm.dataset.incident, { status: v('status'), note: v('note'), by }); done(); }
+      if (kind === 'record-feedback') { store.dispatch('recordFeedback', capId, { from: v('from'), sentiment: v('sentiment') || undefined, date: v('date'), note: v('note'), category: v('category'), reference: v('reference'), by }); done(); }
+      if (kind === 'record-impact') { store.dispatch('recordImpactActual', capId, { metric: v('metric'), value: v('value'), unit: v('unit'), result: v('result'), basis: v('basis'), period: v('period'), note: v('note'), reference: v('reference'), by }); done(); }
     });
     return;
   }

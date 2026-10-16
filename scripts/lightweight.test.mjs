@@ -308,3 +308,57 @@ test('State\'s committed-file path is judged exactly as before', () => {
   assert.ok(requirementsNow(s, id).every((r) => r.result.status === 'no-evidence'));
   assert.ok(evidenceSources(s).some((x) => x.id === 'state-evidence-interpretation'));
 });
+
+// ---------------------------------------------------------------------------
+// Screens
+// ---------------------------------------------------------------------------
+
+import { setPeople, setToday } from '../src/ui.js';
+import { testsView } from '../src/views/tests.js';
+import { configureEvidenceView } from '../src/views/configure.js';
+import { recordEvidenceView } from '../src/views/sources.js';
+import { judgeView, logView } from '../src/views/lightweight.js';
+import { people } from '../src/store/index.js';
+
+const q = (str = '') => new URLSearchParams(str);
+const strip = (h) => String(h).replace(/<[^>]+>/g, ' ').replace(/&#39;/g, '\'').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+function render(s, view) {
+  setPeople(people(s));
+  setToday(s.today);
+  try { return String(view()); } finally { setPeople(null); }
+}
+
+test('screens: a real workspace records outcomes instead of running tests', () => {
+  let [s, id] = firm();
+  s = saveScenarios(s, id, { scenarios: SCENARIOS, by: ANA });
+  const page = render(s, () => testsView(s, id, q()));
+  assert.doesNotMatch(page, /data-action="run-tests"/);
+  assert.equal((page.match(/data-form="record-outcome"/g) || []).length, 3);
+  assert.match(strip(page), /Authority Lab doesn't run your AI or call any model/);
+  assert.doesNotMatch(strip(page), /simulated/i);
+});
+
+test('screens: the evidence page shows each Requirement\'s result and why, with a manual way to fill each gap', () => {
+  let [s, id] = firm();
+  s = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
+  const page = render(s, () => configureEvidenceView(s, id, q()));
+  const text = strip(page);
+  assert.match(text, /Result/);
+  assert.match(text, /Met: 90% across 10 cases/);
+  assert.match(page, /evidence\/judge\?row=templates">Record judgment/);
+  assert.match(page, /evidence\/record\?row=requirement:accuracy">Record result/);
+  assert.match(text, /No metric: the Owner or a Reviewer judges it, and an open critical incident blocks it/);
+});
+
+test('screens: recording against a row offers an upload that says it stays in this browser; judgments and the log render', () => {
+  const [s, id] = firm();
+  const rec = strip(render(s, () => recordEvidenceView(s, id, q('row=requirement:accuracy'))));
+  assert.match(rec, /For: Overall accuracy ≥ 90%/);
+  assert.match(rec, /Stays in this browser/);
+  assert.match(rec, /one row per case/);
+  const judge = strip(render({ ...s, actingAs: CARA }, () => judgeView({ ...s, actingAs: CARA }, id, q('row=templates'))));
+  assert.match(judge, /Recorded as input/);
+  const log = strip(render(s, () => logView(s, id, q())));
+  for (const h of ['Incidents', 'Feedback', 'Impact']) assert.match(log, new RegExp(h));
+  assert.match(log, /Impact is informational and never changes readiness/);
+});

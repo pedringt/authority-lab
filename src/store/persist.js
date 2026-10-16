@@ -20,6 +20,7 @@ import { recordContext, suggestContext, reviewContextFact, recordBaseline, recor
 import { assessRisk } from './risk.js';
 import { startCapability, editSetupCapability, saveSetupRisk, setStartingAuthority, confirmSetup } from './setup.js';
 import { suggestFromDescription } from './context.js';
+import { recordOutcome, recordJudgment, recordIncident, setIncidentStatus, recordFeedback, recordImpactActual, recordResult, uploadEvidence } from './lightweight.js';
 import { setResidualRisk } from './decisions.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
@@ -111,6 +112,14 @@ export const ACTIONS = {
   setStartingAuthority,
   confirmSetup,
   suggestFromDescription,
+  recordOutcome,
+  recordJudgment,
+  recordIncident,
+  setIncidentStatus,
+  recordFeedback,
+  recordImpactActual,
+  recordResult,
+  uploadEvidence,
   reset,
 };
 

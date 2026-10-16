@@ -60,6 +60,10 @@ A measurement has a `metric` id (lowercase letters, digits, hyphens), an optiona
 
 Authority Lab gets a summary and a reference, never the source's content. Every key is allowlisted at every level, so a field the contract doesn't have (a document body, a system prompt, examples, a token) is refused, and every text field is short. The source system stays the record of the detailed run; follow `reference.url` to see it.
 
+## Results people record or upload (#142)
+
+The same envelope carries results a person records in Authority Lab (**Record result**) and files they upload (CSV or JSON). They differ from a connected sender in one way: compatible results add up instead of the newest replacing the rest (same metric, segment, `kind`, measurement type, unit and configuration, inside the 90-day manual window). Three reviews of 10 cases count as 30. A single `value` never adds up. An upload stays in the browser it was made in; a committed file is still the way to share evidence.
+
 ## Versions and comparability
 
 Send every version you know in `config`, the same way on every run. Authority Lab groups runs by source system, source capability and kind (eval or production). The newest run by `observedAt` sets the current configuration; results from a different configuration (any version changed, added or dropped) are shown as **Earlier configuration** and don't count toward targets. Under the same configuration, a newer run's result for a metric and segment replaces the older one. A decision record keeps the configuration in force when it was made.
