@@ -310,7 +310,7 @@ const AREA_WORDS = [
   ['People', /\b(customer|patient|employee|applicant|user|people|person)/i],
   ['Money', /\b(refund|payment|money|credit|invoice|price|\$\d)/i],
   ['Rights', /\b(rights|eligib|benefit|appeal)/i],
-  ['Accounts', /\b(account|login|access)/i],
+  ['Accounts', /\b(accounts?|login|log-in)\b/i],
   ['Compliance', /\b(complian|regulat|legal|law|audit|policy)/i],
   ['Safety', /\b(safety|harm|medical|health|injur)/i],
 ];
@@ -328,7 +328,9 @@ export function interpretDescription(text) {
   const pilot = /\bpilot/i.test(t);
   const live = /\bproduction\b|\blive\b|\bin use\b/i.test(t);
   if (pilot || live) facts.stage = pilot && live ? 'Both' : pilot ? 'Pilot' : 'Production';
-  const sentence = t.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)[0];
+  // The purpose: the sentence that says what the AI is for, else the first.
+  const sentences = t.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
+  const sentence = sentences.find((x) => /\bAI\b/.test(x)) || sentences[0];
   if (sentence) facts.purpose = sentence;
   return facts;
 }

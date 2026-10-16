@@ -2,7 +2,7 @@
 // style. What each capability handles now comes first; the level name is a
 // plain column, and only a restriction is called out.
 import { html, person } from '../ui.js';
-import { authorityRows, workspaceOf, workflowOf, getCapability } from '../store/index.js';
+import { authorityRows, workspaceOf, workflowOf, getCapability, setupState } from '../store/index.js';
 
 export function capabilitiesView(state) {
   const rows = authorityRows(state).map((r) => {
@@ -10,7 +10,7 @@ export function capabilitiesView(state) {
     return html`<tr>
       <td><a href="#/capabilities/${r.capabilityId}"><strong>${r.cap}</strong></a></td>
       <td>${r.plain}</td>
-      <td>${r.level}${cap.status === 'restricted' ? ' · Restricted' : cap.status === 'not-delegated' ? ' · Not delegated' : ''}</td>
+      <td>${setupState(state, cap.id) === 'draft' ? 'Not granted yet · setup not confirmed' : html`${r.level}${cap.status === 'restricted' ? ' · Restricted' : cap.status === 'not-delegated' ? ' · Not delegated' : ''}`}</td>
       <td class="muted">${person(cap.owner).name}</td>
     </tr>`;
   });

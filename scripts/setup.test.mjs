@@ -9,11 +9,13 @@ import {
   addCapability, getCapability, capData, current, startContractDraft, reviewSuggestion, confirmSection, finalizeContract, SECTION_KEYS,
   saveCriteria, defaultsFor, saveStakeholders, addStarterScenarios, startTestRun, advanceTestRun, proposeAuthority, selectDecision,
   setOutcome, setRolloutField, authorize, proposeAmendment, versionList, RISK_OPTIONS,
-  mapEvidence, recordManualEvidence,
+  mapEvidence, recordManualEvidence, startCapability,
 } from '../src/store/index.js';
 import { setPeople, setToday } from '../src/ui.js';
 import { workspaceSetupView } from '../src/views/workspace.js';
-import { addCapabilityView, setupView, setupSteps, SETUP_STAGES, RISK_ANSWERS, TODAY_CHOICES } from '../src/views/setup.js';
+import { setupView, setupSteps, SETUP_STAGES, RISK_ANSWERS, TODAY_CHOICES } from '../src/views/setup.js';
+import { startView, riskStepView } from '../src/views/setupflow.js';
+import { STARTING_POINTS } from '../src/data/templates.js';
 import { peopleView } from '../src/views/people.js';
 import { decisionRecordView } from '../src/views/decisions.js';
 
@@ -257,22 +259,25 @@ test('failure types are optional: defaults follow the risk profile, and a choice
   assert.deepEqual(current(s, lastCap(s), 'risk').failureTypes, ['User rejection']);
 });
 
-test('the add-capability page asks four plain questions; answers map to the stored risk values', () => {
-  const s = solo();
-  const page = render(s, () => String(addCapabilityView(s, q())));
-  const words = text(page);
-  for (const h of ['What does it do?', 'Who owns it?', 'What happens if it gets this wrong?', 'What does it do today?']) assert.ok(words.includes(h), h);
+test('the setup screens ask plain questions; answers map to the stored risk values (#139)', () => {
+  let s = solo();
+  const start = render(s, () => String(startView(s, q())));
+  const words = text(start);
+  for (const h of ['Starting point', 'What specific thing are we giving AI permission to do?', 'Is it already in use?', 'Who owns it?']) assert.ok(words.includes(h), h);
+  for (const t of STARTING_POINTS) assert.match(start, new RegExp(`name="template" value="${t.id}"`));
+  s = startCapability(s, { name: 'Tagging', owner: 'ana-ruiz', template: 'extract', lifecycle: 'planned', by: 'ana-ruiz' });
+  const page = render(s, () => String(riskStepView(s, lastCap(s), q())));
   for (const k of ['impact', 'reversibility', 'exposure']) {
     assert.deepEqual(RISK_ANSWERS[k].map(([v]) => v), RISK_OPTIONS[k], `${k}: every stored value has a plain answer`);
-    for (const [v, label] of RISK_ANSWERS[k]) assert.ok(page.includes(`<option value="${v}" >${label}</option>`) || page.includes(`<option value="${v}">${label}</option>`), `${k}: ${label}`);
   }
+  assert.match(page, /<option value="Medium"[^>]*>Moderate: /, 'Severity reads Moderate; the stored key stays Medium');
   for (const [v, label] of TODAY_CHOICES) {
     assert.match(page, new RegExp(`name="today" value="${v}"`));
-    assert.ok(words.includes(label));
+    assert.ok(text(page).includes(label));
   }
-  assert.ok(!/name="starting"/.test(page), 'no starting-level picker');
-  assert.match(page, /<details class="onboard-more">\s*<summary>More detail \(optional\)<\/summary>[\s\S]*name="failureTypes"/);
+  assert.match(page, /name="likelihood"[\s\S]*Unknown: not enough to say yet/);
   assert.ok(!/the AI (may|won't|suggests|sees)/.test(page), 'no anthropomorphic phrasing');
+  assert.ok(!/Suggested by AI/.test(start + page));
 });
 
 // ---------------------------------------------------------------------------

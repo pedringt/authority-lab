@@ -260,8 +260,8 @@ export function evidenceCoverage(state, capabilityId) {
 // The coverage headline: "4 of 5 decision requirements have sufficient
 // evidence; Minimum 40 high-value cases still needs more cases (18 of 40)."
 export function coverageText(cov) {
-  if (!cov.total) return 'No decision requirements yet.';
-  const head = `${cov.sufficient} of ${cov.total} decision requirement${cov.total === 1 ? ' has' : 's have'} sufficient evidence`;
+  if (!cov.total) return 'No Requirements yet.';
+  const head = `${cov.sufficient} of ${cov.total} Requirement${cov.total === 1 ? ' has' : 's have'} sufficient evidence`;
   const gap = cov.gaps.find((g) => g.status === 'needs-decision') || cov.gaps.find((g) => g.status === 'insufficient') || cov.gaps.find((g) => g.status === 'no-data') || cov.gaps.find((g) => g.status === 'no-source') || cov.gaps.find((g) => g.status === 'stale');
   if (!gap) return `${head}.`;
   const why = gap.status === 'needs-decision' ? 'has no number yet: it needs a decision'

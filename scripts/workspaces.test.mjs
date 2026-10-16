@@ -71,7 +71,7 @@ test('no fictional evidence: State starts with none, and the gaps show as gaps',
   assert.equal(capData(s, ID).evidence.length, 0);
   assert.deepEqual(evidenceSources(s).map((x) => x.id), ['authority-lab-tests', 'manual-review', 'state-evidence-interpretation']);
   assert.ok(evidenceSources(s).every((x) => !x.example));
-  assert.equal(coverageText(evidenceCoverage(s, ID)), '0 of 5 decision requirements have sufficient evidence; "Minimum 16 eval scenarios in a run" has no results yet.');
+  assert.equal(coverageText(evidenceCoverage(s, ID)), '0 of 5 Requirements have sufficient evidence; "Minimum 16 eval scenarios in a run" has no results yet.');
   assert.throws(() => proposeAuthority(s, ID, 2, { by: PAIGE }), /There is no evidence yet/);
   const steps = Object.fromEntries(setupSteps(s, ID).map((x) => [x.id, x.done]));
   assert.deepEqual(steps, { define: true, contract: true, criteria: true, configure: true, coverage: false, gaps: false, stakeholders: true, decision: false });
@@ -80,7 +80,7 @@ test('no fictional evidence: State starts with none, and the gaps show as gaps',
 test('State\'s real run is judged through the normal model: the approved bar, Draft can be proposed, Level 3 waits for real use', () => {
   let s = importEvidence(build(), REAL_RUN);
   assert.equal(criteriaLocked(s, ID), true);
-  assert.equal(coverageText(evidenceCoverage(s, ID)), '5 of 5 decision requirements have sufficient evidence.');
+  assert.equal(coverageText(evidenceCoverage(s, ID)), '5 of 5 Requirements have sufficient evidence.');
   assert.equal(readiness(s, ID).met, 5);
   assert.deepEqual(requirementsNow(s, ID).map((r) => r.current), ['16', '100% across 16 cases', '0 across 11 cases', '0 across 12 cases', '100% across 10 cases']);
   assert.ok(targetsNow(s, ID).every((t) => t.status === 'pass'));

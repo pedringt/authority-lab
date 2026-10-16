@@ -8,7 +8,7 @@
 // is its own module; old tab names are rewritten in routes.js.
 
 import { html, raw, notice } from '../ui.js';
-import { getCapability, capData, waitingActions } from '../store/index.js';
+import { getCapability, capData, waitingActions, setupState } from '../store/index.js';
 import { summaryTab, contractTab, waitingTab } from './cap-status.js';
 import { decideTab } from './cap-decide.js';
 import { monitoringTab } from './cap-monitor.js';
@@ -53,6 +53,7 @@ export function capabilityView(state, id, query, { runs = null } = {}) {
     <p class="cap-desc">${cap.summary}</p>
     ${tabs}
   </header>
+  ${setupState(state, cap.id) === 'draft' ? notice('decision', 'Setup isn\'t confirmed yet', 'No authority is granted until the owner reviews and confirms the setup. Until then the AI can\'t act, and no one can propose more authority. Tests and evidence can still be gathered.', { link: `${base}/setup`, linkText: 'Continue setup' }) : ''}
   ${query.get('error') ? notice('fail', 'That didn\'t work', query.get('error')) : ''}
   ${query.get('tightened') ? notice('pass', 'Targets tightened', 'Every change only made a target stricter, so it applied straight away. Changes are kept in history.', { link: `${base}?tab=history`, linkText: 'See history' }) : ''}
   <div class="tab-panel">${body}</div>`;

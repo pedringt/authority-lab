@@ -4233,9 +4233,9 @@ test('the pilot range and the stakeholder positions date never fall back to a ma
 test('the rules builder for a capability that already has rules points to its Rules tab, with no issue numbers on screen', () => {
   const s = initialState();
   const page = String(contractBuilderView(s, RR, new URLSearchParams()));
-  assert.match(page, /<h1>Set up rules<\/h1>/);
-  assert.match(page, /Rules are already set/);
-  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=rules">See rules</);
+  assert.match(page, /<h1>Boundaries<\/h1>/);
+  assert.match(page, /Boundaries are already set/);
+  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=rules">See them</);
   const text = page.replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'");
   assert.doesNotMatch(text, /#\d|amendment|sign-off|contract/i);
 });

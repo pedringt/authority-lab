@@ -134,9 +134,12 @@ The information architecture and product model must stabilize first.
 ## Where the phases stand
 
 - **Phase 1 — data model (#137): done.** Merged to `main` in #138 (2026-10-16). Paige's answers and the follow-up notes are in `docs/DECISIONS.md` under "Product reset, Phase 1". Treat them as settled.
-- **Phase 2 — setup flow (#139): next, blocked on Paige's product answers.** The issue lists the scope and five open product questions: when setup is recorded, what Review/confirm gates, templates, default numbers, and the "Suggested by AI" label. Do not start coding Phase 2 until Paige answers them. Record the answers in `docs/DECISIONS.md` before implementing.
+- **Phase 2 — setup flow (#139): built, PR open, not merged.** Paige's answers (2026-10-16) are in `docs/DECISIONS.md` under "Product reset, Phase 2". Merging needs Paige to name the destination.
+- **Phase 3 — lightweight evidence path: not started.** Don't start it until Paige says so.
 
-Phase 2 is **not** approval to continue into Proposal/Decision, Residual Risk decision UX, Monitor, material-change revalidation, generative UI or visual polish.
+Known follow-ups from Phase 2: the Decide, Monitor and record screens still say "Rules" and "Decision requirements"; the Status tab's rules panel doesn't yet separate the written Boundary from its enforcement the way setup's review does; the decision record doesn't link to its Setup confirmed snapshot.
+
+No phase is approval to continue into the next one: Proposal/Decision, Residual Risk decision UX, Monitor, material-change revalidation, generative UI and visual polish each wait for Paige.
 
 See `docs/IMPLEMENTATION_PLAN.md`.
 

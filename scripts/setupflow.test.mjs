@@ -110,7 +110,8 @@ test('every suggested Boundary is pending, says where it came from, and none is 
   assert.ok(lines.length > 8);
   assert.ok(lines.every((l) => isSuggestion(l) && l.status === 'pending'), 'a template never decides a Boundary');
   assert.deepEqual([...new Set(lines.map(suggestionOrigin))].sort(), ['answers', 'template']);
-  assert.ok(lines.some((l) => suggestionOrigin(l) === 'answers' && /mentions "refund"/.test(l.because)));
+  assert.ok(lines.some((l) => suggestionOrigin(l) === 'answers' && l.because === 'your risk answers'));
+  assert.ok(!lines.some((l) => /refund or credit policy/.test(l.text)), 'the demo\'s keyword suggestions are not used here');
   assert.equal(SUGGESTION_LABELS.template, 'Template suggestion');
   assert.equal(SUGGESTION_LABELS.answers, 'Based on your answers');
   assert.ok(lines.every((l) => !/\d/.test(l.original.replaceAll(BLANK, ''))), 'no suggested Boundary carries a number');
@@ -304,4 +305,91 @@ test('Northstar and State capabilities are established: no setup state, no recor
   assert.equal(setupState(st, st.capabilities[0].id), 'established');
   // Their defaults are the ones they were set up with.
   assert.ok(defaultsFor(s, 'account-closure').criteria.some((c) => /\d/.test(c.target)));
+});
+
+// ---------------------------------------------------------------------------
+// Screens
+// ---------------------------------------------------------------------------
+
+import { setPeople, setToday } from '../src/ui.js';
+import { contextView, setupHubView, reviewView, setupSequence } from '../src/views/setupflow.js';
+import { criteriaEditorView } from '../src/views/criteria.js';
+import { contractBuilderView } from '../src/views/contract.js';
+import { summaryTab } from '../src/views/cap-status.js';
+import { overviewTodos, authorityRows } from '../src/store/index.js';
+
+const q = (str = '') => new URLSearchParams(str);
+const strip = (h) => String(h).replace(/<[^>]+>/g, ' ').replace(/&#39;/g, '\'').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+function render(s, view) {
+  setPeople(people(s));
+  setToday(s.today);
+  try { return String(view()); } finally { setPeople(null); }
+}
+
+test('Context screen: each suggested fact has its own Confirm and Reject, no confirm-all, and nothing claims to be AI', () => {
+  const s = suggestFromDescription(initialState(), { description: 'Our support team uses AI to recommend refunds for customer orders. We are piloting it.', by: 'priya' });
+  const page = render(s, () => contextView(s, q()));
+  assert.equal((page.match(/data-action="fact-confirm"/g) || []).length, Object.keys(contextNow(s)).length);
+  assert.equal((page.match(/data-action="fact-reject"/g) || []).length, Object.keys(contextNow(s)).length);
+  assert.doesNotMatch(strip(page), /confirm all|accept all/i);
+  assert.match(strip(page), /Based on your answers/);
+  assert.match(strip(page), /simple keyword matching, not AI/);
+  assert.doesNotMatch(strip(page), /Suggested by AI/);
+});
+
+test('the setup hub follows the sequence; an in-use capability gets "What it does today"', () => {
+  let [s, id] = draft();
+  assert.deepEqual(setupSequence(s, id).map((st) => st.id), ['context', 'capability', 'risk', 'boundaries', 'requirements', 'evidence', 'people', 'review']);
+  [s, id] = draft({ lifecycle: 'in-use', name: 'Tag tickets' });
+  assert.deepEqual(setupSequence(s, id).map((st) => st.id).slice(0, 4), ['context', 'capability', 'today', 'risk']);
+  const page = strip(render(s, () => setupHubView(s, id, q())));
+  assert.match(page, /no authority can be proposed or granted until the setup is confirmed/);
+  assert.match(page, /Answer the Risk questions first/);
+});
+
+test('the Requirements editor lists suggestions unticked, and warns before results', () => {
+  let [s, id] = draft();
+  s = saveSetupRisk(s, id, { ...RISK, by: 'priya' });
+  const page = render(s, () => criteriaEditorView(s, id, q()));
+  const boxes = page.match(/name="use-suggestion"[^>]*>/g) || [];
+  assert.ok(boxes.length > 3);
+  assert.ok(boxes.every((b) => !/checked/.test(b)), 'nothing is added for you');
+  assert.match(strip(page), /Minimum cases: Needs decision/);
+  assert.match(strip(page), /Once results are recorded, Requirements, Targets and governed People choices may need sign-off/);
+  assert.doesNotMatch(strip(page), /≥ \d|\d+%/, 'no suggested number on the page');
+});
+
+test('the Boundaries builder labels suggestions by their source and offers "Fill in the number" instead of Accept for a blank', () => {
+  let [s, id] = draft();
+  s = startContractDraft(saveSetupRisk(s, id, { ...RISK, by: 'priya' }), id, { by: 'priya' });
+  const page = render(s, () => contractBuilderView(s, id, q()));
+  assert.match(page, /Template suggestion/);
+  assert.match(page, /Based on your answers/);
+  assert.match(page, /Fill in the number/);
+  assert.doesNotMatch(page, /Suggested by AI/);
+  const blanks = capData(s, id).contractDraft.lines.filter((l) => l.original.includes(BLANK)).length;
+  const accepts = (page.match(/data-action="suggestion-accept"/g) || []).length;
+  assert.equal(accepts, capData(s, id).contractDraft.lines.length - blanks);
+});
+
+test('the review screen: only the owner can confirm, Boundaries read as written vs enforced, and open items are listed', () => {
+  const [s, id] = readyDraft();
+  const asOwner = render({ ...s, actingAs: 'priya' }, () => reviewView({ ...s, actingAs: 'priya' }, id, q()));
+  assert.match(asOwner, /data-action="confirm-setup"[^>]*>Confirm setup as/);
+  assert.doesNotMatch(asOwner.match(/data-action="confirm-setup"[^>]*>/)[0], /disabled/);
+  const other = Object.keys(people(s)).find((k) => k !== 'priya');
+  const asOther = render({ ...s, actingAs: other }, () => reviewView({ ...s, actingAs: other }, id, q()));
+  assert.match(asOther.match(/data-action="confirm-setup"[^>]*>/)[0], /disabled/);
+  const text = strip(asOwner);
+  assert.match(text, /Written Boundary/);
+  assert.match(text, /It doesn't mean nothing is enforced/);
+  assert.match(text, /Open, and allowed at confirmation/);
+  assert.match(text, /Overall Risk Unknown/);
+});
+
+test('a draft says no authority is granted, everywhere it shows', () => {
+  const [s, id] = draft();
+  assert.match(strip(render(s, () => summaryTab(s, getCapability(s, id), capData(s, id)))), /No authority granted yet/);
+  assert.ok(overviewTodos(s).some((t) => t.capabilityId === id && /Finish setting up/.test(t.title)));
+  assert.equal(authorityRows(s).find((r) => r.capabilityId === id).level, 'Not granted yet');
 });

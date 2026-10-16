@@ -2,7 +2,7 @@
 // are "Rules".
 
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from '../data/contract-templates.js';
-import { findStartingPoint, START_FROM_SCRATCH, riskBoundaries, blankNumbers, hasBlank } from '../data/templates.js';
+import { findStartingPoint, START_FROM_SCRATCH, riskBoundaries, hasBlank } from '../data/templates.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionList, performanceResultsSeen } from './selectors.js';
@@ -53,8 +53,11 @@ export function startContractDraft(state, capabilityId, { by } = {}) {
 }
 
 // A capability set up through the setup flow (#139): every line is a
-// suggestion reviewed on its own (template, risk answers, or the name and
-// summary), none is pre-accepted, and numbers are blanks a person fills in.
+// suggestion reviewed on its own (from the template or the risk answers),
+// none is pre-accepted, and numbers are blanks a person fills in. The old
+// keyword suggestions from the name and summary were written for the demo's
+// support domain ("accountant" matched "account"), so the template families
+// replace them here.
 export const SUGGESTION_LABELS = { template: 'Template suggestion', answers: 'Based on your answers', 'authority-lab': 'Authority Lab suggestion', ai: 'AI suggestion' };
 // Lines a person must review: suggestions, and the old keyword lines ('ai'),
 // which were always deterministic and now read "Based on your answers".
@@ -76,7 +79,6 @@ function startSetupBoundaries(state, cap, risk, by) {
   for (const section of SECTION_KEYS) for (const text of family.boundaries[section] || []) push(section, text, 'template', family.name);
   const fromRisk = riskBoundaries(risk);
   for (const section of SECTION_KEYS) for (const text of fromRisk[section] || []) push(section, text, 'answers', 'your risk answers');
-  for (const sug of suggestLines(cap.name, cap.summary)) push(sug.section, blankNumbers(sug.text), 'answers', `it mentions "${sug.because}"`);
   const draft = {
     templateId: family.id,
     templateName: family.name,
@@ -89,7 +91,7 @@ function startSetupBoundaries(state, cap, risk, by) {
     finalizedAt: null,
   };
   const s = updateCap(state, cap.id, { contractDraft: draft });
-  return logEvent(s, { kind: 'contract-draft', title: 'Boundaries draft started', body: `${cap.name}: ${lines.length} suggested Boundaries to review one at a time (from ${family.name}, the risk answers, and the name and summary).`, capabilityId: cap.id, link: `#/capabilities/${cap.id}/contract/build` });
+  return logEvent(s, { kind: 'contract-draft', title: 'Boundaries draft started', body: `${cap.name}: ${lines.length} suggested Boundaries to review one at a time (from ${family.name} and the risk answers).`, capabilityId: cap.id, link: `#/capabilities/${cap.id}/contract/build` });
 }
 
 export function withDraft(state, capabilityId, fn) {

@@ -153,6 +153,21 @@ The **activity history** is an audit-style timeline: pilot started, failure foun
 
 ---
 
+### Setting up a new capability: the setup flow (#139)
+
+Setup follows the reset's order, with related steps sharing a screen: **Context** → **Starting point and capability** → (if already in use) **What it does today** → **Risk and authority** → **Boundaries** → **Requirements and Targets** → **Evidence** → **People** → **Review and confirm**. The capability's **Setup** page lists the steps and where each stands.
+
+- **Setup is a draft until the owner confirms it.** Adding a capability (**Capabilities → Add capability**) starts a draft: no authority is granted (the gate treats it as Level 0) and no decision record is written. Every step saves as you go. **Review and confirm** reads the whole setup back in plain language, lists what's missing and what's open (bars that still need a decision, unconfirmed Context, a missing baseline), and only the owner can confirm. Confirming writes the starting decision record (Level 0 or 1, or not delegated) and an immutable **Setup confirmed** snapshot of what was reviewed, together.
+- **Confirmation gates authority, not exploration.** Before confirming you can write test cases, run tests, and configure or import evidence. Nobody can propose or grant more authority until setup is confirmed. The first recorded result still locks the Requirements, Targets and who is involved under the usual rules, even in a draft; setup warns before that line is crossed.
+- **Context** belongs to the workflow. Describe it in your own words and Authority Lab suggests facts by simple keyword matching (labelled "Based on your answers", never AI). Each is confirmed, corrected or rejected on its own; only confirmed facts shape setup. Confirmed Context marks the template families that fit.
+- **Starting point:** one of eight template families (Knowledge / Research, Draft / Create, Extract / Classify, Recommend, Customer / User Interaction, Workflow Automation, Action / Transaction, Monitor / Detect) or Start from scratch. Templates suggest; they never decide.
+- **Risk and authority:** Severity (shown as Low / Moderate / High), Likelihood (Unknown is an answer), Scale, whether it can be undone, and who is affected. Overall Risk is worked out from the fixed table and explained. The starting authority comes from what it does today, at Level 1 at most; effective authority recorded under **What it does today** is shown beside it, never granted.
+- **Boundaries:** every suggestion, from the template or the risk answers, is pending until it's accepted, edited or rejected on its own, and says where it came from ("Template suggestion", "Based on your answers"). Where a number goes, the suggestion has a blank (___) that a person fills in before it can be accepted. The review shows each saved line as a **Written Boundary** unless Authority Lab's gate actually checks it, and says that runtime limits are set on the authority decision that grants them.
+- **Requirements and Targets:** suggestions are listed apart and added by ticking each one. None sets a number: a measurable Requirement comes with a Target whose bar is **Needs decision**, and the required minimum-cases coverage rule starts as "Minimum cases: Needs decision". Leaving a suggestion out needs a reason, as before.
+- **People:** one Owner, then Reviewers (input required) and Stakeholders (involved or consulted). The approval rules underneath don't change.
+
+Capabilities that existed before #139 (the Northstar demo's, State's) keep their history and are treated as already set up. The table below describes how they were set up.
+
 ### Setting up a new capability: the path at a glance
 
 Everything in Authority Lab is done one capability at a time. A new capability goes through seven steps, in this order, and each step has to be real before the next one means anything:

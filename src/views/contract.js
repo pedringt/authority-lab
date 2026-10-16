@@ -1,6 +1,7 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
-import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS } from '../store/index.js';
+import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS, isSuggestion, suggestionOrigin, SUGGESTION_LABELS, setupState } from '../store/index.js';
+import { hasBlank } from '../data/templates.js';
 import { diffTable } from './activity.js';
 
 const SECTION_HELP = {
@@ -21,14 +22,16 @@ export function contractBuilderView(state, capabilityId, query) {
   const error = query.get('error');
 
   if (versionList(state, capabilityId, 'contract').length) {
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Set up rules</h1><p class="lede">${cap.name} already has rules. To change them, propose a rule change; it needs approval.</p></div></div>
-      ${notice('neutral', 'Rules are already set', 'See them on the capability\'s Rules tab, where you can also propose a change.', { link: `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: 'See rules' })}`;
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Boundaries</h1><p class="lede">${cap.name} already has its Boundaries. To change them, propose a change; it needs approval.</p></div></div>
+      ${notice('neutral', 'Boundaries are already set', 'See them on the capability\'s Rules tab, where you can also propose a change.', { link: cap.setup ? `#/capabilities/${cap.id}/setup` : `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: cap.setup ? 'Back to setup' : 'See them' })}`;
   }
 
   if (!draft) {
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 2</p><h1>Set up rules</h1>${lede(html`We'll start you with rules suited to this risk level (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown exposure').toLowerCase()}).`, html`We also add suggestions based on the capability's name and summary, each marked <strong>Suggested by AI</strong>. Review each one, confirm every section, fix anything the checks flag, and then a named person saves the rules.`)}</div></div>
-      ${error ? notice('fail', 'We couldn\'t start the rules', error) : ''}
-      <div class="card"><p>Starting as <strong>${acting.name}</strong>, ${acting.role}.</p><button class="btn btn-primary" data-action="contract-start" data-capability="${cap.id}">Start with suggested rules</button></div>`;
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}${cap.setup ? '/setup' : ''}">${cap.name}${cap.setup ? ' · Setup' : ''}</a></p><h1>Boundaries</h1>${cap.setup
+      ? lede(html`Where should the AI stop or involve a person?`, html`Authority Lab suggests Boundaries from the starting point and your risk answers. Each one says where it came from. Review every suggestion on its own: accept, edit or reject it. Where a number goes, the suggestion leaves a blank for you to fill in.`)
+      : lede(html`We'll start you with Boundaries suited to this risk level (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown exposure').toLowerCase()}).`, html`We also add suggestions based on the capability's name and summary, each marked <strong>Based on your answers</strong>. Review each one, confirm every section, fix anything the checks flag, and then a named person saves them.`)}</div></div>
+      ${error ? notice('fail', 'We couldn\'t start the Boundaries', error) : ''}
+      <div class="card"><p>Starting as <strong>${acting.name}</strong>, ${acting.role}.</p><button class="btn btn-primary" data-action="contract-start" data-capability="${cap.id}">Start with suggested Boundaries</button></div>`;
   }
 
   const checks = contractChecks(state, capabilityId);
@@ -69,9 +72,11 @@ export function contractBuilderView(state, capabilityId, query) {
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 2</p>
-      <h1>Set up rules</h1>
-      ${lede(html`Starting rules: <strong>${draft.templateName}</strong>, suited to this risk level.`, html`${draft.lines.filter((l) => l.source === 'ai').length} suggestions are based on the name and summary, marked "Suggested by AI". Accept, edit or reject each one; there's no accept-all, on purpose. Rejected suggestions are kept in history.`)}
+      <p class="eyebrow"><a href="#/capabilities/${cap.id}${cap.setup ? '/setup' : ''}">${cap.name}${cap.setup ? ' · Setup' : ''}</a></p>
+      <h1>Boundaries</h1>
+      ${cap.setup
+        ? lede(html`Starting point: <strong>${draft.templateName}</strong>. ${draft.lines.filter(isSuggestion).length} suggestions to review.`, html`Accept, edit or reject each one; there's no accept-all, on purpose. Suggestions with a blank need your number before they can be accepted. Rejected suggestions are kept in history.`)
+        : lede(html`Starting Boundaries: <strong>${draft.templateName}</strong>, suited to this risk level.`, html`${draft.lines.filter((l) => l.source === 'ai').length} suggestions are based on the name and summary, marked "Based on your answers". Accept, edit or reject each one; there's no accept-all, on purpose. Rejected suggestions are kept in history.`)}
     </div>
   </div>
   ${error ? notice('fail', 'We couldn\'t make that change', error) : ''}
@@ -87,25 +92,31 @@ export function contractBuilderView(state, capabilityId, query) {
 
   ${section('Checks', html`<div class="card">${checks.length ? html`<ul class="check-list">${checks.map((c) => html`<li>${badge(c.level === 'block' ? 'fail' : 'watch', c.level === 'block' ? 'Must fix' : 'Warning')} ${c.text}${c.section ? html` <span class="muted">(${SECTION_LABELS[c.section]})</span>` : ''}</li>`)}</ul>` : html`<p class="muted">All checks passed.</p>`}</div>`, { subtitle: 'You can\'t save until these are fixed: an empty "Never allowed" or "Automation is pulled back if" section (unless impact is Low), rules that contradict each other, safety limits without a number or time period, and a financial capability without a spending limit.' })}
 
-  ${section('Save the rules', html`
+  ${section('Save the Boundaries', html`
     <div class="card">
       <p class="eyebrow">Summary</p>
       <p>${contractSummary(value, cap) || html`<span class="muted">Nothing accepted yet.</span>`}</p>
     </div>
     <div class="card">
-      <p class="eyebrow">What you changed from the suggested rules</p>
+      <p class="eyebrow">What you changed from the suggestions</p>
       ${diffTable(draft.template, value)}
     </div>
     <div class="card authorize">
-      <p class="eyebrow">Approve the rules</p>
-      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, on ${fmtDate(state.today)}. This doesn't change what the AI is allowed to do yet: ${cap.name} stays at its current level until someone makes an authority decision. Software will check every action against these rules. Later changes need approval, and changes are kept in history.</p>
+      <p class="eyebrow">Save</p>
+      <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}, on ${fmtDate(state.today)}. This doesn't change what the AI is allowed to do: ${setupState(state, cap.id) === 'draft' ? `nothing is granted until the setup is confirmed.` : `${cap.name} stays at its current level until someone makes an authority decision.`} Where its actions go through Authority Lab's gate, software checks them against these Boundaries; the rest are kept by the people and systems that run it. Later changes need approval, and changes are kept in history.</p>
       ${can.ok ? '' : html`<ul class="plain-list form-error">${can.blocks.map((b) => html`<li>${b.text}</li>`)}</ul>`}
-      <button class="btn btn-primary btn-block" data-action="contract-finalize" data-capability="${cap.id}" ${can.ok ? '' : raw('disabled')}>Save rules</button>
+      <button class="btn btn-primary btn-block" data-action="contract-finalize" data-capability="${cap.id}" ${can.ok ? '' : raw('disabled')}>Save Boundaries</button>
     </div>`, { subtitle: `${warns.length ? `${warns.length} warning${warns.length === 1 ? '' : 's'} won't stop you saving.` : ''}` })}`;
 }
 
+// Where a suggestion came from, in its real words (#139): never "AI" for
+// deterministic output.
 function sourceBadge(l) {
-  if (l.source === 'ai') return html`<span class="badge badge-insufficient">Suggested by AI${l.status === 'accepted' ? ' · accepted' : l.status === 'edited' ? ' · edited' : l.status === 'rejected' ? ' · rejected' : ''}</span>${l.because ? html`<span class="muted small"> because it mentions "${l.because}"</span>` : ''}`;
+  if (isSuggestion(l)) {
+    const origin = suggestionOrigin(l);
+    const why = l.source === 'ai' ? (l.because ? `it mentions "${l.because}"` : '') : origin === 'template' ? `from ${l.because}` : l.because || '';
+    return html`<span class="badge badge-insufficient">${SUGGESTION_LABELS[origin]}${l.status === 'accepted' ? ' · accepted' : l.status === 'edited' ? ' · edited' : l.status === 'rejected' ? ' · rejected' : ''}</span>${why ? html`<span class="muted small"> ${why}</span>` : ''}`;
+  }
   if (l.source === 'template') return html`<span class="badge badge-neutral">Suggested rule${l.status === 'edited' ? ' · edited' : l.status === 'removed' ? ' · removed' : ''}</span>`;
   return html`<span class="badge badge-pass">Added by you</span>`;
 }
@@ -125,8 +136,8 @@ function lineView(cap, l, editing) {
       <span class="line-text">${l.text}</span>
       ${sourceBadge(l)}
       <span class="line-actions">
-        <button class="btn btn-sm" data-action="suggestion-accept" data-capability="${cap.id}" data-line="${l.id}">Accept</button>
-        <a class="btn btn-sm" href="#/capabilities/${cap.id}/contract/build?edit=${l.id}">Edit</a>
+        ${hasBlank(l.original) ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/contract/build?edit=${l.id}">Fill in the number</a>` : html`<button class="btn btn-sm" data-action="suggestion-accept" data-capability="${cap.id}" data-line="${l.id}">Accept</button>
+        <a class="btn btn-sm" href="#/capabilities/${cap.id}/contract/build?edit=${l.id}">Edit</a>`}
         <button class="btn btn-sm btn-ghost" data-action="suggestion-reject" data-capability="${cap.id}" data-line="${l.id}">Reject</button>
       </span>
     </li>`;
@@ -136,7 +147,7 @@ function lineView(cap, l, editing) {
     ${sourceBadge(l)}
     <span class="line-actions">
       <a class="btn btn-sm btn-ghost" href="#/capabilities/${cap.id}/contract/build?edit=${l.id}">Edit</a>
-      ${l.source === 'ai'
+      ${isSuggestion(l)
         ? html`<button class="btn btn-sm btn-ghost" data-action="suggestion-reject" data-capability="${cap.id}" data-line="${l.id}">Reject</button>`
         : html`<button class="btn btn-sm btn-ghost" data-action="line-remove" data-capability="${cap.id}" data-line="${l.id}">Remove</button>`}
     </span>
@@ -147,8 +158,8 @@ function lineView(cap, l, editing) {
 // (versions) page.
 export function contractReviewView(review) {
   if (!review) return '';
-  return html`<details class="amendment"><summary>How these rules were set up · started from "${review.templateName}", ${review.suggestions} AI suggestions (${review.accepted} accepted, ${review.edited} edited, ${review.rejected.length} rejected), ${review.added} added by hand</summary>
-    ${review.rejected.length ? html`<p class="fact-label">Rejected suggestions (kept in history)</p><ul class="contract-lines">${review.rejected.map((r) => html`<li class="contract-line is-rejected"><span class="line-text">${r.text}</span><span class="badge badge-insufficient">Suggested by AI · rejected</span><span class="muted small">${SECTION_LABELS[r.section]}</span></li>`)}</ul>` : ''}
+  return html`<details class="amendment"><summary>How these rules were set up · started from "${review.templateName}", ${review.suggestions} suggestions (${review.accepted} accepted, ${review.edited} edited, ${review.rejected.length} rejected), ${review.added} added by hand</summary>
+    ${review.rejected.length ? html`<p class="fact-label">Rejected suggestions (kept in history)</p><ul class="contract-lines">${review.rejected.map((r) => html`<li class="contract-line is-rejected"><span class="line-text">${r.text}</span><span class="badge badge-insufficient">Suggestion · rejected</span><span class="muted small">${SECTION_LABELS[r.section]}</span></li>`)}</ul>` : ''}
     ${review.removed.length ? html`<p class="fact-label">Suggested rules removed</p><ul class="contract-lines">${review.removed.map((r) => html`<li class="contract-line is-rejected"><span class="line-text">${r.text}</span><span class="muted small">${SECTION_LABELS[r.section]}</span></li>`)}</ul>` : ''}
     ${review.editedTemplate.length ? html`<p class="fact-label">Suggested rules edited</p><ul class="contract-lines">${review.editedTemplate.map((r) => html`<li class="contract-line"><span class="line-text"><span class="diff-before">${r.before}</span> → <span class="diff-after">${r.after}</span></span></li>`)}</ul>` : ''}
   </details>`;

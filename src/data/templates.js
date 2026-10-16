@@ -245,6 +245,3 @@ export function riskBoundaries(risk = {}) {
   return out;
 }
 
-// Keyword suggestions from the capability's name and summary keep their
-// trigger word; numbers in them become blanks.
-export const blankNumbers = (text) => String(text).replace(/\$?\d+(?:\.\d+)?%?/g, (m) => (m.startsWith('$') ? '$' + BLANK : m.endsWith('%') ? BLANK + '%' : BLANK));

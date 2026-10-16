@@ -5,8 +5,9 @@
 // sub-views (?tab=status&show=rules, ?tab=status&show=approvals).
 
 import { DATA_FIELDS } from '../data/seed.js';
+import { setupSequence } from './setupflow.js';
 import { html, badge, kv, fmtDate, person, personAt, notice, tabIntro, SWITCH_PERSON } from '../ui.js';
-import { STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText } from '../store/index.js';
+import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText } from '../store/index.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
 import { proposalsList, amendLink } from './proposals.js';
@@ -181,6 +182,11 @@ function story(state, cap, d) {
 
 // The status page itself (capability.js calls it summaryTab).
 export function summaryTab(state, cap, d) {
+  // A draft (#139) has no authority to describe yet; setup is where it stands.
+  if (setupState(state, cap.id) === 'draft') {
+    const next = setupSequence(state, cap.id).find((st) => !st.done && !st.optional);
+    return html`<section class="card"><h2>No authority granted yet</h2><p class="muted">The setup is a draft. Once the owner confirms it, the starting authority is set and recorded.</p>${next ? html`<p>Next setup step: <strong>${next.title}</strong>. ${next.text}</p>` : ''}<p><a class="btn btn-primary" href="#/capabilities/${cap.id}/setup">Open setup</a></p></section>`;
+  }
   return html`${story(state, cap, d)}
     ${waitingSection(state, cap)}
     <section class="st-lines">
