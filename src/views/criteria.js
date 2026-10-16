@@ -25,14 +25,14 @@ export function criteriaEditorView(state, capabilityId, query) {
   }
 
   const row = (c, i) => html`<tr>
-    <td><input type="hidden" name="c-id" value="${c.id || ''}"><input type="hidden" name="c-source" value="${c.source || ''}"><input type="text" name="c-name" value="${c.name}" maxlength="60" aria-label="Measure" required></td>
+    <td><input type="hidden" name="c-id" value="${c.id || ''}"><input type="hidden" name="c-requirement" value="${c.requirement || ''}"><input type="hidden" name="c-source" value="${c.source || ''}"><input type="text" name="c-name" value="${c.name}" maxlength="60" aria-label="Measure" required></td>
     <td><input type="text" name="c-target" value="${c.target}" maxlength="120" aria-label="Target" required></td>
     <td><input type="text" name="c-note" value="${c.note || ''}" maxlength="240" aria-label="Note"></td>
     <td class="muted small">${c.source || 'Written by hand'}</td>
     <td>${CORE_CRITERIA.includes(c.id) ? html`<span class="muted small" title="You can change the threshold but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove target ${i + 1}">Remove</button>`}</td>
   </tr>`;
   const rrow = (r, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Check" required></td>
+    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Check" required></td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
     <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="You can change the number but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove check ${i + 1}">Remove</button>`}</td>
   </tr>`;
@@ -61,7 +61,7 @@ export function criteriaEditorView(state, capabilityId, query) {
     <div class="card authorize">
       <p class="eyebrow">Save</p>
       <label class="field field-stack"><span>Why are you changing this? <span class="muted small">(Required if you lower or remove a starting value from the risk profile.)</span></span><input type="text" name="reason" maxlength="200" placeholder="${saved ? 'What changed and why.' : 'e.g. First version, before testing.'}"></label>
-      <p class="muted small">Required rows (quality, severe errors, minimum cases) can be adjusted but not removed. If you lower a starting value or remove a row, your reason is saved with the change.</p>
+      <p class="muted small">Targets are optional: keep only the ones that make sense to measure, and write "Needs decision" where the number isn't settled yet. The minimum-cases row can be adjusted but not removed. If you lower a starting value or remove a row, your reason is saved with the change.</p>
       <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}. Changes are kept in history. You can keep editing until the first test runs; after that, changes need approval.</p>
       <button class="btn btn-primary btn-block" type="submit">${saved ? 'Save changes' : 'Save targets'}</button>
     </div>

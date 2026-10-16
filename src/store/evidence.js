@@ -5,7 +5,7 @@ import * as seed from '../data/seed.js';
 import { defaultCriteria, defaultRequirements } from '../data/criteria-defaults.js';
 import { starterScenarios } from '../data/scenario-templates.js';
 import { getCapability, capData, updateCap, logEvent } from './state.js';
-import { current, versionsInForce, performanceResultsSeen, testSummary } from './selectors.js';
+import { current, currentVersion, versionsInForce, performanceResultsSeen, testSummary } from './selectors.js';
 import { people, requireActive } from './people.js';
 import { amend } from './capabilities.js';
 import { measureProblems } from './measures.js';
@@ -80,10 +80,15 @@ export function finishTestRun(state, capabilityId) {
 }
 
 
-// Saved means a non-empty version of both objects exists. Seeded capabilities
-// without criteria carry an empty version 1, which does not count.
+// Saved means a non-empty version of the requirements exists, and targets
+// were either set or deliberately left empty (#137: Targets are optional, so a
+// save with none records `noTargets`). An empty seeded version 1 doesn't
+// count.
 export function criteriaSaved(state, capabilityId) {
-  return current(state, capabilityId, 'criteria').length > 0 && current(state, capabilityId, 'requirements').length > 0;
+  if (!current(state, capabilityId, 'requirements').length) return false;
+  if (current(state, capabilityId, 'criteria').length) return true;
+  const v = currentVersion(state, capabilityId, 'criteria');
+  return Boolean(v && v.noTargets);
 }
 
 // Criteria lock (decision 6): saved, and performance results have been seen.
@@ -139,18 +144,50 @@ function cleanMeasure(measure, words, what) {
   return { measure: { ...measure } };
 }
 
+// A Target whose bar nobody has decided yet (#137). It is neither met nor
+// failed: it is unresolved, and says so.
+export const NEEDS_DECISION = 'needs-decision';
+export const NEEDS_DECISION_TEXT = 'Needs decision';
+export const isUnresolvedTarget = (c) => Boolean(c) && c.bar === NEEDS_DECISION;
+const saysNeedsDecision = (c) => c.bar === NEEDS_DECISION || /^\s*needs (a )?decision\.?\s*$/i.test(c.target || '');
+
+// Targets are optional (#137, Paige 2026-10-14): an empty list is allowed.
+// A row may name the Requirement it judges (`requirement`, a requirement id).
 export function cleanCriteria(items) {
-  if (!Array.isArray(items) || !items.length) throw new Error('Add at least one target.');
+  if (items === undefined || items === null) items = [];
+  if (!Array.isArray(items)) throw new Error('Targets must be a list.');
   const seen = new Set();
   return items.map((c, i) => {
     const name = (c.name || '').trim();
-    const target = (c.target || '').trim();
-    if (!name || !target) throw new Error(`Target ${i + 1} needs a measure and a value.`);
+    if (!name) throw new Error(`Target ${i + 1} needs a measure and a value.`);
     let id = c.id || slugId(name, i);
     while (seen.has(id)) id = `${id}-${i + 1}`;
     seen.add(id);
-    return { id, name, target, current: c.current || 'Not yet measured', status: c.status || 'pending', note: (c.note || '').trim(), source: c.source || 'Written by hand', ...cleanMeasure(c.measure, target, `Target "${name}"`) };
+    const link = c.requirement ? { requirement: String(c.requirement) } : {};
+    if (saysNeedsDecision(c)) {
+      if (c.measure) throw new Error(`Target "${name}" has no bar yet, so it can't be measured. Set its number first.`);
+      return { id, name, target: NEEDS_DECISION_TEXT, bar: NEEDS_DECISION, current: 'No bar set yet', status: NEEDS_DECISION, note: (c.note || '').trim(), source: c.source || 'Written by hand', ...link };
+    }
+    const target = (c.target || '').trim();
+    if (!target) throw new Error(`Target ${i + 1} needs a measure and a value.`);
+    const status = c.status && c.status !== NEEDS_DECISION ? c.status : 'pending';
+    return { id, name, target, current: c.current && c.current !== 'No bar set yet' ? c.current : 'Not yet measured', status, note: (c.note || '').trim(), source: c.source || 'Written by hand', ...link, ...cleanMeasure(c.measure, target, `Target "${name}"`) };
   });
+}
+
+// A Target that names a Requirement must name one that exists.
+export function checkTargetLinks(criteria, requirements) {
+  const ids = new Set(requirements.map((r) => r.id));
+  const bad = criteria.find((c) => c.requirement && !ids.has(c.requirement));
+  if (bad) throw new Error(`Target "${bad.name}" is for requirement "${bad.requirement}", which isn't in the list.`);
+}
+
+// Coverage rules (#137): how much evidence is enough to judge, kept apart
+// from what the evidence must show. A requirement row is a coverage rule when
+// it says so (`kind: 'coverage'`), counts cases (a measure on the sample
+// size), or is the minimum-cases row.
+export function isCoverageRule(r) {
+  return Boolean(r) && (r.kind === 'coverage' || r.id === 'min-cases' || Boolean(r.measure && r.measure.stat === 'sample'));
 }
 
 export function cleanRequirements(items) {
@@ -162,7 +199,8 @@ export function cleanRequirements(items) {
     let id = r.id || slugId(text, i);
     while (seen.has(id)) id = `${id}-${i + 1}`;
     seen.add(id);
-    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
+    if (r.kind !== undefined && r.kind !== 'coverage') throw new Error(`Requirement "${text}": the only kind is "coverage".`);
+    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
   });
 }
 
@@ -205,8 +243,10 @@ export function nextEvidenceId(list) {
   return `EV-${String(top + 1).padStart(2, '0')}`;
 }
 
-// Rows that can be adjusted but never removed.
-export const CORE_CRITERIA = ['quality', 'severe-errors'];
+// Rows that can be adjusted but never removed. Targets are optional since
+// #137 (Paige, 2026-10-14), so no Target row is required; the minimum-cases
+// row stays required, as a coverage rule.
+export const CORE_CRITERIA = [];
 export const CORE_REQUIREMENTS = ['min-cases'];
 export const CORE_LABELS = { quality: 'a quality target', 'severe-errors': 'a serious-error target', 'min-cases': 'a minimum number of cases' };
 
@@ -230,12 +270,17 @@ export function defaultDeviations(defaults, submitted, textOf) {
     if (!now) { out.push({ id: d.id, change: 'removed', from: textOf(d), to: null }); continue; }
     const a = threshold(textOf(d));
     const b = threshold(textOf(now));
+    // Replacing a default's number with "Needs decision" removes a bar, so
+    // it's recorded like any other weakening.
+    if (a && isUnresolvedTarget(now)) { out.push({ id: d.id, change: 'unresolved', from: textOf(d), to: textOf(now) }); continue; }
     if (!a || !b) continue;
     const loosened = a.atLeast ? b.n < a.n : b.n > a.n;
     if (loosened) out.push({ id: d.id, change: 'loosened', from: textOf(d), to: textOf(now) });
   }
   return out;
 }
+
+export const DEVIATION_WORDS = { loosened: 'weakened', removed: 'removed', unresolved: 'left as Needs decision' };
 
 // Save both objects before the first test run. Each save writes a new version
 // (never an edit); once locked, changes go through a proposed amendment (#7).
@@ -250,6 +295,7 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   const r = cleanRequirements(unchangedMeasuresDropped(requirements, baseR)).map((x) => carryMeasure(x, baseR.find((b) => b.id === x.id), x.text, x.text));
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
   if (missingCore.length) throw new Error(`You can change these but not remove them: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
+  checkTargetLinks(c, r);
   const defaults = defaultsFor(state, capabilityId);
   const deviations = [
     ...defaultDeviations(defaults.criteria, c, (x) => x.target).map((x) => ({ ...x, kind: 'criteria', label: (defaults.criteria.find((y) => y.id === x.id) || {}).name })),
@@ -257,11 +303,11 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   ];
   const why = (reason || '').trim();
   if (deviations.length && why.length < 10) {
-    throw new Error(`You weakened or removed a recommended safeguard, so add a short reason (${deviations.map((x) => `${x.label || x.from}: ${x.change === 'loosened' ? 'weakened' : x.change}`).join('; ')}).`);
+    throw new Error(`You weakened or removed a recommended safeguard, so add a short reason (${deviations.map((x) => `${x.label || x.from}: ${DEVIATION_WORDS[x.change] || x.change}`).join('; ')}).`);
   }
   const first = !criteriaSaved(state, capabilityId);
   const text = why || (first ? 'Saved before testing.' : 'Edited before testing.');
-  const meta = (kind) => ({ deviations: deviations.filter((x) => x.kind === kind).map(({ id, change, from, to, label }) => ({ id, change, from, to, label })) });
+  const meta = (kind) => ({ deviations: deviations.filter((x) => x.kind === kind).map(({ id, change, from, to, label }) => ({ id, change, from, to, label })), ...(kind === 'criteria' && !c.length ? { noTargets: true } : {}) });
   let s = amend(state, capabilityId, 'criteria', { value: c, author: by, reason: text, meta: meta('criteria'), silent: true });
   s = amend(s, capabilityId, 'requirements', { value: r, author: by, reason: text, meta: meta('requirements'), silent: true });
   // One event per save, naming both version numbers.

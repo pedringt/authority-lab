@@ -14,6 +14,7 @@ import { addCapability } from './capabilities.js';
 import { startContractDraft, reviewSuggestion, removeContractLine, addContractLine, confirmSection, finalizeContract, SECTION_KEYS } from './contract.js';
 import { saveCriteria } from './evidence.js';
 import { saveStakeholders } from './proposals.js';
+import { recordBaseline } from './context.js';
 import { capData } from './state.js';
 import { personKey } from './people.js';
 import { stateWorkspace } from '../data/workspaces/state.js';
@@ -56,6 +57,8 @@ export function buildWorkspace(config, { today = realToday() } = {}) {
     s = finalizeContract(s, id, { by });
     s = saveCriteria(s, id, { criteria: c.targets, requirements: c.requirements, by, reason: c.criteriaReason });
     if (c.stakeholders && c.stakeholders.length) s = saveStakeholders(s, id, { stakeholders: c.stakeholders.map((x) => ({ ...x, person: personKey(x.name) })), by });
+    // What it actually does today (#137), when the configuration records it.
+    if (c.baseline) s = recordBaseline(s, id, { ...c.baseline, by });
   }
   return s;
 }

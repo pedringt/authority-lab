@@ -173,7 +173,7 @@ export function criteriaTab(state, cap) {
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
     <td>${c.current}</td>
-    <td>${c.status === 'pending' ? badge('neutral', c.judged ? 'No results yet' : 'Not measured yet') : badge(c.status === 'too-early' ? 'insufficient' : c.status, TARGET_WORDS[c.status])}</td>
+    <td>${c.status === 'pending' ? badge('neutral', c.judged ? 'No results yet' : 'Not measured yet') : c.status === 'needs-decision' ? badge('decision', 'Needs decision') : badge(c.status === 'too-early' ? 'insufficient' : c.status, TARGET_WORDS[c.status])}</td>
     <td class="muted">${c.note}</td>
   </tr>`);
   const defining = state.decisionRecords.find((x) => x.capabilityId === cap.id && x.number === 2);

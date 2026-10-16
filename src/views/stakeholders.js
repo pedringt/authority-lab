@@ -12,7 +12,7 @@ export function stakeholdersEditorView(state, capabilityId, query) {
   const choices = Object.entries(activePeople(state)).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
   const v = versionsInForce(state, capabilityId).stakeholders;
   const row = (st, i) => html`<tr>
-    <td><input type="hidden" name="s-position" value="${st.position || ''}"><input type="hidden" name="s-stance-was" value="${st.stance || ''}"><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
+    <td><input type="hidden" name="s-position" value="${st.position || ''}"><input type="hidden" name="s-stance-was" value="${st.stance || ''}"><input type="hidden" name="s-role" value="${st.role === 'reviewer' ? 'reviewer' : ''}"><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
     <td>${selectField(`s-person`, '', choices, st.person || '', { placeholder: 'Choose a person' })}</td>
     <td><select name="s-stance" aria-label="Position">${STANCES.map(([k, l]) => html`<option value="${k}" ${k === (st.stance || 'undecided') ? raw('selected') : ''}>${l}</option>`)}</select></td>
     <td><input type="text" name="s-quote" value="${st.quote || ''}" maxlength="240" placeholder="Their reasoning, in their words" aria-label="Their reasoning"></td>

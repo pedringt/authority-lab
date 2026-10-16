@@ -71,6 +71,7 @@ export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Authority reduced', failure: 'Failure', mitigation: 'Fix', milestone: 'Milestone',
   review: 'Review', workspace: 'Workspace', criteria: 'Targets set', 'criteria-locked': 'Targets can no longer be edited directly', 'contract-finalized': 'Rules finalized', 'contract-draft': 'Rules drafted', 'criteria-saved': 'Targets saved', 'scenarios-saved': 'Test cases saved', proposal: 'Proposed change', roster: 'People',
   decision: 'Decision', test: 'Test run', amendment: 'Change', 'roi-assumptions': 'ROI change', 'evidence-imported': 'Evidence', 'evidence-source': 'Evidence source',
+  context: 'Context', baseline: 'What it does today', 'material-change': 'Material change',
 };
 
 // Activity events for the Activity screen. Default: surfaced events only.
@@ -171,7 +172,9 @@ export function authorityLabel(auth, { short = false } = {}) {
 export function readiness(state, capabilityId) {
   const reqs = requirementsNow(state, capabilityId);
   const met = reqs.filter((r) => r.met).length;
-  return { met, total: reqs.length, unmet: reqs.filter((r) => !r.met) };
+  // `unmet` includes the unresolved ones (they still block); `unresolved`
+  // lists them separately so they're never shown as failed (#137).
+  return { met, total: reqs.length, unmet: reqs.filter((r) => !r.met), unresolved: reqs.filter((r) => r.unresolved) };
 }
 
 export function testSummary(state, capabilityId) {

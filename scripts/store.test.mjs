@@ -108,8 +108,8 @@ test('readiness is computed per capability', () => {
   assert.equal(r.unmet[0].id, 'high-value');
   assert.deepEqual([readiness(s, TC).met, readiness(s, TC).total], [5, 5], 'ticket classification has its own seeded requirements');
   const [b, bid] = blankCap();
-  assert.deepEqual(readiness(b, bid), { met: 0, total: 0, unmet: [] });
-  assert.deepEqual(readiness(s, 'no-such-capability'), { met: 0, total: 0, unmet: [] });
+  assert.deepEqual(readiness(b, bid), { met: 0, total: 0, unmet: [], unresolved: [] });
+  assert.deepEqual(readiness(s, 'no-such-capability'), { met: 0, total: 0, unmet: [], unresolved: [] });
 });
 
 test('test suite runs to completion for one capability and updates its evidence only', () => {
@@ -553,7 +553,7 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   assert.equal(currentVersion(s, c.id, 'risk').date, seed.TODAY);
   assert.equal(versionList(s, c.id, 'contract').length, 0);
   assert.deepEqual(current(s, c.id, 'contract').may, []);
-  assert.deepEqual(readiness(s, c.id), { met: 0, total: 0, unmet: [] });
+  assert.deepEqual(readiness(s, c.id), { met: 0, total: 0, unmet: [], unresolved: [] });
   // Record #01 for this capability.
   assert.equal(s.decisionRecords.length, before + 1);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
@@ -864,7 +864,8 @@ test('saving writes v1 of both; saving again before the lock writes v2; readines
   assert.equal(criteriaSaved(s, id), false);
   const d = defaultsFor(s, id);
   assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements }), /Choose who is acting before you save the targets\./);
-  assert.throws(() => saveCriteria(s, id, { criteria: [], requirements: d.requirements, by: 'priya' }), /at least one target/);
+  // Targets are optional (#137), but dropping every recommended one still needs a reason.
+  assert.throws(() => saveCriteria(s, id, { criteria: [], requirements: d.requirements, by: 'priya' }), /add a short reason \(Quality: removed/);
   assert.throws(() => saveCriteria(s, id, { criteria: [{ name: 'Quality', target: '' }], requirements: d.requirements, by: 'priya' }), /needs a measure and a value/);
   assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: [{ text: ' ' }], by: 'priya' }), /needs text/);
   s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
@@ -932,7 +933,7 @@ test('saveCriteria is available through the store', () => {
   assert.equal(criteriaSaved(store.get(), id), true);
 });
 
-test('loosening or removing a risk-derived default needs a reason, stored on the version; core rows cannot be removed; one event per save', () => {
+test('loosening or removing a risk-derived default needs a reason, stored on the version; only the minimum-cases row is required; one event per save', () => {
   let [s, id] = withNewCap();
   const d = defaultsFor(s, id);
   const looser = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 88% correct decisions' } : c));
@@ -941,10 +942,11 @@ test('loosening or removing a risk-derived default needs a reason, stored on the
   // Tightening needs no reason.
   const tighter = d.criteria.map((c) => (c.id === 'quality' ? { ...c, target: '≥ 95% correct decisions' } : c));
   assert.doesNotThrow(() => saveCriteria(s, id, { criteria: tighter, requirements: d.requirements, by: 'priya' }));
-  // Core rows can be adjusted but not removed.
-  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria.filter((c) => c.id !== 'severe-errors'), requirements: d.requirements, by: 'priya', reason: 'Long enough reason.' }), /You can change these but not remove them: a serious-error target/);
+  // #137: no Target row is required any more; removing one is a recorded deviation.
+  const dropped = saveCriteria(s, id, { criteria: d.criteria.filter((c) => c.id !== 'severe-errors'), requirements: d.requirements, by: 'priya', reason: 'Long enough reason.' });
+  assert.deepEqual(versionList(dropped, id, 'criteria').at(-1).deviations.map((x) => [x.id, x.change]), [['severe-errors', 'removed']]);
   assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements.filter((r) => r.id !== 'min-cases'), by: 'priya', reason: 'Long enough reason.' }), /a minimum number of cases/);
-  assert.deepEqual(CORE_CRITERIA, ['quality', 'severe-errors']);
+  assert.deepEqual(CORE_CRITERIA, [], 'Targets are optional (#137)');
   assert.deepEqual(CORE_REQUIREMENTS, ['min-cases']);
   // Removing a non-core default and loosening a count, with a reason: stored on each version.
   const before = s.activity.length;
@@ -1006,7 +1008,9 @@ test('who must sign off follows the risk profile; the gate follows the lock and 
 test('a proposal on locked criteria is recorded, shows readiness under both versions, and does not change anything yet', () => {
   let s = initialState();
   assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: 'short' }), /Say why you're making this change/);
-  assert.throws(() => proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria').filter((c) => c.id !== 'quality'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON }), /These rows are required. You can change their numbers but not remove them/);
+  // #137: removing a Target is allowed, but after results it goes to sign-off like any other removal.
+  const noQuality = proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria').filter((c) => c.id !== 'quality'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON });
+  assert.equal(openProposal(noQuality, RR, 'criteria').status, 'open');
   const before = versionsInForce(s, RR);
   s = proposeAmendment(s, RR, 'criteria', { value: { criteria: current(s, RR, 'criteria'), requirements: loosenedRequirements(s) }, by: 'priya', reason: REASON });
   const p = openProposal(s, RR, 'criteria');

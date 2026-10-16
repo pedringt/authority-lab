@@ -57,13 +57,13 @@ export function proposeView(state, capabilityId, kind, query) {
   const criteria = current(state, capabilityId, 'criteria');
   const requirements = current(state, capabilityId, 'requirements');
   const row = (x, i) => html`<tr>
-    <td><input type="hidden" name="c-id" value="${x.id || ''}"><input type="hidden" name="c-source" value="${x.source || ''}"><input type="hidden" name="c-current" value="${x.current || ''}"><input type="hidden" name="c-status" value="${x.status || ''}"><input type="text" name="c-name" value="${x.name}" maxlength="60" aria-label="Measure"></td>
+    <td><input type="hidden" name="c-id" value="${x.id || ''}"><input type="hidden" name="c-requirement" value="${x.requirement || ''}"><input type="hidden" name="c-source" value="${x.source || ''}"><input type="hidden" name="c-current" value="${x.current || ''}"><input type="hidden" name="c-status" value="${x.status || ''}"><input type="text" name="c-name" value="${x.name}" maxlength="60" aria-label="Measure"></td>
     <td><input type="text" name="c-target" value="${x.target}" maxlength="120" aria-label="Target"></td>
     <td><input type="text" name="c-note" value="${x.note || ''}" maxlength="240" aria-label="Note"></td>
     <td>${CORE_CRITERIA.includes(x.id) ? html`<span class="muted small" title="You can change the threshold but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove target ${i + 1}">Remove</button>`}</td>
   </tr>`;
   const rrow = (x, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${x.id || ''}"><input type="hidden" name="r-source" value="${x.source || ''}"><input type="text" name="r-text" value="${x.text}" maxlength="120" aria-label="Check"></td>
+    <td><input type="hidden" name="r-id" value="${x.id || ''}"><input type="hidden" name="r-kind" value="${x.kind || ''}"><input type="hidden" name="r-source" value="${x.source || ''}"><input type="text" name="r-text" value="${x.text}" maxlength="120" aria-label="Check"></td>
     <td class="muted small">${x.current || ''}</td>
     <td>${CORE_REQUIREMENTS.includes(x.id) ? html`<span class="muted small" title="You can change the number but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove check ${i + 1}">Remove</button>`}</td>
   </tr>`;

@@ -16,6 +16,9 @@ import { recordManualEvidence } from './sources.js';
 import { advanceToday } from './workspaces.js';
 import { applyPublishedRecords } from './published.js';
 import { mapEvidence } from './configure.js';
+import { recordContext, suggestContext, reviewContextFact, recordBaseline, recordMaterialChange } from './context.js';
+import { assessRisk } from './risk.js';
+import { setResidualRisk } from './decisions.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
@@ -93,6 +96,13 @@ export const ACTIONS = {
   mapEvidence,
   advanceToday,
   applyPublishedRecords: (state, files) => applyPublishedRecords(state, files).state,
+  recordContext,
+  suggestContext,
+  reviewContextFact,
+  recordBaseline,
+  recordMaterialChange,
+  assessRisk,
+  setResidualRisk,
   reset,
 };
 

@@ -24,6 +24,9 @@ export const KIND_TONE = {
   test: 'neutral',
   'evidence-imported': 'neutral',
   'evidence-source': 'neutral',
+  context: 'neutral',
+  baseline: 'neutral',
+  'material-change': 'watch',
 };
 
 // A change to a versioned object says which object it changed.
