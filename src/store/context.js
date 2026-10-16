@@ -62,7 +62,9 @@ const FIELD = Object.fromEntries(CONTEXT_FIELDS.map((f) => [f.key, f]));
 // confirmed fact may drive setup. A person typing a fact confirms it.
 export const FACT_STATUSES = ['suggested', 'reviewed', 'confirmed'];
 // Where a fact came from. 'ai' and 'template' facts arrive as suggestions.
-export const FACT_SOURCES = ['person', 'template', 'ai'];
+// 'description': matched from the free-form description by keyword, shown as
+// "Based on your answers" (#139); never presented as AI.
+export const FACT_SOURCES = ['person', 'template', 'description', 'ai'];
 
 function cleanFact(key, raw) {
   const f = FIELD[key];
@@ -102,14 +104,22 @@ function canRecordContext(state, by) {
   return state.capabilities.some((c) => namedOn(state, c.id, by));
 }
 
-function writeContext(state, facts, { by, reason, title }) {
+// The free-form description the facts were suggested from (#139). It is
+// intake, not a fact: it never drives setup itself.
+export function contextDescription(state) {
+  const v = contextVersions(state).at(-1);
+  return (v && v.description) || '';
+}
+
+function writeContext(state, facts, { by, reason, title, description }) {
   requireActive(state, by, 'record the context');
   if (!canRecordContext(state, by)) throw new Error(`${people(state)[by].name} isn't a workspace admin or named on a capability, so they can't record the context.`);
   const why = (reason || '').trim();
   if (!why) throw new Error('Add a reason for the change.');
   const list = contextVersions(state);
   const prev = list.at(-1);
-  const next = { version: list.length + 1, date: state.today, author: by, authorAt: snapshotPerson(state, by), reason: why, before: prev ? clone(prev.value) : null, value: clone(facts) };
+  const desc = description !== undefined ? String(description).trim() : (prev && prev.description) || '';
+  const next = { version: list.length + 1, date: state.today, author: by, authorAt: snapshotPerson(state, by), reason: why, before: prev ? clone(prev.value) : null, value: clone(facts), ...(desc ? { description: desc } : {}) };
   const s = { ...state, contextVersions: [...list, next] };
   return logEvent(s, { kind: 'context', title, body: `${people(state)[by].name}: ${why}`, link: '#/settings' });
 }
@@ -125,14 +135,14 @@ export function recordContext(state, { facts = {}, by, reason } = {}) {
 
 // Suggestions from a template (or, later, AI) arrive unconfirmed. A confirmed
 // fact is never overwritten by a suggestion.
-export function suggestContext(state, { facts = {}, source, by, reason } = {}) {
-  if (!['template', 'ai'].includes(source)) throw new Error('Suggestions come from a template or AI.');
+export function suggestContext(state, { facts = {}, source, by, reason, description } = {}) {
+  if (!['template', 'description', 'ai'].includes(source)) throw new Error('Suggestions come from a template, the description or AI.');
   const next = { ...contextNow(state) };
   for (const k of Object.keys(facts)) {
     if (next[k] && next[k].status === 'confirmed') continue;
     next[k] = { value: cleanFact(k, facts[k]), status: 'suggested', source, by: null, date: state.today };
   }
-  return writeContext(state, next, { by, reason: reason || `Suggested from a ${source}.`, title: 'Context suggestions added' });
+  return writeContext(state, next, { by, reason: reason || `Suggested from the ${source}.`, title: 'Context suggestions added', description });
 }
 
 // One suggested fact at a time: reviewed, confirmed (optionally corrected) or
@@ -181,6 +191,8 @@ export function baselineNow(state, capabilityId) {
   const v = baselineVersions(state, capabilityId).at(-1);
   if (v) return { ...v.value, recorded: true, version: v.version };
   const cap = getCapability(state, capabilityId);
+  // A capability set up through the setup flow (#139) was asked directly.
+  if (cap && cap.setup && LIFECYCLE[cap.setup.lifecycle]) return { lifecycle: cap.setup.lifecycle, lifecycleFrom: 'setup', effective: { status: 'not-recorded' }, recorded: false, version: 0 };
   const lifecycle = (cap && cap.today && LIFECYCLE_FROM_TODAY[cap.today]) || 'not-recorded';
   return { lifecycle, lifecycleFrom: lifecycle === 'not-recorded' ? null : 'today', effective: { status: 'not-recorded' }, recorded: false, version: 0 };
 }
@@ -278,4 +290,53 @@ export function recordMaterialChange(state, capabilityId, { areas = [], descript
     capabilityId,
     link: `#/capabilities/${capabilityId}`,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Context intake (#139): a free-form description, matched by keyword into
+// suggested facts. Deterministic placeholder assistance, labelled "Based on
+// your answers", never AI. Every suggestion is confirmed one at a time.
+// ---------------------------------------------------------------------------
+
+const ACTION_WORDS = [
+  ['Retrieves', /\b(search|look ?up|lookup|find|retriev|research|summari[sz])/i],
+  ['Drafts', /\b(draft|write|writes|compose|reply|replies|respond)/i],
+  ['Classifies', /\b(classif|categori[sz]|tag|tags|triage|rout(e|ing)|extract)/i],
+  ['Recommends', /\b(recommend|suggest|prioriti[sz]|propos)/i],
+  ['Acts', /\b(issues|sends|updates|closes|deletes|execut|pays|takes action)/i],
+  ['Uses tools', /\b(tool|api|integration|system of record)/i],
+];
+const AREA_WORDS = [
+  ['People', /\b(customer|patient|employee|applicant|user|people|person)/i],
+  ['Money', /\b(refund|payment|money|credit|invoice|price|\$\d)/i],
+  ['Rights', /\b(rights|eligib|benefit|appeal)/i],
+  ['Accounts', /\b(account|login|access)/i],
+  ['Compliance', /\b(complian|regulat|legal|law|audit|policy)/i],
+  ['Safety', /\b(safety|harm|medical|health|injur)/i],
+];
+
+export function interpretDescription(text) {
+  const t = String(text || '');
+  const facts = {};
+  const actions = ACTION_WORDS.filter(([, re]) => re.test(t)).map(([a]) => a);
+  if (actions.length) facts.aiActions = actions;
+  const areas = AREA_WORDS.filter(([, re]) => re.test(t)).map(([a]) => a);
+  if (areas.length) facts.consequenceAreas = areas;
+  const external = /\b(customer|client|public|external|patient|user)s?\b/i.test(t);
+  const internal = /\b(internal|our team|staff|employee|in-house)\b/i.test(t);
+  if (external || internal) facts.environment = external && internal ? 'Both' : external ? 'External' : 'Internal';
+  const pilot = /\bpilot/i.test(t);
+  const live = /\bproduction\b|\blive\b|\bin use\b/i.test(t);
+  if (pilot || live) facts.stage = pilot && live ? 'Both' : pilot ? 'Pilot' : 'Production';
+  const sentence = t.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)[0];
+  if (sentence) facts.purpose = sentence;
+  return facts;
+}
+
+// Suggest facts from a description. Confirmed facts are never overwritten.
+export function suggestFromDescription(state, { description, by } = {}) {
+  const t = String(description || '').trim();
+  if (t.length < 20) throw new Error('Describe the product or workflow in a sentence or two first.');
+  const facts = interpretDescription(t);
+  return suggestContext(state, { facts, source: 'description', by, reason: Object.keys(facts).length ? 'Suggested from the description.' : 'Description saved; nothing matched to suggest.', description: t });
 }

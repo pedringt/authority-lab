@@ -102,9 +102,32 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
   // reads as Unknown.
   data.versions.risk = [firstVersion({ impact: r.impact, reversibility: r.reversibility, exposure: r.exposure, failureTypes, note: (r.note || '').trim() || undefined, ...cleanLikelihoodScale({ likelihood: r.likelihood, scale: r.scale }) }, { date: state.today, author })];
 
+  const record = startingRecord(state, { id, owner }, { level, notDelegated, now, today, reason, author, versions: { contract: 0, criteria: 0, requirements: 0, risk: 1, stakeholders: 0 } });
+  const recordId = record.id;
+  const who = people(state)[author];
+  let s = {
+    ...state,
+    capabilities: [...state.capabilities, cap],
+    capabilityData: { ...state.capabilityData, [id]: data },
+    decisionRecords: [...state.decisionRecords, record],
+  };
+  s = logEvent(s, {
+    kind: 'authority',
+    title: notDelegated ? 'Capability added, not delegated by design' : `Capability added at ${authorityLabel(cap.authority)}`,
+    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${people(state)[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`}${now && now.note ? ` ${now.note}` : ''} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
+    capabilityId: id,
+    link: `#/records/${recordId}`,
+  });
+  return s;
+}
+
+// The first decision record: the capability's starting authority, or "not
+// delegated, by design". Written when a capability is added through the old
+// path, and at setup confirmation (#139).
+export function startingRecord(state, cap, { level, notDelegated, now, today, reason, author, versions, extra = {} }) {
+  const { id, owner } = cap;
   const number = state.decisionRecords.length + 1;
   const recordId = `AC-${String(number).padStart(2, '0')}`;
-  const who = people(state)[author];
   const record = {
     id: recordId,
     number,
@@ -118,7 +141,7 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     ownerAt: snapshotPerson(state, owner),
     authorizedBy: author,
     authorizedByAt: snapshotPerson(state, author),
-    versions: { contract: 0, criteria: 0, requirements: 0, risk: 1, stakeholders: 0 },
+    versions,
     scope: notDelegated
       ? 'Not delegated, by design. The AI doesn\'t do this. Giving it any authority later needs a new decision.'
       : level === 1
@@ -136,22 +159,9 @@ export function addCapability(state, { name, summary, owner, risk, startingLevel
     // What it does in the real world today: context, never authority.
     ...(now ? { context: { today, label: now.label, note: now.note || null } } : {}),
     conditions: null,
+    ...extra,
   };
-
-  let s = {
-    ...state,
-    capabilities: [...state.capabilities, cap],
-    capabilityData: { ...state.capabilityData, [id]: data },
-    decisionRecords: [...state.decisionRecords, record],
-  };
-  s = logEvent(s, {
-    kind: 'authority',
-    title: notDelegated ? 'Capability added, not delegated by design' : `Capability added at ${authorityLabel(cap.authority)}`,
-    body: `${cap.name} was added by ${who.name}${author !== owner ? ` (owner: ${people(state)[owner].name})` : ''}. ${notDelegated ? 'It stays at Level 0 by design.' : `Starting authority is ${authorityLabel(cap.authority)}.`}${now && now.note ? ` ${now.note}` : ''} Risk: ${r.impact} impact, ${r.exposure.toLowerCase()}, ${r.reversibility.toLowerCase()}.`,
-    capabilityId: id,
-    link: `#/records/${recordId}`,
-  });
-  return s;
+  return record;
 }
 
 // Write a new version of a versioned object. The previous versions stay as

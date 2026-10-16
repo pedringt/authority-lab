@@ -2,6 +2,7 @@
 // are "Rules".
 
 import { pickTemplate, suggestLines, CONTRACT_SECTIONS } from '../data/contract-templates.js';
+import { findStartingPoint, START_FROM_SCRATCH, riskBoundaries, blankNumbers, hasBlank } from '../data/templates.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionList, performanceResultsSeen } from './selectors.js';
@@ -20,6 +21,7 @@ export function startContractDraft(state, capabilityId, { by } = {}) {
   const d = capData(state, capabilityId);
   if (d.contractDraft && !d.contractDraft.finalizedAt) return state;
   const risk = current(state, capabilityId, 'risk');
+  if (cap.setup) return startSetupBoundaries(state, cap, risk, by);
   const template = pickTemplate(risk);
   let n = 0;
   const lines = [];
@@ -44,10 +46,50 @@ export function startContractDraft(state, capabilityId, { by } = {}) {
   return logEvent(s, {
     kind: 'contract-draft',
     title: 'Rules draft started',
-    body: `${cap.name}: started from the "${template.name}" starter rules (chosen from its risk profile), with ${lines.filter((l) => l.source === 'ai').length} AI suggestions to review.`,
+    body: `${cap.name}: started from the "${template.name}" starter rules (chosen from its risk profile), with ${lines.filter((l) => l.source === 'ai').length} suggestions based on its name and summary to review.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/contract/build`,
   });
+}
+
+// A capability set up through the setup flow (#139): every line is a
+// suggestion reviewed on its own (template, risk answers, or the name and
+// summary), none is pre-accepted, and numbers are blanks a person fills in.
+export const SUGGESTION_LABELS = { template: 'Template suggestion', answers: 'Based on your answers', 'authority-lab': 'Authority Lab suggestion', ai: 'AI suggestion' };
+// Lines a person must review: suggestions, and the old keyword lines ('ai'),
+// which were always deterministic and now read "Based on your answers".
+export const isSuggestion = (l) => l.source === 'suggestion' || l.source === 'ai';
+export const suggestionOrigin = (l) => (l.source === 'ai' ? 'answers' : l.origin);
+
+function startSetupBoundaries(state, cap, risk, by) {
+  if (!risk.impact) throw new Error('Answer the Risk questions first: the Boundary suggestions depend on them.');
+  const family = findStartingPoint(cap.setup.template) || START_FROM_SCRATCH;
+  const lines = [];
+  const seen = new Set();
+  let n = 0;
+  const push = (section, text, origin, because) => {
+    const key = `${section}|${norm(text)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    lines.push({ id: `L${++n}`, section, text, source: 'suggestion', origin, status: 'pending', original: text, because });
+  };
+  for (const section of SECTION_KEYS) for (const text of family.boundaries[section] || []) push(section, text, 'template', family.name);
+  const fromRisk = riskBoundaries(risk);
+  for (const section of SECTION_KEYS) for (const text of fromRisk[section] || []) push(section, text, 'answers', 'your risk answers');
+  for (const sug of suggestLines(cap.name, cap.summary)) push(sug.section, blankNumbers(sug.text), 'answers', `it mentions "${sug.because}"`);
+  const draft = {
+    templateId: family.id,
+    templateName: family.name,
+    template: family.boundaries,
+    startedAt: state.today,
+    startedBy: by && people(state)[by] ? by : cap.owner,
+    lines,
+    nextId: n + 1,
+    confirmed: Object.fromEntries(SECTION_KEYS.map((k) => [k, false])),
+    finalizedAt: null,
+  };
+  const s = updateCap(state, cap.id, { contractDraft: draft });
+  return logEvent(s, { kind: 'contract-draft', title: 'Boundaries draft started', body: `${cap.name}: ${lines.length} suggested Boundaries to review one at a time (from ${family.name}, the risk answers, and the name and summary).`, capabilityId: cap.id, link: `#/capabilities/${cap.id}/contract/build` });
 }
 
 export function withDraft(state, capabilityId, fn) {
@@ -67,14 +109,17 @@ export function reviewSuggestion(state, capabilityId, lineId, { decision, text }
   return withDraft(state, capabilityId, (draft) => {
     const line = draft.lines.find((l) => l.id === lineId);
     if (!line) throw new Error(`Unknown line: ${lineId}`);
-    if (line.source !== 'ai') throw new Error('Only AI suggestions are reviewed this way.');
+    if (!isSuggestion(line)) throw new Error('Only suggestions are reviewed this way.');
     if (!['accept', 'edit', 'reject'].includes(decision)) throw new Error(`Unknown decision: ${decision}`);
     let next;
+    // A suggestion with a blank needs its number from a person (#139).
+    if (decision === 'accept' && hasBlank(line.original)) throw new Error('This suggestion has a blank for a number. Edit it and fill in the number, or reject it.');
     if (decision === 'accept') next = { ...line, status: 'accepted', text: line.original };
     if (decision === 'reject') next = { ...line, status: 'rejected' };
     if (decision === 'edit') {
       const t = (text || '').trim();
       if (!t) throw new Error('Type the rule, or reject the suggestion.');
+      if (hasBlank(t)) throw new Error('Fill in every blank (___) with a number first.');
       next = { ...line, status: t === line.original ? 'accepted' : 'edited', text: t };
     }
     return unconfirm({ ...draft, lines: draft.lines.map((l) => (l.id === lineId ? next : l)) }, line.section);
@@ -95,7 +140,7 @@ export function editContractLine(state, capabilityId, lineId, text) {
   return withDraft(state, capabilityId, (draft) => {
     const line = draft.lines.find((l) => l.id === lineId);
     if (!line) throw new Error(`Unknown line: ${lineId}`);
-    if (line.source === 'ai') return reviewSuggestionDraft(draft, line, text);
+    if (isSuggestion(line)) return reviewSuggestionDraft(draft, line, text);
     const t = (text || '').trim();
     if (!t) throw new Error('Type the rule first.');
     const next = { ...line, text: t, status: line.source === 'template' && t !== line.original ? 'edited' : line.status };
@@ -105,6 +150,7 @@ export function editContractLine(state, capabilityId, lineId, text) {
 export function reviewSuggestionDraft(draft, line, text) {
   const t = (text || '').trim();
   if (!t) throw new Error('Type the rule, or reject the suggestion.');
+  if (hasBlank(t)) throw new Error('Fill in every blank (___) with a number first.');
   const next = { ...line, status: t === line.original ? 'accepted' : 'edited', text: t };
   return unconfirm({ ...draft, lines: draft.lines.map((l) => (l.id === line.id ? next : l)) }, line.section);
 }
@@ -114,7 +160,7 @@ export function removeContractLine(state, capabilityId, lineId) {
   return withDraft(state, capabilityId, (draft) => {
     const line = draft.lines.find((l) => l.id === lineId);
     if (!line) throw new Error(`Unknown line: ${lineId}`);
-    if (line.source === 'ai') throw new Error('Reject this suggestion instead, so the decision is kept.');
+    if (isSuggestion(line)) throw new Error('Reject this suggestion instead, so the decision is kept.');
     return unconfirm({ ...draft, lines: draft.lines.map((l) => (l.id === lineId ? { ...l, status: 'removed' } : l)) }, line.section);
   });
 }
@@ -218,7 +264,7 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
   const check = canFinalizeContract(state, capabilityId);
   if (!check.ok) throw new Error(`Can't save the rules yet: ${check.blocks.map((b) => b.text).join(' ')}`);
   const value = draftValue(draft);
-  const ai = draft.lines.filter((l) => l.source === 'ai');
+  const ai = draft.lines.filter(isSuggestion);
   const review = {
     templateId: draft.templateId,
     templateName: draft.templateName,
@@ -235,7 +281,7 @@ export function finalizeContract(state, capabilityId, { by } = {}) {
     date: state.today,
     author: by,
     authorAt: snapshotPerson(state, by),
-    reason: `Started from the "${draft.templateName}" starter rules. ${review.suggestions} AI suggestion${review.suggestions === 1 ? '' : 's'}: ${review.accepted} accepted, ${review.edited} edited, ${review.rejected.length} rejected. ${review.added} rule${review.added === 1 ? '' : 's'} added by hand.`,
+    reason: `Started from ${getCapability(state, capabilityId).setup ? `${draft.templateName}` : `the "${draft.templateName}" starter rules`}. ${review.suggestions} suggestion${review.suggestions === 1 ? '' : 's'}: ${review.accepted} accepted, ${review.edited} edited, ${review.rejected.length} rejected. ${review.added} ${getCapability(state, capabilityId).setup ? 'Boundar' : 'rule'}${review.added === 1 ? (getCapability(state, capabilityId).setup ? 'y' : '') : (getCapability(state, capabilityId).setup ? 'ies' : 's')} added by hand.`,
     afterEvidence: performanceResultsSeen(state, capabilityId),
     before: null,
     value,

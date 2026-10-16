@@ -359,7 +359,7 @@ test('Context: facts a person records are confirmed; suggestions stay unconfirme
   assert.throws(() => recordContext(s0, { facts: { environment: 'Mars' }, by: 'priya', reason: 'x' }), /choose one of/);
   assert.throws(() => recordContext(s0, { facts: { aiActions: ['Dreams'] }, by: 'priya', reason: 'x' }), /isn't one of/);
   assert.throws(() => recordContext(s0, { facts: { mood: 'good' }, by: 'priya', reason: 'x' }), /Unknown context fact/);
-  assert.throws(() => suggestContext(s0, { facts: { purpose: 'x' }, source: 'person', by: 'priya' }), /template or AI/);
+  assert.throws(() => suggestContext(s0, { facts: { purpose: 'x' }, source: 'person', by: 'priya' }), /template, the description or AI/);
 });
 
 // ---------------------------------------------------------------------------

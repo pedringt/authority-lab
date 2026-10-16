@@ -136,6 +136,8 @@ export function targetsNow(state, capabilityId) {
 export function requirementsNow(state, capabilityId) {
   const unresolved = current(state, capabilityId, 'criteria').filter((c) => c.bar === 'needs-decision' && c.requirement);
   return current(state, capabilityId, 'requirements').map((row) => {
+    // A coverage rule waiting for its number (#139): unresolved, not failed.
+    if (row.bar === 'needs-decision') return { ...row, current: 'No number set yet', met: false, unresolved: true, gap: 'Its number hasn\'t been set: it needs a decision. This isn\'t a failed result.' };
     const r = judgedRequirement(state, capabilityId, row);
     const open = unresolved.filter((c) => c.requirement === r.id);
     if (!open.length) return r;
@@ -213,6 +215,7 @@ export const COVERAGE_WORDS = {
   insufficient: 'Needs more cases',
   'no-data': 'No results yet',
   'no-source': 'No source mapped',
+  'needs-decision': 'Needs decision',
 };
 
 const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
@@ -221,6 +224,8 @@ const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400
 // judges it, as before. Stale evidence is older than its source's freshness
 // window; it still counts (Paige, 2026-10-13), it's only flagged.
 export function rowCoverage(state, capabilityId, row) {
+  // A coverage rule whose number nobody has set (#139) can't be sufficient.
+  if (row.bar === 'needs-decision') return { status: 'needs-decision', mapped: false };
   if (!row.measure) return { status: 'no-source', mapped: false };
   const j = judgeMeasure(state, capabilityId, row.measure);
   const source = row.measure.source ? findSource(state, row.measure.source) : null;
@@ -257,9 +262,10 @@ export function evidenceCoverage(state, capabilityId) {
 export function coverageText(cov) {
   if (!cov.total) return 'No decision requirements yet.';
   const head = `${cov.sufficient} of ${cov.total} decision requirement${cov.total === 1 ? ' has' : 's have'} sufficient evidence`;
-  const gap = cov.gaps.find((g) => g.status === 'insufficient') || cov.gaps.find((g) => g.status === 'no-data') || cov.gaps.find((g) => g.status === 'no-source') || cov.gaps.find((g) => g.status === 'stale');
+  const gap = cov.gaps.find((g) => g.status === 'needs-decision') || cov.gaps.find((g) => g.status === 'insufficient') || cov.gaps.find((g) => g.status === 'no-data') || cov.gaps.find((g) => g.status === 'no-source') || cov.gaps.find((g) => g.status === 'stale');
   if (!gap) return `${head}.`;
-  const why = gap.status === 'insufficient' ? `still needs more cases (${gap.judged.text})`
+  const why = gap.status === 'needs-decision' ? 'has no number yet: it needs a decision'
+    : gap.status === 'insufficient' ? `still needs more cases (${gap.judged.text})`
     : gap.status === 'no-data' ? 'has no results yet'
       : gap.status === 'stale' ? `has stale evidence (${gap.age} days old)`
         : 'has no evidence source mapped';

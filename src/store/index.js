@@ -40,3 +40,8 @@ export { LEVEL_PLAIN, readinessText, overviewTodos, stillNeeded, overviewApprova
 export { CONTEXT_FIELDS, FACT_STATUSES, FACT_SOURCES, contextVersions, contextNow, confirmedContext, recordContext, suggestContext, reviewContextFact, LIFECYCLE, BASELINE_FIELDS, baselineVersions, baselineNow, authorityBaseline, recordBaseline, MATERIAL_CHANGE_AREAS, materialChanges, recordMaterialChange, namedOn } from './context.js';
 export { BOUNDARY_CATEGORIES, ENFORCEMENT, actsThroughGate, boundaries, peopleModel } from './boundaries.js';
 export { RISK_SEVERITIES, SEVERITY_LABELS, LIKELIHOODS, SCALES, OVERALL_RISKS, OVERALL_RISK_TABLE, overallRisk, riskView, assessRisk } from './risk.js';
+// Product reset, Phase 2: the setup flow (#139).
+export { SETUP_STATES, setupState, setupConfirmed, UNCONFIRMED_REASON, startCapability, editSetupCapability, saveSetupRisk, setStartingAuthority, setupReview, confirmSetup, setupConfirmation, resultsLockWarning } from './setup.js';
+export { contextDescription, interpretDescription, suggestFromDescription } from './context.js';
+export { SUGGESTION_LABELS, isSuggestion, suggestionOrigin } from './contract.js';
+export { CHECK_SOURCES, suggestedChecks } from './evidence.js';

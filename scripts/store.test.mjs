@@ -723,7 +723,7 @@ test('suggestions are reviewed one at a time; edits keep the original; rejection
   assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'approve' }), /Unknown decision/);
   assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'edit', text: '  ' }), /Type the rule, or reject the suggestion/);
   const tpl = capData(s, id).contractDraft.lines.find((l) => l.source === 'template');
-  assert.throws(() => reviewSuggestion(s, id, tpl.id, { decision: 'accept' }), /Only AI suggestions/);
+  assert.throws(() => reviewSuggestion(s, id, tpl.id, { decision: 'accept' }), /Only suggestions are reviewed/);
   // A section cannot be confirmed while it has pending suggestions.
   const pendingSection = capData(s, id).contractDraft.lines.find((l) => l.status === 'pending').section;
   assert.throws(() => confirmSection(s, id, pendingSection, true), /Accept, edit or reject every suggestion in this section first/);

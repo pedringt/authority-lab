@@ -4,6 +4,7 @@
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { versionsInForce, proposedAuthority, decisionRequired, levelName, authorityLabel, readiness, testSummary, performanceResultsSeen } from './selectors.js';
 import { people, snapshotPerson, requireActive, isActivePerson } from './people.js';
+import { setupConfirmed, UNCONFIRMED_REASON } from './setup.js';
 import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
 
@@ -242,6 +243,7 @@ const RATIONALE_HINT = 'Say why you\'re making this decision (a sentence or more
 
 export function canAuthorize(state, capabilityId) {
   const d = capData(state, capabilityId).decision;
+  if (!setupConfirmed(state, capabilityId)) return { ok: false, reason: UNCONFIRMED_REASON };
   if (!d.option) return { ok: false, reason: 'Choose an option first.' };
   if ((d.option === 'expand' || d.option === 'expand-limits') && !d.proposed) return { ok: false, reason: 'No one has proposed more authority for this AI yet. Propose the next level first.' };
   // Belt and braces: the proposal must be for exactly one level up from now.
@@ -398,6 +400,8 @@ export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error('This capability no longer exists.');
   requireActive(state, by, 'propose more authority');
+  // Confirmation gates authority (#139).
+  if (!setupConfirmed(state, capabilityId)) throw new Error(UNCONFIRMED_REASON);
   if (decisionRequired(state, capabilityId)) throw new Error('A decision is already open for this AI. Finish it first.');
   if (cap.status === 'not-delegated') throw new Error('This work is not delegated by design: it was deliberately kept with people, so the AI has no authority here.');
   const target = Number(level);
