@@ -53,6 +53,10 @@ Phase 1 makes the store able to represent the reset. No setup UI, Proposal/Decis
 - **Boundaries: documented vs enforced (5d).** `boundaries()` reads the rules as Allowed / Needs human review / Not allowed / What must always stay human (no section feeds the last yet: a Phase 2 question). A line is **enforced** only when the gate recognises it and the capability's actions go through the gate; a check on the model's own report is **model-reported**; everything else is **documented**. "Automation is pulled back if" lines are enforced only when the gate log or imported production evidence measures them. All of State's are documented.
 - **Residual Risk (5e).** Optional on the pending decision (`setResidualRisk`: Low / Moderate / High / Unknown and a note); when given it goes on the decision record, frozen, and on a published record. Never required, never set by software.
 - **Compatibility.** The storage version stays 14. Workspaces saved before #137 lack the new fields; every selector reads a missing list as empty, so nothing is migrated in place.
+- **Phase 1 follow-up (Paige, 2026-10-16, PR #138 review).**
+  - **Context fields:** the current list (`CONTEXT_FIELDS`) stays for Phase 1. Its structure (fields that split, merge or become follow-up questions) is revisited when the Phase 2 intake is designed; no more schema before then.
+  - **Coverage rules:** stay a kind of Requirement (`kind: 'coverage'`). Coverage remains a distinct concept, but a separate versioned list of coverage rules is revisited only in Phase 3, when the Evidence/Coverage workflow is designed.
+  - **Boundaries UI:** "documented only" describes the prose line itself. Some limits are enforced elsewhere, e.g. an Allowed line's limits enforced through the structured conditions on the decision. So the future Boundaries UI (Phase 2/4) must show the written Boundary and, separately, any structured runtime limit or enforcement that implements it. It must never imply that nothing behind a documented Boundary is enforced.
 
 ### Records
 
