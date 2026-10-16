@@ -69,7 +69,7 @@ test('its rules are exactly the configured ones, built and finalized through the
 test('no fictional evidence: State starts with none, and the gaps show as gaps', () => {
   const s = build();
   assert.equal(capData(s, ID).evidence.length, 0);
-  assert.deepEqual(evidenceSources(s).map((x) => x.id), ['authority-lab-tests', 'manual-review', 'state-evidence-interpretation']);
+  assert.deepEqual(evidenceSources(s).map((x) => x.id), ['authority-lab-tests', 'manual-review', 'feedback', 'state-evidence-interpretation']);
   assert.ok(evidenceSources(s).every((x) => !x.example));
   assert.equal(coverageText(evidenceCoverage(s, ID)), '0 of 5 Requirements have sufficient evidence; "Minimum 16 eval scenarios in a run" has no results yet.');
   assert.throws(() => proposeAuthority(s, ID, 2, { by: PAIGE }), /There is no evidence yet/);

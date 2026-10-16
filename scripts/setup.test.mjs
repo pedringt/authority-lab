@@ -9,7 +9,7 @@ import {
   addCapability, getCapability, capData, current, startContractDraft, reviewSuggestion, confirmSection, finalizeContract, SECTION_KEYS,
   saveCriteria, defaultsFor, saveStakeholders, addStarterScenarios, startTestRun, advanceTestRun, proposeAuthority, selectDecision,
   setOutcome, setRolloutField, authorize, proposeAmendment, versionList, RISK_OPTIONS,
-  mapEvidence, recordManualEvidence, startCapability,
+  mapEvidence, recordManualEvidence, startCapability, simulateScenario, recordOutcome,
 } from '../src/store/index.js';
 import { setPeople, setToday } from '../src/ui.js';
 import { workspaceSetupView } from '../src/views/workspace.js';
@@ -33,9 +33,15 @@ function render(s, view) {
   setToday(s.today);
   try { return view(); } finally { setPeople(null); }
 }
+// A workspace started empty is real (#142): Authority Lab doesn't run the AI,
+// so a person records each case's outcome. These tests record the same
+// deterministic results the demo's simulation would give, so the numbers stay.
 function runSuite(s, id) {
-  s = startTestRun(s, id);
-  for (let i = 0; i < 100 && capData(s, id).testRun.status === 'running'; i++) s = advanceTestRun(s, id);
+  const by = getCapability(s, id).owner;
+  for (const sc of capData(s, id).scenarios) {
+    const sim = simulateScenario(sc);
+    s = recordOutcome(s, id, sc.id, { result: sim.pass ? 'pass' : 'fail', severity: sim.pass ? undefined : sim.severity.toLowerCase(), happened: sim.aiDecision, by });
+  }
   return s;
 }
 const lastCap = (s) => s.capabilities[s.capabilities.length - 1].id;

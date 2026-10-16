@@ -149,8 +149,8 @@ const RISK_OF = { high: 'High', medium: 'Medium', low: 'Low' };
 // One evidence item per measurement, in the same list as every other piece of
 // evidence. `from: 'imported'` and `external` say where it came from; the
 // measurement itself is kept so targets can be judged from it (#120).
-function itemsFor(env, { via = 'file', sourceId = null, recordedBy = null } = {}) {
-  const manual = via === 'manual' || Boolean(recordedBy);
+function itemsFor(env, { via = 'file', sourceId = null, recordedBy = null, provenance = null } = {}) {
+  const manual = via === 'manual' || via === 'upload' || Boolean(recordedBy);
   const external = {
     importId: env.id,
     system: env.source.system,
@@ -162,12 +162,14 @@ function itemsFor(env, { via = 'file', sourceId = null, recordedBy = null } = {}
   };
   return env.measurements.map((m) => ({
     id: `${env.id}#${m.metric}${m.segment ? `@${m.segment.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''}`,
-    from: manual ? 'manual' : 'imported',
+    from: via === 'upload' ? 'uploaded' : manual ? 'manual' : 'imported',
+    // An upload (#142) says which file it came from and that it stays in this browser.
+    ...(provenance ? { provenance } : {}),
     // Seeded example evidence (#126) is demo data, never a live import.
     ...(via === 'seed' ? { demo: true } : {}),
     sourceId: sourceId || sourceIdFor(env.source.system, env.source.capability),
     ...(recordedBy ? { recordedBy } : {}),
-    source: manual ? 'Manual review' : `${env.source.system} ${env.kind === 'eval' ? 'eval' : 'production'}`,
+    source: via === 'upload' ? `Upload: ${env.source.capability}` : manual ? 'Manual review' : `${env.source.system} ${env.kind === 'eval' ? 'eval' : 'production'}`,
     metric: m.label || m.metric,
     value: measurementText(m),
     status: 'recorded',
@@ -185,7 +187,7 @@ function itemsFor(env, { via = 'file', sourceId = null, recordedBy = null } = {}
 // immutable: the same envelope again (a retry) changes nothing and returns
 // the same state; the same id with different content is refused, because a
 // correction arrives as new evidence with its own id.
-export function importEvidence(state, env, { via = 'file', sourceId = null, recordedBy = null } = {}) {
+export function importEvidence(state, env, { via = 'file', sourceId = null, recordedBy = null, provenance = null } = {}) {
   const errors = checkEvidence(env);
   if (errors.length) throw new Error(`This evidence can't be imported: ${errors.join(' ')}`);
   const cap = getCapability(state, env.capabilityId);
@@ -195,19 +197,21 @@ export function importEvidence(state, env, { via = 'file', sourceId = null, reco
     if (prior.capabilityId === env.capabilityId && same(prior.envelope, env)) return state;
     throw new Error(`Evidence ${env.id} was already imported with different content. Imported evidence never changes: send a correction as new evidence with its own id.`);
   }
-  const items = itemsFor(env, { via, sourceId, recordedBy });
-  const record = { id: env.id, importedOn: state.today, via, envelope: canonicalEvidence(env), ...(recordedBy ? { recordedBy } : {}) };
+  const items = itemsFor(env, { via, sourceId, recordedBy, provenance });
+  const record = { id: env.id, importedOn: state.today, via, envelope: canonicalEvidence(env), ...(recordedBy ? { recordedBy } : {}), ...(provenance ? { provenance } : {}) };
   // A connected system becomes a workspace source the first time it sends
   // evidence (#126); a result a person records belongs to manual review.
   // Seeded examples are part of the seed: no registration, no Activity.
   if (via === 'seed') return updateCap(state, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
-  let s = via === 'manual' ? state : registerSource(state, { system: env.source.system, capability: env.source.capability, kind: env.kind });
+  let s = via === 'manual' || via === 'upload' ? state : registerSource(state, { system: env.source.system, capability: env.source.capability, kind: env.kind });
   s = updateCap(s, cap.id, (d) => ({ ...d, imports: [...(d.imports || []), record], evidence: [...items, ...d.evidence] }));
   const logged = logEvent(s, {
     kind: 'evidence-imported',
     surfaced: true,
-    title: via === 'manual' ? `Result recorded by ${recordedBy ? recordedBy.name : 'a person'}` : `Evidence imported from ${env.source.system}`,
-    body: via === 'manual'
+    title: via === 'upload' ? `Evidence uploaded by ${recordedBy ? recordedBy.name : 'a person'}` : via === 'manual' ? `Result recorded by ${recordedBy ? recordedBy.name : 'a person'}` : `Evidence imported from ${env.source.system}`,
+    body: via === 'upload'
+      ? `${cap.name}: ${items.length} result${items.length === 1 ? '' : 's'} from ${provenance ? provenance.fileName : 'a file'} (${env.source.capability}), uploaded in this browser only.`
+      : via === 'manual'
       ? `${cap.name}: ${items[0].metric}, ${items[0].value} (${env.kind === 'eval' ? 'on test cases' : 'in real use'}, ${env.observedAt.slice(0, 10)}), recorded by hand.`
       : `${cap.name}: ${items.length} result${items.length === 1 ? '' : 's'} from ${env.source.capability} (${env.kind === 'eval' ? 'an eval' : 'production'}, ${env.observedAt.slice(0, 10)}), run ${env.id}.`,
     capabilityId: cap.id,

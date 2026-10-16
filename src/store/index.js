@@ -45,3 +45,6 @@ export { SETUP_STATES, BASELINE_REQUIRED, setupState, setupConfirmed, UNCONFIRME
 export { contextDescription, interpretDescription, suggestFromDescription } from './context.js';
 export { SUGGESTION_LABELS, isSuggestion, suggestionOrigin } from './contract.js';
 export { CHECK_SOURCES, suggestedChecks } from './evidence.js';
+// Product reset, Phase 3: the lightweight evidence path (#142).
+export { isDemoWorkspace, judgeRole, OUTCOME_RESULTS, OUTCOME_SEVERITIES, recordOutcome, outcomesNow, VERDICTS, recordJudgment, judgmentsFor, INCIDENT_SEVERITIES, INCIDENT_STATUSES, recordIncident, setIncidentStatus, incidentStatus, incidentsFor, openCriticalIncidents, isIncidentRequirement, FEEDBACK_SENTIMENTS, FEEDBACK_SOURCE, recordFeedback, feedbackFor, feedbackMeasurements, IMPACT_BASES, recordImpactActual, impactActuals, rowMetric, linkRowForResults, recordResult, parseCsv, measurementsFromRows, rowsFromFile, uploadEvidence } from './lightweight.js';
+export { outcomeMeasurements } from './sources.js';

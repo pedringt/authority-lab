@@ -14,6 +14,7 @@ import { getCapability, capData, logEvent } from './state.js';
 import { people, isActivePerson, snapshotPerson, requireActive } from './people.js';
 import { current } from './selectors.js';
 import { importEvidence, evidenceImports, EVIDENCE_SCHEMA } from './external.js';
+import { isDemoWorkspace, outcomesNow } from './lightweight.js';
 
 export const SOURCE_KINDS = {
   eval: 'Eval suite',
@@ -23,10 +24,11 @@ export const SOURCE_KINDS = {
   monitoring: 'Monitoring',
   'manual-review': 'Manual review',
   tests: 'Authority Lab tests',
+  feedback: 'Feedback',
 };
 // How long a source's data stays fresh, by kind (Paige, 2026-10-13). Stale
 // evidence still counts; it is shown as stale and raises a Monitor warning.
-export const FRESH_DAYS = { eval: 30, production: 14, ticketing: 14, analytics: 14, monitoring: 14, 'manual-review': 90, tests: 30 };
+export const FRESH_DAYS = { eval: 30, production: 14, ticketing: 14, analytics: 14, monitoring: 14, 'manual-review': 90, tests: 30, feedback: 90 };
 export const CONNECTIONS = { connected: 'Connected', manual: 'Entered by people', 'built-in': 'Built in' };
 
 export const TESTS_SOURCE = 'authority-lab-tests';
@@ -34,7 +36,10 @@ export const MANUAL_SOURCE = 'manual-review';
 export const BUILT_IN_SOURCES = [
   { id: TESTS_SOURCE, name: 'Authority Lab tests', kind: 'tests', connection: 'built-in', description: 'Test cases written and run in Authority Lab.', freshForDays: FRESH_DAYS.tests,
     metrics: [{ metric: 'tests-passed', label: 'Tests passed', type: 'rate', segments: [] }, { metric: 'serious-test-failures', label: 'Serious test failures', type: 'count', segments: [] }] },
-  { id: MANUAL_SOURCE, name: 'Manual review', kind: 'manual-review', connection: 'manual', description: 'A result a person records by hand: a review, an audit, a spot check.', freshForDays: FRESH_DAYS['manual-review'] },
+  { id: MANUAL_SOURCE, name: 'Manual review', kind: 'manual-review', connection: 'manual', description: 'A result a person records by hand, or a file they upload: a review, an audit, a spot check.', freshForDays: FRESH_DAYS['manual-review'] },
+  // Feedback (#142, P7) is context; it judges a row only when a row is mapped to it.
+  { id: 'feedback', name: 'Feedback', kind: 'feedback', connection: 'manual', description: 'Feedback people record from users, reviewers or stakeholders. It judges nothing unless a Requirement or Target is explicitly mapped to it.', freshForDays: FRESH_DAYS.feedback,
+    metrics: [{ metric: 'positive-feedback', label: 'Positive feedback', type: 'rate', segments: [] }] },
 ];
 
 const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
@@ -101,7 +106,7 @@ export function manualEntryEligibility(state, capabilityId, by) {
 // A result a person records by hand. It travels the same path as imported
 // evidence (one envelope, the same checks, immutable once recorded), marked
 // manual and naming who recorded it. A measured result counts like any other.
-export function recordManualEvidence(state, capabilityId, { by, label, kind, type, passed, total, value, unit, segment, severity, observedAt, note, url } = {}) {
+export function recordManualEvidence(state, capabilityId, { by, label, metric, kind, type, passed, total, value, unit, segment, severity, observedAt, note, url } = {}) {
   requireActive(state, by, 'record evidence');
   const ok = manualEntryEligibility(state, capabilityId, by);
   if (!ok.ok) throw new Error(ok.reason);
@@ -116,7 +121,8 @@ export function recordManualEvidence(state, capabilityId, { by, label, kind, typ
   if (type === 'count' && !whole(value)) throw new Error('Give the number of events as a whole number.');
   if (type === 'count' && num(total) !== undefined && (!whole(total) || num(total) < num(value))) throw new Error('The number of cases has to be a whole number at least as large as the number of events.');
   if (type === 'value' && !Number.isFinite(num(value))) throw new Error('Give the number.');
-  const m = { metric: slug(name) || 'result', label: name.slice(0, 80), type };
+  // Recorded against a row (#142), the row's own metric; otherwise one from the words.
+  const m = { metric: metric || slug(name) || 'result', label: name.slice(0, 80), type };
   if (type === 'rate') Object.assign(m, { passed: num(passed), total: num(total) });
   else if (type === 'count') Object.assign(m, { value: num(value), ...(num(total) !== undefined ? { total: num(total) } : {}) });
   else Object.assign(m, { value: num(value), ...(unit ? { unit } : {}), ...(num(total) !== undefined ? { total: num(total) } : {}) });
@@ -142,6 +148,9 @@ export function recordManualEvidence(state, capabilityId, { by, label, kind, typ
 // passed, overall and by type of test case, and serious failures. Empty until
 // a run is recorded.
 export function testMeasurements(state, capabilityId) {
+  // Outside the demo, the tests source reads the outcomes people recorded
+  // (#142, P1); a simulated result never counts there.
+  if (!isDemoWorkspace(state)) return outcomeMeasurements(state, capabilityId);
   const d = capData(state, capabilityId);
   if (!d.testRun.lastRun || !d.scenarios.length) return [];
   const sc = d.scenarios;
@@ -155,4 +164,25 @@ export function testMeasurements(state, capabilityId) {
     out.push({ metric: 'tests-passed', label: 'Tests passed', type: 'rate', passed: group.filter((x) => x.pass).length, total: group.length, segment: groupName(g) });
   }
   return out.map((m) => ({ ...m, date: d.testRun.lastRun }));
+}
+
+// The tests source from recorded outcomes (#142): each test case's latest
+// outcome. Unable to judge is neither pass nor fail, so it's left out of the
+// rate and reported apart.
+export function outcomeMeasurements(state, capabilityId) {
+  const now = outcomesNow(state, capabilityId).filter((x) => x.outcome);
+  const judged = now.filter((x) => x.outcome.result !== 'unable');
+  if (!judged.length) return [];
+  const date = now.reduce((d, x) => (x.outcome.date > d ? x.outcome.date : d), '');
+  const groupName = (g) => (seed.SCENARIO_GROUPS.find((x) => x.id === g) || { name: g }).name;
+  const passed = (list) => list.filter((x) => x.outcome.result === 'pass').length;
+  const out = [
+    { metric: 'tests-passed', label: 'Tests passed', type: 'rate', passed: passed(judged), total: judged.length },
+    { metric: 'serious-test-failures', label: 'Serious test failures', type: 'count', value: judged.filter((x) => x.outcome.result === 'fail' && x.outcome.severity === 'high').length, total: judged.length, severity: 'high' },
+  ];
+  for (const g of [...new Set(judged.map((x) => x.scenario.group))]) {
+    const group = judged.filter((x) => x.scenario.group === g);
+    out.push({ metric: 'tests-passed', label: 'Tests passed', type: 'rate', passed: passed(group), total: group.length, segment: groupName(g) });
+  }
+  return out.map((m) => ({ ...m, date }));
 }

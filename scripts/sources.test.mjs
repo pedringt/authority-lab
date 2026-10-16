@@ -23,14 +23,14 @@ const env = (over = {}) => ({
 });
 const manual = (s, over = {}) => recordManualEvidence(s, RR, { by: 'maya', label: 'Policy compliance in a Risk review', kind: 'production', type: 'rate', passed: '18', total: '20', ...over });
 
-test('every workspace has the two built-in sources; the demo adds three example ones; Start empty keeps only the built-ins', () => {
+test('every workspace has the three built-in sources; the demo adds three example ones; Start empty keeps only the built-ins', () => {
   const ids = (s) => evidenceSources(s).map((x) => x.id);
-  assert.deepEqual(ids(initialState()), [TESTS_SOURCE, MANUAL_SOURCE, 'support-platform-refund-decisions', 'ticketing-escalations', 'eval-harness-refund-suite']);
-  assert.ok(evidenceSources(initialState()).slice(2).every((x) => x.example && x.connection === 'connected'));
+  assert.deepEqual(ids(initialState()), [TESTS_SOURCE, MANUAL_SOURCE, 'feedback', 'support-platform-refund-decisions', 'ticketing-escalations', 'eval-harness-refund-suite']);
+  assert.ok(evidenceSources(initialState()).slice(3).every((x) => x.example && x.connection === 'connected'));
   const s = importEvidence(initialState(), env());
-  assert.equal(evidenceSources(s).length, 6);
-  assert.deepEqual(ids(startEmpty(s)), [TESTS_SOURCE, MANUAL_SOURCE]);
-  assert.deepEqual(BUILT_IN_SOURCES.map((x) => x.connection), ['built-in', 'manual']);
+  assert.equal(evidenceSources(s).length, 7);
+  assert.deepEqual(ids(startEmpty(s)), [TESTS_SOURCE, MANUAL_SOURCE, 'feedback']);
+  assert.deepEqual(BUILT_IN_SOURCES.map((x) => x.connection), ['built-in', 'manual', 'manual']);
 });
 
 test('a connected system becomes a source the first time it sends evidence, and shows what it has sent', () => {

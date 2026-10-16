@@ -10,8 +10,12 @@ import { current, currentVersion, versionsInForce, performanceResultsSeen, testS
 import { people, requireActive } from './people.js';
 import { amend } from './capabilities.js';
 import { measureProblems } from './measures.js';
+import { isDemoWorkspace } from './lightweight.js';
 
 export function startTestRun(state, capabilityId) {
+  // Simulation is for the demo only (#142, P1): a real workspace records what
+  // its AI actually did, one test case at a time.
+  if (!isDemoWorkspace(state)) throw new Error('Authority Lab doesn\'t run your AI. Run each test case through it yourself, then record the outcome.');
   const d = capData(state, capabilityId);
   if (d.testRun.status === 'running' || !d.scenarios.length) return state;
   if (!criteriaSaved(state, capabilityId)) throw new Error('Set targets and decision requirements before the first test run. They lock when the first results come in, so the bar can\'t move after we see them.');
@@ -380,7 +384,7 @@ export function simulateScenario(sc) {
 
 export const GROUP_PREFIX = { standard: 'S', ambiguous: 'A', adversarial: 'X', 'high-impact': 'H', edge: 'E' };
 
-export function cleanScenarios(list) {
+export function cleanScenarios(list, { simulate = true } = {}) {
   if (!Array.isArray(list)) throw new Error('Scenarios must be a list.');
   const counts = {};
   return list.map((sc, i) => {
@@ -393,6 +397,9 @@ export function cleanScenarios(list) {
     counts[group] = (counts[group] || 0) + 1;
     const base = { id: sc.id || `${GROUP_PREFIX[group]}-${String(counts[group]).padStart(2, '0')}`, group, name, situation, expected, source: sc.source === 'ai' ? 'ai' : 'person' };
     // Keep a recorded result if the scenario text is unchanged; otherwise simulate.
+    // Outside the demo, a test case carries no result of its own: its outcomes
+    // are recorded by a person (#142).
+    if (!simulate) return base;
     const keep = sc.pass !== undefined && sc.aiDecision && !sc.simulated ? { pass: sc.pass, severity: sc.severity, aiDecision: sc.aiDecision, outcome: sc.outcome, explanation: sc.explanation, reviewer: sc.reviewer, escalated: sc.escalated, incident: sc.incident, failureType: sc.failureType } : simulateScenario(base);
     return { ...base, ...keep };
   });
@@ -413,7 +420,7 @@ export function saveScenarios(state, capabilityId, { scenarios, by } = {}) {
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
   requireActive(state, by, 'save the test cases');
   const d = capData(state, capabilityId);
-  const list = cleanScenarios(scenarios);
+  const list = cleanScenarios(scenarios, { simulate: isDemoWorkspace(state) });
   const groups = new Set(list.map((sc) => sc.group));
   if (list.length && groups.size < 2) throw new Error('Include at least two types of case. One type alone doesn\'t show much.');
   let s = updateCap(state, capabilityId, { scenarios: list, testRun: d.testRun.lastRun ? { ...d.testRun, status: 'not-run', completed: [] } : d.testRun });
