@@ -31,7 +31,7 @@ export { replayRecording } from './replay.js';
 export { grantingRecord, actionRates, METRICS, recogniseMetric, expectedVsActual, ROI_FIELDS, roiVersions, currentRoiAssumptions, roiEditEligibility, setRoiAssumptions, roi } from './value.js';
 export { ADOPTION_THRESHOLDS, adoptionSignals } from './adoption.js';
 export { barFromWords, MEASURE_STAT_WORDS, mapEvidence } from './configure.js';
-export { MIN_PRODUCTION_SAMPLE, MEASURE_STATS, MEASURE_OPS, MEASURE_WORDS, measureProblems, measuredEvidence, judgeMeasure, targetsNow, requirementsNow, importedVerdicts, ruleMeasureOf, importedRuleReading, COVERAGE_WORDS, rowCoverage, evidenceCoverage, coverageText, evidenceSignals } from './measures.js';
+export { MIN_PRODUCTION_SAMPLE, MEASURE_STATS, MEASURE_OPS, MEASURE_WORDS, measureProblems, measuredEvidence, judgeMeasure, targetsNow, requirementsNow, importedVerdicts, ruleMeasureOf, importedRuleReading, COVERAGE_WORDS, RESULT_WORDS, rowCoverage, evidenceCoverage, coverageText, evidenceSignals } from './measures.js';
 export { enforceImportedRules } from './monitoring.js';
 export { SOURCE_KINDS, FRESH_DAYS, CONNECTIONS, TESTS_SOURCE, MANUAL_SOURCE, BUILT_IN_SOURCES, sourceIdFor, sourceOfItem, evidenceSources, findSource, registerSource, manualEntryEligibility, recordManualEvidence } from './sources.js';
 export { EVIDENCE_SCHEMA, EVIDENCE_KINDS, MEASUREMENT_TYPES, SEVERITIES, CONFIG_KEYS, CONFIG_LABELS, MAX_MEASUREMENTS, checkEvidence, canonicalEvidence, evidenceImports, findImport, measurementText, measurementSample, importEvidence, importEvidenceFiles, FROM_LABELS, evidenceFrom, configChanges, changesText, evidenceStreams, importedStanding, externalSnapshot } from './external.js';

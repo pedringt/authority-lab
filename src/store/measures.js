@@ -16,7 +16,8 @@
 import { capData, getCapability } from './state.js';
 import { current } from './selectors.js';
 import { importedStanding, measurementSample } from './external.js';
-import { sourceOfItem, findSource, testMeasurements, TESTS_SOURCE } from './sources.js';
+import { sourceOfItem, findSource, testMeasurements, TESTS_SOURCE, FRESH_DAYS } from './sources.js';
+import { feedbackMeasurements, FEEDBACK_SOURCE, judgmentsFor, openCriticalIncidents, isIncidentRequirement, VERDICTS } from './lightweight.js';
 
 // The default minimum production sample before a production result is judged
 // (Paige, 2026-10-12): the same 20 cases as rollout goals. A measure's own
@@ -96,12 +97,96 @@ export function measuredEvidence(state, capabilityId, measure) {
 // failures") that's already exceeded fails at once. More cases can't undo a
 // failure that happened, and one severe failure must be able to block.
 export function judgeMeasure(state, capabilityId, measure) {
-  const e = measuredEvidence(state, capabilityId, measure);
-  if (!e) return { status: 'pending', text: 'No results yet' };
+  const candidates = candidateResults(state, capabilityId, measure);
+  if (!candidates.length) return { status: 'pending', text: 'No results yet' };
+  const judged = candidates.map((c) => judgeOne(state, measure, c));
+  const decisive = judged.filter((j) => j.status === 'pass' || j.status === 'fail');
+  // Stale results never create a conflict (#142, P5); they still count when
+  // nothing fresher judges the row.
+  const fresh = decisive.filter((j) => !j.stale);
+  const pool = fresh.length ? fresh : decisive;
+  const newest = (list) => list.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0];
+  if (pool.some((j) => j.status === 'pass') && pool.some((j) => j.status === 'fail')) {
+    const says = (j) => `${j.label} says ${j.status === 'pass' ? 'met' : 'not met'} (${j.text})`;
+    return { ...newest(pool), status: 'conflicting', text: `Results disagree: ${pool.map(says).join('; ')}`, results: judged, conflict: pool.map((j) => j.evidenceId) };
+  }
+  const pick = pool.length ? newest(pool) : newest(judged);
+  return { ...pick, results: judged };
+}
+
+// Every current result that judges a measure (#142): one per connected
+// stream (its newest under the current configuration), Authority Lab's tests
+// or the feedback source when the measure names them, and the lightweight
+// results (recorded by hand or uploaded), combined where compatible.
+function candidateResults(state, capabilityId, measure) {
+  if (measure.source === TESTS_SOURCE) {
+    const e = measuredEvidence(state, capabilityId, measure);
+    return e ? [{ ...e, label: 'Authority Lab tests', freshForDays: FRESH_DAYS.tests }] : [];
+  }
+  if (measure.source === FEEDBACK_SOURCE) {
+    const m = feedbackMeasurements(state, capabilityId).find((x) => x.metric === measure.metric && !measure.segment);
+    if (!m) return [];
+    const { date, label, ...measured } = m;
+    return [{ id: `feedback:${capabilityId}#${m.metric}`, date, metric: label, sourceId: FEEDBACK_SOURCE, measure: measured, external: { importId: 'recorded feedback', kind: 'production' }, label: 'Feedback', freshForDays: FRESH_DAYS.feedback, itemIds: [] }];
+  }
+  const standing = importedStanding(state, capabilityId);
+  const seg = measure.segment || null;
+  const matching = capData(state, capabilityId).evidence.filter((e) => e.external && e.measure
+    && e.measure.metric === measure.metric && (e.measure.segment || null) === seg
+    && (!measure.kind || e.external.kind === measure.kind)
+    && (!measure.source || sourceOfItem(e) === measure.source));
+  const lightweight = matching.filter(isLightweight);
+  const imported = matching.filter((e) => !isLightweight(e) && (standing.get(e.id) || {}).standing === 'current');
+  const src = (e) => findSource(state, sourceOfItem(e));
+  const out = imported.map((e) => ({ ...e, label: (src(e) || { name: e.source }).name, freshForDays: (src(e) || {}).freshForDays ?? null, itemIds: [e.id] }));
+  return [...out, ...combineLightweight(state, lightweight)];
+}
+
+// Recorded by hand or uploaded (#142): the results that combine.
+const isLightweight = (e) => e.from === 'manual' || e.from === 'uploaded';
+const daysOld = (state, date) => Math.round((Date.parse(state.today) - Date.parse(date)) / 86400000);
+
+// Compatible lightweight results combine (#142, P4): the same metric and
+// segment (already matched), the same evidence mode, the same kind of
+// measurement and unit, the same configuration, all inside the freshness
+// window. A rate adds its cases; a count adds its events (and cases, when
+// every result gives them); a single value never combines, so each stands on
+// its own. The results themselves are never changed.
+function combineLightweight(state, items) {
+  if (!items.length) return [];
+  const fresh = FRESH_DAYS['manual-review'];
+  const inWindow = items.filter((e) => daysOld(state, e.date) <= fresh);
+  // Nothing in the window: the newest result alone, which shows as stale.
+  const pool = inWindow.length ? inWindow : [items.slice().sort((a, b) => (a.date < b.date ? 1 : -1))[0]];
+  const groups = new Map();
+  for (const e of pool) {
+    const m = e.measure;
+    const key = m.type === 'value' ? `value|${e.id}` : `${m.type}|${m.unit || ''}|${e.external.kind}|${JSON.stringify(e.external.config || {})}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+  return [...groups.values()].map((list) => {
+    const sorted = list.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    const top = sorted[0];
+    if (list.length === 1) return { ...top, label: lightweightLabel(top), freshForDays: fresh, itemIds: [top.id], combined: 1 };
+    const m = top.measure;
+    const sum = (k) => list.reduce((n, e) => n + (e.measure[k] || 0), 0);
+    const measure = m.type === 'rate'
+      ? { ...m, passed: sum('passed'), total: sum('total') }
+      : { ...m, value: sum('value'), ...(list.every((e) => Number.isInteger(e.measure.total)) ? { total: sum('total') } : { total: undefined }) };
+    if (measure.total === undefined) delete measure.total;
+    return { ...top, id: `combined:${list.map((e) => e.id).join('+')}`.slice(0, 200), measure, label: `${list.length} combined results`, freshForDays: fresh, itemIds: sorted.map((e) => e.id), combined: list.length };
+  });
+}
+const lightweightLabel = (e) => (e.from === 'uploaded' ? `Upload (${e.provenance ? e.provenance.fileName : e.external.capability})` : `Recorded by ${e.recordedBy ? e.recordedBy.name : e.external.capability}`);
+
+function judgeOne(state, measure, e) {
   const m = e.measure;
   const actual = reading(m, measure.stat);
   const sample = measurementSample(m);
-  const base = { evidenceId: e.id, importId: e.external.importId, kind: e.external.kind, date: e.date, sample, actual };
+  const age = e.date ? daysOld(state, e.date) : null;
+  const stale = e.freshForDays != null && age !== null && age > e.freshForDays;
+  const base = { evidenceId: e.id, importId: e.external.importId, kind: e.external.kind, date: e.date, sample, actual, label: e.label || e.metric, itemIds: e.itemIds || [e.id], combined: e.combined || 1, stale };
   if (actual === null) return { ...base, status: 'pending', text: `This result can't be read as a ${measure.stat}` };
   // A case count reads as the bare number ("now 18" against "Minimum 40 … cases").
   const actualText = measure.stat === 'sample' ? `${actual}` : `${fmt(actual, measure.stat)}${sample !== null ? ` across ${casesText(sample)}` : ''}`;
@@ -115,7 +200,7 @@ export function judgeMeasure(state, capabilityId, measure) {
   return { ...base, status: ok ? 'pass' : 'fail', text: actualText, needed };
 }
 
-export const MEASURE_WORDS = { pass: 'Met', fail: 'Not met', 'too-early': 'Too early to judge', insufficient: 'Not enough data', pending: 'No results yet', 'needs-decision': 'Needs decision' };
+export const MEASURE_WORDS = { pass: 'Met', fail: 'Not met', 'too-early': 'Too early to judge', insufficient: 'Not enough data', pending: 'No results yet', 'needs-decision': 'Needs decision', conflicting: 'Conflicting' };
 
 // The targets as they stand now: a row with a measure takes its "now" and
 // status from the imported evidence; other rows are as stored.
@@ -137,13 +222,57 @@ export function requirementsNow(state, capabilityId) {
   const unresolved = current(state, capabilityId, 'criteria').filter((c) => c.bar === 'needs-decision' && c.requirement);
   return current(state, capabilityId, 'requirements').map((row) => {
     // A coverage rule waiting for its number (#139): unresolved, not failed.
-    if (row.bar === 'needs-decision') return { ...row, current: 'No number set yet', met: false, unresolved: true, gap: 'Its number hasn\'t been set: it needs a decision. This isn\'t a failed result.' };
-    const r = judgedRequirement(state, capabilityId, row);
+    if (row.bar === 'needs-decision') return withResult({ ...row, current: 'No number set yet', met: false, unresolved: true, gap: 'Its number hasn\'t been set: it needs a decision. This isn\'t a failed result.' }, 'needs-decision');
+    const r = row.measure ? judgedRequirement(state, capabilityId, row) : personJudged(state, capabilityId, row);
     const open = unresolved.filter((c) => c.requirement === r.id);
     if (!open.length) return r;
     const gap = `${open.map((c) => `"${c.name}"`).join(' and ')} ${open.length === 1 ? 'has' : 'have'} no bar yet: it needs a decision. This isn't a failed result.`;
-    return { ...r, met: false, unresolved: true, gap: r.met || !r.gap ? gap : `${r.gap} Also, ${gap.charAt(0).toLowerCase()}${gap.slice(1)}` };
+    return withResult({ ...r, met: false, unresolved: true, gap: r.met || !r.gap ? gap : `${r.gap} Also, ${gap.charAt(0).toLowerCase()}${gap.slice(1)}` }, 'needs-decision');
   });
+}
+
+// Every Requirement's result and why (#142, J): Met, Not met, Unknown,
+// Conflicting, Not enough evidence, No evidence yet or Needs decision. Only
+// Met counts toward readiness; none of the others is ever a pass.
+export const RESULT_WORDS = { met: 'Met', 'not-met': 'Not met', unknown: 'Unknown', conflicting: 'Conflicting', 'not-enough': 'Not enough evidence', 'no-evidence': 'No evidence yet', 'needs-decision': 'Needs decision' };
+const RESULT_OF = { pass: 'met', fail: 'not-met', conflicting: 'conflicting', insufficient: 'not-enough', 'too-early': 'not-enough', pending: 'no-evidence' };
+function withResult(r, status, why) {
+  return { ...r, result: { status, label: RESULT_WORDS[status], why: why || r.gap || (status === 'met' ? `Met: ${r.current}.` : '') } };
+}
+
+// A Requirement with no metric (#142): an open critical incident blocks the
+// incidents Requirement (P6); otherwise the Owner's and Reviewers' latest
+// judgments decide it (P2), and if they disagree it is Conflicting.
+// Stakeholder input never decides it. With no judgment at all, a row keeps
+// whatever it already had (the seeded demo's stored results).
+function personJudged(state, capabilityId, row) {
+  if (isIncidentRequirement(row)) {
+    const open = openCriticalIncidents(state, capabilityId);
+    if (open.length) {
+      const why = `${open.length === 1 ? 'An open critical incident' : `${open.length} open critical incidents`}: ${open.map((x) => `${x.id} (${x.what.slice(0, 80)})`).join('; ')}. Resolving ${open.length === 1 ? 'it' : 'them'} removes this blocker; it doesn't by itself show the Requirement is met.`;
+      return withResult({ ...row, met: false, current: 'Open critical incident', gap: why, incidentsOpen: open.map((x) => x.id) }, 'not-met', why);
+    }
+  }
+  const { counting, input } = judgmentsFor(state, capabilityId, row.id);
+  const note = input.length ? ` Stakeholder input: ${input.map((j) => `${j.byAt.name} says ${VERDICTS[j.verdict].toLowerCase()}`).join('; ')} (input doesn't decide it).` : '';
+  const decisive = counting.filter((j) => j.verdict !== 'unknown');
+  const said = (j) => `${j.byAt.name} (${j.role}) judged it ${VERDICTS[j.verdict].toLowerCase()} on ${j.date}: ${j.rationale}`;
+  if (decisive.some((j) => j.verdict === 'met') && decisive.some((j) => j.verdict === 'not-met')) {
+    const why = `Judgments disagree: ${decisive.map(said).join(' / ')}. Look into it, or collect more evidence.${note}`;
+    return withResult({ ...row, met: false, conflicting: true, current: 'Judgments disagree', gap: why, judgments: decisive.map((j) => j.id) }, 'conflicting', why);
+  }
+  if (decisive.length) {
+    const met = decisive.every((j) => j.verdict === 'met');
+    const why = `${decisive.map(said).join(' / ')}.${note}`;
+    return withResult({ ...row, met, current: met ? 'Judged met' : 'Judged not met', gap: met ? undefined : why, judgments: decisive.map((j) => j.id) }, met ? 'met' : 'not-met', why);
+  }
+  if (counting.length) {
+    const why = `${counting.map(said).join(' / ')}. Unknown is neither met nor failed.${note}`;
+    return withResult({ ...row, met: false, current: 'Judged unknown', gap: why, judgments: counting.map((j) => j.id) }, 'unknown', why);
+  }
+  if (row.met) return withResult(row, 'met', `Met: ${row.current}.${note}`);
+  const why = row.gap || `No evidence yet. The Owner or a Reviewer can record a judgment.${note}`;
+  return withResult({ ...row, gap: why }, 'no-evidence', why);
 }
 
 function judgedRequirement(state, capabilityId, r) {
@@ -153,11 +282,14 @@ function judgedRequirement(state, capabilityId, r) {
     // A row's own explanation of its gap, written by a person, is kept while
     // the gap is open; the generated sentence is the fallback.
     const gap = j.status === 'pass' ? undefined
+      : j.status === 'conflicting' ? `${j.text}. Conflicting evidence is never a pass: look into it, or collect more.`
       : r.gap ? r.gap
       : j.status === 'fail' ? `Measured ${j.text} in ${j.importId}.`
-        : j.status === 'pending' ? 'No imported results measure this yet.'
+        : j.status === 'pending' ? 'No results measure this yet.'
           : `${MEASURE_WORDS[j.status]}: ${j.text}.`;
-    return { ...r, current: j.text, met: j.status === 'pass', gap, judged: j };
+    const from = j.combined > 1 ? ` (${j.combined} compatible results combined)` : '';
+    const why = j.status === 'pass' ? `Met: ${j.text}${from}, from ${j.label}.` : `${gap}${from && j.status !== 'conflicting' ? from : ''}`;
+    return withResult({ ...r, current: j.text, met: j.status === 'pass', gap, judged: j, ...(j.status === 'conflicting' ? { conflicting: true } : {}) }, RESULT_OF[j.status] || 'no-evidence', why);
   }
 }
 
@@ -216,6 +348,9 @@ export const COVERAGE_WORDS = {
   'no-data': 'No results yet',
   'no-source': 'No source mapped',
   'needs-decision': 'Needs decision',
+  judged: 'Judged by a person',
+  unknown: 'Unknown',
+  conflicting: 'Conflicting evidence',
 };
 
 const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
@@ -226,8 +361,16 @@ const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400
 export function rowCoverage(state, capabilityId, row) {
   // A coverage rule whose number nobody has set (#139) can't be sufficient.
   if (row.bar === 'needs-decision') return { status: 'needs-decision', mapped: false };
-  if (!row.measure) return { status: 'no-source', mapped: false };
+  if (!row.measure) {
+    // A person's judgment, or an open critical incident, is the evidence for
+    // a Requirement with no metric (#142).
+    const st = row.result && row.result.status;
+    if (st === 'met' || st === 'not-met') return { status: 'judged', mapped: false };
+    if (st === 'unknown' || st === 'conflicting') return { status: st, mapped: false };
+    return { status: 'no-source', mapped: false };
+  }
   const j = judgeMeasure(state, capabilityId, row.measure);
+  if (j.status === 'conflicting') return { status: 'conflicting', mapped: true, judged: j, source: row.measure.source ? findSource(state, row.measure.source) : null };
   const source = row.measure.source ? findSource(state, row.measure.source) : null;
   if (j.status === 'pending') return { status: 'no-data', mapped: true, judged: j, source };
   if (j.status === 'insufficient' || j.status === 'too-early') return { status: 'insufficient', mapped: true, judged: j, source };
@@ -250,10 +393,10 @@ export function evidenceCoverage(state, capabilityId) {
     requirements: reqs,
     targets,
     // Stale evidence still counts as evidence; it is flagged, not discarded.
-    sufficient: count(reqs, 'covered', 'stale'),
+    sufficient: count(reqs, 'covered', 'stale', 'judged'),
     total: reqs.length,
     mapped: reqs.filter((x) => x.mapped).length,
-    gaps: reqs.filter((x) => !['covered'].includes(x.status)),
+    gaps: reqs.filter((x) => !['covered', 'judged'].includes(x.status)),
   };
 }
 
@@ -262,9 +405,11 @@ export function evidenceCoverage(state, capabilityId) {
 export function coverageText(cov) {
   if (!cov.total) return 'No Requirements yet.';
   const head = `${cov.sufficient} of ${cov.total} Requirement${cov.total === 1 ? ' has' : 's have'} sufficient evidence`;
-  const gap = cov.gaps.find((g) => g.status === 'needs-decision') || cov.gaps.find((g) => g.status === 'insufficient') || cov.gaps.find((g) => g.status === 'no-data') || cov.gaps.find((g) => g.status === 'no-source') || cov.gaps.find((g) => g.status === 'stale');
+  const gap = cov.gaps.find((g) => g.status === 'conflicting') || cov.gaps.find((g) => g.status === 'needs-decision') || cov.gaps.find((g) => g.status === 'insufficient') || cov.gaps.find((g) => g.status === 'no-data') || cov.gaps.find((g) => g.status === 'no-source') || cov.gaps.find((g) => g.status === 'stale') || cov.gaps.find((g) => g.status === 'unknown');
   if (!gap) return `${head}.`;
-  const why = gap.status === 'needs-decision' ? 'has no number yet: it needs a decision'
+  const why = gap.status === 'conflicting' ? 'has conflicting evidence'
+    : gap.status === 'unknown' ? 'was judged Unknown'
+    : gap.status === 'needs-decision' ? 'has no number yet: it needs a decision'
     : gap.status === 'insufficient' ? `still needs more cases (${gap.judged.text})`
     : gap.status === 'no-data' ? 'has no results yet'
       : gap.status === 'stale' ? `has stale evidence (${gap.age} days old)`
