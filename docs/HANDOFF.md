@@ -131,17 +131,16 @@ Do not start from old mockups.
 
 The information architecture and product model must stabilize first.
 
-## First implementation phase
+## Where the phases stand
 
-Start with **#137 — Product reset Phase 1: data-model and setup foundations**.
+- **Phase 1 — data model (#137): done.** Merged to `main` in #138 (2026-10-16). Paige's answers and the follow-up notes are in `docs/DECISIONS.md` under "Product reset, Phase 1". Treat them as settled.
+- **Phase 2 — setup flow (#139): next, blocked on Paige's product answers.** The issue lists the scope and five open product questions: when setup is recorded, what Review/confirm gates, templates, default numbers, and the "Suggested by AI" label. Do not start coding Phase 2 until Paige answers them. Record the answers in `docs/DECISIONS.md` before implementing.
 
-#137 is intentionally blocked by the reset documentation PR #136. Do not start implementation until #136 is available on the branch Paige tells you to work from.
-
-Phase 1 only makes the underlying product able to represent the reset concepts while preserving existing behavior where possible. It is **not** approval to continue into setup UI, generative UI, Proposal/Decision redesign, Monitor redesign or visual polish.
+Phase 2 is **not** approval to continue into Proposal/Decision, Residual Risk decision UX, Monitor, material-change revalidation, generative UI or visual polish.
 
 See `docs/IMPLEMENTATION_PLAN.md`.
 
-Do not continue into later phases just because Phase 1 is green. Each phase should remain a controlled scope.
+Do not continue into later phases just because a phase is green. Each phase should remain a controlled scope.
 
 ## State as a reality check
 
