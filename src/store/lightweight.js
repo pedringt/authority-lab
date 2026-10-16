@@ -99,7 +99,9 @@ export function recordJudgment(state, capabilityId, requirementId, { verdict, ra
   if (!role) throw new Error(`${people(state)[by].name} isn't the owner or named on ${cap.name}, so they can't judge its Requirements.`);
   const req = current(state, capabilityId, 'requirements').find((r) => r.id === requirementId);
   if (!req) throw new Error('That Requirement no longer exists.');
-  if (req.measure) throw new Error(`"${req.text}" is judged by its evidence, not by a person. Record a result for it instead.`);
+  // Only a Requirement with no number is judged by a person (P2); one that
+  // names a number is measured.
+  if (req.measure || /\d/.test(req.text)) throw new Error(`"${req.text}" is measured, not judged by a person. Record a result for it instead.`);
   if (req.bar === 'needs-decision') throw new Error(`"${req.text}" has no number yet. Set it before judging it.`);
   if (!VERDICTS[verdict]) throw new Error('Choose Met, Not met or Unknown.');
   const why = text(rationale, 400);
