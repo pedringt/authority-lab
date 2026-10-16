@@ -12,7 +12,7 @@ import {
   getCapability, capData, current, versionList, actor, activePeople, workflowOf, RISK_OPTIONS, levelName,
   CONTEXT_FIELDS, contextNow, confirmedContext, contextDescription, LIFECYCLE, BASELINE_FIELDS, baselineNow, baselineVersions, authorityBaseline,
   LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, setupState, setupReview, setupConfirmation, resultsLockWarning,
-  boundaries, ENFORCEMENT, peopleModel, criteriaSaved, evidenceCoverage, coverageText, performanceResultsSeen, enforcementTerms,
+  BASELINE_REQUIRED, boundaries, ENFORCEMENT, peopleModel, criteriaSaved, evidenceCoverage, coverageText, performanceResultsSeen, enforcementTerms,
 } from '../store/index.js';
 import { STARTING_POINTS, findStartingPoint, familiesFor } from '../data/templates.js';
 import { TODAY_CHOICES, RISK_ANSWERS } from './setup.js';
@@ -140,7 +140,8 @@ export function todayStepView(state, capabilityId, query) {
   return html`${stepHead(cap, 'What it does today', 'Record what it actually does now, not what the policy says.', 'Documented policy and real operation often differ. Effective authority is how independently it really operates today. It is recorded separately and never changes the authority Authority Lab grants.')}
   ${draftNotice(state, cap)}${error ? notice('fail', 'Couldn\'t save that', error) : ''}
   <form class="setup-form onboard-form" data-form="setup-today" data-capability="${cap.id}">
-    ${BASELINE_FIELDS.map((f) => html`<label class="field field-stack"><span>${f.label}</span><textarea name="b-${f.key}" rows="2" maxlength="600">${b[f.key] || ''}</textarea></label>`)}
+    <p class="muted small">The first four are needed before the setup can be confirmed. Write "Unknown" where you don't know: the point is to record what is and isn't known about the real system.</p>
+    ${BASELINE_FIELDS.map((f) => html`<label class="field field-stack"><span>${f.label}${BASELINE_REQUIRED.includes(f.key) ? '' : html` <span class="muted small">(optional)</span>`}</span><textarea name="b-${f.key}" rows="2" maxlength="600">${b[f.key] || ''}</textarea></label>`)}
     <div class="onboard-group"><h2 class="onboard-q">How independently does it really operate today?</h2>
       ${selectField('effective', 'Effective authority', [['unknown', 'Not sure'], ...[0, 1, 2, 3, 4].map((l) => [String(l), `Level ${l} — ${levelName(l)}`])], effValue, { placeholder: 'Not recorded' })}
       <label class="field field-stack"><span>How do you know? <span class="muted small">(required with a level)</span></span><input type="text" name="effective-note" value="${e.note || ''}" maxlength="300"></label>
@@ -211,7 +212,7 @@ export function setupSequence(state, capabilityId) {
   const steps = [
     { id: 'context', title: 'Context', done: Boolean(facts.purpose), text: facts.purpose ? `Purpose: ${facts.purpose}${pending ? ` · ${pending} suggested fact${pending === 1 ? '' : 's'} still to confirm` : ''}` : 'Describe the product or workflow and confirm its purpose.', link: `#/setup/context?next=${encodeURIComponent(`${base}/setup`)}` },
     { id: 'capability', title: 'Starting point and capability', done: true, text: `${findStartingPoint(cap.setup.template).name} · ${LIFECYCLE[cap.setup.lifecycle]} · Owner: ${person(cap.owner).name}`, link: `${base}/setup/capability` },
-    ...(cap.setup.lifecycle === 'in-use' ? [{ id: 'today', title: 'What it does today', done: baselineVersions(state, capabilityId).length > 0, text: baselineVersions(state, capabilityId).length ? `Effective authority: ${authorityBaseline(state, capabilityId).effective.status === 'recorded' ? `Level ${authorityBaseline(state, capabilityId).effective.level} — ${authorityBaseline(state, capabilityId).effective.name}` : authorityBaseline(state, capabilityId).effective.status === 'unknown' ? 'not sure' : 'not recorded'}` : 'It is already in use: record what it really does today.', link: `${base}/setup/today` }] : []),
+    ...(cap.setup.lifecycle === 'in-use' ? [{ id: 'today', title: 'What it does today', done: !setupReview(state, capabilityId).missing.some((m) => m.step === 'today'), text: baselineVersions(state, capabilityId).length ? `Effective authority: ${authorityBaseline(state, capabilityId).effective.status === 'recorded' ? `Level ${authorityBaseline(state, capabilityId).effective.level} — ${authorityBaseline(state, capabilityId).effective.name}` : authorityBaseline(state, capabilityId).effective.status === 'unknown' ? 'not sure' : 'not recorded'}` : 'It is already in use: record what it really does today.', link: `${base}/setup/today` }] : []),
     { id: 'risk', title: 'Risk and authority', done: riskSaved && Boolean(cap.setup.today), text: riskSaved ? `Overall Risk ${v.overall} (Severity ${v.severityLabel}, Likelihood ${v.likelihood}).${cap.setup.today ? ` Starts at ${notDelegated ? 'Level 0, not delegated' : `Level ${cap.setup.today === 'nothing' ? 0 : 1}`} once confirmed.` : ' Choose the starting authority.'}` : 'Severity, Likelihood, Scale, who is affected, and where it starts.', link: `${base}/setup/risk` },
     ...(notDelegated ? [] : [
       { id: 'boundaries', title: 'Boundaries', done: boundariesSaved, text: boundariesSaved ? 'Saved.' : draftLines ? `${draftLines.lines.filter((l) => l.status === 'pending').length} suggestions still to review.` : 'Where it must stop or involve a person. Every suggestion is reviewed one at a time.', link: `${base}/contract/build`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },

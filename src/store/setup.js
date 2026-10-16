@@ -21,7 +21,10 @@ import { current, currentVersion, versionList, versionsInForce, levelName, perfo
 import { people, isActivePerson, snapshotPerson, requireActive } from './people.js';
 import { slugify, RISK_OPTIONS, TODAY, amend, startingRecord, defaultFailureTypes } from './capabilities.js';
 import { cleanLikelihoodScale, riskView } from './risk.js';
-import { contextNow, contextVersions, confirmedContext, baselineNow, baselineVersions, authorityBaseline, LIFECYCLE } from './context.js';
+import { contextNow, contextVersions, confirmedContext, baselineNow, baselineVersions, authorityBaseline, LIFECYCLE, BASELINE_FIELDS } from './context.js';
+
+// What an in-use capability's baseline must say before setup is confirmed.
+export const BASELINE_REQUIRED = ['currentBehavior', 'humanInvolvement', 'permissions', 'safeguards'];
 import { criteriaSaved } from './evidence.js';
 import { findStartingPoint } from '../data/templates.js';
 
@@ -153,13 +156,22 @@ export function setupReview(state, capabilityId) {
   if (notDelegated && (s.rationale || '').length < 20) missing.push({ step: 'risk', text: 'Say why this stays with people (a sentence or two).' });
   if (!notDelegated && !boundariesDone) missing.push({ step: 'boundaries', text: 'Review and save the Boundaries.' });
   if (!notDelegated && !requirementsDone) missing.push({ step: 'requirements', text: 'Save the Requirements.' });
+  // Already in use (Paige, 2026-10-16, #141 review): what it really does
+  // today must be recorded before setup is confirmed. Not certainty: any of
+  // these can say "Unknown", and effective authority may stay unknown or not
+  // recorded. But each has to be written down.
+  if (s.lifecycle === 'in-use') {
+    const b = baselineNow(state, capabilityId);
+    const blank = BASELINE_REQUIRED.filter((k) => !b.recorded || !String(b[k] || '').trim());
+    if (blank.length) missing.push({ step: 'today', text: `It is already in use: record what it does today (${blank.map((k) => BASELINE_FIELDS.find((f) => f.key === k).label.toLowerCase()).join('; ')}). Write "Unknown" where you don't know.` });
+  }
   const targets = current(state, capabilityId, 'criteria');
   const requirements = current(state, capabilityId, 'requirements');
   const open = [
     ...targets.filter((t) => t.bar === 'needs-decision').map((t) => `Target "${t.name}" has no bar yet: Needs decision.`),
     ...requirements.filter((r) => r.bar === 'needs-decision').map((r) => `Requirement "${r.text}" has no number yet: Needs decision.`),
     ...pendingFacts.map((k) => `Context fact "${k}" is suggested but not confirmed, so it doesn't drive setup.`),
-    ...(s.lifecycle === 'in-use' && !baselineVersions(state, capabilityId).length ? ['It is already in use, but what it does today hasn\'t been recorded.'] : []),
+    ...(s.lifecycle === 'in-use' && baselineVersions(state, capabilityId).length && authorityBaseline(state, capabilityId).effective.status !== 'recorded' ? ['It is already in use, and how independently it really operates today isn\'t known.'] : []),
     ...(current(state, capabilityId, 'stakeholders').length ? [] : ['No Reviewers or Stakeholders are named: the owner decides alone.']),
   ];
   const level = notDelegated ? 0 : now ? now.level : null;

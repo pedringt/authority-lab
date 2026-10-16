@@ -13,7 +13,7 @@ import {
   startContractDraft, reviewSuggestion, addContractLine, confirmSection, finalizeContract, SECTION_KEYS, isSuggestion, suggestionOrigin, SUGGESTION_LABELS,
   defaultsFor, saveCriteria, criteriaLocked, requirementsNow, targetsNow, readiness, evidenceCoverage, coverageText,
   addStarterScenarios, startTestRun, advanceTestRun, proposeAuthority, selectDecision, setRationale, canAuthorize, authorize,
-  baselineNow, recordBaseline, findWorkspace, isCoverageRule,
+  baselineNow, baselineVersions, recordBaseline, findWorkspace, isCoverageRule,
 } from '../src/store/index.js';
 import { STARTING_POINTS, TEMPLATE_FAMILIES, BLANK, familiesFor } from '../src/data/templates.js';
 
@@ -245,13 +245,52 @@ test('"not something to delegate" confirms at Level 0 by design, without Boundar
   assert.deepEqual([getCapability(c, id).status, getCapability(c, id).authority.level, c.decisionRecords.at(-1).option], ['not-delegated', 0, 'not-delegated']);
 });
 
-test('an in-use capability: the review flags a missing baseline, and the effective authority shows once recorded', () => {
-  let [s, id] = draft({ lifecycle: 'in-use' });
+// Paige, 2026-10-16 (#141 review): an in-use capability's baseline is required
+// before confirmation. Not certainty: "Unknown" is a valid entry.
+function readyInUse() {
+  let [s, id] = draft({ lifecycle: 'in-use', name: 'Tag tickets', template: 'extract' });
   s = saveSetupRisk(s, id, { ...RISK, by: 'priya' });
-  assert.ok(setupReview(s, id).open.some((o) => /already in use/.test(o)));
-  s = recordBaseline(s, id, { effective: { level: 2, note: 'Agents send every recommendation it drafts after a quick check.' }, by: 'priya', reason: 'What it does today.' });
-  assert.equal(setupReview(s, id).summary.authority.effective.level, 2);
-  assert.ok(!setupReview(s, id).open.some((o) => /already in use/.test(o)));
+  s = setStartingAuthority(s, id, { today: 'acts' });
+  s = startContractDraft(s, id, { by: 'priya' });
+  s = finalizeContract(reviewAll(s, id), id, { by: 'priya' });
+  const d = defaultsFor(s, id);
+  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
+  return [s, id];
+}
+const BASELINE = { currentBehavior: 'Tags every ticket on arrival; agents can retag.', humanInvolvement: 'Agents see the tag and fix wrong ones.', permissions: 'Writes the tag field only.', safeguards: 'Unknown' };
+
+test('an in-use capability can\'t be confirmed without a baseline of what it does today', () => {
+  const [s, id] = readyInUse();
+  const r = setupReview(s, id);
+  assert.equal(r.ready, false);
+  assert.match(r.missing.find((m) => m.step === 'today').text, /already in use: record what it does today/);
+  assert.throws(() => confirmSetup(s, id, { by: 'priya' }), /record what it does today/);
+  // Every one of the four is needed; a partial baseline still blocks.
+  const partial = recordBaseline(s, id, { fields: { currentBehavior: BASELINE.currentBehavior }, by: 'priya', reason: 'Started.' });
+  assert.match(setupReview(partial, id).missing.find((m) => m.step === 'today').text, /where people are involved today; permissions and actions it has today; safeguards in place today/);
+});
+
+test('a baseline can say "Unknown", and effective authority may stay unknown or not recorded', () => {
+  const [s0, id] = readyInUse();
+  for (const effective of [{ status: 'unknown' }, { status: 'not-recorded' }]) {
+    const s = recordBaseline(s0, id, { fields: BASELINE, effective, by: 'priya', reason: 'What it does today.' });
+    const r = setupReview(s, id);
+    assert.equal(r.ready, true, effective.status);
+    assert.ok(r.open.some((o) => /how independently it really operates today isn't known/.test(o)), 'shown as open, not blocking');
+    const c = confirmSetup(s, id, { by: 'priya' });
+    assert.equal(getCapability(c, id).authority.level, 1, 'declared start stays at Level 1, whatever it does today');
+  }
+  const known = recordBaseline(s0, id, { fields: BASELINE, effective: { level: 3, note: 'It files tags itself; nobody approves each one.' }, by: 'priya', reason: 'What it does today.' });
+  assert.equal(setupReview(known, id).summary.authority.effective.level, 3);
+  assert.equal(confirmSetup(known, id, { by: 'priya' }).decisionRecords.at(-1).next.level, 1);
+});
+
+test('a planned capability needs no baseline to be confirmed', () => {
+  const [s, id] = readyDraft();
+  assert.equal(getCapability(s, id).setup.lifecycle, 'planned');
+  assert.equal(baselineVersions(s, id).length, 0);
+  assert.equal(setupReview(s, id).ready, true);
+  assert.ok(!setupReview(s, id).missing.some((m) => m.step === 'today'));
 });
 
 // ---------------------------------------------------------------------------
