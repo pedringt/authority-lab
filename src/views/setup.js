@@ -20,65 +20,6 @@ export const TODAY_CHOICES = [
   ['not-delegated', 'Not something to delegate', 'This stays with people, by design. It stays at Observe (Level 0), and the reason is recorded.'],
 ];
 
-// Add a capability: four plain questions, one submit. Failure types and a
-// starting rationale are optional; nothing starts above Level 1.
-export function addCapabilityView(state, query) {
-  const error = query.get('error');
-  const acting = person(actor(state));
-  const owners = Object.entries(activePeople(state)).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
-  return html`<div class="page-head">
-    <div>
-      <p class="eyebrow"><a href="#/capabilities">Capabilities</a> · ${workflowOf(state).name}</p>
-      <h1>Add a capability</h1>
-      <p class="lede">One piece of work that could earn more autonomy, like "Recommend a refund".</p>
-    </div>
-  </div>
-  ${error ? notice('fail', 'Could not add the capability', error) : ''}
-  <form class="setup-form onboard-form" data-form="add-capability" novalidate>
-    <div class="onboard-group">
-      <h2 class="onboard-q">What does it do?</h2>
-      <label class="field field-stack"><span>Name</span><input name="name" type="text" required maxlength="80" placeholder="e.g. Recommend a refund" data-action="check-name" autocomplete="off"></label>
-      <p class="form-hint muted small" data-name-warning hidden></p>
-      <label class="field field-stack"><span>In one sentence</span><input name="summary" type="text" maxlength="160" placeholder="e.g. Reviews refund requests and recommends whether to issue one."></label>
-    </div>
-
-    <div class="onboard-group">
-      <h2 class="onboard-q">Who owns it?</h2>
-      ${selectField('owner', 'Owner', owners, actor(state), { action: 'choose-owner' })}
-      <p class="muted small">Choosing an owner also switches "Demo as" to them.</p>
-    </div>
-
-    <div class="onboard-group">
-      <h2 class="onboard-q">What happens if it gets this wrong?</h2>
-      <div class="three-col">
-        ${selectField('impact', 'How serious would a bad decision be?', RISK_ANSWERS.impact, '', { placeholder: 'Choose' })}
-        ${selectField('reversibility', 'Can it be undone?', RISK_ANSWERS.reversibility, '', { placeholder: 'Choose' })}
-        ${selectField('exposure', 'Who or what is affected?', RISK_ANSWERS.exposure, '', { placeholder: 'Choose' })}
-      </div>
-      <p class="muted small">The riskier it is, the more evidence it needs before it gets more autonomy.</p>
-    </div>
-
-    <div class="onboard-group">
-      <h2 class="onboard-q">What does it do today?</h2>
-      <div class="option-list" role="radiogroup" aria-label="What does it do today?">
-        ${TODAY_CHOICES.map(([value, label, text]) => html`<label class="option"><input type="radio" name="today" value="${value}"><span class="option-body"><strong>${label}</strong><span class="muted small">${text}</span></span></label>`)}
-      </div>
-      <label class="field field-stack"><span>Why? <span class="muted small">(required if it stays with people)</span></span><textarea name="rationale" rows="2" placeholder="e.g. Deletion can't be undone and happens rarely. A person does it every time."></textarea></label>
-    </div>
-
-    <details class="onboard-more">
-      <summary>More detail (optional)</summary>
-      <p class="fact-label">What could go wrong?</p>
-      <p class="muted small">Leave these blank to use the defaults for its risk profile.</p>
-      <div class="check-grid">${RISK_OPTIONS.failureTypes.map((f) => html`<label class="check"><input type="checkbox" name="failureTypes" value="${f}"><span>${f}</span></label>`)}</div>
-      <label class="field field-stack"><span>Note</span><input name="riskNote" type="text" maxlength="200" placeholder="What a mistake would cost, and who would notice."></label>
-    </details>
-
-    <p class="muted small">This writes its first decision record, authorized by <strong>${acting.name}</strong> (${acting.role}) on ${fmtDate(state.today)}.</p>
-    <button class="btn btn-primary" type="submit">Add capability</button>
-  </form>`;
-}
-
 // The setup steps, shown as three stages (#126, Paige 2026-10-13): Define;
 // Evidence (what good looks like, which evidence judges it, what's covered,
 // and filling the gaps, where tests are one way among several); Decide.

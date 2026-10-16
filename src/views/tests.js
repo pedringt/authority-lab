@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, fmtDate, lede, tabIntro } from '../ui.js';
-import { testSummary, capData, getCapability, canRunSuite, workspaceOf } from '../store/index.js';
+import { testSummary, capData, getCapability, canRunSuite, workspaceOf, resultsLockWarning, setupState } from '../store/index.js';
 
 const FILTERS = [
   ['all', 'All results'],
@@ -22,7 +22,7 @@ export function testsView(state, capabilityId, query, { embedded = false } = {})
   const gate = canRunSuite(state, capabilityId);
   const runControl = t.status === 'running'
     ? html`<button class="btn btn-primary" disabled>Running… ${t.completed} of ${t.total}</button>`
-    : html`<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${gate.ok ? '' : raw('disabled')} title="${gate.ok ? '' : gate.reason}">${t.status === 'complete' ? 'Run tests again' : 'Run tests'}</button>${gate.ok || !t.total ? '' : html`<p class="muted small">${gate.reason} <a href="#/capabilities/${cap.id}/criteria/edit">Set targets and decision requirements</a></p>`}`;
+    : html`${gate.ok && setupState(state, cap.id) === 'draft' && resultsLockWarning(state, cap.id) ? html`<p class="muted small">${resultsLockWarning(state, cap.id)}</p>` : ''}<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${gate.ok ? '' : raw('disabled')} title="${gate.ok ? '' : gate.reason}">${t.status === 'complete' ? 'Run tests again' : 'Run tests'}</button>${gate.ok || !t.total ? '' : html`<p class="muted small">${gate.reason} <a href="#/capabilities/${cap.id}/criteria/edit">Set targets and decision requirements</a></p>`}`;
 
   const summaryLine = !t.total
     ? html`No test cases for ${cap.name} yet. Add some to start testing.`
@@ -138,7 +138,7 @@ export function scenarioTable(state, capabilityId, { filter = 'all', group = 'al
     return html`<details class="${cls}" ${showResult && !s.pass ? raw('open') : ''}>
       <summary>
         <span class="scenario-id">${s.id}</span>
-        <span class="scenario-name"><strong>${s.name}</strong><span class="muted small"> · ${groupName(s.group)}</span>${s.source === 'ai' ? html` <span class="badge badge-insufficient">Suggested by AI</span>` : ''}</span>
+        <span class="scenario-name"><strong>${s.name}</strong><span class="muted small"> · ${groupName(s.group)}</span>${s.source === 'ai' ? html` <span class="badge badge-insufficient">Authority Lab suggestion</span>` : ''}</span>
         <span class="scenario-status">
           ${showResult ? badge(s.pass ? 'pass' : 'fail', s.pass ? 'Passed' : 'Failed') : pendingRun ? html`<span class="badge badge-neutral">Running</span>` : html`<span class="badge badge-neutral">Not run</span>`}
           ${showResult && s.severity !== 'None' ? html`<span class="badge badge-${s.severity === 'High' ? 'fail' : 'watch'}">${SEVERITY_WORDS[s.severity] || `${s.severity} severity`}</span>` : ''}

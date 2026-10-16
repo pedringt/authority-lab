@@ -18,6 +18,8 @@ import { applyPublishedRecords } from './published.js';
 import { mapEvidence } from './configure.js';
 import { recordContext, suggestContext, reviewContextFact, recordBaseline, recordMaterialChange } from './context.js';
 import { assessRisk } from './risk.js';
+import { startCapability, editSetupCapability, saveSetupRisk, setStartingAuthority, confirmSetup } from './setup.js';
+import { suggestFromDescription } from './context.js';
 import { setResidualRisk } from './decisions.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
@@ -103,6 +105,12 @@ export const ACTIONS = {
   recordMaterialChange,
   assessRisk,
   setResidualRisk,
+  startCapability,
+  editSetupCapability,
+  saveSetupRisk,
+  setStartingAuthority,
+  confirmSetup,
+  suggestFromDescription,
   reset,
 };
 

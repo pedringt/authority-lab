@@ -131,17 +131,19 @@ Do not start from old mockups.
 
 The information architecture and product model must stabilize first.
 
-## First implementation phase
+## Where the phases stand
 
-Start with **#137 — Product reset Phase 1: data-model and setup foundations**.
+- **Phase 1 — data model (#137): done.** Merged to `main` in #138 (2026-10-16). Paige's answers and the follow-up notes are in `docs/DECISIONS.md` under "Product reset, Phase 1". Treat them as settled.
+- **Phase 2 — setup flow (#139): built, PR open, not merged.** Paige's answers (2026-10-16) are in `docs/DECISIONS.md` under "Product reset, Phase 2". Merging needs Paige to name the destination.
+- **Phase 3 — lightweight evidence path: not started.** Don't start it until Paige says so.
 
-#137 is intentionally blocked by the reset documentation PR #136. Do not start implementation until #136 is available on the branch Paige tells you to work from.
+Known follow-ups from Phase 2: the Decide, Monitor and record screens still say "Rules" and "Decision requirements"; the Status tab's rules panel doesn't yet separate the written Boundary from its enforcement the way setup's review does; the decision record doesn't link to its Setup confirmed snapshot.
 
-Phase 1 only makes the underlying product able to represent the reset concepts while preserving existing behavior where possible. It is **not** approval to continue into setup UI, generative UI, Proposal/Decision redesign, Monitor redesign or visual polish.
+No phase is approval to continue into the next one: Proposal/Decision, Residual Risk decision UX, Monitor, material-change revalidation, generative UI and visual polish each wait for Paige.
 
 See `docs/IMPLEMENTATION_PLAN.md`.
 
-Do not continue into later phases just because Phase 1 is green. Each phase should remain a controlled scope.
+Do not continue into later phases just because a phase is green. Each phase should remain a controlled scope.
 
 ## State as a reality check
 

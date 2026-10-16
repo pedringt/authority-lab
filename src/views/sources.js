@@ -4,7 +4,7 @@
 // is connected and what each source has sent.
 
 import { html, notice, lede, fmtDate, badge, SWITCH_PERSON } from '../ui.js';
-import { evidenceSources, SOURCE_KINDS, CONNECTIONS, getCapability, actor, manualEntryEligibility, people, workspaceOf } from '../store/index.js';
+import { evidenceSources, SOURCE_KINDS, CONNECTIONS, getCapability, actor, manualEntryEligibility, people, workspaceOf, resultsLockWarning } from '../store/index.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
@@ -46,6 +46,7 @@ export function recordEvidenceView(state, capabilityId, query) {
       ${lede('A result a person measured: a review, an audit, a spot check.', 'It is kept exactly as recorded, labelled as recorded by hand with your name, and can\'t be edited later: a correction is a new result. A measured result counts like any other evidence, so the first one locks this capability\'s targets. A view or a recommendation is not a result: record it as a stakeholder position instead.')}
     </div></div>
     ${error ? notice('fail', 'Couldn\'t record the result', error) : ''}
+    ${resultsLockWarning(state, cap.id) ? notice('watch', 'Before you record results', resultsLockWarning(state, cap.id)) : ''}
     ${ok.ok ? '' : notice('watch', 'You can\'t record results for this capability', `${ok.reason}`)}
     <form class="card form-stack" data-form="record-evidence" data-capability="${cap.id}">
       <label>What was measured <input type="text" name="label" maxlength="80" required placeholder="Policy compliance in a Risk review"></label>

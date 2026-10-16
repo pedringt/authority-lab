@@ -723,7 +723,7 @@ test('suggestions are reviewed one at a time; edits keep the original; rejection
   assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'approve' }), /Unknown decision/);
   assert.throws(() => reviewSuggestion(s, id, ai[3].id, { decision: 'edit', text: '  ' }), /Type the rule, or reject the suggestion/);
   const tpl = capData(s, id).contractDraft.lines.find((l) => l.source === 'template');
-  assert.throws(() => reviewSuggestion(s, id, tpl.id, { decision: 'accept' }), /Only AI suggestions/);
+  assert.throws(() => reviewSuggestion(s, id, tpl.id, { decision: 'accept' }), /Only suggestions are reviewed/);
   // A section cannot be confirmed while it has pending suggestions.
   const pendingSection = capData(s, id).contractDraft.lines.find((l) => l.status === 'pending').section;
   assert.throws(() => confirmSection(s, id, pendingSection, true), /Accept, edit or reject every suggestion in this section first/);
@@ -4233,9 +4233,9 @@ test('the pilot range and the stakeholder positions date never fall back to a ma
 test('the rules builder for a capability that already has rules points to its Rules tab, with no issue numbers on screen', () => {
   const s = initialState();
   const page = String(contractBuilderView(s, RR, new URLSearchParams()));
-  assert.match(page, /<h1>Set up rules<\/h1>/);
-  assert.match(page, /Rules are already set/);
-  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=rules">See rules</);
+  assert.match(page, /<h1>Boundaries<\/h1>/);
+  assert.match(page, /Boundaries are already set/);
+  assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=status&amp;show=rules">See them</);
   const text = page.replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'");
   assert.doesNotMatch(text, /#\d|amendment|sign-off|contract/i);
 });

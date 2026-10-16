@@ -14,6 +14,7 @@ import { waitingActions, queueApprovers, describe } from './queue.js';
 import { namedStakeholders, approvalEligibility } from './proposals.js';
 import { reviewNeeded } from './monitoring.js';
 import { expectedVsActual } from './value.js';
+import { setupState } from './setup.js';
 
 // What each level lets the AI do, in a sentence a product person can read.
 export const LEVEL_PLAIN = [
@@ -55,6 +56,8 @@ const num = (v) => { const m = String(v ?? '').replace(/,/g, '').match(/^\s*(-?\
 const metricWord = (text) => text.replace(/^overall\s+/i, '').replace(/^./, (c) => c.toLowerCase());
 export function requirementWork(req) {
   const text = String(req.text || '').trim();
+  // A number nobody has set yet (#139) is a decision to make, not a gap to close.
+  if (req.bar === 'needs-decision' || req.unresolved) return { title: `Decide the bar: ${text.replace(/:\s*needs decision\.?$/i, '').replace(/^./, (c) => c.toLowerCase())}`, status: 'No number set yet: it needs a decision', short: 'A bar needs a decision' };
   const now = num(req.current);
   let m = text.match(/^(?:minimum|at least)\s+(\d[\d,]*)\s+(.+)$/i);
   if (m && now != null) {
@@ -85,6 +88,11 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
   for (const cap of state.capabilities) {
     const row = (item) => out.push({ capabilityId: cap.id, cap: cap.name, owner: cap.owner, ownerName: nameOf(state, cap.owner), mine: cap.owner === me, ...item });
     const link = (q = '') => `#/capabilities/${cap.id}${q}`;
+    // A draft (#139): the one thing to do is finish and confirm the setup.
+    if (setupState(state, cap.id) === 'draft') {
+      row({ kind: 'setup', title: `Finish setting up ${cap.name}`, sub: 'The setup is a draft. Nothing is granted until the owner confirms it.', action: 'Open setup', href: link('/setup') });
+      continue;
+    }
     const review = reviewNeeded(state, cap.id);
     const auto = automaticRestriction(state, cap.id);
     if (review.restriction && auto) {
@@ -286,7 +294,8 @@ export function authorityRows(state) {
     const review = reviewNeeded(state, cap.id);
     const held = personRestriction(state, cap.id);
     let next;
-    if (review.restriction) next = { badge: ['restricted', 'Needs review'], text: 'before any expansion' };
+    if (setupState(state, cap.id) === 'draft') next = { badge: ['decision', 'In setup'], text: 'nothing granted until the setup is confirmed' };
+    else if (review.restriction) next = { badge: ['restricted', 'Needs review'], text: 'before any expansion' };
     else if (decisionRequired(state, cap.id)) { const p = proposedAuthority(state, cap.id); next = { badge: ['decision', 'Ready'], text: `to decide on expanding ${p.level >= 4 ? 'broadly' : p.level === 3 ? 'within limits' : `to ${levelName(p.level)}`}` }; }
     else if (cap.status === 'not-delegated') next = { text: 'Not delegated, by design' };
     else if (held && cap.status === 'restricted') next = { badge: ['restricted', 'Restricted'], text: `until it meets the requirements to return to ${levelName(held.previous.level)}` };
@@ -294,6 +303,6 @@ export function authorityRows(state) {
     else if (r.total && r.met < r.total) { const w = requirementWork(r.unmet[0]); next = { text: w.short ? w.short.replace(/^./, (c) => c.toUpperCase()) : `${r.met} of ${r.total} checks met` }; }
     else next = { text: 'No change planned' };
     return { capabilityId: cap.id, cap: cap.name, authority: cap.authority, plain: handlesNow(cap),
-      level: `${levelName(cap.authority.level)}${cap.authority.limited ? ', with limits' : ''}`, movedBack: Boolean(review.restriction), next };
+      level: setupState(state, cap.id) === 'draft' ? 'Not granted yet' : `${levelName(cap.authority.level)}${cap.authority.limited ? ', with limits' : ''}`, movedBack: Boolean(review.restriction), next };
   });
 }

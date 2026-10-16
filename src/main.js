@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord} from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS } from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -8,7 +8,8 @@ import { capabilityView } from './views/capability.js';
 import { decisionsListView, decisionWorkspaceView, decisionRecordView } from './views/decisions.js';
 import { activityView } from './views/activity.js';
 import { versionsView } from './views/versions.js';
-import { addCapabilityView, setupView } from './views/setup.js';
+import { setupView } from './views/setup.js';
+import { contextView, startView, capabilityStepView, todayStepView, riskStepView, setupHubView, reviewView } from './views/setupflow.js';
 import { contractBuilderView } from './views/contract.js';
 import { criteriaEditorView } from './views/criteria.js';
 import { proposeView, proposalView } from './views/proposals.js';
@@ -200,7 +201,12 @@ function render() {
   if (setupPending(state)) { view = workspaceSetupView(state, query, setupDraft); title = 'Set up your workspace'; }
   else switch (root) {
     case 'capabilities':
-      if (sub === 'new') { view = addCapabilityView(state, query); title = 'Add a capability'; }
+      if (sub === 'new') { view = startView(state, query); title = 'Add a capability'; }
+      else if (sub && action === 'setup' && parts[3] && getCapability(state, sub) && getCapability(state, sub).setup) {
+        // The setup flow's own steps (#139).
+        const STEP = { capability: [capabilityStepView, 'Starting point and capability'], today: [todayStepView, 'What it does today'], risk: [riskStepView, 'Risk and authority'], review: [reviewView, 'Review and confirm'] }[parts[3]];
+        if (STEP) { view = STEP[0](state, sub, query); title = STEP[1]; } else { view = setupHubView(state, sub, query); title = 'Setup'; }
+      }
       else if (sub && action === 'decision') {
         // The decision lives in the capability's Decide tab (redesign).
         const q = new URLSearchParams(query);
@@ -212,9 +218,9 @@ function render() {
       else if (sub && action === 'evidence' && parts[3] === 'configure') { view = configureEvidenceView(state, sub, query); title = 'Configure evidence'; }
       else if (sub && action === 'evidence' && parts[3] === 'record') { view = recordEvidenceView(state, sub, query); title = 'Record a result'; }
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
-      else if (sub && action === 'setup') { view = setupView(state, sub, query); title = 'Setup'; }
-      else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Set up rules'; }
-      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = 'Targets and decision requirements'; }
+      else if (sub && action === 'setup') { view = getCapability(state, sub) && getCapability(state, sub).setup ? setupHubView(state, sub, query) : setupView(state, sub, query); title = 'Setup'; }
+      else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Boundaries'; }
+      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = getCapability(state, sub) && getCapability(state, sub).setup ? 'Requirements and Targets' : 'Targets and decision requirements'; }
       else if (sub && action === 'stakeholders' && parts[3] === 'edit') { view = stakeholdersEditorView(state, sub, query); title = 'Stakeholders'; }
       else if (sub && action === 'scenarios' && parts[3] === 'edit') { view = scenariosEditorView(state, sub, query); title = 'Tests'; }
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Propose a change'; }
@@ -226,6 +232,11 @@ function render() {
         title = getCapability(state, sub)?.name || 'Capability';
       }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
+      break;
+    case 'setup':
+      // The workflow's Context (#139), the first step of setup.
+      view = contextView(state, query);
+      title = 'Context';
       break;
     case 'records': {
       // Decision records and the activity history, one place (#93).
@@ -325,7 +336,9 @@ function captureForms() {
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[form.dataset.form];
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions') continue;
+    // Ticked suggestions (#139) survive a refused save; the rows re-render from state.
+    if (values && form.dataset.form === 'save-criteria') for (const el of form.querySelectorAll('[name="use-suggestion"]')) { if (`use-suggestion=${el.value}` in values) el.checked = values[`use-suggestion=${el.value}`]; }
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts') continue;
     for (const el of form.elements) {
       if (!el.name) continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -427,6 +440,15 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (action === 'simulate-breach') store.dispatch('simulateBreach', capId);
+  // Context facts are reviewed one at a time (#139).
+  if (action === 'fact-confirm' || action === 'fact-reject') {
+    const route = here();
+    dispatchOr(route, () => { store.dispatch('reviewContextFact', btn.dataset.key, { decision: action === 'fact-confirm' ? 'confirm' : 'reject', by: actor(store.get()) }); clearErrorOn(route, 'error'); render(); });
+  }
+  if (action === 'confirm-setup') {
+    const route = `#/capabilities/${capId}/setup/review`;
+    dispatchOr(route, () => { store.dispatch('confirmSetup', capId, { by: actor(store.get(), capId) }); location.hash = route; render(); });
+  }
   if (action === 'authorize') {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
@@ -444,7 +466,7 @@ document.addEventListener('click', (e) => {
   if (action === 'section-unconfirm') tryDispatch(() => store.dispatch('confirmSection', capId, btn.dataset.section, false));
   if (action === 'contract-finalize') {
     tryDispatch(() => store.dispatch('finalizeContract', capId, { by: actor(store.get(), capId) }));
-    if (!location.hash.includes('?error=')) location.hash = `#/capabilities/${capId}?tab=status&show=rules`;
+    if (!location.hash.includes('?error=')) location.hash = getCapability(store.get(), capId).setup ? `#/capabilities/${capId}/setup` : `#/capabilities/${capId}?tab=status&show=rules`;
   }
   if (action === 'starter-add') {
     const route = `#/capabilities/${capId}/scenarios/edit`;
@@ -609,7 +631,7 @@ document.addEventListener('submit', (e) => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('saveStakeholders', capId, { stakeholders, by: actor(store.get(), capId) });
       const after = capData(store.get(), capId).proposals;
-      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=status`;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : getCapability(store.get(), capId).setup ? `#/capabilities/${capId}/setup` : `#/capabilities/${capId}?tab=status`;
     });
     return;
   }
@@ -728,7 +750,7 @@ document.addEventListener('submit', (e) => {
     };
     // Keep what was typed if setup is refused; drop it once it goes through.
     setupDraft = draft;
-    dispatchOr('#/overview', () => { store.dispatch('setUpWorkspace', draft); setupDraft = null; location.hash = '#/capabilities/new'; render(); });
+    dispatchOr('#/overview', () => { store.dispatch('setUpWorkspace', draft); setupDraft = null; location.hash = '#/setup/context'; render(); });
     return;
   }
   const critForm = e.target.closest('[data-form="save-criteria"]');
@@ -737,8 +759,10 @@ document.addEventListener('submit', (e) => {
     const capId = parseRoute().parts[1];
     const { criteria, requirements } = readCriteriaRows(critForm);
     dispatchOr(`#/capabilities/${capId}/criteria/edit`, () => {
-      store.dispatch('saveCriteria', capId, { criteria, requirements, by: actor(store.get(), capId), reason: critForm.reason.value });
-      location.hash = `#/capabilities/${capId}?tab=decide&show=targets`;
+      // Suggestions are added one by one, by ticking each (#139).
+      const picked = [...critForm.querySelectorAll('[name="use-suggestion"]:checked')].map((el) => JSON.parse(el.value));
+      store.dispatch('saveCriteria', capId, { criteria: [...criteria, ...picked.filter((x) => x.kind === 'target').map((x) => x.row)], requirements: [...requirements, ...picked.filter((x) => x.kind === 'requirement').map((x) => x.row)], by: actor(store.get(), capId), reason: critForm.reason.value });
+      location.hash = getCapability(store.get(), capId).setup ? `#/capabilities/${capId}/setup` : `#/capabilities/${capId}?tab=decide&show=targets`;
     });
     return;
   }
@@ -755,24 +779,49 @@ document.addEventListener('submit', (e) => {
     });
     return;
   }
-  const form = e.target.closest('[data-form="add-capability"]');
-  if (!form) return;
+  // The setup flow (#139). Each form saves one step of a draft.
+  const setupForm = e.target.closest('[data-form="context-describe"], [data-form="context-facts"], [data-form="fact-correct"], [data-form="start-capability"], [data-form="setup-capability"], [data-form="setup-today"], [data-form="setup-risk"]');
+  if (!setupForm) return;
   e.preventDefault();
-  const f = new FormData(form);
-  dispatchOr('#/capabilities/new', () => {
-    const before = store.get().capabilities.length;
-    store.dispatch('addCapability', {
-      name: f.get('name'),
-      summary: f.get('summary'),
-      owner: f.get('owner'),
-      risk: { impact: f.get('impact'), reversibility: f.get('reversibility'), exposure: f.get('exposure'), failureTypes: f.getAll('failureTypes'), note: f.get('riskNote') },
-      // "What does it do today?": context that sets a starting level of 0 or 1.
-      today: f.get('today') || '',
-      rationale: f.get('rationale'),
-      by: actor(store.get()),
-    });
-    const added = store.get().capabilities[before];
-    location.hash = `#/capabilities/${added.id}/setup`;
+  const f = new FormData(setupForm);
+  const kind = setupForm.dataset.form;
+  const route = here();
+  const by = actor(store.get(), setupForm.dataset.capability);
+  const sid = setupForm.dataset.capability;
+  dispatchOr(route, () => {
+    if (kind === 'context-describe') store.dispatch('suggestFromDescription', { description: f.get('description'), by });
+    if (kind === 'fact-correct') store.dispatch('reviewContextFact', setupForm.dataset.key, { decision: 'confirm', value: f.get('value'), by });
+    if (kind === 'context-facts') {
+      const now = contextNow(store.get());
+      const facts = {};
+      for (const fld of CONTEXT_FIELDS) {
+        const v = fld.multi ? f.getAll(`ctx-${fld.key}`) : String(f.get(`ctx-${fld.key}`) || '').trim();
+        const empty = fld.multi ? !v.length : !v;
+        const was = now[fld.key] && now[fld.key].status === 'confirmed' ? now[fld.key].value : null;
+        if (empty || JSON.stringify(v) === JSON.stringify(was)) continue;
+        facts[fld.key] = v;
+      }
+      if (Object.keys(facts).length) store.dispatch('recordContext', { facts, by, reason: f.get('reason') });
+    }
+    if (kind === 'start-capability') {
+      const before = store.get().capabilities.length;
+      store.dispatch('startCapability', { name: f.get('name'), summary: f.get('summary'), owner: f.get('owner'), template: f.get('template'), lifecycle: f.get('lifecycle'), by: actor(store.get()) });
+      location.hash = `#/capabilities/${store.get().capabilities[before].id}/setup`;
+      return;
+    }
+    if (kind === 'setup-capability') store.dispatch('editSetupCapability', sid, { name: f.get('name'), summary: f.get('summary'), owner: f.get('owner'), template: f.get('template') || undefined, lifecycle: f.get('lifecycle') || undefined });
+    if (kind === 'setup-today') {
+      const eff = f.get('effective');
+      const fields = Object.fromEntries(BASELINE_FIELDS.map((b) => [b.key, f.get(`b-${b.key}`) || '']));
+      store.dispatch('recordBaseline', sid, { fields, effective: eff === '' ? { status: 'not-recorded' } : eff === 'unknown' ? { status: 'unknown', note: f.get('effective-note') } : { level: Number(eff), note: f.get('effective-note') }, by, reason: f.get('reason') });
+    }
+    if (kind === 'setup-risk') {
+      store.dispatch('saveSetupRisk', sid, { impact: f.get('impact'), likelihood: f.get('likelihood'), scale: f.get('scale') || undefined, reversibility: f.get('reversibility'), exposure: f.get('exposure'), failureTypes: f.getAll('failureTypes'), note: f.get('riskNote'), by });
+      if (f.get('today')) store.dispatch('setStartingAuthority', sid, { today: f.get('today'), rationale: f.get('rationale') });
+    }
+    if (sid && kind !== 'setup-risk') { location.hash = `#/capabilities/${sid}/setup`; return; }
+    clearErrorOn(route, 'error');
+    render();
   });
 });
 

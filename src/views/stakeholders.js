@@ -11,6 +11,32 @@ export function stakeholdersEditorView(state, capabilityId, query) {
   const existing = list.length ? list : [{ team: people(state)[cap.owner].team, person: cap.owner, stance: 'undecided', position: '', quote: '' }];
   const choices = Object.entries(activePeople(state)).map(([k, p]) => [k, `${p.name}, ${p.role}`]);
   const v = versionsInForce(state, capabilityId).stakeholders;
+  // In setup (#139): one Owner, then Reviewers and Stakeholders. Positions
+  // belong to decisions, so setup doesn't ask for them (they're kept as they are).
+  if (cap.setup) {
+    const srow = (st, i) => html`<tr>
+      <td><input type="hidden" name="s-position" value="${st.position || ''}"><input type="hidden" name="s-stance-was" value="${st.stance || ''}"><input type="hidden" name="s-stance" value="${st.stance || 'undecided'}"><input type="hidden" name="s-quote" value="${st.quote || ''}">${selectField('s-person', '', choices, st.person || '', { placeholder: 'Choose a person' })}</td>
+      <td><select name="s-role" aria-label="Role"><option value="" ${st.role === 'reviewer' ? '' : raw('selected')}>Stakeholder: involved or consulted</option><option value="reviewer" ${st.role === 'reviewer' ? raw('selected') : ''}>Reviewer: their input is required</option></select></td>
+      <td><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
+      <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove person ${i + 1}">Remove</button></td>
+    </tr>`;
+    return html`<div class="page-head"><div>
+      <p class="eyebrow"><a href="#/capabilities/${cap.id}/setup">${cap.name} · Setup</a></p>
+      <h1>People</h1>
+      ${lede(html`Owner: <strong>${people(state)[cap.owner].name}</strong>, the one accountable person. Only the owner confirms the setup and records authority decisions.`, 'Reviewers are people whose input is required; Stakeholders are involved or consulted. Who may approve changes, and when a Risk approver is needed, follows the approval rules underneath, which don\'t change here. The Risk approver right is set on People.')}
+    </div></div>
+    ${error ? notice('fail', 'Couldn\'t save', error) : ''}
+    ${needsSignoff(state, capabilityId, 'stakeholders') ? notice('watch', 'Results are in', 'Adding or removing someone, changing their team, or changing whether they are a Reviewer is now submitted for approval.') : notice('neutral', 'Before results', 'Once results are recorded, changing who is involved needs sign-off, even while setup is unconfirmed.')}
+    <form class="setup-form criteria-form" data-form="save-stakeholders" novalidate>
+      <div class="card table-card"><table class="table table-edit">
+        <thead><tr><th>Person</th><th>Role</th><th>Team</th><th></th></tr></thead>
+        <tbody data-rows="stakeholders">${list.map(srow)}</tbody>
+      </table></div>
+      <button class="btn btn-sm" type="button" data-action="row-add" data-kind="stakeholders">Add a person</button>
+      <div class="card authorize"><p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}.</p><button class="btn btn-primary btn-block" type="submit">Save people</button></div>
+    </form>
+    <template id="row-stakeholders">${srow({ team: '', person: '', stance: 'undecided', quote: '' }, 0)}</template>`;
+  }
   const row = (st, i) => html`<tr>
     <td><input type="hidden" name="s-position" value="${st.position || ''}"><input type="hidden" name="s-stance-was" value="${st.stance || ''}"><input type="hidden" name="s-role" value="${st.role === 'reviewer' ? 'reviewer' : ''}"><input type="text" name="s-team" value="${st.team || ''}" maxlength="40" placeholder="e.g. Risk" aria-label="Team"></td>
     <td>${selectField(`s-person`, '', choices, st.person || '', { placeholder: 'Choose a person' })}</td>

@@ -17,7 +17,7 @@ export function scenariosEditorView(state, capabilityId, query) {
     <td><input type="text" name="sc-name" value="${sc.name || ''}" maxlength="60" placeholder="Short name" aria-label="Test case name"></td>
     <td><input type="text" name="sc-situation" value="${sc.situation || ''}" maxlength="240" placeholder="What the AI sees" aria-label="Situation"></td>
     <td><input type="text" name="sc-expected" value="${sc.expected || ''}" maxlength="200" placeholder="What it should do" aria-label="What it should do"></td>
-    <td>${sc.source === 'ai' ? html`<span class="badge badge-insufficient">Suggested by AI</span>` : html`<span class="muted small">Written by your team</span>`}</td>
+    <td>${sc.source === 'ai' ? html`<span class="badge badge-insufficient">Authority Lab suggestion</span>` : html`<span class="muted small">Written by your team</span>`}</td>
     <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove test case ${i + 1}">Remove</button></td>
   </tr>`;
   return html`<div class="page-head">
@@ -26,7 +26,7 @@ export function scenariosEditorView(state, capabilityId, query) {
       <h1>Test cases</h1>
       ${lede(`Realistic cases to test ${cap.name} on, in five types: standard, ambiguous, adversarial, high impact and edge cases.`, html`In this demo, each case gets a fixed simulated result, so the same case always gives the same answer. ${d.testRun.lastRun ? 'Saving changes clears the last run; run the tests again to get new results.' : ''}`)}
     </div>
-    <div class="page-actions">${hasStarter ? '' : html`<button class="btn" data-action="starter-add" data-capability="${cap.id}">Add 20 suggested cases</button><p class="muted small">Suggested by AI for ${cap.name}: four of each type. Edit or remove any of them.</p>`}</div>
+    <div class="page-actions">${hasStarter ? '' : html`<button class="btn" data-action="starter-add" data-capability="${cap.id}">Add 20 suggested cases</button><p class="muted small">Authority Lab suggestions for ${cap.name}: four of each type, matched from its name and summary. Edit or remove any of them.</p>`}</div>
   </div>
   ${error ? notice('fail', 'Couldn\'t save the test cases', error) : ''}
   <div class="card progress-card"><div class="progress-facts">

@@ -136,7 +136,14 @@ export function cleanAmendmentValue(state, capabilityId, kind, value) {
     return { ...rest, name: x.name, target: x.target, note: x.note, ...status, ...(x.requirement ? { requirement: x.requirement } : {}) };
   };
   const criteria = c.map((x) => { const b = baseC.find((y) => y.id === x.id); return b ? carryMeasure({ ...edited(x, b), ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.target, x.name) : x; });
-  const requirements = r.map((x) => { const b = baseR.find((y) => y.id === x.id); if (!b) return x; const { kind, ...bRest } = unmeasured(b); return carryMeasure({ ...bRest, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text); });
+  const requirements = r.map((x) => {
+    const b = baseR.find((y) => y.id === x.id);
+    if (!b) return x;
+    const { kind, bar, ...bRest } = unmeasured(b);
+    // A coverage rule's number set, or cleared to Needs decision (#139).
+    const status = x.bar ? { bar: x.bar, current: x.current, met: false } : bar ? { current: 'Not yet measured', met: false } : {};
+    return carryMeasure({ ...bRest, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...status, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text);
+  });
   checkTargetLinks(criteria, requirements);
   return { criteria, requirements };
 }
@@ -191,7 +198,7 @@ export function tighteningOnly(base, next) {
   const changes = [];
   const kinds = [
     ['criteria', 'target', (x) => x.name, ['name', 'note', 'requirement', 'bar']],
-    ['requirements', 'text', (x) => x.text, ['kind']],
+    ['requirements', 'text', (x) => x.text, ['kind', 'bar']],
   ];
   for (const [kind, field, label, fixed] of kinds) {
     const before = base[kind] || [];

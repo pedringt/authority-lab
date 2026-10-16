@@ -99,7 +99,7 @@ test('coverage tells "no source", "no results", "needs more cases", "stale" and 
   const cov = evidenceCoverage(s, id);
   assert.equal(cov.sufficient, 3);
   assert.equal(cov.total, 5);
-  assert.equal(coverageText(cov), '3 of 5 decision requirements have sufficient evidence; "High-severity error rate < 5%" still needs more cases (12% across 100 cases (100 cases so far, 500 needed)).');
+  assert.equal(coverageText(cov), '3 of 5 Requirements have sufficient evidence; "High-severity error rate < 5%" still needs more cases (12% across 100 cases (100 cases so far, 500 needed)).');
   // Thirty-one days on, the eval is past its 30-day window: stale, still counted.
   const later = { ...s, today: '2026-11-05' };
   assert.equal(req(later, id, 'accuracy').status, 'stale');
@@ -155,7 +155,7 @@ test('the Configure evidence page: coverage first, each row\'s evidence, gaps wi
   setPeople(people(s));
   const h = String(configureEvidenceView(s, id, new URLSearchParams()));
   assert.match(h, /<h1>Configure evidence<\/h1>/);
-  assert.match(h, /<p class="decide-big">1 of 5 decision requirements have sufficient evidence; &quot;Minimum 50 pilot cases&quot; has no evidence source mapped\.<\/p>/);
+  assert.match(h, /<p class="decide-big">1 of 5 Requirements have sufficient evidence; &quot;Minimum 50 pilot cases&quot; has no evidence source mapped\.<\/p>/);
   assert.match(h, /<strong>Evals · Notes suite<\/strong> · answer-quality/);
   assert.match(h, /badge-pass">Sufficient evidence</);
   assert.match(h, /<h2>Fill the gaps<\/h2>[\s\S]*Choose which evidence judges it: a connected source, Authority Lab tests, or a manual review\./);
@@ -195,7 +195,7 @@ test('the example: Refund recommendation is judged by a connected platform, tick
   assert.match(by['high-value'].row.gap, /^High-value refund performance needs more evidence\./);
   assert.equal(by.severe.row.current, '1.4% across 218 cases');
   assert.equal(by.incidents.row.met, true, 'Daniel\'s review: 0 unresolved critical incidents');
-  assert.equal(coverageText(cov), '5 of 6 decision requirements have sufficient evidence; "Minimum 40 high-value refund cases" still needs more cases (18 of 40 cases).');
+  assert.equal(coverageText(cov), '5 of 6 Requirements have sufficient evidence; "Minimum 40 high-value refund cases" still needs more cases (18 of 40 cases).');
   // The eval suite last ran on Sep 3, past its 30-day window: the quality target is stale, still counted.
   const quality = cov.targets.find((t) => t.id === 'quality');
   assert.equal(quality.status, 'stale');

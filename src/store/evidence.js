@@ -4,6 +4,7 @@
 import * as seed from '../data/seed.js';
 import { defaultCriteria, defaultRequirements } from '../data/criteria-defaults.js';
 import { starterScenarios } from '../data/scenario-templates.js';
+import { findStartingPoint, START_FROM_SCRATCH, BASE_REQUIREMENTS, riskRequirements } from '../data/templates.js';
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, currentVersion, versionsInForce, performanceResultsSeen, testSummary } from './selectors.js';
 import { people, requireActive } from './people.js';
@@ -105,9 +106,32 @@ export function canRunSuite(state, capabilityId) {
   return { ok: true };
 }
 
+// The recommended Targets and Requirements. A capability set up through the
+// setup flow (#139) gets suggestions with no numbers: measurable ones come
+// with a Target whose bar is Needs decision, and the minimum-cases coverage
+// rule waits for its number too. Capabilities from before #139 keep the
+// defaults they were set up with.
 export function defaultsFor(state, capabilityId) {
   const risk = current(state, capabilityId, 'risk');
+  const cap = getCapability(state, capabilityId);
+  if (cap && cap.setup) return suggestedChecks(risk, cap.setup.template);
   return { criteria: defaultCriteria(risk), requirements: defaultRequirements(risk) };
+}
+
+export const CHECK_SOURCES = { base: 'Authority Lab suggestion', template: 'Template suggestion', answers: 'Based on your answers' };
+
+export function suggestedChecks(risk, templateId) {
+  const family = findStartingPoint(templateId) || START_FROM_SCRATCH;
+  const rows = [
+    ...BASE_REQUIREMENTS.map((r) => ({ ...r, from: 'base' })),
+    ...family.requirements.map((r) => ({ ...r, from: 'template' })),
+    ...riskRequirements(risk).map((r) => ({ ...r, from: 'answers' })),
+  ];
+  const seen = new Set();
+  const unique = rows.filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
+  const requirements = unique.map(({ id, text, kind, bar, from, why }) => ({ id, text, source: CHECK_SOURCES[from], ...(kind ? { kind } : {}), ...(bar ? { bar } : {}), ...(why ? { why } : {}) }));
+  const criteria = unique.filter((r) => r.target).map((r) => ({ id: r.target.id, name: r.target.name, target: NEEDS_DECISION_TEXT, bar: NEEDS_DECISION, note: r.target.note || '', requirement: r.id, source: CHECK_SOURCES[r.from] }));
+  return { criteria, requirements };
 }
 
 export const slugId = (text, i) => (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `item-${i + 1}`;
@@ -200,6 +224,13 @@ export function cleanRequirements(items) {
     while (seen.has(id)) id = `${id}-${i + 1}`;
     seen.add(id);
     if (r.kind !== undefined && r.kind !== 'coverage') throw new Error(`Requirement "${text}": the only kind is "coverage".`);
+    // Only a coverage rule may wait for its number (#139, C3); a measurable
+    // Requirement's bar belongs on its Target.
+    if (r.bar === NEEDS_DECISION || /\bneeds decision\b/i.test(text)) {
+      if (!isCoverageRule(r)) throw new Error(`Requirement "${text}": only a coverage rule (how much evidence is enough) can wait for its number. Put the bar on a Target instead.`);
+      if (r.measure) throw new Error(`Requirement "${text}" has no number yet, so it can't be measured. Set its number first.`);
+      return { id, text, current: 'No number set yet', met: false, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), bar: NEEDS_DECISION };
+    }
     return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
   });
 }
@@ -389,7 +420,7 @@ export function saveScenarios(state, capabilityId, { scenarios, by } = {}) {
   return logEvent(s, {
     kind: 'scenarios-saved',
     title: 'Test cases saved',
-    body: `${cap.name}: ${list.length} test case${list.length === 1 ? '' : 's'} across ${groups.size} type${groups.size === 1 ? '' : 's'} saved by ${people(state)[by].name}${list.some((x) => x.source === 'ai') ? ` (${list.filter((x) => x.source === 'ai').length} suggested by AI)` : ''}.`,
+    body: `${cap.name}: ${list.length} test case${list.length === 1 ? '' : 's'} across ${groups.size} type${groups.size === 1 ? '' : 's'} saved by ${people(state)[by].name}${list.some((x) => x.source === 'ai') ? ` (${list.filter((x) => x.source === 'ai').length} suggested by Authority Lab)` : ''}.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/scenarios/edit`,
   });

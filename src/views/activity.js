@@ -27,6 +27,8 @@ export const KIND_TONE = {
   context: 'neutral',
   baseline: 'neutral',
   'material-change': 'watch',
+  setup: 'neutral',
+  'setup-confirmed': 'pass',
 };
 
 // A change to a versioned object says which object it changed.
