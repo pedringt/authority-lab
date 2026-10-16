@@ -40,7 +40,7 @@ Earlier redesign mockups and interface directions remain historical context only
 
 ## Decisions
 
-### Product reset, Phase 3: the lightweight evidence path (Paige, 2026-10-16)
+### Product reset, Phase 3: the lightweight evidence path (#142, Paige, 2026-10-16)
 
 The question: can a small team with no governance, eval, observability or data stack collect enough credible evidence inside Authority Lab to support an authority decision? Manual first never means manual only: State's committed-file path stays, and both paths converge on one evidence model. Authority Lab stays eval-aware, not eval-centric: no eval runner, no model calls.
 
