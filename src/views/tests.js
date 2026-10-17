@@ -1,6 +1,7 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, fmtDate, lede, tabIntro } from '../ui.js';
-import { testSummary, capData, getCapability, canRunSuite, workspaceOf, resultsLockWarning, setupState } from '../store/index.js';
+import { testSummary, capData, getCapability, canRunSuite, workspaceOf, resultsLockWarning, setupState, isDemoWorkspace } from '../store/index.js';
+import { realTestsView } from './lightweight.js';
 
 const FILTERS = [
   ['all', 'All results'],
@@ -13,6 +14,8 @@ const FILTERS = [
 const SEVERITY_WORDS = { High: 'Serious', Medium: 'Moderate', Low: 'Minor' };
 
 export function testsView(state, capabilityId, query, { embedded = false } = {}) {
+  // Outside the demo, people record what their real AI did (#142, P1).
+  if (!isDemoWorkspace(state)) return realTestsView(state, capabilityId, query, { embedded });
   const cap = getCapability(state, capabilityId);
   const t = testSummary(state, capabilityId);
   const filter = query.get('filter') || 'all';

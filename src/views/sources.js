@@ -4,7 +4,8 @@
 // is connected and what each source has sent.
 
 import { html, notice, lede, fmtDate, badge, SWITCH_PERSON } from '../ui.js';
-import { evidenceSources, SOURCE_KINDS, CONNECTIONS, getCapability, actor, manualEntryEligibility, people, workspaceOf, resultsLockWarning } from '../store/index.js';
+import { unlinkedNotice } from './lightweight.js';
+import { unlinkedBeforeResults, current, evidenceSources, SOURCE_KINDS, CONNECTIONS, getCapability, actor, manualEntryEligibility, people, workspaceOf, resultsLockWarning } from '../store/index.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
@@ -39,17 +40,22 @@ export function recordEvidenceView(state, capabilityId, query) {
   const by = actor(state, capabilityId);
   const ok = manualEntryEligibility(state, capabilityId, by);
   const error = query.get('error');
-  const back = `#/capabilities/${cap.id}?tab=decide&show=all`;
+  // Recorded against one Requirement or Target (#142): the row's own metric.
+  const [rowKind, rowId] = (query.get('row') || '').split(':');
+  const row = rowId ? (rowKind === 'target' ? current(state, capabilityId, 'criteria') : current(state, capabilityId, 'requirements')).find((r) => r.id === rowId) : null;
+  const rowLabel = row ? (rowKind === 'target' ? `${row.name} (${row.target})` : row.text) : null;
+  const back = row ? `#/capabilities/${cap.id}/evidence/configure` : `#/capabilities/${cap.id}?tab=decide&show=all`;
   return html`<div class="page-head"><div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Evidence</p>
-      <h1>Record a result</h1>
+      <h1>${row ? 'Record result' : 'Record a result'}</h1>${row ? html`<p class="lede">For: <strong>${rowLabel}</strong></p>` : ''}
       ${lede('A result a person measured: a review, an audit, a spot check.', 'It is kept exactly as recorded, labelled as recorded by hand with your name, and can\'t be edited later: a correction is a new result. A measured result counts like any other evidence, so the first one locks this capability\'s targets. A view or a recommendation is not a result: record it as a stakeholder position instead.')}
     </div></div>
     ${error ? notice('fail', 'Couldn\'t record the result', error) : ''}
-    ${resultsLockWarning(state, cap.id) ? notice('watch', 'Before you record results', resultsLockWarning(state, cap.id)) : ''}
+    ${unlinkedBeforeResults(state, cap.id) ? unlinkedNotice(state, cap) : resultsLockWarning(state, cap.id) ? notice('watch', 'Before you record results', resultsLockWarning(state, cap.id)) : ''}
     ${ok.ok ? '' : notice('watch', 'You can\'t record results for this capability', `${ok.reason}`)}
-    <form class="card form-stack" data-form="record-evidence" data-capability="${cap.id}">
-      <label>What was measured <input type="text" name="label" maxlength="80" required placeholder="Policy compliance in a Risk review"></label>
+    ${row && !row.measure ? notice('neutral', 'This links the row to results people record', 'Recording the first result links this row to manual results, so later results for it combine. After results exist, changing which evidence judges a row needs approval.') : ''}
+    <form class="card form-stack" data-form="record-evidence" data-capability="${cap.id}" ${row ? html`data-row-kind="${rowKind}" data-row="${rowId}"` : ''}>
+      ${row ? '' : html`<label>What was measured <input type="text" name="label" maxlength="80" required placeholder="Policy compliance in a Risk review"></label>`}
       <fieldset class="choice-row"><legend>Measured on</legend>
         <label><input type="radio" name="kind" value="production" checked> Real use</label>
         <label><input type="radio" name="kind" value="eval"> Test cases</label>
@@ -73,5 +79,17 @@ export function recordEvidenceView(state, capabilityId, query) {
       <label>Link to the source document (optional) <input type="url" name="url" maxlength="300" placeholder="https://"></label>
       <p class="muted small">Recording as <strong>${(people(state)[by] || { name: by }).name}</strong>.${ok.ok ? '' : ` ${SWITCH_PERSON}`}</p>
       <div class="form-actions"><button class="btn btn-primary" type="submit" ${ok.ok ? '' : 'disabled'}>Record result</button> <a class="btn btn-ghost" href="${back}">Cancel</a></div>
-    </form>`;
+    </form>
+    ${row ? html`<section class="section"><h2>Or upload a file</h2>
+    <form class="card form-stack" data-form="upload-evidence" data-capability="${cap.id}" data-row-kind="${rowKind}" data-row="${rowId}">
+      <p class="muted small">A CSV or JSON file, in any layout with a header row: <strong>one row per case</strong> with an <code>outcome</code> column (pass, fail or unable; optional <code>severity</code>, <code>date</code>, <code>segment</code>), which Authority Lab totals up; or <strong>already-totalled rows</strong> with <code>passed</code> and <code>total</code>, or a <code>value</code>. A JSON evidence file (<code>authority-lab-evidence/1</code>) is imported as it is.</p>
+      ${notice('watch', 'Stays in this browser', 'An uploaded file is kept only in this browser\'s copy of the workspace. It isn\'t shared with anyone or published.')}
+      <label>File <input type="file" name="file" accept=".csv,.json,text/csv,application/json" required></label>
+      <label>Where it came from <input type="text" name="sourceLabel" maxlength="80" required placeholder="Weekly review sheet"></label>
+      <fieldset class="choice-row"><legend>These are results on</legend>
+        <label><input type="radio" name="kind" value="eval" checked> Test cases</label>
+        <label><input type="radio" name="kind" value="production"> Real use</label>
+      </fieldset>
+      <div class="form-actions"><button class="btn btn-primary" type="submit" ${ok.ok ? '' : 'disabled'}>Upload</button></div>
+    </form></section>` : ''}`;
 }

@@ -28,17 +28,19 @@ export function defaultRequirements(risk = {}) {
   const impact = QUALITY[risk.impact] ? risk.impact : 'Medium';
   const from = `Default for ${impact} impact`;
   const items = [
-    { id: 'min-cases', text: `Minimum ${CASES[impact]} pilot cases`, source: from },
-    { id: 'accuracy', text: `Overall accuracy ≥ ${QUALITY[impact]}%`, source: from },
-    { id: 'severe', text: `High-severity error rate < ${SEVERE[impact]}%`, source: from },
-    { id: 'override', text: 'Override rate < 20%', source: 'Default for every capability' },
-    { id: 'incidents', text: 'No unresolved critical incidents', source: 'Default for every capability' },
+    // How each is judged (#143 review): measured ones by evidence, the
+    // incidents check by a person (with the open-incident blocker on top).
+    { id: 'min-cases', text: `Minimum ${CASES[impact]} pilot cases`, source: from, judgment: 'evidence' },
+    { id: 'accuracy', text: `Overall accuracy ≥ ${QUALITY[impact]}%`, source: from, judgment: 'evidence' },
+    { id: 'severe', text: `High-severity error rate < ${SEVERE[impact]}%`, source: from, judgment: 'evidence' },
+    { id: 'override', text: 'Override rate < 20%', source: 'Default for every capability', judgment: 'evidence' },
+    { id: 'incidents', text: 'No unresolved critical incidents', source: 'Default for every capability', judgment: 'person' },
   ];
   if (risk.exposure === 'Financial / consequential') {
-    items.push({ id: 'high-value', text: 'Minimum 40 high-value cases', source: 'Default for financial exposure' });
+    items.push({ id: 'high-value', text: 'Minimum 40 high-value cases', source: 'Default for financial exposure', judgment: 'evidence' });
   }
   if (risk.reversibility === 'Difficult to reverse') {
-    items.push({ id: 'reversal', text: 'Every pilot action reviewed before it took effect', source: 'Default for difficult-to-reverse actions' });
+    items.push({ id: 'reversal', text: 'Every pilot action reviewed before it took effect', source: 'Default for difficult-to-reverse actions', judgment: 'person' });
   }
   return items;
 }

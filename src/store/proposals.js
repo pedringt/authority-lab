@@ -6,6 +6,7 @@ import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, r
 import { amend } from './capabilities.js';
 import { SECTION_KEYS, contractValueChecks } from './contract.js';
 import { requirementsNow, judgeMeasure } from './measures.js';
+import { effectiveJudgment } from './lightweight.js';
 import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, checkTargetLinks, isUnresolvedTarget, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS, carryMeasure, unchangedMeasuresDropped } from './evidence.js';
 
 // Assumption, not yet confirmed (decision 7): the same sign-off applies to
@@ -142,7 +143,10 @@ export function cleanAmendmentValue(state, capabilityId, kind, value) {
     const { kind, bar, ...bRest } = unmeasured(b);
     // A coverage rule's number set, or cleared to Needs decision (#139).
     const status = x.bar ? { bar: x.bar, current: x.current, met: false } : bar ? { current: 'Not yet measured', met: false } : {};
-    return carryMeasure({ ...bRest, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...status, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text);
+    const { judgment: bJudgment, ...bRest2 } = bRest;
+    // How it is judged is part of the Requirement (#143 review): kept unless the change says otherwise.
+    const judgment = x.judgment || bJudgment;
+    return carryMeasure({ ...bRest2, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...(judgment ? { judgment } : {}), ...status, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text);
   });
   checkTargetLinks(criteria, requirements);
   return { criteria, requirements };
@@ -198,7 +202,7 @@ export function tighteningOnly(base, next) {
   const changes = [];
   const kinds = [
     ['criteria', 'target', (x) => x.name, ['name', 'note', 'requirement', 'bar']],
-    ['requirements', 'text', (x) => x.text, ['kind', 'bar']],
+    ['requirements', 'text', (x) => x.text, ['kind', 'bar', 'judgment']],
   ];
   for (const [kind, field, label, fixed] of kinds) {
     const before = base[kind] || [];
@@ -207,7 +211,13 @@ export function tighteningOnly(base, next) {
     for (const a of after) {
       const b = before.find((x) => x.id === a.id);
       if (!b) return { ok: false, reason: `It adds "${label(a)}", and new rows always need approval.`, changes };
-      for (const f of fixed) if (String(a[f] || '') !== String(b[f] || '')) return { ok: false, reason: `It changes the ${f} of "${label(b)}".`, changes };
+      for (const f of fixed) {
+        // How a Requirement is judged compares as it effectively is: saying
+        // "evidence" for a row that already has a measure is no change; giving
+        // a legacy row its judgment, or changing one, is (#143 review).
+        const same = f === 'judgment' ? effectiveJudgment(a) === effectiveJudgment(b) : String(a[f] || '') === String(b[f] || '');
+        if (!same) return { ok: false, reason: f === 'judgment' ? `It changes how "${label(b)}" is judged.` : `It changes the ${f} of "${label(b)}".`, changes };
+      }
       // How a row is measured (#120) may change only in its number, which
       // must move with the wording; anything else is a different bar.
       const rest = (m) => (m ? JSON.stringify({ ...m, value: undefined }) : null);

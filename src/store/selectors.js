@@ -54,7 +54,14 @@ export const MEASURED_SOURCES = new Set(['Automated tests', 'Pilot outcomes', 'H
 // amendments (afterEvidence) and by the criteria lock (#6).
 export function performanceResultsSeen(state, capabilityId) {
   const d = capData(state, capabilityId);
-  return Boolean(d.testRun.lastRun) || Boolean(d.pilot) || d.evidence.some((e) => MEASURED_SOURCES.has(e.source) || Boolean(e.external));
+  // Since #142: a recorded test outcome (pass or fail) and a counting
+  // judgment (Met or Not met) are results too. A recorded incident is not
+  // (Paige, #143 review): it is evidence and a lifecycle event, and a
+  // numeric result only when explicitly mapped into a metric. Feedback and
+  // Impact are not results either. A simulated run counts only in the demo.
+  return Boolean(d.testRun.lastRun) || Boolean(d.pilot) || d.evidence.some((e) => MEASURED_SOURCES.has(e.source) || Boolean(e.external))
+    || (d.outcomes || []).some((o) => o.result !== 'unable')
+    || (d.judgments || []).some((j) => j.counts && j.verdict !== 'unknown');
 }
 
 // Kinds shown in Activity by default (decision 3): decisions, automatic
