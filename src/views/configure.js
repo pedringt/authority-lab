@@ -98,9 +98,18 @@ function editForm(state, cap, c, locked) {
 function rowActions(state, cap, c) {
   const personJudged = c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person';
   const manual = c.row.measure && (c.row.measure.source === MANUAL_SOURCE || !c.row.measure.source);
-  const record = c.row.bar !== 'needs-decision' && (c.kind === 'target' ? (!c.row.measure || manual) : (Boolean(manual) && !isCoverageRule(c.row)));
+  const linkedTarget = c.kind === 'requirement' && c.row.result && /^Judged by its Target/.test(c.row.result.why || '');
+  // An evidence-judged Requirement records results when they come from
+  // people (or no evidence is chosen yet); a person-judged one never does.
+  const record = c.row.bar !== 'needs-decision' && (c.kind === 'target' ? (!c.row.measure || manual) : (!personJudged && !isCoverageRule(c.row) && !linkedTarget && (manual || !c.row.measure)));
   const noNumber = personJudged;
-  return html`${record ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/record?row=${c.kind}:${c.id}">Record result</a> ` : ''}${noNumber ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/judge?row=${c.id}">Record judgment</a> ` : ''}<a class="btn btn-sm" href="#/capabilities/${cap.id}/evidence/configure?row=${c.kind}:${c.id}">${c.mapped ? 'Change evidence' : 'Choose evidence'}</a>`;
+  // A Requirement a person is set to decide can't have evidence chosen; how
+  // it is judged is changed in the Requirements editor (governed as usual).
+  const explicitPerson = personJudged && c.row.judgment === 'person';
+  const evidenceLink = explicitPerson
+    ? html`<a class="btn btn-sm" href="#/capabilities/${cap.id}/${criteriaLocked(state, cap.id) ? 'amend/criteria' : 'criteria/edit'}">Change how it's judged</a>`
+    : html`<a class="btn btn-sm" href="#/capabilities/${cap.id}/evidence/configure?row=${c.kind}:${c.id}">${c.mapped ? 'Change evidence' : 'Choose evidence'}</a>`;
+  return html`${record ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/record?row=${c.kind}:${c.id}">Record result</a> ` : ''}${noNumber ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/judge?row=${c.id}">Record judgment</a> ` : ''}${evidenceLink}`;
 }
 
 // The row's result and why (#142): Met, Not met, Unknown, Conflicting, Not

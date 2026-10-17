@@ -1,6 +1,14 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
-import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule } from '../store/index.js';
+import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule, JUDGMENTS, JUDGMENT_WORDS } from '../store/index.js';
+
+// How will you know this is true? (#143 review) Asked for every Requirement
+// and stored on it, never inferred from its wording. A coverage rule is
+// always judged by evidence.
+export function judgmentField(r) {
+  if (isCoverageRule(r)) return html`<span class="muted small">Judged by evidence (coverage rule)</span>`;
+  return html`<select name="r-judgment" aria-label="How will you know this is true?"><option value="" ${r.judgment ? '' : raw('selected')}>How will you know this is true?</option>${JUDGMENTS.map((k) => html`<option value="${k}" ${r.judgment === k ? raw('selected') : ''}>${JUDGMENT_WORDS[k]}</option>`)}</select>`;
+}
 
 // Editor for success criteria and evidence requirements (#6). Before the
 // first test run the editors are open and every save is a new version. After
@@ -34,7 +42,7 @@ export function criteriaEditorView(state, capabilityId, query) {
     <td>${CORE_CRITERIA.includes(c.id) ? html`<span class="muted small" title="You can change the threshold but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove target ${i + 1}">Remove</button>`}</td>
   </tr>`;
   const rrow = (r, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Check" required></td>
+    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Check" required>${judgmentField(r)}</td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
     <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="You can change the number but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove check ${i + 1}">Remove</button>`}</td>
   </tr>`;
@@ -84,7 +92,7 @@ function setupChecksView(state, cap, { error, acting, saved, defaults, criteria,
   const reqChoices = requirements.map((r) => [r.id, r.text]);
   const warn = resultsLockWarning(state, cap.id);
   const rrow = (r, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required>${r.bar === 'needs-decision' ? html`<span class="muted small">Coverage rule: replace "Needs decision" with the number, e.g. "Minimum 50 cases", when you've decided.</span>` : ''}</td>
+    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required>${judgmentField(r)}${r.bar === 'needs-decision' ? html`<span class="muted small">Coverage rule: replace "Needs decision" with the number, e.g. "Minimum 50 cases", when you've decided.</span>` : ''}</td>
     <td>${r.bar === 'needs-decision' ? badge('decision', 'Needs decision') : isCoverageRule(r) ? html`<span class="muted small">Coverage rule</span>` : ''}</td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
     <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="You can set its number but not remove it.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove requirement ${i + 1}">Remove</button>`}</td>

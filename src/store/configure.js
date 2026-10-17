@@ -34,6 +34,10 @@ export function mapEvidence(state, capabilityId, { rowKind, rowId, measure, by, 
   if (!row) throw new Error('That row no longer exists. Reload the page.');
   const words = rowKind === 'target' ? row.target : row.text;
   const label = rowKind === 'target' ? row.name : row.text;
+  // Choosing evidence configures an evidence-judged Requirement; it never
+  // turns a person-judged one into one (Paige, #143 review). Changing how a
+  // Requirement is judged is an edit to the Requirement, governed as usual.
+  if (rowKind === 'requirement' && row.judgment === 'person' && measure) throw new Error(`"${label}" is decided by a person, so evidence can't be chosen for it. To measure it instead, change how it is judged in Requirements first${criteriaLocked(state, capabilityId) ? ' (results exist, so that change needs approval)' : ''}.`);
   let next = null;
   if (measure) {
     const bar = barFromWords(words);

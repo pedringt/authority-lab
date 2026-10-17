@@ -142,7 +142,10 @@ export function cleanAmendmentValue(state, capabilityId, kind, value) {
     const { kind, bar, ...bRest } = unmeasured(b);
     // A coverage rule's number set, or cleared to Needs decision (#139).
     const status = x.bar ? { bar: x.bar, current: x.current, met: false } : bar ? { current: 'Not yet measured', met: false } : {};
-    return carryMeasure({ ...bRest, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...status, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text);
+    const { judgment: bJudgment, ...bRest2 } = bRest;
+    // How it is judged is part of the Requirement (#143 review): kept unless the change says otherwise.
+    const judgment = x.judgment || bJudgment;
+    return carryMeasure({ ...bRest2, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...(judgment ? { judgment } : {}), ...status, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text);
   });
   checkTargetLinks(criteria, requirements);
   return { criteria, requirements };
@@ -198,7 +201,7 @@ export function tighteningOnly(base, next) {
   const changes = [];
   const kinds = [
     ['criteria', 'target', (x) => x.name, ['name', 'note', 'requirement', 'bar']],
-    ['requirements', 'text', (x) => x.text, ['kind', 'bar']],
+    ['requirements', 'text', (x) => x.text, ['kind', 'bar', 'judgment']],
   ];
   for (const [kind, field, label, fixed] of kinds) {
     const before = base[kind] || [];

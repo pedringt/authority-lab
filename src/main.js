@@ -553,7 +553,7 @@ function readCriteriaRows(form) {
   const rows = (kind) => [...form.querySelectorAll(`[data-rows="${kind}"] tr`)];
   const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
   const criteria = rows('criteria').map((tr) => ({ id: val(tr, 'c-id') || undefined, name: val(tr, 'c-name'), target: val(tr, 'c-target'), note: val(tr, 'c-note'), source: val(tr, 'c-source') || undefined, current: val(tr, 'c-current') || undefined, status: val(tr, 'c-status') || undefined, requirement: val(tr, 'c-requirement') || undefined }));
-  const requirements = rows('requirements').map((tr) => ({ id: val(tr, 'r-id') || undefined, text: val(tr, 'r-text'), source: val(tr, 'r-source') || undefined, kind: val(tr, 'r-kind') || undefined }));
+  const requirements = rows('requirements').map((tr) => ({ id: val(tr, 'r-id') || undefined, text: val(tr, 'r-text'), source: val(tr, 'r-source') || undefined, kind: val(tr, 'r-kind') || undefined, judgment: val(tr, 'r-judgment') || undefined }));
   return { criteria, requirements };
 }
 

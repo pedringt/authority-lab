@@ -44,8 +44,12 @@ test('before results, mapping a row saves directly; the comparison and number co
   const s = mapEvidence(s0, id, { rowKind: 'requirement', rowId: 'accuracy', measure: { source: 'evals-notes-suite', metric: 'answer-quality', stat: 'rate' }, by: 'maya' });
   assert.deepEqual(current(s, id, 'requirements').find((r) => r.id === 'accuracy').measure, { source: 'evals-notes-suite', metric: 'answer-quality', stat: 'rate', op: '>=', value: 85 });
   assert.equal(openProposal(s, id, 'criteria'), null, 'no approval needed before results');
-  // "No unresolved critical incidents" maps as at most 0.
-  const s2 = mapEvidence(s, id, { rowKind: 'requirement', rowId: 'incidents', measure: { source: 'manual-review', metric: 'unresolved-critical-incidents', stat: 'count' }, by: 'maya' });
+  // "No unresolved critical incidents" is decided by a person by default
+  // (#143 review); choosing evidence for it is refused until it is changed
+  // to be judged by evidence. Then it maps as at most 0.
+  assert.throws(() => mapEvidence(s, id, { rowKind: 'requirement', rowId: 'incidents', measure: { source: 'manual-review', metric: 'unresolved-critical-incidents', stat: 'count' }, by: 'maya' }), /decided by a person, so evidence can't be chosen for it\. To measure it instead, change how it is judged in Requirements first\./);
+  const measured = saveCriteria(s, id, { criteria: current(s, id, 'criteria'), requirements: current(s, id, 'requirements').map((r) => (r.id === 'incidents' ? { ...r, judgment: 'evidence' } : r)), by: 'maya', reason: 'Incidents are counted.' });
+  const s2 = mapEvidence(measured, id, { rowKind: 'requirement', rowId: 'incidents', measure: { source: 'manual-review', metric: 'unresolved-critical-incidents', stat: 'count' }, by: 'maya' });
   assert.deepEqual(current(s2, id, 'requirements').find((r) => r.id === 'incidents').measure, { source: 'manual-review', metric: 'unresolved-critical-incidents', stat: 'count', op: '<=', value: 0 });
   // A row with no number in its words can't be measured.
   assert.throws(() => mapEvidence(s, id, { rowKind: 'target', rowId: 'confidence', measure: { metric: 'x', stat: 'rate' }, by: 'maya' }), /doesn't say a number to check/);

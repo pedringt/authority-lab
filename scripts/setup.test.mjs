@@ -85,7 +85,8 @@ test('a one-person workspace adds a capability and takes it all the way to its f
   s = finalizeContract(s, id, { by: 'ana-ruiz' });
   assert.equal(versionList(s, id, 'contract').length, 1);
   const d = defaultsFor(s, id);
-  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'ana-ruiz' });
+  // Incidents are counted here, so judged by evidence rather than a person (#143 review).
+  s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements.map((r) => (r.id === 'incidents' ? { ...r, judgment: 'evidence' } : r)), by: 'ana-ruiz', reason: 'Incidents are counted.' });
   s = saveStakeholders(s, id, { stakeholders: [{ person: 'ana-ruiz', team: 'Support', position: 'Support', stance: 'support', reasoning: 'I own it.' }], by: 'ana-ruiz' });
   // Configure evidence (#126): which evidence judges each requirement. Three
   // from Authority Lab's own tests, two from a review recorded by hand.

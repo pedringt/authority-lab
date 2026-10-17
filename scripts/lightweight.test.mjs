@@ -8,7 +8,7 @@ import {
   initialState, startEmpty, setUpWorkspace, addPerson, addCapability, getCapability, capData, current, findWorkspace, advanceToday,
   saveCriteria, saveScenarios, saveStakeholders, startTestRun, criteriaLocked, performanceResultsSeen, readiness, requirementsNow, evidenceCoverage, coverageText, evidenceSources, mapEvidence, proposeAuthority,
   isDemoWorkspace, recordOutcome, outcomesNow, outcomeMeasurements, recordJudgment, judgmentsFor, recordIncident, setIncidentStatus, incidentsFor, incidentStatus,
-  recordFeedback, recordImpactActual, impactActuals, recordResult, judgedBy, unlinkedBeforeResults, rowMetric, uploadEvidence, parseCsv, measurementsFromRows, evidenceImports, MANUAL_SOURCE, FEEDBACK_SOURCE,
+  recordFeedback, recordImpactActual, impactActuals, recordResult, judgedBy, unlinkedBeforeResults, tighteningOnly, defaultsFor, rowMetric, uploadEvidence, parseCsv, measurementsFromRows, evidenceImports, MANUAL_SOURCE, FEEDBACK_SOURCE,
 } from '../src/store/index.js';
 
 // A small accounting firm: Ana runs it alone at first, then names Ben as a
@@ -27,9 +27,9 @@ function firm() {
     criteria: [],
     requirements: [
       { id: 'min-cases', text: 'Minimum 20 cases', kind: 'coverage' },
-      { id: 'accuracy', text: 'Overall accuracy ≥ 90%' },
-      { id: 'incidents', text: 'No unresolved critical incidents' },
-      { id: 'templates', text: 'The tax lead has approved the email templates' },
+      { id: 'accuracy', text: 'Overall accuracy ≥ 90%', judgment: 'evidence' },
+      { id: 'incidents', text: 'No unresolved critical incidents', judgment: 'person' },
+      { id: 'templates', text: 'The tax lead has approved the email templates', judgment: 'person' },
     ],
     by: ANA,
     reason: 'Our own bar for a first pilot, written by us.',
@@ -39,6 +39,8 @@ function firm() {
   s = linkManual(s, id, 'accuracy', 'rate');
   return [s, id];
 }
+// Redefine a Requirement as judged by evidence (an edit to the Requirement).
+const evidenceJudged = (reqs, rowId) => reqs.map((r) => (r.id === rowId ? { ...r, judgment: 'evidence' } : r));
 function linkManual(s, id, rowId, stat) {
   return mapEvidence(s, id, { rowKind: 'requirement', rowId, measure: { source: MANUAL_SOURCE, metric: rowMetric('requirement', rowId), stat }, by: ANA });
 }
@@ -105,11 +107,11 @@ test('Record result: a measured Requirement uses its own metric; a person-judged
   assert.equal(capData(s, id).evidence[0].measure.metric, rowMetric('requirement', 'accuracy'), 'no metric id typed');
   assert.equal(criteriaLocked(s, id), true, 'the first result locks the bar, as before');
   const [t] = firm();
-  assert.throws(() => recordResult(t, id, { rowKind: 'requirement', rowId: 'templates', type: 'rate', passed: 4, total: 4, kind: 'eval', by: BEN }), /judged by a person: record a judgment\. To measure it instead, choose its evidence first/);
+  assert.throws(() => recordResult(t, id, { rowKind: 'requirement', rowId: 'templates', type: 'rate', passed: 4, total: 4, kind: 'eval', by: BEN }), /decided by a person: record a judgment\. To measure it instead, change how it is judged in Requirements first/);
   assert.equal(current(t, id, 'requirements').find((r) => r.id === 'templates').measure, undefined, 'nothing was linked');
   assert.throws(() => recordResult(t, id, { rowKind: 'requirement', rowId: 'min-cases', type: 'rate', passed: 1, total: 1, kind: 'eval', by: BEN }), /coverage rule/);
   // A Target is measurable by definition: its first result links it, before results.
-  let u = saveCriteria(t, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: current(t, id, 'requirements'), by: ANA, reason: 'A quality bar for the templates.' });
+  let u = saveCriteria(t, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: evidenceJudged(current(t, id, 'requirements'), 'templates'), by: ANA, reason: 'A quality bar for the templates.' });
   u = recordResult(u, id, { rowKind: 'target', rowId: 'quality', type: 'rate', passed: 19, total: 20, kind: 'eval', by: BEN });
   assert.deepEqual(current(u, id, 'criteria')[0].measure, { source: MANUAL_SOURCE, metric: rowMetric('target', 'quality'), stat: 'rate', op: '>=', value: 90 });
   assert.throws(() => recordResult(u, id, { rowKind: 'requirement', rowId: 'templates', type: 'rate', passed: 1, total: 1, kind: 'eval', by: BEN }), /judged by its Target/);
@@ -121,7 +123,7 @@ test('Record result: a measured Requirement uses its own metric; a person-judged
 
 test('a Requirement judged through its linked Target takes the Target\'s result (#143 review)', () => {
   let [s, id] = firm();
-  s = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: current(s, id, 'requirements'), by: ANA, reason: 'A quality bar for the templates.' });
+  s = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: evidenceJudged(current(s, id, 'requirements'), 'templates'), by: ANA, reason: 'A quality bar for the templates.' });
   assert.equal(judgedBy(s, id, current(s, id, 'requirements').find((r) => r.id === 'templates')), 'evidence');
   assert.equal(req(s, id, 'templates').result.status, 'no-evidence');
   const met = recordResult(s, id, { rowKind: 'target', rowId: 'quality', type: 'rate', passed: 19, total: 20, kind: 'eval', by: BEN });
@@ -208,9 +210,50 @@ test('a Requirement with no metric is judged by a person even when its wording h
   assert.equal(req(s, id, 'all-four').result.status, 'met');
   // A linked Target makes a Requirement evidence-judged, whatever its wording.
   let [t] = firm();
-  t = saveCriteria(t, id, { criteria: [{ name: 'Template approval', target: 'Needs decision', requirement: 'templates' }], requirements: current(t, id, 'requirements'), by: ANA, reason: 'Measure template approval.' });
+  t = saveCriteria(t, id, { criteria: [{ name: 'Template approval', target: 'Needs decision', requirement: 'templates' }], requirements: evidenceJudged(current(t, id, 'requirements'), 'templates'), by: ANA, reason: 'Measure template approval.' });
   assert.equal(judgedBy(t, id, current(t, id, 'requirements').find((r) => r.id === 'templates')), 'evidence');
   assert.throws(() => recordJudgment(t, id, 'templates', { verdict: 'met', rationale: 'All approved on Oct 14.', by: BEN }), /a Target is linked to it/);
+});
+
+test('how a Requirement is judged is stored on it: a person-judged one may contain a number; an evidence-judged one stays evidence-judged with no source yet (#143 review)', () => {
+  let [s, id] = firm();
+  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved', judgment: 'person' }, { id: 'speed', text: 'At least 50% faster', judgment: 'evidence' }], by: ANA, reason: 'Two more checks.' });
+  const row = (rid) => current(s, id, 'requirements').find((r) => r.id === rid);
+  // Person-judged, number in the wording.
+  assert.equal(row('all-four').judgment, 'person');
+  assert.equal(judgedBy(s, id, row('all-four')), 'person');
+  assert.equal(recordJudgment(s, id, 'all-four', { verdict: 'met', rationale: 'Ben approved all four on Oct 14.', by: BEN }).capabilityData[id].judgments.length, 1);
+  assert.throws(() => recordResult(s, id, { rowKind: 'requirement', rowId: 'all-four', type: 'rate', passed: 4, total: 4, kind: 'eval', by: BEN }), /decided by a person/);
+  assert.throws(() => mapEvidence(s, id, { rowKind: 'requirement', rowId: 'all-four', measure: { source: MANUAL_SOURCE, metric: 'x', stat: 'rate' }, by: ANA }), /decided by a person, so evidence can't be chosen/);
+  // Evidence-judged, no source chosen yet: never person-judged, No evidence yet.
+  assert.equal(row('speed').measure, undefined);
+  assert.equal(judgedBy(s, id, row('speed')), 'evidence');
+  assert.equal(req(s, id, 'speed').result.status, 'no-evidence');
+  assert.match(req(s, id, 'speed').result.why, /No evidence yet: choose its evidence/);
+  assert.throws(() => recordJudgment(s, id, 'speed', { verdict: 'met', rationale: 'Feels faster to me.', by: BEN }), /judged by its evidence/);
+  assert.ok(unlinkedBeforeResults(s, id).includes('At least 50% faster'), 'it needs its evidence chosen');
+  // Its first recorded result chooses results people record here; it stays evidence-judged.
+  const r = recordResult(s, id, { rowKind: 'requirement', rowId: 'speed', type: 'value', value: 60, kind: 'eval', by: BEN });
+  assert.deepEqual([current(r, id, 'requirements').find((x) => x.id === 'speed').judgment, req(r, id, 'speed').result.status], ['evidence', 'met']);
+  // Changing how a Requirement is judged after results needs sign-off.
+  const flip = { criteria: current(r, id, 'criteria'), requirements: current(r, id, 'requirements').map((x) => (x.id === 'all-four' ? { ...x, judgment: 'evidence' } : x)) };
+  assert.equal(tighteningOnly({ criteria: current(r, id, 'criteria'), requirements: current(r, id, 'requirements') }, flip).ok, false);
+  assert.throws(() => saveCriteria(r, id, { ...flip, by: ANA }), /can't be changed directly now that results exist/);
+  // A coverage rule can't be person-judged.
+  assert.throws(() => saveCriteria(firm()[0], id, { criteria: [], requirements: [{ id: 'min-cases', text: 'Minimum 20 cases', kind: 'coverage', judgment: 'person' }], by: ANA, reason: 'Trying.' }), /judged by evidence .*coverage rule/);
+});
+
+test('a setup-flow capability must say how each new hand-written Requirement is judged (#143 review)', async () => {
+  const { startCapability, saveSetupRisk } = await import('../src/store/index.js');
+  let s = startCapability(initialState(), { name: 'Tag tickets', owner: 'priya', template: 'scratch', lifecycle: 'planned', by: 'priya' });
+  const id = s.capabilities.at(-1).id;
+  s = saveSetupRisk(s, id, { impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only', likelihood: 'Unknown', by: 'priya' });
+  const d = defaultsFor(s, id);
+  assert.ok(d.requirements.every((r) => r.judgment), 'every suggested Requirement says how it is judged');
+  assert.deepEqual(Object.fromEntries(d.requirements.map((r) => [r.id, r.judgment])), { 'min-cases': 'evidence', accuracy: 'evidence', severe: 'evidence', incidents: 'person' });
+  assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: [...d.requirements, { text: 'All 4 templates have been approved' }], by: 'priya' }), /how will you know this is true\?/);
+  const ok = saveCriteria(s, id, { criteria: d.criteria, requirements: [...d.requirements, { text: 'All 4 templates have been approved', judgment: 'person' }], by: 'priya' });
+  assert.equal(current(ok, id, 'requirements').at(-1).judgment, 'person');
 });
 
 test('before the first result, the Requirements and Targets with no evidence linked are listed; after, nothing is', () => {
@@ -222,7 +265,7 @@ test('before the first result, the Requirements and Targets with no evidence lin
   const four = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved' }], by: ANA, reason: 'Adding the template check.' });
   assert.deepEqual(unlinkedBeforeResults(four, id), ['Minimum 20 cases']);
   // An evidence-judged row with nothing linked is listed: a Target with a bar.
-  const withTarget = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: current(s, id, 'requirements'), by: ANA, reason: 'A quality bar.' });
+  const withTarget = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: evidenceJudged(current(s, id, 'requirements'), 'templates'), by: ANA, reason: 'A quality bar.' });
   assert.deepEqual(unlinkedBeforeResults(withTarget, id), ['Minimum 20 cases', 'Quality']);
   s = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
   assert.equal(unlinkedBeforeResults(s, id), null, 'results exist: the existing lock rule applies, unchanged');

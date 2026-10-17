@@ -133,7 +133,9 @@ export function suggestedChecks(risk, templateId) {
   ];
   const seen = new Set();
   const unique = rows.filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
-  const requirements = unique.map(({ id, text, kind, bar, from, why }) => ({ id, text, source: CHECK_SOURCES[from], ...(kind ? { kind } : {}), ...(bar ? { bar } : {}), ...(why ? { why } : {}) }));
+  // How each is judged is set when it is suggested (#143 review): a coverage
+  // rule or one with a suggested Target by evidence, anything else by a person.
+  const requirements = unique.map(({ id, text, kind, bar, from, why, target }) => ({ id, text, source: CHECK_SOURCES[from], judgment: kind === 'coverage' || target ? 'evidence' : 'person', ...(kind ? { kind } : {}), ...(bar ? { bar } : {}), ...(why ? { why } : {}) }));
   const criteria = unique.filter((r) => r.target).map((r) => ({ id: r.target.id, name: r.target.name, target: NEEDS_DECISION_TEXT, bar: NEEDS_DECISION, note: r.target.note || '', requirement: r.id, source: CHECK_SOURCES[r.from] }));
   return { criteria, requirements };
 }
@@ -208,6 +210,22 @@ export function checkTargetLinks(criteria, requirements) {
   const ids = new Set(requirements.map((r) => r.id));
   const bad = criteria.find((c) => c.requirement && !ids.has(c.requirement));
   if (bad) throw new Error(`Target "${bad.name}" is for requirement "${bad.requirement}", which isn't in the list.`);
+  // A Requirement judged through a Target is judged by evidence (#143 review).
+  const person = criteria.find((c) => c.requirement && (requirements.find((r) => r.id === c.requirement) || {}).judgment === 'person');
+  if (person) throw new Error(`Target "${person.name}" is for "${requirements.find((r) => r.id === person.requirement).text}", which a person decides. A Requirement judged by a Target is judged by evidence: change how it is judged first.`);
+}
+
+export const JUDGMENTS = ['person', 'evidence'];
+export const JUDGMENT_WORDS = { person: 'A person reviews and decides', evidence: 'Evidence or measurement shows it' };
+
+// New Requirements on a capability set up through the setup flow must say
+// how they are judged (#143 review). Earlier capabilities keep their rows.
+export function requireJudgments(state, capabilityId, requirements, criteria) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap || !cap.setup) return;
+  const before = new Set(current(state, capabilityId, 'requirements').map((r) => r.id));
+  const missing = requirements.find((r) => !r.judgment && !before.has(r.id) && !isCoverageRule(r) && !criteria.some((c) => c.requirement === r.id));
+  if (missing) throw new Error(`"${missing.text}": how will you know this is true? Choose whether a person reviews and decides, or evidence shows it.`);
 }
 
 // Coverage rules (#137): how much evidence is enough to judge, kept apart
@@ -228,14 +246,20 @@ export function cleanRequirements(items) {
     while (seen.has(id)) id = `${id}-${i + 1}`;
     seen.add(id);
     if (r.kind !== undefined && r.kind !== 'coverage') throw new Error(`Requirement "${text}": the only kind is "coverage".`);
+    // How it is judged is part of the Requirement (Paige, 2026-10-17, #143
+    // review): a person decides, or evidence shows it. Stored, never inferred
+    // from its wording or from whether evidence is configured yet.
+    if (r.judgment !== undefined && !JUDGMENTS.includes(r.judgment)) throw new Error(`Requirement "${text}": say whether a person decides it or evidence shows it.`);
+    if (r.judgment === 'person' && (r.kind === 'coverage' || r.id === 'min-cases' || r.measure || r.bar === NEEDS_DECISION)) throw new Error(`Requirement "${text}" is judged by evidence (it ${r.measure ? 'has a measure' : 'is a coverage rule'}), so a person can't decide it.`);
+    const judgment = r.judgment ? { judgment: r.judgment } : {};
     // Only a coverage rule may wait for its number (#139, C3); a measurable
     // Requirement's bar belongs on its Target.
     if (r.bar === NEEDS_DECISION || /\bneeds decision\b/i.test(text)) {
       if (!isCoverageRule(r)) throw new Error(`Requirement "${text}": only a coverage rule (how much evidence is enough) can wait for its number. Put the bar on a Target instead.`);
       if (r.measure) throw new Error(`Requirement "${text}" has no number yet, so it can't be measured. Set its number first.`);
-      return { id, text, current: 'No number set yet', met: false, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), bar: NEEDS_DECISION };
+      return { id, text, current: 'No number set yet', met: false, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...judgment, bar: NEEDS_DECISION };
     }
-    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
+    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...judgment, ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
   });
 }
 
@@ -331,6 +355,7 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   const missingCore = [...CORE_CRITERIA.filter((id) => !c.some((x) => x.id === id)), ...CORE_REQUIREMENTS.filter((id) => !r.some((x) => x.id === id))];
   if (missingCore.length) throw new Error(`You can change these but not remove them: ${missingCore.map((id) => CORE_LABELS[id]).join(', ')}.`);
   checkTargetLinks(c, r);
+  requireJudgments(state, capabilityId, r, c);
   const defaults = defaultsFor(state, capabilityId);
   const deviations = [
     ...defaultDeviations(defaults.criteria, c, (x) => x.target).map((x) => ({ ...x, kind: 'criteria', label: (defaults.criteria.find((y) => y.id === x.id) || {}).name })),
