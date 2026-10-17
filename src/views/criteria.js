@@ -1,13 +1,18 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
-import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule, JUDGMENTS, JUDGMENT_WORDS } from '../store/index.js';
+import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule, JUDGMENTS, JUDGMENT_WORDS, effectiveJudgment } from '../store/index.js';
 
 // How will you know this is true? (#143 review) Asked for every Requirement
 // and stored on it, never inferred from its wording. A coverage rule is
 // always judged by evidence.
 export function judgmentField(r) {
   if (isCoverageRule(r)) return html`<span class="muted small">Judged by evidence (coverage rule)</span>`;
-  return html`<select name="r-judgment" aria-label="How will you know this is true?"><option value="" ${r.judgment ? '' : raw('selected')}>How will you know this is true?</option>${JUDGMENTS.map((k) => html`<option value="${k}" ${r.judgment === k ? raw('selected') : ''}>${JUDGMENT_WORDS[k]}</option>`)}</select>`;
+  // Pre-selected when the row already says it (stored, or a measure). An
+  // older row that doesn't say is left unset until someone answers; a new
+  // row must answer.
+  const now = effectiveJudgment(r);
+  const isNew = !r.id;
+  return html`<select name="r-judgment" aria-label="How will you know this is true?" ${isNew ? raw('required') : ''}><option value="" ${now ? '' : raw('selected')}>${isNew ? 'How will you know this is true?' : 'Not set yet (older Requirement)'}</option>${JUDGMENTS.map((k) => html`<option value="${k}" ${now === k ? raw('selected') : ''}>${JUDGMENT_WORDS[k]}</option>`)}</select>`;
 }
 
 // Editor for success criteria and evidence requirements (#6). Before the

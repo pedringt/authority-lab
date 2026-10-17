@@ -154,7 +154,7 @@ test('three compatible manual reviews of 10 cases give 30 cases; the results the
 test('Conflicting never counts as met, shows which evidence disagrees, and stale evidence doesn\'t conflict', () => {
   let [s, id] = firm();
   // Single values don't combine: each judges on its own.
-  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'speed', text: 'At least 50% faster' }], by: ANA, reason: 'Adding speed.' });
+  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'speed', text: 'At least 50% faster', judgment: 'evidence' }], by: ANA, reason: 'Adding speed.' });
   s = linkManual(s, id, 'speed', 'value');
   s = recordResult(s, id, { rowKind: 'requirement', rowId: 'speed', type: 'value', value: 60, kind: 'eval', by: BEN });
   const later = recordResult(s, id, { rowKind: 'requirement', rowId: 'speed', type: 'value', value: 30, kind: 'eval', by: ANA });
@@ -204,7 +204,7 @@ test('the Owner or a Reviewer judges a Requirement with no metric; a Stakeholder
 
 test('a Requirement with no metric is judged by a person even when its wording has a number (#143 review)', () => {
   let [s, id] = firm();
-  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved' }], by: ANA, reason: 'Adding the template check.' });
+  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved', judgment: 'person' }], by: ANA, reason: 'Adding the template check.' });
   assert.equal(judgedBy(s, id, current(s, id, 'requirements').find((r) => r.id === 'all-four')), 'person');
   s = recordJudgment(s, id, 'all-four', { verdict: 'met', rationale: 'Ben approved all four on Oct 14.', by: BEN });
   assert.equal(req(s, id, 'all-four').result.status, 'met');
@@ -212,7 +212,7 @@ test('a Requirement with no metric is judged by a person even when its wording h
   let [t] = firm();
   t = saveCriteria(t, id, { criteria: [{ name: 'Template approval', target: 'Needs decision', requirement: 'templates' }], requirements: evidenceJudged(current(t, id, 'requirements'), 'templates'), by: ANA, reason: 'Measure template approval.' });
   assert.equal(judgedBy(t, id, current(t, id, 'requirements').find((r) => r.id === 'templates')), 'evidence');
-  assert.throws(() => recordJudgment(t, id, 'templates', { verdict: 'met', rationale: 'All approved on Oct 14.', by: BEN }), /a Target is linked to it/);
+  assert.throws(() => recordJudgment(t, id, 'templates', { verdict: 'met', rationale: 'All approved on Oct 14.', by: BEN }), /judged by its evidence, not by a person/);
 });
 
 test('how a Requirement is judged is stored on it: a person-judged one may contain a number; an evidence-judged one stays evidence-judged with no source yet (#143 review)', () => {
@@ -262,7 +262,7 @@ test('before the first result, the Requirements and Targets with no evidence lin
   // rule. Accuracy is linked; incidents and templates are judged by a person.
   assert.deepEqual(unlinkedBeforeResults(s, id), ['Minimum 20 cases']);
   // "All 4 templates have been approved" is person-judged: never listed.
-  const four = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved' }], by: ANA, reason: 'Adding the template check.' });
+  const four = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved', judgment: 'person' }], by: ANA, reason: 'Adding the template check.' });
   assert.deepEqual(unlinkedBeforeResults(four, id), ['Minimum 20 cases']);
   // An evidence-judged row with nothing linked is listed: a Target with a bar.
   const withTarget = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: evidenceJudged(current(s, id, 'requirements'), 'templates'), by: ANA, reason: 'A quality bar.' });
@@ -314,7 +314,7 @@ test('feedback is context: it changes nothing unless a row is explicitly mapped 
   assert.equal(performanceResultsSeen(s, id), false);
   assert.ok(evidenceSources(s).some((x) => x.id === FEEDBACK_SOURCE));
   // A Requirement explicitly judged by feedback.
-  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'acceptance', text: 'Client feedback at least 75% positive' }], by: ANA, reason: 'Clients must accept it.' });
+  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'acceptance', text: 'Client feedback at least 75% positive', judgment: 'evidence' }], by: ANA, reason: 'Clients must accept it.' });
   s = mapEvidence(s, id, { rowKind: 'requirement', rowId: 'acceptance', measure: { source: FEEDBACK_SOURCE, metric: 'positive-feedback', stat: 'rate' }, by: ANA });
   // Feedback is real use, so it waits for the usual 20 before it's judged.
   assert.equal(req(s, id, 'acceptance').result.status, 'not-enough');
@@ -477,7 +477,7 @@ test('screens: before the first outcome, the test-case page names the rows with 
 
 test('screens: "All 4 templates have been approved" offers Record judgment, never Record result; Choose evidence starts on results people record here (#143 review)', () => {
   let [s, id] = firm();
-  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved' }], by: ANA, reason: 'Adding the template check.' });
+  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved', judgment: 'person' }], by: ANA, reason: 'Adding the template check.' });
   const page = render(s, () => configureEvidenceView(s, id, q()));
   const row = page.split('<tr').find((r) => r.includes('<td><strong>All 4 templates have been approved')).split('</tr>')[0];
   assert.match(row, /evidence\/judge\?row=all-four">Record judgment/);
@@ -491,4 +491,64 @@ test('screens: "All 4 templates have been approved" offers Record judgment, neve
   const acc = page.split('<tr').find((r) => r.includes('<td><strong>Overall accuracy')).split('</tr>')[0];
   assert.match(acc, /Record result/);
   assert.doesNotMatch(acc, /Record judgment/);
+});
+
+// ---------------------------------------------------------------------------
+// Legacy Requirements (Paige, 2026-10-17): rows saved before `judgment`
+// existed whose intended judgment can't be recovered from what is stored.
+// ---------------------------------------------------------------------------
+
+const legacyRows = (s) => s.capabilities.flatMap((c) => current(s, c.id, 'requirements').filter((r) => judgedBy(s, c.id, r) === 'legacy').map((r) => ({ cap: c.id, r })));
+
+test('the 18 ambiguous Northstar Requirements are legacy: nothing rewritten, their stored results stand, nobody judges or records against them until someone says how', () => {
+  const s = initialState();
+  const rows = legacyRows(s);
+  // 4 on Ticket classification, 4 on Response drafting, 6 on Refund execution > $50, 4 on Account closure.
+  assert.deepEqual(Object.entries(rows.reduce((n, x) => ({ ...n, [x.cap]: (n[x.cap] || 0) + 1 }), {})), [['ticket-classification', 4], ['response-drafting', 4], ['refund-execution-high-value', 6], ['account-closure', 4]]);
+  assert.ok(rows.every(({ r }) => !Object.hasOwn(r, 'judgment')), 'no judgment was assigned');
+  // Their result is exactly the stored one.
+  for (const { cap, r } of rows) assert.equal(req(s, cap, r.id).met, r.met, `${cap}/${r.id}`);
+  const { cap, r } = rows.find((x) => x.cap === 'response-drafting' && x.r.id === 'accuracy');
+  assert.equal(r.text, 'Overall accuracy ≥ 90%');
+  const owner = getCapability(s, cap).owner;
+  assert.throws(() => recordJudgment(s, cap, 'accuracy', { verdict: 'met', rationale: 'It looks accurate now.', by: owner }), /older Requirement that doesn't say how it is judged yet/);
+  assert.throws(() => recordResult(s, cap, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: owner }), /older Requirement/);
+  // State has none: its Requirements are measured.
+  assert.equal(legacyRows(findWorkspace('state').build({ today: '2026-10-17' })).length, 0);
+  // None of them is listed as needing a link: they don't say they're judged by evidence.
+  for (const id of new Set(rows.map((x) => x.cap))) {
+    const listed = unlinkedBeforeResults(s, id) || [];
+    for (const x of rows.filter((y) => y.cap === id)) assert.ok(!listed.includes(x.r.text), `${id}: ${x.r.text}`);
+  }
+});
+
+test('a legacy row edited must say how it is judged; saying it after results is a governed change', () => {
+  // Before results: a new capability with a legacy-style row (no judgment).
+  let s = addCapability(initialState(), { name: 'Tag tickets', owner: 'priya', risk: { impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, startingLevel: 0 });
+  const id = s.capabilities.at(-1).id;
+  s = saveCriteria(s, id, { criteria: [], requirements: [{ id: 'min-cases', text: 'Minimum 50 cases', kind: 'coverage' }, { id: 'old', text: 'Tags look right', judgment: 'person' }], by: 'priya', reason: 'Our own bar for tagging.' });
+  // A brand-new row must say how it is judged.
+  assert.throws(() => saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'new', text: 'Routing matches the team list' }], by: 'priya', reason: 'Adding one.' }), /how will you know this is true\?/);
+  // Unchanged legacy rows are never forced (the demo's locked rows are edited by proposal).
+  const rr = initialState();
+  const base = { criteria: current(rr, 'response-drafting', 'criteria'), requirements: current(rr, 'response-drafting', 'requirements') };
+  // Giving a legacy row its judgment after results: not tightening-only, so sign-off.
+  const set = { ...base, requirements: base.requirements.map((r) => (r.id === 'accuracy' ? { ...r, judgment: 'evidence' } : r)) };
+  assert.match(tighteningOnly(base, set).reason, /changes how "Overall accuracy ≥ 90%" is judged/);
+  // Saying "evidence" for a row that already has a measure is no change.
+  const rr2 = { criteria: current(rr, 'refund-recommendation', 'criteria'), requirements: current(rr, 'refund-recommendation', 'requirements') };
+  const same = { ...rr2, requirements: rr2.requirements.map((r) => (r.id === 'accuracy' ? { ...r, judgment: 'evidence' } : r)) };
+  assert.doesNotMatch(tighteningOnly(rr2, same).reason, /judged/, 'no change to how it is judged');
+  // A legacy row whose text is edited must say how it is judged.
+  const legacyEdit = saveCriteria(s, id, { criteria: [], requirements: current(s, id, 'requirements').map(({ judgment, ...r }) => r), by: 'priya', reason: 'Leave it unsaid, as an older row would be.' });
+  assert.throws(() => saveCriteria(legacyEdit, id, { criteria: [], requirements: current(legacyEdit, id, 'requirements').map((r) => (r.id === 'old' ? { ...r, text: 'Tags look right to the team lead' } : r)), by: 'priya', reason: 'Clearer.' }), /how will you know this is true\?/);
+});
+
+test('removing a Requirement\'s Targets leaves how it is judged as it was', () => {
+  let [s, id] = firm();
+  s = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: evidenceJudged(current(s, id, 'requirements'), 'templates'), by: ANA, reason: 'A quality bar.' });
+  const after = saveCriteria(s, id, { criteria: [], requirements: current(s, id, 'requirements'), by: ANA, reason: 'Dropping the Target.' });
+  assert.equal(current(after, id, 'requirements').find((r) => r.id === 'templates').judgment, 'evidence', 'still evidence-judged, not silently flipped to a person');
+  assert.equal(judgedBy(after, id, current(after, id, 'requirements').find((r) => r.id === 'templates')), 'evidence');
+  assert.equal(req(after, id, 'templates').result.status, 'no-evidence');
 });

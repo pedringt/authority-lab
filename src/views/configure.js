@@ -13,7 +13,10 @@ const TONE = { covered: 'pass', stale: 'watch', insufficient: 'insufficient', 'n
 const KIND_WORDS = { eval: 'test cases only', production: 'real use only' };
 
 function mappingText(state, m, row = null) {
-  if (!m) return html`<span class="muted">${row && row.kind !== 'target' && judgedBy(state, row.capabilityId, row) === 'person' ? 'Judged by a person' : 'Not linked yet'}</span>`;
+  if (!m) {
+    const how = row && row.kind !== 'target' ? judgedBy(state, row.capabilityId, row) : null;
+    return html`<span class="muted">${how === 'person' ? 'Judged by a person' : how === 'legacy' ? 'Not set yet (older Requirement)' : 'Not linked yet'}</span>`;
+  }
   const src = m.source ? findSource(state, m.source) : null;
   return html`<strong>${src ? src.name : 'Any source'}</strong> · ${m.metric}${m.segment ? ` · ${m.segment}` : ''}<div class="muted small">${MEASURE_STAT_WORDS[m.stat] || m.stat}${m.minSample ? `, at least ${m.minSample} cases` : ''}${m.kind ? `, ${KIND_WORDS[m.kind]}` : ''}</div>`;
 }
@@ -41,9 +44,14 @@ function suggestion(state, cap, c) {
   if (c.status === 'conflicting') return html`The evidence disagrees: ${c.row.result ? c.row.result.why : ''} Look into it, or collect more evidence. Conflicting is never a pass.`;
   if (c.status === 'unknown') return html`Judged Unknown. Record a judgment once you know. <a href="${judge}">Record judgment</a>`;
   if (c.status === 'needs-decision') return html`Decide its number first. <a href="#/capabilities/${cap.id}/criteria/edit">Requirements and Targets</a>`;
+  if (c.status === 'no-source' && c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'legacy') return html`An older Requirement that doesn't say how it is judged. Choose its evidence, or say how you'll know it is true. <a href="${configure}">Choose evidence</a>`;
   if (c.status === 'no-source' && c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person') return html`No metric: the Owner or a Reviewer judges it${isIncidentRequirement(c.row) ? ', and an open critical incident blocks it' : ''}. <a href="${judge}">Record judgment</a>${isIncidentRequirement(c.row) ? html` · <a href="#/capabilities/${cap.id}/evidence/log#incidents">Incidents</a>` : ''}`;
   if (c.status === 'no-source' && c.kind === 'target') return html`Record a result for it by hand or upload a file: that links it to manual results. Or choose another source. <a href="${record}">Record result</a> · <a href="${configure}">Choose evidence</a>`;
-  if (c.status === 'no-source' && c.kind === 'requirement' && !isCoverageRule(c.row)) return html`It is judged through its Target: record results there. <a href="${configure}">Choose evidence</a>`;
+  if (c.status === 'no-source' && c.kind === 'requirement' && !isCoverageRule(c.row)) {
+    // Evidence-judged with nothing chosen yet: through a linked Target, or its own evidence.
+    if (c.row.result && /^Judged by its Target/.test(c.row.result.why || '')) return html`It is judged through its Target: record results there. <a href="${configure}">Choose evidence</a>`;
+    return html`Evidence shows it, and none is chosen yet. Record its first result from its row (that links it to results people record here), or choose another source. <a href="${record}">Record result</a> · <a href="${configure}">Choose evidence</a>`;
+  }
   const src = c.mapped && c.row.measure.source ? findSource(state, c.row.measure.source) : null;
   if (c.status === 'no-source') return html`Choose which evidence judges it: a connected source, Authority Lab tests, or a manual review. <a href="${configure}">Choose evidence</a>`;
   if (c.status === 'no-data') {
@@ -106,6 +114,9 @@ function rowActions(state, cap, c) {
   // A Requirement a person is set to decide can't have evidence chosen; how
   // it is judged is changed in the Requirements editor (governed as usual).
   const explicitPerson = personJudged && c.row.judgment === 'person';
+  // An older Requirement that doesn't say how it is judged (legacy): its
+  // evidence can be chosen as before, or someone says how it is judged.
+  if (c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'legacy') return html`<a class="btn btn-sm" href="#/capabilities/${cap.id}/evidence/configure?row=${c.kind}:${c.id}">Choose evidence</a> <a class="btn btn-sm" href="#/capabilities/${cap.id}/${criteriaLocked(state, cap.id) ? 'amend/criteria' : 'criteria/edit'}">Set how it's judged</a>`;
   const evidenceLink = explicitPerson
     ? html`<a class="btn btn-sm" href="#/capabilities/${cap.id}/${criteriaLocked(state, cap.id) ? 'amend/criteria' : 'criteria/edit'}">Change how it's judged</a>`
     : html`<a class="btn btn-sm" href="#/capabilities/${cap.id}/evidence/configure?row=${c.kind}:${c.id}">${c.mapped ? 'Change evidence' : 'Choose evidence'}</a>`;

@@ -218,13 +218,17 @@ export function checkTargetLinks(criteria, requirements) {
 export const JUDGMENTS = ['person', 'evidence'];
 export const JUDGMENT_WORDS = { person: 'A person reviews and decides', evidence: 'Evidence or measurement shows it' };
 
-// New Requirements on a capability set up through the setup flow must say
-// how they are judged (#143 review). Earlier capabilities keep their rows.
+// A new or edited Requirement must say how it is judged (Paige, 2026-10-17):
+// "How will you know this is true?" A coverage rule, one with a linked Target
+// and one with a measure already say so by their structure. An older row
+// left as it was (a legacy row) is never forced to: nothing is rewritten.
 export function requireJudgments(state, capabilityId, requirements, criteria) {
-  const cap = getCapability(state, capabilityId);
-  if (!cap || !cap.setup) return;
-  const before = new Set(current(state, capabilityId, 'requirements').map((r) => r.id));
-  const missing = requirements.find((r) => !r.judgment && !before.has(r.id) && !isCoverageRule(r) && !criteria.some((c) => c.requirement === r.id));
+  const before = new Map(current(state, capabilityId, 'requirements').map((r) => [r.id, r]));
+  const missing = requirements.find((r) => {
+    if (r.judgment || isCoverageRule(r) || r.measure || r.bar === NEEDS_DECISION || criteria.some((c) => c.requirement === r.id)) return false;
+    const b = before.get(r.id);
+    return !b || b.text !== r.text;
+  });
   if (missing) throw new Error(`"${missing.text}": how will you know this is true? Choose whether a person reviews and decides, or evidence shows it.`);
 }
 

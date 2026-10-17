@@ -248,6 +248,7 @@ function withResult(r, status, why) {
 // Stakeholder input never decides it. With no judgment at all, a row keeps
 // whatever it already had (the seeded demo's stored results).
 function personJudged(state, capabilityId, row) {
+  const by = judgedBy(state, capabilityId, row);
   if (isIncidentRequirement(row)) {
     const open = openCriticalIncidents(state, capabilityId);
     if (open.length) {
@@ -285,8 +286,10 @@ function personJudged(state, capabilityId, row) {
     return withResult({ ...row, met: false, current: 'Judged unknown', gap: why, judgments: counting.map((j) => j.id) }, 'unknown', why);
   }
   if (row.met) return withResult(row, 'met', `Met: ${row.current}.${note}`);
-  const by = judgedBy(state, capabilityId, row);
-  const how = by === 'person' ? 'the Owner or a Reviewer can record a judgment' : isCoverageRule(row) ? 'choose which results it counts' : 'choose its evidence';
+  // A legacy row's stored result stands as it was (Paige, 2026-10-17): not
+  // met with a recorded value reads Not met, with its stored reason.
+  if (by === 'legacy' && row.current && row.current !== 'Not yet measured') return withResult(row, 'not-met', row.gap || `Not met: ${row.current}.`);
+  const how = by === 'person' ? 'the Owner or a Reviewer can record a judgment' : by === 'legacy' ? 'choose its evidence, or say how it is judged' : isCoverageRule(row) ? 'choose which results it counts' : 'choose its evidence';
   const why = row.gap || `No evidence yet: ${how}.${note}`;
   return withResult({ ...row, gap: why }, 'no-evidence', why);
 }

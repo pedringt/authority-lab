@@ -98,17 +98,28 @@ export const VERDICTS = { met: 'Met', 'not-met': 'Not met', unknown: 'Unknown' }
 // changes it. A coverage rule and a Requirement with linked Targets are
 // always judged by evidence.
 //
-// INTERIM, pending Paige's decision on the fallback: a Requirement saved
-// before `judgment` existed (the seeded demo's rows, rows saved earlier in a
-// browser) is read from its structure: evidence if it has a measure, a
-// linked Target, a coverage role or a number still to decide; otherwise a
-// person.
+// Legacy rows (Paige, 2026-10-17): a Requirement saved before `judgment`
+// existed, with no measure, linked Target or coverage role, can't have its
+// intended judgment recovered safely from what is stored, so it is 'legacy':
+// its stored result stands exactly as before, nobody judges it or records a
+// result against it until someone says how it is judged, and its evidence
+// can still be chosen as before. Nothing is rewritten. One with a measure
+// is read as evidence-judged, as its structure says.
 export function judgedBy(state, capabilityId, req) {
   if (!req) return null;
   if (isCoverageRule(req) || req.bar === 'needs-decision') return 'evidence';
   if (current(state, capabilityId, 'criteria').some((c) => c.requirement === req.id)) return 'evidence';
   if (req.judgment) return req.judgment;
-  return req.measure ? 'evidence' : 'person';
+  return req.measure ? 'evidence' : 'legacy';
+}
+
+// The judgment a row effectively has without asking anyone: its stored one,
+// or what its structure alone says. null for a legacy row.
+export function effectiveJudgment(row) {
+  if (!row) return null;
+  if (row.judgment) return row.judgment;
+  if (row.measure || row.kind === 'coverage' || row.id === 'min-cases' || row.bar === 'needs-decision') return 'evidence';
+  return null;
 }
 
 // Before the first result (Paige, #143 review): which Requirements and
@@ -138,7 +149,9 @@ export function recordJudgment(state, capabilityId, requirementId, { verdict, ra
   if (!req) throw new Error('That Requirement no longer exists.');
   // Only a Requirement with no metric is judged by a person (P2), decided
   // from its structure, never from its wording.
-  if (judgedBy(state, capabilityId, req) !== 'person') throw new Error(`"${req.text}" is judged by its evidence${isCoverageRule(req) ? ' (it is a coverage rule)' : req.measure ? '' : ' (a Target is linked to it)'}, not by a person.`);
+  const how = judgedBy(state, capabilityId, req);
+  if (how === 'legacy') throw new Error(`"${req.text}" is an older Requirement that doesn't say how it is judged yet. Say how you'll know it is true (in Requirements) before judging it.`);
+  if (how !== 'person') throw new Error(`"${req.text}" is judged by its evidence${isCoverageRule(req) ? ' (it is a coverage rule)' : req.measure || req.judgment === 'evidence' ? '' : ' (a Target is linked to it)'}, not by a person.`);
   if (req.bar === 'needs-decision') throw new Error(`"${req.text}" has no number yet. Set it before judging it.`);
   if (!VERDICTS[verdict]) throw new Error('Choose Met, Not met or Unknown.');
   const why = text(rationale, 400);
@@ -305,7 +318,8 @@ export function linkRowForResults(state, capabilityId, { rowKind, rowId, type, k
     // An evidence-judged Requirement with no evidence chosen yet: recording
     // its first result chooses results people record here, under its own
     // metric. A person-judged one is never converted.
-    if (row.judgment !== 'evidence') throw new Error(`"${label}" is decided by a person: record a judgment. To measure it instead, change how it is judged in Requirements first.`);
+    if (row.judgment === 'person') throw new Error(`"${label}" is decided by a person: record a judgment. To measure it instead, change how it is judged in Requirements first.`);
+    if (row.judgment !== 'evidence') throw new Error(`"${label}" is an older Requirement that doesn't say how it is judged yet. Say how you'll know it is true (in Requirements), or choose its evidence.`);
   }
   const words = rowKind === 'target' ? row.target : row.text;
   const bar = barFromWords(words);
