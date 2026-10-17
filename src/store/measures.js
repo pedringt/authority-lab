@@ -242,7 +242,7 @@ function withResult(r, status, why) {
   return { ...r, result: { status, label: RESULT_WORDS[status], why: why || r.gap || (status === 'met' ? `Met: ${r.current}.` : '') } };
 }
 
-// A Requirement with no metric (#142): an open critical incident blocks the
+// A Requirement with no measure (#142): an open critical incident blocks the
 // incidents Requirement (P6); otherwise the Owner's and Reviewers' latest
 // judgments decide it (P2), and if they disagree it is Conflicting.
 // Stakeholder input never decides it. With no judgment at all, a row keeps
@@ -383,7 +383,7 @@ export function rowCoverage(state, capabilityId, row) {
   if (row.bar === 'needs-decision') return { status: 'needs-decision', mapped: false };
   if (!row.measure) {
     // A person's judgment, or an open critical incident, is the evidence for
-    // a Requirement with no metric (#142).
+    // a person-judged Requirement (#142).
     const st = row.result && row.result.status;
     if (row.incidentsOpen) return { status: 'incident', mapped: false };
     if (st === 'met' || st === 'not-met') return { status: 'judged', mapped: false };

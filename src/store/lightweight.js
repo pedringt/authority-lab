@@ -4,7 +4,7 @@
 // committed-file path:
 // - test-case outcomes a person records after running the case through their
 //   real AI (P1);
-// - human judgments on Requirements that have no metric (P2);
+// - human judgments on person-judged Requirements (P2);
 // - results recorded against a Requirement or Target row, and uploads (P3);
 // - incidents (P6), feedback (P7) and Impact actuals (P8).
 // Every record here is append-only: never edited, never removed.
@@ -86,7 +86,7 @@ export function outcomesNow(state, capabilityId) {
 }
 
 // ---------------------------------------------------------------------------
-// Judgments on Requirements with no metric (P2)
+// Judgments on person-judged Requirements (P2)
 // ---------------------------------------------------------------------------
 
 export const VERDICTS = { met: 'Met', 'not-met': 'Not met', unknown: 'Unknown' };
@@ -147,8 +147,8 @@ export function recordJudgment(state, capabilityId, requirementId, { verdict, ra
   if (!role) throw new Error(`${people(state)[by].name} isn't the owner or named on ${cap.name}, so they can't judge its Requirements.`);
   const req = current(state, capabilityId, 'requirements').find((r) => r.id === requirementId);
   if (!req) throw new Error('That Requirement no longer exists.');
-  // Only a Requirement with no metric is judged by a person (P2), decided
-  // from its structure, never from its wording.
+  // Only a person-judged Requirement takes judgments (P2): how it is judged
+  // is stored on it, never inferred from its wording.
   const how = judgedBy(state, capabilityId, req);
   if (how === 'legacy') throw new Error(`"${req.text}" is an older Requirement that doesn't say how it is judged yet. Say how you'll know it is true (in Requirements) before judging it.`);
   if (how !== 'person') throw new Error(`"${req.text}" is judged by its evidence${isCoverageRule(req) ? ' (it is a coverage rule)' : req.measure || req.judgment === 'evidence' ? '' : ' (a Target is linked to it)'}, not by a person.`);

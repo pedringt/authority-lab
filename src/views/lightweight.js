@@ -1,5 +1,5 @@
 // Screens for the lightweight evidence path (#142): recording what a real AI
-// did on each test case, judging Requirements with no metric, and the log of
+// did on each test case, judging the Requirements a person decides, and the log of
 // incidents, feedback and Impact. Every record is kept as entered.
 
 import * as seed from '../data/seed.js';
@@ -75,7 +75,7 @@ export function realTestsView(state, capabilityId, query, { embedded = false } =
 }
 
 // ---------------------------------------------------------------------------
-// Judge a Requirement with no metric
+// Judge a person-judged Requirement
 // ---------------------------------------------------------------------------
 
 export function judgeView(state, capabilityId, query) {
@@ -86,7 +86,7 @@ export function judgeView(state, capabilityId, query) {
   const by = actor(state, capabilityId);
   const role = judgeRole(state, capabilityId, by);
   const { all } = judgmentsFor(state, capabilityId, id);
-  return html`${head(cap, 'Record a judgment', row.text, 'For a Requirement with no metric, a person judges whether it is met. The Owner\'s and Reviewers\' judgments count; a Stakeholder\'s is recorded as input and never decides it. A judgment is evidence, not the authority decision, and it can\'t be edited later: a new judgment replaces your own earlier one.')}
+  return html`${head(cap, 'Record a judgment', row.text, 'This Requirement is judged by a person: someone records whether it is met. The Owner\'s and Reviewers\' judgments count; a Stakeholder\'s is recorded as input and never decides it. A judgment is evidence, not the authority decision, and it can\'t be edited later: a new judgment replaces your own earlier one.')}
   ${query.get('error') ? notice('fail', 'Couldn\'t record the judgment', query.get('error')) : ''}
   ${row.result ? notice(RESULT_STATUS_TONE[row.result.status] === 'pass' ? 'pass' : RESULT_STATUS_TONE[row.result.status] === 'fail' ? 'fail' : 'neutral', `Now: ${row.result.label}`, row.result.why || '') : ''}
   ${unlinkedBeforeResults(state, capabilityId) ? unlinkedNotice(state, cap) : resultsLockWarning(state, capabilityId) ? notice('watch', 'Before you record a judgment', resultsLockWarning(state, capabilityId)) : ''}

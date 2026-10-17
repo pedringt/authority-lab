@@ -171,10 +171,10 @@ test('Conflicting never counts as met, shows which evidence disagrees, and stale
 });
 
 // ---------------------------------------------------------------------------
-// P2: judgments on Requirements with no metric
+// P2: judgments on person-judged Requirements
 // ---------------------------------------------------------------------------
 
-test('the Owner or a Reviewer judges a Requirement with no metric; a Stakeholder\'s input never decides it', () => {
+test('the Owner or a Reviewer judges a person-judged Requirement; a Stakeholder\'s input never decides it', () => {
   let [s, id] = firm();
   assert.equal(req(s, id, 'templates').result.status, 'no-evidence');
   assert.throws(() => recordJudgment(s, id, 'templates', { verdict: 'met', rationale: 'ok', by: BEN }), /Say why/);
@@ -202,7 +202,7 @@ test('the Owner or a Reviewer judges a Requirement with no metric; a Stakeholder
   assert.equal(performanceResultsSeen(unsure, id), false, 'Unknown is not a result');
 });
 
-test('a Requirement with no metric is judged by a person even when its wording has a number (#143 review)', () => {
+test('a person-judged Requirement stays person-judged even when its wording has a number (#143 review)', () => {
   let [s, id] = firm();
   s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved', judgment: 'person' }], by: ANA, reason: 'Adding the template check.' });
   assert.equal(judgedBy(s, id, current(s, id, 'requirements').find((r) => r.id === 'all-four')), 'person');
@@ -390,7 +390,7 @@ test('the small firm, end to end: outcomes, judgments, an incident and a manual 
   s = recordIncident(s, id, { what: 'One email had last year\'s deadline; caught before sending.', severity: 'critical', by: CARA });
   assert.equal(readiness(s, id).unmet.some((r) => r.id === 'incidents'), true);
   s = setIncidentStatus(s, id, incidentsFor(s, id)[0].id, { status: 'resolved', note: 'Date source fixed; 16 more checked.', by: BEN });
-  // Judgments where there's no metric.
+  // Judgments on the person-judged Requirements.
   s = recordJudgment(s, id, 'incidents', { verdict: 'met', rationale: 'The one critical incident is resolved and retested.', by: BEN });
   s = recordJudgment(s, id, 'templates', { verdict: 'met', rationale: 'All four templates approved on Oct 14.', by: BEN });
   // Every Requirement says why, and all are met.
@@ -447,7 +447,7 @@ test('screens: the evidence page shows each Requirement\'s result and why, with 
   assert.match(text, /Met: 90% across 10 cases/);
   assert.match(page, /evidence\/judge\?row=templates">Record judgment/);
   assert.match(page, /evidence\/record\?row=requirement:accuracy">Record result/);
-  assert.match(text, /No metric: the Owner or a Reviewer judges it, and an open critical incident blocks it/);
+  assert.match(text, /A person judges it: the Owner or a Reviewer records the judgment, and an open critical incident blocks it/);
 });
 
 test('screens: recording against a row offers an upload that says it stays in this browser; judgments and the log render', () => {

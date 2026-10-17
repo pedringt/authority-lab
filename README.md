@@ -68,7 +68,7 @@ Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/â
 
 ## Evidence without integrations
 
-A small team can collect evidence entirely inside Authority Lab (#142): record each test case's real outcome, record or upload results against a Requirement or Target, judge Requirements that have no number, and log incidents, feedback and Impact. Compatible results add up; disagreement shows as Conflicting; every Requirement says why it is Met, Not met, Unknown, Conflicting or short of evidence. Only the Northstar demo simulates test results. See `docs/HOW_IT_WORKS.md`, "Collecting evidence without integrations".
+A small team can collect evidence entirely inside Authority Lab (#142): record each test case's real outcome, record or upload results against a Requirement or Target, record a judgment on each Requirement a person decides, and log incidents, feedback and Impact. Compatible results add up; disagreement shows as Conflicting; every Requirement says why it is Met, Not met, Unknown, Conflicting or short of evidence. Only the Northstar demo simulates test results. See `docs/HOW_IT_WORKS.md`, "Collecting evidence without integrations".
 
 ## Evidence from other systems
 

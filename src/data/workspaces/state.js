@@ -87,7 +87,7 @@ export const stateWorkspace = {
       ],
     },
     // The decision bar for formally approving Draft, set before a fresh result
-    // set is evaluated. Rows a source can't judge stay with a person.
+    // set is evaluated. Every row is measured by the connected source.
     targets: [
       { id: 'quality', name: 'Interpretation quality', target: '≥ 90% of scenarios interpreted correctly', note: 'Expected action and checks met, scored by the suite.', measure: m('interpretation-quality', 'rate', { op: '>=', value: 90 }) },
       { id: 'severe-errors', name: 'High-severity failures', target: 'At most 0 high-severity scenarios failed', note: 'A high-severity scenario that errors counts as failed.', measure: m('high-severity-failures', 'count', { op: '<=', value: 0 }) },
