@@ -18,6 +18,7 @@ import { current } from './selectors.js';
 import { importedStanding, measurementSample } from './external.js';
 import { sourceOfItem, findSource, testMeasurements, TESTS_SOURCE, FRESH_DAYS } from './sources.js';
 import { isCoverageRule } from './evidence.js';
+import { judgedBy } from './lightweight.js';
 import { feedbackMeasurements, FEEDBACK_SOURCE, judgmentsFor, openCriticalIncidents, isIncidentRequirement, VERDICTS } from './lightweight.js';
 
 // The default minimum production sample before a production result is judged
@@ -254,7 +255,8 @@ function personJudged(state, capabilityId, row) {
       return withResult({ ...row, met: false, current: 'Open critical incident', gap: why, incidentsOpen: open.map((x) => x.id) }, 'not-met', why);
     }
   }
-  const { counting, input } = judgmentsFor(state, capabilityId, row.id);
+  // Judgments decide only a Requirement a person judges (by its structure).
+  const { counting, input } = judgedBy(state, capabilityId, row) === 'person' ? judgmentsFor(state, capabilityId, row.id) : { counting: [], input: [] };
   const note = input.length ? ` Stakeholder input: ${input.map((j) => `${j.byAt.name} says ${VERDICTS[j.verdict].toLowerCase()}`).join('; ')} (input doesn't decide it).` : '';
   const decisive = counting.filter((j) => j.verdict !== 'unknown');
   const said = (j) => `${j.byAt.name} (${j.role}) judged it ${VERDICTS[j.verdict].toLowerCase()} on ${j.date}: ${j.rationale}`;
@@ -272,7 +274,8 @@ function personJudged(state, capabilityId, row) {
     return withResult({ ...row, met: false, current: 'Judged unknown', gap: why, judgments: counting.map((j) => j.id) }, 'unknown', why);
   }
   if (row.met) return withResult(row, 'met', `Met: ${row.current}.${note}`);
-  const how = /\d/.test(row.text) ? (isCoverageRule(row) ? 'choose which results it counts' : 'record a result, upload a file, or choose its evidence') : 'the Owner or a Reviewer can record a judgment';
+  const by = judgedBy(state, capabilityId, row);
+  const how = by === 'person' ? 'the Owner or a Reviewer can record a judgment' : isCoverageRule(row) ? 'choose which results it counts' : 'record a result, upload a file, or choose its evidence';
   const why = row.gap || `No evidence yet: ${how}.${note}`;
   return withResult({ ...row, gap: why }, 'no-evidence', why);
 }

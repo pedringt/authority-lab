@@ -5,15 +5,15 @@
 
 import { html, notice, lede, badge, fmtDate } from '../ui.js';
 import {
-  getCapability, actor, people, criteriaLocked, evidenceSources, evidenceCoverage, coverageText, COVERAGE_WORDS, MEASURE_STAT_WORDS, barFromWords, SOURCE_KINDS, TESTS_SOURCE, MANUAL_SOURCE, findSource, isCoverageRule, isIncidentRequirement,
+  getCapability, actor, people, criteriaLocked, evidenceSources, evidenceCoverage, coverageText, COVERAGE_WORDS, MEASURE_STAT_WORDS, barFromWords, SOURCE_KINDS, TESTS_SOURCE, MANUAL_SOURCE, findSource, isCoverageRule, isIncidentRequirement, judgedBy,
 } from '../store/index.js';
-import { RESULT_STATUS_TONE } from './lightweight.js';
+import { RESULT_STATUS_TONE, unlinkedNotice } from './lightweight.js';
 
 const TONE = { covered: 'pass', stale: 'watch', insufficient: 'insufficient', 'no-data': 'neutral', 'no-source': 'neutral', 'needs-decision': 'decision', judged: 'pass', unknown: 'insufficient', conflicting: 'watch', incident: 'fail' };
 const KIND_WORDS = { eval: 'test cases only', production: 'real use only' };
 
 function mappingText(state, m, row = null) {
-  if (!m) return html`<span class="muted">${row && row.kind !== 'target' && !/\d/.test(row.text || '') ? 'Judged by a person' : 'Not linked yet'}</span>`;
+  if (!m) return html`<span class="muted">${row && row.kind !== 'target' && judgedBy(state, row.capabilityId, row) === 'person' ? 'Judged by a person' : 'Not linked yet'}</span>`;
   const src = m.source ? findSource(state, m.source) : null;
   return html`<strong>${src ? src.name : 'Any source'}</strong> · ${m.metric}${m.segment ? ` · ${m.segment}` : ''}<div class="muted small">${MEASURE_STAT_WORDS[m.stat] || m.stat}${m.minSample ? `, at least ${m.minSample} cases` : ''}${m.kind ? `, ${KIND_WORDS[m.kind]}` : ''}</div>`;
 }
@@ -41,7 +41,7 @@ function suggestion(state, cap, c) {
   if (c.status === 'conflicting') return html`The evidence disagrees: ${c.row.result ? c.row.result.why : ''} Look into it, or collect more evidence. Conflicting is never a pass.`;
   if (c.status === 'unknown') return html`Judged Unknown. Record a judgment once you know. <a href="${judge}">Record judgment</a>`;
   if (c.status === 'needs-decision') return html`Decide its number first. <a href="#/capabilities/${cap.id}/criteria/edit">Requirements and Targets</a>`;
-  if (c.status === 'no-source' && c.kind === 'requirement' && !/\d/.test(c.row.text)) return html`No metric: the Owner or a Reviewer judges it${isIncidentRequirement(c.row) ? ', and an open critical incident blocks it' : ''}. <a href="${judge}">Record judgment</a>${isIncidentRequirement(c.row) ? html` · <a href="#/capabilities/${cap.id}/evidence/log#incidents">Incidents</a>` : ''}`;
+  if (c.status === 'no-source' && c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person') return html`No metric: the Owner or a Reviewer judges it${barFromWords(c.row.text) && !isIncidentRequirement(c.row) ? ', or record a result for it to measure it instead' : ''}${isIncidentRequirement(c.row) ? ', and an open critical incident blocks it' : ''}. <a href="${judge}">Record judgment</a>${isIncidentRequirement(c.row) ? html` · <a href="#/capabilities/${cap.id}/evidence/log#incidents">Incidents</a>` : ''}`;
   if (c.status === 'no-source' && !(c.kind === 'requirement' && isCoverageRule(c.row))) return html`Record a result for it by hand or upload a file: that links it to manual results. Or choose another source. <a href="${record}">Record result</a> · <a href="${configure}">Choose evidence</a>`;
   const src = c.mapped && c.row.measure.source ? findSource(state, c.row.measure.source) : null;
   if (c.status === 'no-source') return html`Choose which evidence judges it: a connected source, Authority Lab tests, or a manual review. <a href="${configure}">Choose evidence</a>`;
@@ -91,11 +91,14 @@ function editForm(state, cap, c, locked) {
 // What a person can do for a row (#142): record a result or upload (rows
 // with a number, judged by manual results or not linked yet), judge it (a
 // Requirement with no number), or choose its evidence.
-function rowActions(cap, c) {
-  const noNumber = c.kind === 'requirement' && !/\d/.test(c.row.text) && !c.row.measure;
+function rowActions(state, cap, c) {
+  // Judged by a person or by evidence, from the row's structure (#143 review).
+  const noNumber = c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person';
   const coverage = c.kind === 'requirement' && isCoverageRule(c.row);
   const manual = !c.row.measure || c.row.measure.source === MANUAL_SOURCE || !c.row.measure.source;
-  const record = !noNumber && !coverage && c.row.bar !== 'needs-decision' && manual;
+  // A result can be recorded when the row states a bar to check (or is already
+  // measured by manual results); that is what linking it needs.
+  const record = !coverage && c.row.bar !== 'needs-decision' && manual && (Boolean(c.row.measure) || Boolean(barFromWords(c.kind === 'target' ? c.row.target : c.row.text))) && !(c.kind === 'requirement' && isIncidentRequirement(c.row));
   return html`${record ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/record?row=${c.kind}:${c.id}">Record result</a> ` : ''}${noNumber ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/judge?row=${c.id}">Record judgment</a> ` : ''}<a class="btn btn-sm" href="#/capabilities/${cap.id}/evidence/configure?row=${c.kind}:${c.id}">${c.mapped ? 'Change evidence' : 'Choose evidence'}</a>`;
 }
 
@@ -117,7 +120,7 @@ export function configureEvidenceView(state, capabilityId, query) {
   const editing = [...cov.requirements, ...cov.targets].find((c) => c.kind === editKind && c.id === editId);
   const table = (title, list) => (list.length ? html`<section class="section"><h2>${title}</h2><div class="card table-card"><table class="table">
     <thead><tr><th>${title === 'Requirements' ? 'Requirement' : 'Target'}</th><th>Evidence</th><th>Coverage</th><th>Result</th><th></th></tr></thead>
-    <tbody>${list.map((c) => html`<tr class="${editing === c ? 'is-editing' : ''}"><td><strong>${c.label}</strong>${c.kind === 'target' ? html`<div class="muted small">${c.row.target}</div>` : ''}</td><td>${mappingText(state, c.row.measure, { ...c.row, kind: c.kind })}</td><td>${coverageCell(c)}</td><td>${resultCell(c)}</td><td>${rowActions(cap, c)}</td></tr>`)}</tbody>
+    <tbody>${list.map((c) => html`<tr class="${editing === c ? 'is-editing' : ''}"><td><strong>${c.label}</strong>${c.kind === 'target' ? html`<div class="muted small">${c.row.target}</div>` : ''}</td><td>${mappingText(state, c.row.measure, { ...c.row, kind: c.kind, capabilityId: cap.id })}</td><td>${coverageCell(c)}</td><td>${resultCell(c)}</td><td>${rowActions(state, cap, c)}</td></tr>`)}</tbody>
   </table></div></section>` : '');
   const gaps = cov.requirements.filter((c) => !['covered', 'judged', 'incident'].includes(c.status));
   return html`<div class="page-head"><div>
@@ -126,6 +129,7 @@ export function configureEvidenceView(state, capabilityId, query) {
       ${lede('Choose which evidence judges each Requirement and Target, see what is covered, and see each result and why.', 'Your implementation team connects systems; each one shows up under Settings → Evidence sources once it sends results. Here you only decide what those results mean for this capability: which source and metric judge a row, and how to read it. The bar itself comes from the row\'s wording, so what people read and what software checks always agree. Authority Lab tests and a manual review are always available as sources. Evidence never changes authority on its own: a person decides.')}
     </div></div>
     ${error ? notice('fail', 'Couldn\'t save that', error) : ''}
+    ${unlinkedNotice(state, cap, { here: true })}
     ${locked ? notice('watch', 'Results already exist', 'Changing which evidence judges a row is a change to the bar, so it is proposed and needs approval, like any other change to the targets.') : ''}
     <div class="coverage-summary card"><p class="decide-big">${coverageText(cov)}</p>
       <p class="muted small">${['covered', 'judged', 'stale', 'insufficient', 'conflicting', 'unknown', 'needs-decision', 'no-data', 'no-source'].map((st) => [st, cov.requirements.filter((c) => c.status === st).length]).filter(([, n]) => n).map(([st, n]) => `${n} ${COVERAGE_WORDS[st].toLowerCase()}`).join(' · ')}</p></div>

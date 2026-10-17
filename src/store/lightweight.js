@@ -12,7 +12,7 @@
 // Nothing here calls a model or runs an eval.
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
-import { current } from './selectors.js';
+import { current, performanceResultsSeen } from './selectors.js';
 import { people, snapshotPerson, requireActive } from './people.js';
 import { peopleRoleOf } from './proposals.js';
 import { manualEntryEligibility, recordManualEvidence, MANUAL_SOURCE } from './sources.js';
@@ -91,6 +91,31 @@ export function outcomesNow(state, capabilityId) {
 
 export const VERDICTS = { met: 'Met', 'not-met': 'Not met', unknown: 'Unknown' };
 
+// How a Requirement is judged, from its configured structure only (Paige,
+// 2026-10-17, #143 review): by evidence when it has a measure, a linked
+// Target, is a coverage rule, or still waits for its number; otherwise by a
+// person. Never inferred from its wording: "All 4 templates have been
+// approved" is judged by a person.
+export function judgedBy(state, capabilityId, req) {
+  if (!req) return null;
+  if (req.measure || req.bar === 'needs-decision' || isCoverageRule(req)) return 'evidence';
+  if (current(state, capabilityId, 'criteria').some((c) => c.requirement === req.id)) return 'evidence';
+  return 'person';
+}
+
+// Before the first result (Paige, #143 review): which Requirements and
+// Targets have no evidence linked yet. Once results exist, linking one needs
+// approval, so a one-person team is told first. A row a person will judge
+// needs no link; the list doesn't guess which those are.
+export function unlinkedBeforeResults(state, capabilityId) {
+  if (performanceResultsSeen(state, capabilityId)) return null;
+  const rows = [
+    ...current(state, capabilityId, 'requirements').filter((r) => !r.measure && r.bar !== 'needs-decision').map((r) => r.text),
+    ...current(state, capabilityId, 'criteria').filter((c) => !c.measure && c.bar !== 'needs-decision').map((c) => c.name),
+  ];
+  return rows.length ? rows : null;
+}
+
 export function recordJudgment(state, capabilityId, requirementId, { verdict, rationale, reference, by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
@@ -99,9 +124,9 @@ export function recordJudgment(state, capabilityId, requirementId, { verdict, ra
   if (!role) throw new Error(`${people(state)[by].name} isn't the owner or named on ${cap.name}, so they can't judge its Requirements.`);
   const req = current(state, capabilityId, 'requirements').find((r) => r.id === requirementId);
   if (!req) throw new Error('That Requirement no longer exists.');
-  // Only a Requirement with no number is judged by a person (P2); one that
-  // names a number is measured.
-  if (req.measure || /\d/.test(req.text)) throw new Error(`"${req.text}" is measured, not judged by a person. Record a result for it instead.`);
+  // Only a Requirement with no metric is judged by a person (P2), decided
+  // from its structure, never from its wording.
+  if (judgedBy(state, capabilityId, req) !== 'person') throw new Error(`"${req.text}" is judged by its evidence${isCoverageRule(req) ? ' (it is a coverage rule)' : req.measure ? '' : ' (a Target is linked to it)'}, not by a person.`);
   if (req.bar === 'needs-decision') throw new Error(`"${req.text}" has no number yet. Set it before judging it.`);
   if (!VERDICTS[verdict]) throw new Error('Choose Met, Not met or Unknown.');
   const why = text(rationale, 400);

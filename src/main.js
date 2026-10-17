@@ -192,7 +192,7 @@ function render() {
   setToday(state.today);
   demoDate.textContent = fmtDate(state.today);
   brandWs.textContent = workspaceOf(state).name;
-  footData.textContent = state.clientWorkspace ? 'Real configuration. Evidence comes only from the connected source; nothing here calls a model.' : state.startedEmpty ? 'AI responses here are simulated. Nothing calls a real model.' : 'All data is fictional demo data.';
+  footData.textContent = state.clientWorkspace ? 'Real configuration. Evidence comes only from the connected source; nothing here calls a model.' : state.startedEmpty ? 'Your own workspace: evidence is what people record here or upload. Nothing here runs or calls a model.' : 'All data is fictional demo data.';
   renderWorkspaceMenu();
   const { parts, query } = parseRoute();
   const [root, sub, action] = parts;

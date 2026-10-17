@@ -8,7 +8,7 @@ import {
   initialState, startEmpty, setUpWorkspace, addPerson, addCapability, getCapability, capData, current, findWorkspace, advanceToday,
   saveCriteria, saveScenarios, saveStakeholders, startTestRun, criteriaLocked, performanceResultsSeen, readiness, requirementsNow, evidenceCoverage, coverageText, evidenceSources, mapEvidence, proposeAuthority,
   isDemoWorkspace, recordOutcome, outcomesNow, outcomeMeasurements, recordJudgment, judgmentsFor, recordIncident, setIncidentStatus, incidentsFor, incidentStatus,
-  recordFeedback, recordImpactActual, impactActuals, recordResult, rowMetric, uploadEvidence, parseCsv, measurementsFromRows, evidenceImports, MANUAL_SOURCE, FEEDBACK_SOURCE,
+  recordFeedback, recordImpactActual, impactActuals, recordResult, judgedBy, unlinkedBeforeResults, rowMetric, uploadEvidence, parseCsv, measurementsFromRows, evidenceImports, MANUAL_SOURCE, FEEDBACK_SOURCE,
 } from '../src/store/index.js';
 
 // A small accounting firm: Ana runs it alone at first, then names Ben as a
@@ -151,7 +151,10 @@ test('the Owner or a Reviewer judges a Requirement with no metric; a Stakeholder
   let [s, id] = firm();
   assert.equal(req(s, id, 'templates').result.status, 'no-evidence');
   assert.throws(() => recordJudgment(s, id, 'templates', { verdict: 'met', rationale: 'ok', by: BEN }), /Say why/);
-  assert.throws(() => recordJudgment(s, id, 'accuracy', { verdict: 'met', rationale: 'Looks accurate to me.', by: BEN }), /is measured, not judged by a person/);
+  // Measured by structure: a linked measure, a linked Target, or a coverage rule.
+  const linked = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
+  assert.throws(() => recordJudgment(linked, id, 'accuracy', { verdict: 'met', rationale: 'Looks accurate to me.', by: BEN }), /is judged by its evidence, not by a person/);
+  assert.throws(() => recordJudgment(s, id, 'min-cases', { verdict: 'met', rationale: 'We reviewed plenty.', by: BEN }), /coverage rule/);
   const input = recordJudgment(s, id, 'templates', { verdict: 'met', rationale: 'Clients like the new wording.', by: CARA });
   assert.equal(req(input, id, 'templates').result.status, 'no-evidence', 'Stakeholder input alone satisfies nothing');
   assert.match(req(input, id, 'templates').result.why, /Stakeholder input: Cara Lim says met \(input doesn't decide it\)/);
@@ -170,6 +173,26 @@ test('the Owner or a Reviewer judges a Requirement with no metric; a Stakeholder
   assert.equal(req(unsure, id, 'templates').result.status, 'unknown');
   assert.equal(req(unsure, id, 'templates').met, false);
   assert.equal(performanceResultsSeen(unsure, id), false, 'Unknown is not a result');
+});
+
+test('a Requirement with no metric is judged by a person even when its wording has a number (#143 review)', () => {
+  let [s, id] = firm();
+  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved' }], by: ANA, reason: 'Adding the template check.' });
+  assert.equal(judgedBy(s, id, current(s, id, 'requirements').find((r) => r.id === 'all-four')), 'person');
+  s = recordJudgment(s, id, 'all-four', { verdict: 'met', rationale: 'Ben approved all four on Oct 14.', by: BEN });
+  assert.equal(req(s, id, 'all-four').result.status, 'met');
+  // A linked Target makes a Requirement evidence-judged, whatever its wording.
+  let [t] = firm();
+  t = saveCriteria(t, id, { criteria: [{ name: 'Template approval', target: 'Needs decision', requirement: 'templates' }], requirements: current(t, id, 'requirements'), by: ANA, reason: 'Measure template approval.' });
+  assert.equal(judgedBy(t, id, current(t, id, 'requirements').find((r) => r.id === 'templates')), 'evidence');
+  assert.throws(() => recordJudgment(t, id, 'templates', { verdict: 'met', rationale: 'All approved on Oct 14.', by: BEN }), /a Target is linked to it/);
+});
+
+test('before the first result, the Requirements and Targets with no evidence linked are listed; after, nothing is', () => {
+  let [s, id] = firm();
+  assert.deepEqual(unlinkedBeforeResults(s, id), ['Minimum 20 cases', 'Overall accuracy ≥ 90%', 'No unresolved critical incidents', 'The tax lead has approved the email templates']);
+  s = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
+  assert.equal(unlinkedBeforeResults(s, id), null, 'results exist: the existing lock rule applies, unchanged');
 });
 
 // ---------------------------------------------------------------------------
@@ -198,7 +221,8 @@ test('an open critical incident makes "No unresolved critical incidents" Not met
   t = recordIncident(t, id, { what: 'Wrong deadline sent to a client by email.', severity: 'critical', by: ANA });
   t = setIncidentStatus(t, id, incidentsFor(t, id)[0].id, { status: 'resolved', note: 'Fixed and checked.', by: ANA });
   assert.equal(req(t, id, 'incidents').result.status, 'no-evidence');
-  assert.equal(performanceResultsSeen(t, id), true, 'an incident is a result');
+  assert.equal(performanceResultsSeen(t, id), false, 'an incident is evidence and a lifecycle event, not a performance result: it doesn\'t lock the bar (#143 review)');
+  assert.equal(criteriaLocked(t, id), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -361,4 +385,15 @@ test('screens: recording against a row offers an upload that says it stays in th
   const log = strip(render(s, () => logView(s, id, q())));
   for (const h of ['Incidents', 'Feedback', 'Impact']) assert.match(log, new RegExp(h));
   assert.match(log, /Impact is informational and never changes readiness/);
+});
+
+test('screens: before the first outcome, the test-case page names the rows with no evidence linked and points to linking them first', () => {
+  let [s, id] = firm();
+  s = saveScenarios(s, id, { scenarios: SCENARIOS, by: ANA });
+  const page = strip(render(s, () => testsView(s, id, q())));
+  assert.match(page, /Some Requirements are not linked to evidence yet/);
+  assert.match(page, /Once you record results, changing those links may require approval\. Not linked yet: Minimum 20 cases; Overall accuracy ≥ 90%/);
+  assert.match(page, /Link them first/);
+  const after = recordOutcome(s, id, capData(s, id).scenarios[0].id, { result: 'pass', happened: 'Right date, right tone.', by: BEN });
+  assert.doesNotMatch(strip(render(after, () => testsView(after, id, q()))), /not linked to evidence yet/);
 });

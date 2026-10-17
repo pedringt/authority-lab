@@ -5,12 +5,21 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, lede, fmtDate, SWITCH_PERSON } from '../ui.js';
 import {
-  getCapability, capData, current, actor, people, manualEntryEligibility, resultsLockWarning, judgeRole,
+  getCapability, capData, current, actor, people, manualEntryEligibility, resultsLockWarning, judgeRole, unlinkedBeforeResults,
   OUTCOME_RESULTS, OUTCOME_SEVERITIES, outcomesNow, outcomeMeasurements, VERDICTS, judgmentsFor, requirementsNow, RESULT_WORDS,
   INCIDENT_SEVERITIES, INCIDENT_STATUSES, incidentsFor, incidentStatus, FEEDBACK_SENTIMENTS, feedbackFor, IMPACT_BASES, impactActuals,
 } from '../store/index.js';
 
 const name = (state, k) => (people(state)[k] || { name: k }).name;
+
+// Before the first result (#143 review): name the rows with no evidence
+// linked, because linking one afterwards needs approval. It warns; it never
+// changes the approval rule.
+export function unlinkedNotice(state, cap, { here = false } = {}) {
+  const rows = unlinkedBeforeResults(state, cap.id);
+  if (!rows) return '';
+  return notice('watch', 'Some Requirements are not linked to evidence yet', html`Once you record results, changing those links may require approval. Not linked yet: ${rows.join('; ')}. A Requirement a person will judge needs no link. ${here ? 'Link the others below first: choose each one\'s evidence, or record its first result from its row.' : html`<a href="#/capabilities/${cap.id}/evidence/configure">Link them first</a>.`}`);
+}
 const RESULT_TONE = { pass: 'pass', fail: 'fail', unable: 'insufficient' };
 export const RESULT_STATUS_TONE = { met: 'pass', 'not-met': 'fail', unknown: 'insufficient', conflicting: 'watch', 'not-enough': 'insufficient', 'no-evidence': 'neutral', 'needs-decision': 'decision' };
 
@@ -59,7 +68,7 @@ export function realTestsView(state, capabilityId, query, { embedded = false } =
   };
   return html`${embedded ? '' : head(cap, `Test cases for ${cap.name}`, 'Run each case through your real AI, then record what happened.', 'Authority Lab doesn\'t run your AI or call any model. A case run again gets a new outcome; earlier outcomes stay on record. "Unable to judge" is neither a pass nor a fail.')}
   ${query.get('error') ? notice('fail', 'Couldn\'t record that', query.get('error')) : ''}
-  ${warn && rows.length ? notice('watch', 'Before you record outcomes', warn) : ''}
+  ${warn && rows.length ? (unlinkedBeforeResults(state, capabilityId) ? unlinkedNotice(state, cap) : notice('watch', 'Before you record outcomes', warn)) : ''}
   ${ok.ok ? '' : notice('watch', 'You can\'t record outcomes for this capability', `${ok.reason} ${SWITCH_PERSON}`)}
   <p>${summary} <a href="#/capabilities/${cap.id}/scenarios/edit">Edit test cases</a></p>
   ${rows.length ? html`<div class="scenario-list">${rows.map(item)}</div>` : html`<p class="empty">No test cases yet. <a href="#/capabilities/${cap.id}/scenarios/edit">Add some</a>.</p>`}`;
@@ -80,7 +89,7 @@ export function judgeView(state, capabilityId, query) {
   return html`${head(cap, 'Record a judgment', row.text, 'For a Requirement with no metric, a person judges whether it is met. The Owner\'s and Reviewers\' judgments count; a Stakeholder\'s is recorded as input and never decides it. A judgment is evidence, not the authority decision, and it can\'t be edited later: a new judgment replaces your own earlier one.')}
   ${query.get('error') ? notice('fail', 'Couldn\'t record the judgment', query.get('error')) : ''}
   ${row.result ? notice(RESULT_STATUS_TONE[row.result.status] === 'pass' ? 'pass' : RESULT_STATUS_TONE[row.result.status] === 'fail' ? 'fail' : 'neutral', `Now: ${row.result.label}`, row.result.why || '') : ''}
-  ${resultsLockWarning(state, capabilityId) ? notice('watch', 'Before you record a judgment', resultsLockWarning(state, capabilityId)) : ''}
+  ${unlinkedBeforeResults(state, capabilityId) ? unlinkedNotice(state, cap) : resultsLockWarning(state, capabilityId) ? notice('watch', 'Before you record a judgment', resultsLockWarning(state, capabilityId)) : ''}
   ${!role ? notice('watch', 'You can\'t judge this', `${name(state, by)} isn't the owner or named on ${cap.name}. ${SWITCH_PERSON}`) : role === 'stakeholder' ? notice('neutral', 'Recorded as input', `${name(state, by)} is a Stakeholder: this is recorded as input and doesn't decide the Requirement.`) : ''}
   <form class="card form-stack" data-form="record-judgment" data-capability="${cap.id}" data-row="${id}">
     <fieldset class="choice-row"><legend>Judgment</legend>${Object.entries(VERDICTS).map(([k, v]) => html`<label><input type="radio" name="verdict" value="${k}" ${k === 'met' ? raw('checked') : ''}> ${v}</label>`)}</fieldset>
