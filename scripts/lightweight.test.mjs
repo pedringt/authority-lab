@@ -34,7 +34,13 @@ function firm() {
     by: ANA,
     reason: 'Our own bar for a first pilot, written by us.',
   });
+  // Choose evidence (before any result): accuracy is measured by results
+  // people record here. The other Requirements are left as they are.
+  s = linkManual(s, id, 'accuracy', 'rate');
   return [s, id];
+}
+function linkManual(s, id, rowId, stat) {
+  return mapEvidence(s, id, { rowKind: 'requirement', rowId, measure: { source: MANUAL_SOURCE, metric: rowMetric('requirement', rowId), stat }, by: ANA });
 }
 const req = (s, id, rid) => requirementsNow(s, id).find((r) => r.id === rid);
 const SCENARIOS = [
@@ -92,19 +98,37 @@ test('in the demo, simulation still works and is the only kind of run there', ()
 // A: recording a result from the row
 // ---------------------------------------------------------------------------
 
-test('a result recorded from a Requirement links that row to manual results first, so no metric id is typed', () => {
+test('Record result: a measured Requirement uses its own metric; a person-judged one is never turned into a measured one; a Target links itself (#143 review)', () => {
   let [s, id] = firm();
   s = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
-  const r = current(s, id, 'requirements').find((x) => x.id === 'accuracy');
-  assert.deepEqual(r.measure, { source: MANUAL_SOURCE, metric: rowMetric('requirement', 'accuracy'), stat: 'rate', op: '>=', value: 90 });
   assert.equal(req(s, id, 'accuracy').result.status, 'met');
+  assert.equal(capData(s, id).evidence[0].measure.metric, rowMetric('requirement', 'accuracy'), 'no metric id typed');
   assert.equal(criteriaLocked(s, id), true, 'the first result locks the bar, as before');
-  // After results, linking another row needs approval.
-  const other = saveCriteria(firm()[0], id, { criteria: [], requirements: [...current(s, id, 'requirements').map(({ measure, ...x }) => x), { id: 'speed', text: 'At least 50% faster' }], by: ANA, reason: 'Adding speed.' });
-  const locked = recordResult(other, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
-  assert.throws(() => recordResult(locked, id, { rowKind: 'requirement', rowId: 'speed', type: 'value', value: 55, kind: 'eval', by: BEN }), /linking evidence to "At least 50% faster" needs approval/);
-  assert.throws(() => recordResult(s, id, { rowKind: 'requirement', rowId: 'templates', type: 'rate', passed: 1, total: 1, kind: 'eval', by: BEN }), /doesn't say a number to check\. Judge it instead/);
-  assert.throws(() => recordResult(s, id, { rowKind: 'requirement', rowId: 'min-cases', type: 'rate', passed: 1, total: 1, kind: 'eval', by: BEN }), /coverage rule/);
+  const [t] = firm();
+  assert.throws(() => recordResult(t, id, { rowKind: 'requirement', rowId: 'templates', type: 'rate', passed: 4, total: 4, kind: 'eval', by: BEN }), /judged by a person: record a judgment\. To measure it instead, choose its evidence first/);
+  assert.equal(current(t, id, 'requirements').find((r) => r.id === 'templates').measure, undefined, 'nothing was linked');
+  assert.throws(() => recordResult(t, id, { rowKind: 'requirement', rowId: 'min-cases', type: 'rate', passed: 1, total: 1, kind: 'eval', by: BEN }), /coverage rule/);
+  // A Target is measurable by definition: its first result links it, before results.
+  let u = saveCriteria(t, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: current(t, id, 'requirements'), by: ANA, reason: 'A quality bar for the templates.' });
+  u = recordResult(u, id, { rowKind: 'target', rowId: 'quality', type: 'rate', passed: 19, total: 20, kind: 'eval', by: BEN });
+  assert.deepEqual(current(u, id, 'criteria')[0].measure, { source: MANUAL_SOURCE, metric: rowMetric('target', 'quality'), stat: 'rate', op: '>=', value: 90 });
+  assert.throws(() => recordResult(u, id, { rowKind: 'requirement', rowId: 'templates', type: 'rate', passed: 1, total: 1, kind: 'eval', by: BEN }), /judged by its Target/);
+  // After results, linking another Target needs approval, as before.
+  const more = saveCriteria(firm()[0], id, { criteria: [{ id: 'speed', name: 'Speed', target: 'At least 50% faster' }], requirements: current(firm()[0], id, 'requirements'), by: ANA, reason: 'Adding speed.' });
+  const locked = recordResult(more, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
+  assert.throws(() => recordResult(locked, id, { rowKind: 'target', rowId: 'speed', type: 'value', value: 55, kind: 'eval', by: BEN }), /linking evidence to "Speed" needs approval/);
+});
+
+test('a Requirement judged through its linked Target takes the Target\'s result (#143 review)', () => {
+  let [s, id] = firm();
+  s = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: current(s, id, 'requirements'), by: ANA, reason: 'A quality bar for the templates.' });
+  assert.equal(judgedBy(s, id, current(s, id, 'requirements').find((r) => r.id === 'templates')), 'evidence');
+  assert.equal(req(s, id, 'templates').result.status, 'no-evidence');
+  const met = recordResult(s, id, { rowKind: 'target', rowId: 'quality', type: 'rate', passed: 19, total: 20, kind: 'eval', by: BEN });
+  assert.equal(req(met, id, 'templates').result.status, 'met');
+  assert.match(req(met, id, 'templates').result.why, /Judged by its Target: Quality: Met \(95% across 20 cases\)/);
+  const failed = recordResult(s, id, { rowKind: 'target', rowId: 'quality', type: 'rate', passed: 15, total: 20, kind: 'eval', by: BEN });
+  assert.equal(req(failed, id, 'templates').result.status, 'not-met');
 });
 
 // ---------------------------------------------------------------------------
@@ -129,6 +153,7 @@ test('Conflicting never counts as met, shows which evidence disagrees, and stale
   let [s, id] = firm();
   // Single values don't combine: each judges on its own.
   s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'speed', text: 'At least 50% faster' }], by: ANA, reason: 'Adding speed.' });
+  s = linkManual(s, id, 'speed', 'value');
   s = recordResult(s, id, { rowKind: 'requirement', rowId: 'speed', type: 'value', value: 60, kind: 'eval', by: BEN });
   const later = recordResult(s, id, { rowKind: 'requirement', rowId: 'speed', type: 'value', value: 30, kind: 'eval', by: ANA });
   const r = req(later, id, 'speed');
@@ -190,7 +215,15 @@ test('a Requirement with no metric is judged by a person even when its wording h
 
 test('before the first result, the Requirements and Targets with no evidence linked are listed; after, nothing is', () => {
   let [s, id] = firm();
-  assert.deepEqual(unlinkedBeforeResults(s, id), ['Minimum 20 cases', 'Overall accuracy ≥ 90%', 'No unresolved critical incidents', 'The tax lead has approved the email templates']);
+  // Only evidence-judged rows that still need evidence chosen: the coverage
+  // rule. Accuracy is linked; incidents and templates are judged by a person.
+  assert.deepEqual(unlinkedBeforeResults(s, id), ['Minimum 20 cases']);
+  // "All 4 templates have been approved" is person-judged: never listed.
+  const four = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved' }], by: ANA, reason: 'Adding the template check.' });
+  assert.deepEqual(unlinkedBeforeResults(four, id), ['Minimum 20 cases']);
+  // An evidence-judged row with nothing linked is listed: a Target with a bar.
+  const withTarget = saveCriteria(s, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: current(s, id, 'requirements'), by: ANA, reason: 'A quality bar.' });
+  assert.deepEqual(unlinkedBeforeResults(withTarget, id), ['Minimum 20 cases', 'Quality']);
   s = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 9, total: 10, kind: 'eval', by: BEN });
   assert.equal(unlinkedBeforeResults(s, id), null, 'results exist: the existing lock rule applies, unchanged');
 });
@@ -392,8 +425,27 @@ test('screens: before the first outcome, the test-case page names the rows with 
   s = saveScenarios(s, id, { scenarios: SCENARIOS, by: ANA });
   const page = strip(render(s, () => testsView(s, id, q())));
   assert.match(page, /Some Requirements are not linked to evidence yet/);
-  assert.match(page, /Once you record results, changing those links may require approval\. Not linked yet: Minimum 20 cases; Overall accuracy ≥ 90%/);
+  assert.match(page, /Once you record results, changing those links may require approval\. Not linked yet: Minimum 20 cases\./);
+  assert.doesNotMatch(page, /Not linked yet:[^.]*(templates|incidents)/, 'person-judged Requirements need no link');
   assert.match(page, /Link them first/);
   const after = recordOutcome(s, id, capData(s, id).scenarios[0].id, { result: 'pass', happened: 'Right date, right tone.', by: BEN });
   assert.doesNotMatch(strip(render(after, () => testsView(after, id, q()))), /not linked to evidence yet/);
+});
+
+test('screens: "All 4 templates have been approved" offers Record judgment, never Record result; Choose evidence starts on results people record here (#143 review)', () => {
+  let [s, id] = firm();
+  s = saveCriteria(s, id, { criteria: [], requirements: [...current(s, id, 'requirements'), { id: 'all-four', text: 'All 4 templates have been approved' }], by: ANA, reason: 'Adding the template check.' });
+  const page = render(s, () => configureEvidenceView(s, id, q()));
+  const row = page.split('<tr').find((r) => r.includes('<td><strong>All 4 templates have been approved')).split('</tr>')[0];
+  assert.match(row, /evidence\/judge\?row=all-four">Record judgment/);
+  assert.doesNotMatch(row, /Record result/);
+  assert.match(strip(row), /Judged by a person/);
+  // Choosing its evidence is the explicit way to measure it, with the manual metric filled in.
+  const form = render(s, () => configureEvidenceView(s, id, q('row=requirement:all-four')));
+  assert.match(form, new RegExp(`<option value="${MANUAL_SOURCE}" selected`));
+  assert.match(form, new RegExp(`name="metric"[^>]*value="${rowMetric('requirement', 'all-four')}"`));
+  // A Requirement measured by results people record offers Record result.
+  const acc = page.split('<tr').find((r) => r.includes('<td><strong>Overall accuracy')).split('</tr>')[0];
+  assert.match(acc, /Record result/);
+  assert.doesNotMatch(acc, /Record judgment/);
 });

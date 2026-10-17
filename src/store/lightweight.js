@@ -104,14 +104,18 @@ export function judgedBy(state, capabilityId, req) {
 }
 
 // Before the first result (Paige, #143 review): which Requirements and
-// Targets have no evidence linked yet. Once results exist, linking one needs
-// approval, so a one-person team is told first. A row a person will judge
-// needs no link; the list doesn't guess which those are.
+// Targets judged by evidence have no evidence linked yet. Once results exist,
+// linking one needs approval, so a one-person team is told first.
 export function unlinkedBeforeResults(state, capabilityId) {
   if (performanceResultsSeen(state, capabilityId)) return null;
+  // Only rows judged by evidence that still need their evidence chosen: a
+  // coverage rule, or an evidence-judged Requirement, with no measure, and any
+  // Target with a bar and no measure. Person-judged Requirements need no link;
+  // a Requirement judged through its Target is covered by the Target's entry.
+  const criteria = current(state, capabilityId, 'criteria');
   const rows = [
-    ...current(state, capabilityId, 'requirements').filter((r) => !r.measure && r.bar !== 'needs-decision').map((r) => r.text),
-    ...current(state, capabilityId, 'criteria').filter((c) => !c.measure && c.bar !== 'needs-decision').map((c) => c.name),
+    ...current(state, capabilityId, 'requirements').filter((r) => !r.measure && r.bar !== 'needs-decision' && judgedBy(state, capabilityId, r) === 'evidence' && !criteria.some((c) => c.requirement === r.id)).map((r) => r.text),
+    ...criteria.filter((c) => !c.measure && c.bar !== 'needs-decision').map((c) => c.name),
   ];
   return rows.length ? rows : null;
 }
@@ -283,9 +287,17 @@ export function linkRowForResults(state, capabilityId, { rowKind, rowId, type, k
     if (row.measure.kind && kind && row.measure.kind !== kind) throw new Error(`"${label}" counts ${row.measure.kind === 'eval' ? 'test-case results' : 'real-use results'} only.`);
     return { state, metric: row.measure.metric };
   }
-  const words = rowKind === 'target' ? row.target : row.text;
+  // A Requirement is measured only by its configured structure (#143
+  // review): recording a result never turns a person-judged one into a
+  // measured one. Choose its evidence first (Configure evidence). A Target is
+  // measurable by definition, so its first result links it.
+  if (rowKind === 'requirement') {
+    const linkedTarget = current(state, capabilityId, 'criteria').some((c) => c.requirement === rowId);
+    throw new Error(linkedTarget ? `"${label}" is judged by its Target. Record results for the Target.` : `"${label}" is judged by a person: record a judgment. To measure it instead, choose its evidence first.`);
+  }
+  const words = row.target;
   const bar = barFromWords(words);
-  if (!bar) throw new Error(`"${label}" doesn't say a number to check. Judge it instead${rowKind === 'requirement' ? ' (Record judgment)' : ''}, or give it a number first.`);
+  if (!bar) throw new Error(`"${label}" doesn't say a number to check. Give it a number first.`);
   if (criteriaLocked(state, capabilityId)) throw new Error(`Results already exist, so linking evidence to "${label}" needs approval. Propose it under Configure evidence.`);
   const metric = rowMetric(rowKind, rowId);
   const stat = ROW_STAT[type];
@@ -294,8 +306,7 @@ export function linkRowForResults(state, capabilityId, { rowKind, rowId, type, k
   const edit = (list) => list.map((r) => (r.id === rowId ? { ...r, measure } : r));
   const criteria = current(state, capabilityId, 'criteria');
   const requirements = current(state, capabilityId, 'requirements');
-  const value = rowKind === 'target' ? { criteria: edit(criteria), requirements } : { criteria, requirements: edit(requirements) };
-  const s = saveCriteria(state, capabilityId, { ...value, by, reason: `Results for "${label}" are recorded by people.` });
+  const s = saveCriteria(state, capabilityId, { criteria: edit(criteria), requirements, by, reason: `Results for "${label}" are recorded by people.` });
   return { state: s, metric };
 }
 

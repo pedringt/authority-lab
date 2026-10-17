@@ -5,7 +5,7 @@
 
 import { html, notice, lede, badge, fmtDate } from '../ui.js';
 import {
-  getCapability, actor, people, criteriaLocked, evidenceSources, evidenceCoverage, coverageText, COVERAGE_WORDS, MEASURE_STAT_WORDS, barFromWords, SOURCE_KINDS, TESTS_SOURCE, MANUAL_SOURCE, findSource, isCoverageRule, isIncidentRequirement, judgedBy,
+  getCapability, actor, people, criteriaLocked, evidenceSources, evidenceCoverage, coverageText, COVERAGE_WORDS, MEASURE_STAT_WORDS, barFromWords, SOURCE_KINDS, TESTS_SOURCE, MANUAL_SOURCE, findSource, isCoverageRule, isIncidentRequirement, judgedBy, rowMetric,
 } from '../store/index.js';
 import { RESULT_STATUS_TONE, unlinkedNotice } from './lightweight.js';
 
@@ -41,8 +41,9 @@ function suggestion(state, cap, c) {
   if (c.status === 'conflicting') return html`The evidence disagrees: ${c.row.result ? c.row.result.why : ''} Look into it, or collect more evidence. Conflicting is never a pass.`;
   if (c.status === 'unknown') return html`Judged Unknown. Record a judgment once you know. <a href="${judge}">Record judgment</a>`;
   if (c.status === 'needs-decision') return html`Decide its number first. <a href="#/capabilities/${cap.id}/criteria/edit">Requirements and Targets</a>`;
-  if (c.status === 'no-source' && c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person') return html`No metric: the Owner or a Reviewer judges it${barFromWords(c.row.text) && !isIncidentRequirement(c.row) ? ', or record a result for it to measure it instead' : ''}${isIncidentRequirement(c.row) ? ', and an open critical incident blocks it' : ''}. <a href="${judge}">Record judgment</a>${isIncidentRequirement(c.row) ? html` · <a href="#/capabilities/${cap.id}/evidence/log#incidents">Incidents</a>` : ''}`;
-  if (c.status === 'no-source' && !(c.kind === 'requirement' && isCoverageRule(c.row))) return html`Record a result for it by hand or upload a file: that links it to manual results. Or choose another source. <a href="${record}">Record result</a> · <a href="${configure}">Choose evidence</a>`;
+  if (c.status === 'no-source' && c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person') return html`No metric: the Owner or a Reviewer judges it${isIncidentRequirement(c.row) ? ', and an open critical incident blocks it' : ''}. <a href="${judge}">Record judgment</a>${isIncidentRequirement(c.row) ? html` · <a href="#/capabilities/${cap.id}/evidence/log#incidents">Incidents</a>` : ''}`;
+  if (c.status === 'no-source' && c.kind === 'target') return html`Record a result for it by hand or upload a file: that links it to manual results. Or choose another source. <a href="${record}">Record result</a> · <a href="${configure}">Choose evidence</a>`;
+  if (c.status === 'no-source' && c.kind === 'requirement' && !isCoverageRule(c.row)) return html`It is judged through its Target: record results there. <a href="${configure}">Choose evidence</a>`;
   const src = c.mapped && c.row.measure.source ? findSource(state, c.row.measure.source) : null;
   if (c.status === 'no-source') return html`Choose which evidence judges it: a connected source, Authority Lab tests, or a manual review. <a href="${configure}">Choose evidence</a>`;
   if (c.status === 'no-data') {
@@ -57,7 +58,9 @@ function suggestion(state, cap, c) {
 
 function editForm(state, cap, c, locked) {
   const sources = evidenceSources(state);
-  const m = c.row.measure || {};
+  // An unlinked row starts on results people record here, under the row's own
+  // metric (#143 review), so nobody types a metric id; any other choice stays open.
+  const m = c.row.measure || (isCoverageRule(c.row) ? {} : { source: MANUAL_SOURCE, metric: rowMetric(c.kind, c.id) });
   const words = c.kind === 'target' ? c.row.target : c.row.text;
   const bar = barFromWords(words);
   const metrics = sources.flatMap((s) => s.metrics.map((x) => ({ ...x, source: s.name })));
@@ -89,16 +92,14 @@ function editForm(state, cap, c, locked) {
 }
 
 // What a person can do for a row (#142): record a result or upload (rows
-// with a number, judged by manual results or not linked yet), judge it (a
-// Requirement with no number), or choose its evidence.
+// measured by results people record, or a Target not linked yet), judge it
+// (a person-judged Requirement), or choose its evidence. Decided by the row's
+// structure only (Paige, #143 review), never by numbers in its wording.
 function rowActions(state, cap, c) {
-  // Judged by a person or by evidence, from the row's structure (#143 review).
-  const noNumber = c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person';
-  const coverage = c.kind === 'requirement' && isCoverageRule(c.row);
-  const manual = !c.row.measure || c.row.measure.source === MANUAL_SOURCE || !c.row.measure.source;
-  // A result can be recorded when the row states a bar to check (or is already
-  // measured by manual results); that is what linking it needs.
-  const record = !coverage && c.row.bar !== 'needs-decision' && manual && (Boolean(c.row.measure) || Boolean(barFromWords(c.kind === 'target' ? c.row.target : c.row.text))) && !(c.kind === 'requirement' && isIncidentRequirement(c.row));
+  const personJudged = c.kind === 'requirement' && judgedBy(state, cap.id, c.row) === 'person';
+  const manual = c.row.measure && (c.row.measure.source === MANUAL_SOURCE || !c.row.measure.source);
+  const record = c.row.bar !== 'needs-decision' && (c.kind === 'target' ? (!c.row.measure || manual) : (Boolean(manual) && !isCoverageRule(c.row)));
+  const noNumber = personJudged;
   return html`${record ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/record?row=${c.kind}:${c.id}">Record result</a> ` : ''}${noNumber ? html`<a class="btn btn-sm btn-primary" href="#/capabilities/${cap.id}/evidence/judge?row=${c.id}">Record judgment</a> ` : ''}<a class="btn btn-sm" href="#/capabilities/${cap.id}/evidence/configure?row=${c.kind}:${c.id}">${c.mapped ? 'Change evidence' : 'Choose evidence'}</a>`;
 }
 

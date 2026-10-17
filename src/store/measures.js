@@ -255,6 +255,17 @@ function personJudged(state, capabilityId, row) {
       return withResult({ ...row, met: false, current: 'Open critical incident', gap: why, incidentsOpen: open.map((x) => x.id) }, 'not-met', why);
     }
   }
+  // A Requirement judged through its linked Target(s) (#143 review) takes
+  // their result: any Not met makes it Not met; any Conflicting makes it
+  // Conflicting; all Met makes it Met; otherwise not enough evidence yet.
+  const linked = targetsNow(state, capabilityId).filter((t) => t.requirement === row.id && t.bar !== 'needs-decision');
+  if (linked.length) {
+    const st = (t) => RESULT_OF[t.status] || (t.status === 'pass' ? 'met' : 'no-evidence');
+    const all = linked.map(st);
+    const status = all.includes('not-met') ? 'not-met' : all.includes('conflicting') ? 'conflicting' : all.every((x) => x === 'met') ? 'met' : all.includes('not-enough') ? 'not-enough' : 'no-evidence';
+    const why = `Judged by its Target${linked.length === 1 ? '' : 's'}: ${linked.map((t) => `${t.name}: ${RESULT_WORDS[st(t)]}${t.current ? ` (${t.current})` : ''}`).join('; ')}.`;
+    return withResult({ ...row, met: status === 'met', current: RESULT_WORDS[status], gap: status === 'met' ? undefined : why, ...(status === 'conflicting' ? { conflicting: true } : {}) }, status, why);
+  }
   // Judgments decide only a Requirement a person judges (by its structure).
   const { counting, input } = judgedBy(state, capabilityId, row) === 'person' ? judgmentsFor(state, capabilityId, row.id) : { counting: [], input: [] };
   const note = input.length ? ` Stakeholder input: ${input.map((j) => `${j.byAt.name} says ${VERDICTS[j.verdict].toLowerCase()}`).join('; ')} (input doesn't decide it).` : '';
@@ -275,7 +286,7 @@ function personJudged(state, capabilityId, row) {
   }
   if (row.met) return withResult(row, 'met', `Met: ${row.current}.${note}`);
   const by = judgedBy(state, capabilityId, row);
-  const how = by === 'person' ? 'the Owner or a Reviewer can record a judgment' : isCoverageRule(row) ? 'choose which results it counts' : 'record a result, upload a file, or choose its evidence';
+  const how = by === 'person' ? 'the Owner or a Reviewer can record a judgment' : isCoverageRule(row) ? 'choose which results it counts' : 'choose its evidence';
   const why = row.gap || `No evidence yet: ${how}.${note}`;
   return withResult({ ...row, gap: why }, 'no-evidence', why);
 }
