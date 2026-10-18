@@ -30,9 +30,9 @@ test('Decide: an open decision is one column, its steps in order, with one recor
   assert.match(page, /<div class="decide-flow">/);
   assert.doesNotMatch(page, /decision-grid|decision-side|decision-main|decision-panel/, 'no two-column workspace');
   assert.doesNotMatch(page, /class="subnav"/, 'no chip row of evidence views');
-  assert.match(page, /<h2>Should we expand autonomy for this capability\?<\/h2><p class="muted">A named person makes the call, and the decision is recorded\.<\/p>/);
+  assert.match(page, /<h2>Should we expand autonomy for this capability\?<\/h2><p class="muted">A named person makes the call, and the decision is recorded\. Evidence never grants authority on its own\.<\/p>/);
   // Nothing chosen yet: the steps that depend on the choice aren't there.
-  assert.deepEqual(steps(page), ['1 What are we deciding?', '2 What do we know?', '3 Recommendation', '4 Your decision', '5 Why are you making this decision?', '6 Review and record']);
+  assert.deepEqual(steps(page), ['1 What changes if I approve this?', '2 What do we know?', '3 Who has said what?', '4 Risk', '5 Recommendation', '6 Your decision', '7 Why are you making this decision?', '8 Review and record']);
   assert.equal(count(page, /data-action="authorize"/g), 1, 'one action');
   assert.match(page, /<button class="btn btn-primary decide-record" data-action="authorize" data-capability="refund-recommendation" disabled>Record decision as Maya Chen<\/button>/);
   assert.ok(page.lastIndexOf('data-action="authorize"') > page.indexOf('<h2>Your decision</h2>'), 'the button comes last');
@@ -104,7 +104,7 @@ test('Decide step 3: the recommendation in plain words, worked out from the evid
   // A capability without a recommendation skips the step.
   let s = withCapData(initialState(), RR, { recommendation: null });
   assert.doesNotMatch(decide(s), /<h2>Recommendation<\/h2>/);
-  assert.equal(steps(decide(s))[2], '3 Your decision');
+  assert.equal(steps(decide(s))[4], '5 Your decision');
 });
 
 test('Decide step 4: four choices, a second question for Expand and Reduce, nothing chosen for the person', () => {
@@ -154,7 +154,7 @@ test('Decide: each final choice maps to the option the store records', () => {
 
 test('Decide: limits, goals and the rollout plan appear only when they apply', () => {
   const at = (option) => steps(decide(selectDecision(initialState(), RR, option))).map((x) => x.replace(/^\d+ /, ''));
-  const base = ['What are we deciding?', 'What do we know?', 'Recommendation', 'Your decision'];
+  const base = ['What changes if I approve this?', 'What do we know?', 'Who has said what?', 'Risk', 'Recommendation', 'Your decision'];
   const end = ['Why are you making this decision?', 'Review and record'];
   assert.deepEqual(at('expand-limits'), [...base, 'Limits', 'What should improve?', 'Rollout plan', ...end]);
   assert.deepEqual(at('expand'), [...base, 'What should improve?', 'Rollout plan', ...end]);

@@ -40,6 +40,25 @@ Earlier redesign mockups and interface directions remain historical context only
 
 ## Decisions
 
+### Product reset, Phase 4: Proposal and Decision (#144, Paige, 2026-10-18)
+
+The settled model (Paige, 2026-10-18): a Proposal is one concrete proposed authority change that a person explicitly creates; it answers "What changes if I approve this?" and is not a Decision. A Decision is the recorded human choice. Evidence never grants authority; AI may prepare the workspace but never records the Decision. Residual Risk is a person's judgment (Low / Moderate / High / Unknown with a reason), never a score. Reviewer disagreement is visible, never averaged away. Every existing approval and expansion rule is kept.
+
+What follows directly from that, as built:
+
+- **The Proposal is frozen when a person proposes** (`proposeAuthority` → `freezeProposal`, `src/store/proposal.js`). It records who proposed it (`proposedBy`, `proposedByAt`) and freezes current and proposed authority; newly permitted (the proposed level's plain description and the Rules' "may" lines), still needs a person (the level's human step, "must ask" and escalation lines) and still prohibited ("must never" lines); every Boundary with its enforcement; Requirement and Target results with their reasons; coverage; Reviewer and Stakeholder positions; the initial Risk; versions, the Context and baseline versions, the material changes known, and imported-evidence provenance. Proposals are append-only (`capabilityData.authorityProposals`, ids `AP-NN`); open, decided or closed is derived, never written onto the frozen object.
+- **Staleness, only as far as the recorded model determines it.** An open Proposal is marked "may be stale" when a versioned object it was reviewed against (Rules, Targets, Requirements, Risk, people) has a newer version, or a material change was recorded after it opened (`proposalStaleness`). Requirement results that moved since are listed as information, not staleness (Q3 below). Staleness never blocks: `canAuthorize` doesn't read it.
+- **The Decision record freezes what the person deciding saw.** It adds the Proposal reviewed (`proposalId`), whether it may have been stale (`proposalStale`, with reasons), and `reviewed`: Requirement and Target results with reasons, coverage, Boundaries with enforcement, the initial Risk and every position. A decision opened before Proposals were frozen (Northstar's seeded pending decision) is recorded with `proposalLegacy: true`; no snapshot is invented for it.
+- **Residual Risk can now be given in the Decide flow** (it had no screen since Phase 1). Still optional, still never set by software; the flow shows the initial Risk and the controls beside it, and the record and brief show it.
+- **Kept unchanged:** one level at a time; expansion needs a pending proposal; evidence needed before proposing, real-use evidence for Level 3; setup confirmation; the post-incident review lock; reductions close an incompatible open proposal; expected impact and a rollout plan for every expansion; `canAuthorize` as the only judge of whether a decision can be recorded; immutable records; evidence and version snapshots; the decision brief; and the bar-change sign-off rules (frozen approvers, feasibility, Risk approvers, proposer never approves).
+
+Open questions, not decided (brought to Paige with the PR):
+
+- **Q1. Who records the Decision.** Any active person today; the reset docs say the Owner.
+- **Q2. Reviewer input before an expansion.** Whether missing input or disagreement blocks the Decision or only shows (it only shows today).
+- **Q3. Staleness.** Whether moved results count; whether a stale Proposal blocks; refresh in place or replace.
+- **Q4. Residual Risk.** Whether it is required for an expansion (optional today).
+
 ### Product reset, Phase 3: the lightweight evidence path (#142, Paige, 2026-10-16)
 
 The question: can a small team with no governance, eval, observability or data stack collect enough credible evidence inside Authority Lab to support an authority decision? Manual first never means manual only: State's committed-file path stays, and both paths converge on one evidence model. Authority Lab stays eval-aware, not eval-centric: no eval runner, no model calls.

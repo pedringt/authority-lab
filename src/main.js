@@ -301,7 +301,7 @@ function render() {
   const opened = lastRoute === location.hash ? [...app.querySelectorAll('details[id][open]')].map((el) => el.id) : [];
   // A field being typed into (expected impact, rationale) keeps its focus and
   // caret across the re-render its own debounced dispatch causes.
-  const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale', 'set-rollout'].includes(document.activeElement.dataset.action)
+  const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale', 'set-rollout', 'set-residual-note'].includes(document.activeElement.dataset.action)
     ? { action: document.activeElement.dataset.action, index: document.activeElement.dataset.index || '', field: document.activeElement.dataset.field || '', start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd }
     : null;
   app.innerHTML = String(html`${workspaceBanner()}${view}`);
@@ -453,6 +453,7 @@ document.addEventListener('click', (e) => {
     const route = `#/capabilities/${capId}/setup/review`;
     dispatchOr(route, () => { store.dispatch('confirmSetup', capId, { by: actor(store.get(), capId) }); location.hash = route; render(); });
   }
+  if (action === 'clear-residual-risk') store.dispatch('setResidualRisk', capId, { level: null });
   if (action === 'authorize') {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
@@ -542,6 +543,11 @@ document.addEventListener('change', (e) => {
   }
   if (el.dataset.action === 'choose-owner') { store.dispatch('setActingAs', el.value || null); return; }
   if (el.dataset.action === 'select-option') store.dispatch('selectDecision', capId, el.value);
+  // Residual Risk (#144): optional, a person's judgment, kept with its note.
+  if (el.dataset.action === 'set-residual-risk') {
+    const note = ((capData(store.get(), capId).decision.residualRisk) || {}).note || '';
+    store.dispatch('setResidualRisk', capId, { level: el.value, note });
+  }
   if (el.dataset.action === 'set-condition') {
     const key = el.dataset.key;
     const value = el.type === 'checkbox' ? el.checked : Number(el.value);
@@ -879,6 +885,17 @@ document.addEventListener('input', (e) => {
     const value = ro.value;
     clearTimeout(outcomeTimers[`rollout-${field}`]);
     outcomeTimers[`rollout-${field}`] = setTimeout(() => store.dispatch('setRolloutField', capability, field, value), ro.tagName === 'SELECT' || ro.type === 'date' ? 0 : 300);
+    return;
+  }
+  const rn = e.target.closest('[data-action="set-residual-note"]');
+  if (rn) {
+    const capId = rn.dataset.capability;
+    const value = rn.value;
+    clearTimeout(outcomeTimers['residual-note']);
+    outcomeTimers['residual-note'] = setTimeout(() => {
+      const rr = capData(store.get(), capId).decision.residualRisk;
+      if (rr) store.dispatch('setResidualRisk', capId, { level: rr.level, note: value });
+    }, 300);
     return;
   }
   const out = e.target.closest('[data-action="set-outcome"]');

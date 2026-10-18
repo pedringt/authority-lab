@@ -7,6 +7,7 @@ import { people, snapshotPerson, requireActive, isActivePerson } from './people.
 import { setupConfirmed, UNCONFIRMED_REASON } from './setup.js';
 import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
+import { freezeProposal, reviewConditions, openAuthorityProposal, proposalStaleness } from './proposal.js';
 
 export function actionNoun(cap) {
   return (cap && cap.actionNoun) || 'actions';
@@ -302,6 +303,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const next = nextAuthority(option, previous, proposedAuthority(state, capabilityId));
   const number = state.decisionRecords.length + 1;
   const id = `AC-${String(number).padStart(2, '0')}`;
+  const openProposal = d.decision.proposed ? openAuthorityProposal(state, capabilityId) : null;
+  const staleness = openProposal ? proposalStaleness(state, capabilityId, openProposal) : null;
 
   const record = {
     id,
@@ -333,6 +336,13 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     ...(next.level > previous.level && d.decision.rolloutPrefilled ? { rolloutPrefilled: true } : {}),
     // #137: recorded only when the person deciding gave one.
     ...(d.decision.residualRisk ? { residualRisk: deepFreeze({ ...d.decision.residualRisk, by, byAt: snapshotPerson(state, by) }) } : {}),
+    // #144: the Proposal this decision answered, and what the person saw when
+    // they decided: Requirement and Target results, coverage, Boundaries,
+    // initial Risk and every position, frozen. A decision opened before
+    // Proposals were frozen says so instead of borrowing today's snapshot.
+    ...(openProposal ? { proposalId: openProposal.id } : d.decision.proposed ? { proposalLegacy: true } : {}),
+    ...(staleness && staleness.stale ? { proposalStale: deepFreeze(JSON.parse(JSON.stringify(staleness.reasons))) } : {}),
+    reviewed: deepFreeze(JSON.parse(JSON.stringify(reviewConditions(state, capabilityId)))),
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
@@ -374,7 +384,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'If more than 5% of the last 50 cases have a severe error, the AI is moved back to Draft automatically.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
-  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null, residualRisk: null }, monitoring });
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null, proposalId: null, residualRisk: null }, monitoring });
   s = { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
   // A restrict, suspend or redesign decided while a proposal to expand was
   // open closes that proposal too, and says so.
@@ -409,11 +419,13 @@ export function proposeAuthority(state, capabilityId, level, { by } = {}) {
   if (!performanceResultsSeen(state, capabilityId)) throw new Error('There is no evidence yet. Run the tests, record a result, or have a connected source send results, then propose more authority.');
   if (target >= 3 && !realUseEvidence(state, capabilityId)) throw new Error('Level 3 needs evidence from real use: a pilot at Draft, or production results from a connected source or recorded by hand.');
   const d = capData(state, capabilityId);
-  let s = updateCap(state, capabilityId, { decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, residualRisk: null, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
+  // #144: the Proposal is frozen now, with what the person proposing saw.
+  const proposal = freezeProposal(state, capabilityId, { level: target, by });
+  let s = updateCap(state, capabilityId, { authorityProposals: [...(d.authorityProposals || []), proposal], decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, proposalId: proposal.id, residualRisk: null, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
   return logEvent(s, {
     kind: 'decision',
-    title: `More authority proposed: ${authorityLabel(cap.authority, { short: true })} → Level ${target}`,
-    body: `${cap.name}: ${people(state)[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. A person makes the decision.`,
+    title: `More authority proposed: ${authorityLabel(cap.authority, { short: true })} → Level ${target} (${proposal.id})`,
+    body: `${cap.name}: ${people(state)[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. The Proposal (${proposal.id}) is frozen as it was proposed. It is not a decision: a person makes the decision.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/decision`,
   });

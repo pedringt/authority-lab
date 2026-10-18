@@ -36,6 +36,16 @@ function watch(rec) {
   return items.length ? html`<ul class="brief-list">${items}</ul>` : none('No rollout plan was recorded.');
 }
 
+// Initial Risk and the Residual Risk the person deciding gave (#144), from
+// the record. No score; nothing here judges whether it was acceptable.
+function risk(rec) {
+  const items = [];
+  if (rec.reviewed) items.push(html`<li><strong>Initial Risk:</strong> ${rec.reviewed.risk.overall}</li>`);
+  if (rec.residualRisk) items.push(html`<li><strong>Residual Risk:</strong> ${rec.residualRisk.level}${rec.residualRisk.note ? `: ${rec.residualRisk.note}` : ''}</li>`);
+  if (rec.proposalId) items.push(html`<li><strong>Proposal reviewed:</strong> ${rec.proposalId}${rec.proposalStale ? ' (it may have been stale: something it was reviewed against had changed)' : ''}</li>`);
+  return items.length ? html`<ul class="brief-list">${items}</ul>` : none('Not recorded: this decision was made before Risk was frozen on records.');
+}
+
 export function decisionBriefView(state, recordId) {
   const rec = state.decisionRecords.find((r) => r.id === recordId);
   if (!rec) return html`<div class="page-head"><h1>Record not found</h1></div>`;
@@ -59,6 +69,7 @@ export function decisionBriefView(state, recordId) {
       ${block('Expected impact', rec.expectedOutcomes && rec.expectedOutcomes.length
         ? html`<ul class="brief-list">${rec.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>`
         : none(auto || !(rec.previous && rec.next.level > rec.previous.level) ? 'Not applicable: authority did not expand.' : 'Not recorded: this decision was made before expected outcomes were required.'))}
+      ${block('Risk', risk(rec))}
       ${block('What we\'ll watch', watch(rec))}
       ${block('When it gets pulled back', pullBack(state, rec))}
     </div>

@@ -4042,7 +4042,7 @@ test('#96: the decision flow numbers its steps and the checklist says exactly wh
   // The seeded expansion: every step done, recording enabled.
   const ready = String(decisionWorkspaceView(pendingRR(), RR));
   assert.deepEqual(marks(ready), ['Decision: Expand autonomy, within limits:✓', 'Limits:✓', 'What should improve:✓', 'Rollout plan:✓', 'Your reason:✓']);
-  assert.deepEqual(steps(ready), ['1 What are we deciding?', '2 What do we know?', '3 Recommendation', '4 Your decision', '5 Limits', '6 What should improve?', '7 Rollout plan', '8 Why are you making this decision?', '9 Review and record']);
+  assert.deepEqual(steps(ready), ['1 What changes if I approve this?', '2 What do we know?', '3 Who has said what?', '4 Risk', '5 Recommendation', '6 Your decision', '7 Limits', '8 What should improve?', '9 Rollout plan', '10 Why are you making this decision?', '11 Review and record']);
   // The evidence is on the page, not behind a closed panel: its headline shows.
   assert.match(ready, /<p class="decide-big">Almost ready: 5 of 6 checks met<\/p>/);
   assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);

@@ -386,3 +386,13 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 
 /* Publishing a decision made in this browser (client workspaces). */
 .publish-json { width: 100%; font-family: var(--mono); font-size: 12px; padding: 8px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface); }
+
+/* Phase 4 (#144): the Proposal and Decision review. */
+.proposal-meta { margin-top: 8px; }
+.proposal-three { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+.proposal-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.proposal-positions li { margin-bottom: 8px; }
+.proposal-bounds, .proposal-frozen { margin-top: 12px; }
+.residual-risk { border: 0; padding: 0; margin: 16px 0 0; }
+.residual-risk legend { font-weight: 600; margin-bottom: 8px; }
+.residual-options { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }

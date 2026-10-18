@@ -52,7 +52,7 @@ A first visit opens a welcome page (`#/welcome`) with two paths: **Guided demo**
 A dark bar across the top holds three places: **Overview** (To do, Approvals needed, Important results, Current autonomy), **Capabilities** (one table, plus **Add capability**) and **Records** (Decisions and Activity). On the right sit **Demo as** (a demo stand-in for sign-in) and the **Settings** gear: **People**, **Workspace**, **Guided demo**, **Start empty** and **Reset demo**. A capability opens with a header panel and four tabs:
 
 - **Status**: what it can do now, why it's here, what happens next, then. **Needs a decision** lists single actions waiting for a person; one-line **Boundaries** and **People involved** follow. The full rules are at `?tab=status&show=rules`; every waiting action at `?tab=status&show=approvals`.
-- **Decide**: one flow (what are we deciding, what do we know, the recommendation, your decision, limits, what should improve, rollout plan, why, review and record). Full evidence views open with `show=tests`, `runs`, `all`, `targets`, `requirements` or `results`.
+- **Decide**: one flow (what changes if I approve this, what do we know, who has said what, Risk, the recommendation, your decision, limits, what should improve, rollout plan, why, review and record). A move up starts from a Proposal, frozen when a person proposes it (#144). Full evidence views open with `show=tests`, `runs`, `all`, `targets`, `requirements` or `results`.
 - **Monitor**: **Still safe?** and **Delivering value?**, each leading with a verdict.
 - **History**: one timeline of records, reviews, test runs, proposed changes and versions.
 

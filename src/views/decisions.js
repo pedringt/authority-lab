@@ -4,6 +4,8 @@ import { getCapability, capData, readiness, authorityLabel, canAuthorize, condit
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
+import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed } from './proposal.js';
+import { reviewConditions } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -147,6 +149,8 @@ export function decisionRecordView(state, id) {
       // #119: imported evidence in force, with the configuration it describes.
       ...(x.externalEvidence && x.externalEvidence.length ? [['Imported evidence', externalRecordList(x.externalEvidence)]] : []),
       ['Still to resolve', x.openCondition],
+      // #144: the Proposal reviewed and what was frozen when it was decided.
+      ...recordReviewed(state, x),
       // B1: what an expansion was expected to achieve, fixed on the record.
       ...(x.expectedOutcomes && x.expectedOutcomes.length
         ? [['Expected impact', html`<ul class="plain-list">${x.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>${x.outcomesPrefilled ? html`<p class="muted small">Prefilled for the demo.</p>` : ''}`]]
@@ -303,7 +307,8 @@ function noDecisionView(state, cap, d, { runs }) {
   } else if (proposable(state, cap, d, review)) {
     lead = html`<div class="decide-start"><h2>Ready to propose Level ${n}, ${levelName(n)}</h2>
       <p>${LEVEL_PLAIN[n]} A named person makes the call, and the decision is recorded.</p>
-      ${proposeButton(cap)}</div>`;
+      ${proposeButton(cap)}
+      <p class="muted small">Proposing freezes what is shown below, as it is now, so the decision can be reviewed against it. It isn't a decision, and it gives the AI no authority.</p></div>`;
   } else {
     const why = cap.status === 'not-delegated' ? 'This work is kept with people by design, so there is nothing to decide.'
       : n > 4 ? 'It already has the most autonomy there is.'
@@ -343,9 +348,11 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   let n = 0;
   const step = (title, body, { id, sub } = {}) => html`<section class="decide-step"${id ? html` id="${id}"` : ''}><p class="decide-step-n">Step ${++n}</p><h2>${title}</h2>${sub ? html`<p class="muted small decide-step-sub">${sub}</p>` : ''}${body}</section>`;
 
-  // Step 1: the change, as behaviour first and level second.
-  const side = (label, level, limited, cls) => html`<div class="decide-${cls}"><span class="muted small">${label}</span><strong>${LEVEL_PLAIN[level]}</strong><span class="muted small">Level ${level} · ${levelName(level)}${limited && level !== 3 ? ' (limited)' : ''}</span></div>`;
-  const change = html`<div class="decide-change">${side('Now', cur, cap.authority.limited, 'from')}<span class="decide-arrow" aria-hidden="true">→</span>${side('Proposed', proposed.level, proposed.limited, 'to')}</div>`;
+  // Step 1 (#144): what changes if this is approved, from the frozen
+  // Proposal; today's conditions are in step 2, never in its place.
+  const ps = openProposalState(state, cap);
+  const change = changeStep(state, cap, ps, proposed);
+  const live = reviewConditions(state, cap.id);
 
   // Step 3: the recommendation, in the person's words.
   const recConditions = (seed.capabilityData[cap.id] || {}).defaultConditions || c;
@@ -416,9 +423,11 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     <p class="muted small">${dec.option ? html`Recorded as “${optionName(dec.option)}”, with your name (${authorizer.name}, ${authorizer.role}), your reason and this evidence.` : 'Your name, your reason and this evidence are recorded with the decision.'} Records can't be edited.</p>`;
 
   return html`<div class="decide-flow">
-    <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded.</p></div>
-    ${step('What are we deciding?', change)}
-    ${step('What do we know?', whatWeKnow(state, cap, { runs }))}
+    <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded. Evidence never grants authority on its own.</p>${proposalBanner(state, cap, ps)}</div>
+    ${step('What changes if I approve this?', change)}
+    ${step('What do we know?', html`${whatWeKnow(state, cap, { runs })}${frozenResults(ps.prop, ps.staleness)}`)}
+    ${step('Who has said what?', positionsStep(live.positions, { then: ps.prop && JSON.stringify(ps.prop.positions) !== JSON.stringify(live.positions) ? 'Positions have changed since it was proposed; these are the current ones. The record keeps the ones in force when you decide.' : null }), { sub: 'Reviewers and Stakeholders, as each gave their position.' })}
+    ${step('Risk', riskStep(cap, dec, live.risk, live.boundaries), { sub: 'The Risk before controls, the controls, and what you judge is left.' })}
     ${rec ? step('Recommendation', recommendation) : ''}
     ${step('Your decision', html`${choices}<p class="decide-pending">Finish your choice above to continue.</p><div class="decide-after-means">${preview}</div>`, { id: 'decide-choice' })}
     <div class="decide-after">
