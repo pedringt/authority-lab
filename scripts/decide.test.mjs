@@ -219,7 +219,7 @@ test('Decide with no decision open: what has to happen first, the evidence, and 
   const s = initialState();
   const tc = decide(s, TC);
   // Level 4 is offered now (#149), but its seeded results aren't real use.
-  assert.match(tc, /<h2>No decision is open<\/h2><p>Level 4, Broad Delegation, needs evidence from real use/);
+  assert.match(tc, /<h2>No decision is open<\/h2><p>Level 4, Broad Delegation, needs at least 20 cases from real use/);
   assert.match(tc, /<h2>What do we know\?<\/h2>/);
   assert.match(tc, /<p class="decide-big">Ready: all 5 Requirements met<\/p>/);
   assert.doesNotMatch(tc, /data-action="(authorize|select-option|propose-authority)"/);

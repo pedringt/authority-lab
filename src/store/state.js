@@ -117,6 +117,9 @@ export function initialState() {
   const base = {
     version: 14,
     today: seed.TODAY,
+    // The demo organization has Risk approvers, so it uses formal Risk
+    // approvals (#157). Real workspaces start without them.
+    policies: { formalRiskApprovals: true },
     // The workspace and its one workflow (roadmap item 7). Seeded here so an
     // empty workspace can set its own.
     workspace: clone(seed.workspace),

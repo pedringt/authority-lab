@@ -1,5 +1,5 @@
 import { html, raw, badge, notice, section, person, personAt, fmtDate, kv, warningNotice, SWITCH_PERSON } from '../ui.js';
-import { people, actor, isWorkspaceAdmin, rosterVersions, RIGHTS, RIGHT_LABELS, openRosterProposal, rosterApprovalEligibility, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf, foundingRoster } from '../store/index.js';
+import { people, actor, isWorkspaceAdmin, rosterVersions, RIGHTS, RIGHT_LABELS, openRosterProposal, rosterApprovalEligibility, rosterChangeImpact, coverageWarnings, workspaceOf, workflowOf, foundingRoster, formalRiskApprovals } from '../store/index.js';
 import { diffTable } from './activity.js';
 
 // A right as it reads mid-sentence: "Make Jonas a Risk approver".
@@ -160,7 +160,13 @@ function workspaceSection(state, admin, who, editing) {
   const log = history.length
     ? html`<details class="amendment"><summary>${history.length} change${history.length === 1 ? '' : 's'} recorded</summary><ul class="plain-list">${history.map((h) => html`<li>${fmtDate(h.date)}, ${personAt(h.authorAt, h.author).name} <span class="muted small">(version ${h.version})</span>: ${h.before.workspace.name !== h.value.workspace.name ? html`workspace "${h.before.workspace.name}" → "${h.value.workspace.name}". ` : ''}${h.before.workflow.name !== h.value.workflow.name ? html`workflow "${h.before.workflow.name}" → "${h.value.workflow.name}". ` : ''}${h.before.workspace.description !== h.value.workspace.description || h.before.workflow.description !== h.value.workflow.description ? 'Description changed. ' : ''}<span class="muted">Reason: ${h.reason}</span></li>`)}</ul></details>`
     : '';
-  return section('Workspace', html`${body}${log}`, { id: 'workspace', subtitle: admin ? 'Workspace admins can rename the workspace and its workflow. Changes are kept in history.' : 'Only a workspace admin can rename the workspace or workflow.' });
+  // Approval policy (#157): formal Risk approvals are an organization's choice.
+  const formal = formalRiskApprovals(state);
+  const policy = html`<div class="card"><p><strong>Formal Risk approvals: ${formal ? 'on' : 'off'}.</strong> ${formal
+    ? 'Consequential changes (High impact, or legal or financial consequences) need two approvers, one of them with the Risk approver right.'
+    : 'Consequential changes need a named Reviewer (or the owner, if a Reviewer proposed it) who acknowledges the risk. Turn this on if your organization has people who formally approve risk.'}</p>
+    ${admin ? html`<form class="line-add" data-form="approval-policy"><input type="hidden" name="on" value="${formal ? '' : 'on'}"><input type="text" name="reason" maxlength="200" placeholder="Why the policy is changing" aria-label="Why the policy is changing" required><button class="btn btn-sm" type="submit">${formal ? 'Turn off' : 'Turn on'}</button></form>` : ''}</div>`;
+  return section('Workspace', html`${body}${policy}${log}`, { id: 'workspace', subtitle: admin ? 'Workspace admins can rename the workspace and its workflow. Changes are kept in history.' : 'Only a workspace admin can rename the workspace or workflow.' });
 }
 
 function flatten(roster) {

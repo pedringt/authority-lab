@@ -1,6 +1,7 @@
 // The store wrapper: dispatch, subscriptions, and localStorage persistence.
 
 import { initialState, reset } from './state.js';
+import { setFormalRiskApprovals } from './policy.js';
 import { addPerson, editPerson, deactivatePerson, proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, setActingAs } from './people.js';
 import { addCapability, amend } from './capabilities.js';
 import { startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection, finalizeContract } from './contract.js';
@@ -94,6 +95,7 @@ export const ACTIONS = {
   startEmpty,
   setUpWorkspace,
   renameWorkspace,
+  setFormalRiskApprovals,
   approveAction,
   rejectAction,
   setRoiAssumptions,

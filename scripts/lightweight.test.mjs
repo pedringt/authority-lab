@@ -113,7 +113,7 @@ test('Record result: a measured Requirement uses its own metric; a person-judged
   // A Target is measurable by definition: its first result links it, before results.
   let u = saveCriteria(t, id, { criteria: [{ id: 'quality', name: 'Quality', target: '≥ 90% correct', requirement: 'templates' }], requirements: evidenceJudged(current(t, id, 'requirements'), 'templates'), by: ANA, reason: 'A quality bar for the templates.' });
   u = recordResult(u, id, { rowKind: 'target', rowId: 'quality', type: 'rate', passed: 19, total: 20, kind: 'eval', by: BEN });
-  assert.deepEqual(current(u, id, 'criteria')[0].measure, { source: MANUAL_SOURCE, metric: rowMetric('target', 'quality'), stat: 'rate', op: '>=', value: 90 });
+  assert.deepEqual(current(u, id, 'criteria')[0].measure, { source: MANUAL_SOURCE, metric: rowMetric('target', 'quality'), stat: 'rate', op: '>=', value: 90, auto: true }, 'made by Authority Lab: provisional (#157)');
   assert.throws(() => recordResult(u, id, { rowKind: 'requirement', rowId: 'templates', type: 'rate', passed: 1, total: 1, kind: 'eval', by: BEN }), /judged by its Target/);
   // After results, linking another Target needs approval, as before.
   const more = saveCriteria(firm()[0], id, { criteria: [{ id: 'speed', name: 'Speed', target: 'At least 50% faster' }], requirements: current(firm()[0], id, 'requirements'), by: ANA, reason: 'Adding speed.' });

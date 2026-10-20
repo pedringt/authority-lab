@@ -20,6 +20,8 @@ export function startEmpty() {
     setupPending: true,
     // A workspace set up from scratch, not the seeded Northstar demo.
     startedEmpty: true,
+    // Real workspaces start without formal Risk approvals (#157).
+    policies: { formalRiskApprovals: false },
     workspace: null,
     workflow: null,
     roster: { versions: [] },

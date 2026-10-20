@@ -1,6 +1,7 @@
 // Amendments after evidence need sign-off (#7), and stakeholders (#8).
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
+import { formalRiskApprovals } from './policy.js';
 import { current, versionList, versionsInForce, performanceResultsSeen, readiness, decisionRequired } from './selectors.js';
 import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, requireActive, soloHint } from './people.js';
 import { amend } from './capabilities.js';
@@ -39,13 +40,15 @@ export function stakeholderMembershipChanged(before, after) {
 
 // Who must approve (decision 7, revised): the proposer never approves.
 // Low/Medium impact: one approver, the owner, or any other named stakeholder
-// if the owner proposed. High impact or Financial exposure: two distinct
-// approvers, at least one from Risk. Owners can still propose.
+// if the owner proposed. High impact or Financial exposure: with formal Risk
+// approvals on (#157), two distinct approvers, at least one from Risk;
+// without them, one named Reviewer (or the owner, if a Reviewer proposed)
+// who acknowledges the risk. Owners can still propose.
 export function signoffRequirements(state, capabilityId, proposedBy = null) {
   const cap = getCapability(state, capabilityId);
   const risk = current(state, capabilityId, 'risk');
   const high = risk.impact === 'High' || risk.exposure === 'Financial / consequential';
-  if (high) return { approvers: 2, riskRequired: true, ownerOnly: false };
+  if (high) return formalRiskApprovals(state) ? { approvers: 2, riskRequired: true, ownerOnly: false } : { approvers: 1, riskRequired: false, ownerOnly: false, reviewerRequired: true, riskAck: true };
   const ownerProposed = Boolean(cap && proposedBy && proposedBy === cap.owner);
   return { approvers: 1, riskRequired: false, ownerOnly: !ownerProposed };
 }
@@ -57,6 +60,7 @@ export function signoffRequirements(state, capabilityId, proposedBy = null) {
 export function requirementLabel(req, approvals = null) {
   if (!req) return '';
   if (approvals) return approvalProgress({ required: req, approvals });
+  if (req.reviewerRequired) return 'A named Reviewer must approve it (or the owner, if a Reviewer proposed it), and acknowledge the risk.';
   if (req.approvers === 1) return req.ownerOnly ? 'The owner must approve it.' : 'One other stakeholder must approve it, because the owner proposed it.';
   return 'Two people must approve it, including someone with the Risk approver right.';
 }
@@ -303,18 +307,25 @@ function barMove(before, after) {
   return (p.atLeast ? q.n > p.n : q.n < p.n) ? 'stricter' : 'looser';
 }
 
-function classifyCriteria(base, next) {
-  const out = { recorded: [], governed: [], raises: false };
-  const rec = (t, raises = false) => { out.recorded.push(t); if (raises) out.raises = true; };
+// `kinds` runs parallel to `recorded`: link, people, tighten, harden,
+// add-requirement, boundary. Only a change of what counts as success (not a
+// link) is a "changed after results" event (#157).
+function classifyCriteria(base, next, provisional = () => false) {
+  const out = { recorded: [], governed: [], raises: false, kinds: [] };
+  const rec = (t, kind, raises = false) => { out.recorded.push(t); out.kinds.push(kind); if (raises) out.raises = true; };
   const gov = (t) => out.governed.push(t);
-  const evidenceMove = (b, a, label) => {
-    if (!b.measure && a.measure) rec(`Links "${label}" to its evidence.`);
+  const evidenceMove = (b, a, label, kind) => {
+    const sameEvidence = measureRest({ ...b.measure, auto: undefined }) === measureRest({ ...a.measure, auto: undefined });
+    if (!b.measure && a.measure) rec(`Links "${label}" to its evidence.`, 'link');
+    // A link Authority Lab made itself is provisional (#157): a person
+    // confirming, correcting or removing it isn't a change to the bar.
+    else if (b.measure && b.measure.auto && provisional(kind, b.id) && (!a.measure || !sameEvidence || !a.measure.auto)) rec(!a.measure ? `Removes the link Authority Lab made for "${label}".` : sameEvidence ? `Confirms the link Authority Lab made for "${label}".` : `Corrects the link Authority Lab made for "${label}".`, 'link');
     else if (b.measure && !a.measure) gov(`It removes the evidence that judges "${label}".`);
-    else if (b.measure && a.measure && measureRest(b.measure) !== measureRest(a.measure)) gov(`It changes the evidence that judges "${label}".`);
+    else if (b.measure && a.measure && !sameEvidence) gov(`It changes the evidence that judges "${label}".`);
   };
   const bar = (b, a, field, label) => {
     const move = barMove(b[field], a[field]);
-    if (move === 'stricter') rec(`Tightens "${label}": ${b[field]} → ${a[field]}.`, true);
+    if (move === 'stricter') rec(`Tightens "${label}": ${b[field]} → ${a[field]}.`, 'tighten', true);
     else if (move === 'looser') gov(`It loosens "${label}": ${b[field]} → ${a[field]}.`);
     else if (move === 'reworded') gov(`It rewords "${label}", not only its number.`);
     else if (move === 'rewritten') gov(`It rewrites "${label}" without making it stricter.`);
@@ -326,12 +337,12 @@ function classifyCriteria(base, next) {
   for (const b of br) if (!nr.some((a) => a.id === b.id)) gov(b.consideration ? `It removes the consideration "${b.text}".` : `It removes the hard Requirement "${b.text}".`);
   for (const a of nr) {
     const b = br.find((x) => x.id === a.id);
-    if (!b) { rec(`Adds the Requirement "${a.text}"${a.consideration ? ', as a consideration' : ''}.`, !a.consideration); continue; }
-    if (b.consideration && !a.consideration) rec(`Makes "${b.text}" a hard Requirement.`, true);
+    if (!b) { rec(`Adds the Requirement "${a.text}"${a.consideration ? ', as a consideration' : ''}.`, 'add-requirement', !a.consideration); continue; }
+    if (b.consideration && !a.consideration) rec(`Makes "${b.text}" a hard Requirement.`, 'harden', true);
     if (!b.consideration && a.consideration) gov(`It makes "${b.text}" a consideration instead of a hard Requirement.`);
     if (effectiveJudgment(a) !== effectiveJudgment(b)) gov(`It changes how "${b.text}" is judged.`);
     for (const f of ['kind', 'bar']) if (String(a[f] || '') !== String(b[f] || '')) gov(`It changes the ${f === 'bar' ? 'bar' : 'kind'} of "${b.text}".`);
-    evidenceMove(b, a, b.text);
+    evidenceMove(b, a, b.text, 'requirements');
     bar(b, a, 'text', b.text);
   }
   const bc = base.criteria || [];
@@ -341,14 +352,14 @@ function classifyCriteria(base, next) {
     const b = bc.find((x) => x.id === a.id);
     if (!b) { gov(`It adds the Target "${a.name}".`); continue; }
     for (const f of ['name', 'note', 'requirement', 'bar']) if (String(a[f] || '') !== String(b[f] || '')) gov(`It changes the ${f === 'requirement' ? 'Requirement it judges' : f} of "${b.name}".`);
-    evidenceMove(b, a, b.name);
+    evidenceMove(b, a, b.name, 'criteria');
     bar(b, a, 'target', b.name);
   }
   return out;
 }
 
 function classifyStakeholders(base, next, nameOf = (k) => k) {
-  const out = { recorded: [], governed: [], raises: false };
+  const out = { recorded: [], governed: [], raises: false, kinds: [] };
   const role = (st) => (peopleRoleOf(st) === 'reviewer' ? 'Reviewer' : 'Stakeholder');
   for (const b of base) {
     const a = next.find((x) => x.person === b.person);
@@ -356,12 +367,13 @@ function classifyStakeholders(base, next, nameOf = (k) => k) {
     if (role(a) !== role(b)) out.governed.push(`It changes ${nameOf(b.person)} from ${role(b)} to ${role(a)}.`);
     if (String(a.team || '') !== String(b.team || '')) out.governed.push(`It changes ${nameOf(b.person)}'s team label.`);
   }
-  for (const a of next) if (!base.some((b) => b.person === a.person)) out.recorded.push(`Adds ${nameOf(a.person)} as a ${role(a)}.`);
+  for (const a of next) if (!base.some((b) => b.person === a.person)) { out.recorded.push(`Adds ${nameOf(a.person)} as a ${role(a)}.`); out.kinds.push('people'); }
   return out;
 }
 
 function classifyContract(base, next) {
-  const out = { recorded: [], governed: [], raises: false };
+  const out = { recorded: [], governed: [], raises: false, kinds: [] };
+  const rec = (t) => { out.recorded.push(t); out.kinds.push('boundary'); };
   const n = (list) => (list || []).map(norm);
   for (const k of SECTION_KEYS) {
     const b = base[k] || [];
@@ -370,17 +382,17 @@ function classifyContract(base, next) {
     const removed = b.filter((t) => !n(a).includes(norm(t)));
     const label = SECTION_LABELS[k];
     if (RESTRICTIVE.includes(k)) {
-      for (const t of added) out.recorded.push(`Adds the Boundary "${t}" under "${label}".`);
+      for (const t of added) rec(`Adds the Boundary "${t}" under "${label}".`);
       for (const t of removed) out.governed.push(`It removes the Boundary "${t}" from "${label}", which permits more.`);
     } else {
-      for (const t of removed) out.recorded.push(`No longer allows "${t}".`);
+      for (const t of removed) rec(`No longer allows "${t}".`);
       for (const t of added) out.governed.push(`It allows "${t}", which permits more.`);
     }
   }
   const bd = base.dataSeen || [];
   const ad = next.dataSeen || [];
   for (const f of ad) if (!bd.includes(f)) out.governed.push(`It lets the AI see "${f}".`);
-  for (const f of bd) if (!ad.includes(f)) out.recorded.push(`Stops the AI seeing "${f}".`);
+  for (const f of bd) if (!ad.includes(f)) rec(`Stops the AI seeing "${f}".`);
   const bm = base.ruleMeasures || {};
   const am = next.ruleMeasures || {};
   for (const line of new Set([...Object.keys(bm), ...Object.keys(am)])) {
@@ -393,10 +405,20 @@ function classifyContract(base, next) {
   return out;
 }
 
+// A link Authority Lab made (`auto`) is provisional until a person confirms
+// or changes it, or an expansion Decision relied on it (#157): after that it
+// carries the same weight as a link a person chose.
+export function provisionalLink(state, capabilityId, kind, rowId) {
+  const row = current(state, capabilityId, kind).find((r) => r.id === rowId);
+  if (!row || !row.measure || !row.measure.auto) return false;
+  const withAuto = new Set(versionList(state, capabilityId, kind).filter((v) => (v.value || []).some((r) => r.id === rowId && r.measure && r.measure.auto)).map((v) => v.version));
+  return !state.decisionRecords.some((r) => r.capabilityId === capabilityId && ['expand', 'expand-limits'].includes(r.option) && r.versions && withAuto.has(r.versions[kind]));
+}
+
 // What a change after results is: what it records, what needs sign-off, and
 // whether it raises the decision bar.
 export function classifyChange(state, capabilityId, kind, value) {
-  if (kind === 'criteria') return classifyCriteria({ criteria: current(state, capabilityId, 'criteria'), requirements: current(state, capabilityId, 'requirements') }, value);
+  if (kind === 'criteria') return classifyCriteria({ criteria: current(state, capabilityId, 'criteria'), requirements: current(state, capabilityId, 'requirements') }, value, (k, rowId) => provisionalLink(state, capabilityId, k, rowId));
   if (kind === 'stakeholders') return classifyStakeholders(current(state, capabilityId, 'stakeholders'), value, (k) => (people(state)[k] || { name: k }).name);
   if (kind === 'contract') return classifyContract(current(state, capabilityId, 'contract'), value);
   throw new Error(`Unknown amendment kind: ${kind}`);
@@ -415,10 +437,13 @@ export function recordedChange(state, capabilityId, by, c) {
   return { ok: true, reason: null };
 }
 
-const RECORDED_TITLE = { criteria: 'Requirements or Targets changed after results, recorded', stakeholders: 'People added after results, recorded', contract: 'Boundaries tightened, recorded' };
-function applyRecorded(state, capabilityId, kind, value, by, reason, changes) {
+const RECORDED_TITLE = { criteria: 'Requirements or Targets changed after results, recorded', links: 'Evidence linked, recorded', stakeholders: 'People added after results, recorded', contract: 'Boundaries tightened, recorded' };
+function applyRecorded(state, capabilityId, kind, value, by, reason, changes, kinds = []) {
   const cap = getCapability(state, capabilityId);
-  const meta = { recorded: true, changes };
+  // Only linking evidence to the existing bar: not a change to what counts
+  // as success, so it isn't flagged as "changed after results" (#157).
+  const linksOnly = kinds.length > 0 && kinds.every((k) => k === 'link');
+  const meta = { recorded: true, changes, changeKinds: kinds, ...(linksOnly ? { linksOnly: true } : {}) };
   let s;
   if (kind === 'criteria') {
     const requirements = proposalReadiness(state, capabilityId, { kind: 'criteria', value }).proposed.requirements;
@@ -435,7 +460,7 @@ function applyRecorded(state, capabilityId, kind, value, by, reason, changes) {
     objectKind: kind,
     version: v[kind],
     recorded: true,
-    title: RECORDED_TITLE[kind],
+    title: linksOnly ? RECORDED_TITLE.links : RECORDED_TITLE[kind],
     body: `${cap.name}: ${people(state)[by].name} recorded this without approval, because it only completes or strengthens the bar: ${changes.join(' ')} Reason: ${reason}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/versions?kind=${kind}&version=${v[kind]}`,
@@ -470,11 +495,11 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
   let shortcutDeclined = null;
   if (c.recorded.length && !c.governed.length) {
     const allowed = recordedChange(state, capabilityId, by, c);
-    if (allowed.ok) return applyRecorded(state, capabilityId, kind, clean, by, why, c.recorded);
+    if (allowed.ok) return applyRecorded(state, capabilityId, kind, clean, by, why, c.recorded, c.kinds);
     shortcutDeclined = allowed.reason;
   }
   const required = signoffRequirements(state, capabilityId, by);
-  const eligible = namedStakeholders(state, capabilityId).filter((k) => k !== by);
+  const eligible = (required.reviewerRequired ? reviewersAndOwner(state, capabilityId) : namedStakeholders(state, capabilityId)).filter((k) => k !== by);
   const feasible = signoffFeasibility(state, capabilityId, required, eligible, by);
   if (!feasible.ok) throw new Error(feasible.reason);
   const d = capData(state, capabilityId);
@@ -514,9 +539,18 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
 
 // Can the eligible approvers ever satisfy the rule? Checked when a proposal
 // opens, so nothing is recorded that can never complete.
+// The owner and the named Reviewers, who can approve a consequential change
+// without formal Risk approvals (#157).
+export function reviewersAndOwner(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  const reviewers = current(state, capabilityId, 'stakeholders').filter((st) => peopleRoleOf(st) === 'reviewer').map((st) => st.person);
+  return [...new Set([...(cap && isActivePerson(state, cap.owner) ? [cap.owner] : []), ...reviewers.filter((k) => isActivePerson(state, k))])];
+}
+
 export function signoffFeasibility(state, capabilityId, required, eligible, proposedBy) {
   const cap = getCapability(state, capabilityId);
   const who = people(state)[proposedBy] ? people(state)[proposedBy].name : 'you';
+  if (required.reviewerRequired && !eligible.length) return { ok: false, reason: `This is a consequential change, so a named Reviewer must approve it and acknowledge the risk${proposedBy === cap.owner ? '' : ` (or the owner, ${people(state)[cap.owner].name})`}. There's no one other than ${who} who can. Name a Reviewer for ${cap.name} first.` };
   if (required.ownerOnly) {
     if (!eligible.includes(cap.owner)) return { ok: false, reason: `Only the owner, ${people(state)[cap.owner].name}, can approve this, and they can't right now (they proposed it or aren't active). Ask another stakeholder to propose it${soloHint(state)}` };
     return { ok: true };
@@ -579,13 +613,16 @@ export function approvalEligibility(state, capabilityId, proposal, personKey) {
   return { ok: true, role, reason: null };
 }
 
-export function approveProposal(state, capabilityId, proposalId, { by } = {}) {
+export function approveProposal(state, capabilityId, proposalId, { by, riskAck = false } = {}) {
   const cap = getCapability(state, capabilityId);
   const proposal = getProposal(state, capabilityId, proposalId);
   if (!proposal) throw new Error('This change couldn\'t be found.');
   const e = approvalEligibility(state, capabilityId, proposal, by);
   if (!e.ok) throw new Error(e.reason);
-  const approvals = [...proposal.approvals, { by, byAt: snapshotPerson(state, by), role: e.role, date: state.today }];
+  // A consequential change without formal Risk approvals (#157): the
+  // Reviewer says, as part of approving, that they considered the risk.
+  if (proposal.required.riskAck && riskAck !== true) throw new Error('This is a consequential change: confirm that you\'ve considered what could go wrong with it before approving.');
+  const approvals = [...proposal.approvals, { by, byAt: snapshotPerson(state, by), role: e.role, date: state.today, ...(proposal.required.riskAck ? { riskAck: true } : {}) }];
   let next = { ...proposal, approvals };
   let s = state;
   const who = people(state)[by];

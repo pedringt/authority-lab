@@ -11,7 +11,7 @@ import { html, raw, badge, notice, selectField, person, fmtDate, lede } from '..
 import {
   getCapability, capData, current, versionList, actor, activePeople, workflowOf, RISK_OPTIONS, levelName,
   CONTEXT_FIELDS, contextNow, confirmedContext, contextDescription, LIFECYCLE, BASELINE_FIELDS, baselineNow, baselineVersions, authorityBaseline,
-  LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, lowRiskMismatch, contextQuestions, setupState, setupReview, setupConfirmation, resultsLockWarning,
+  LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, lowRiskMismatch, contextQuestions, noHardQuality, NO_HARD_QUALITY, setupState, setupReview, setupConfirmation, resultsLockWarning,
   BASELINE_REQUIRED, boundaries, ENFORCEMENT, peopleModel, criteriaSaved, evidenceCoverage, coverageText, performanceResultsSeen, enforcementTerms,
 } from '../store/index.js';
 import { STARTING_POINTS, findStartingPoint, familiesFor } from '../data/templates.js';
@@ -308,6 +308,7 @@ export function reviewView(state, capabilityId, query) {
   <section class="card"><h2>Requirements</h2>${reqs.length ? html`<ul class="plain-list">${reqs.map((q) => html`<li>${q.text}${q.kind === 'coverage' ? html` <span class="muted small">coverage rule</span>` : ''}${q.bar === 'needs-decision' ? html` ${badge('decision', 'Needs decision')}` : ''}${targets.filter((t) => t.requirement === q.id).map((t) => html`<div class="muted small">Measured as ${t.name}, bar ${t.bar === 'needs-decision' ? html`${badge('decision', 'Needs decision')}` : t.target}</div>`)}</li>`)}</ul>${targets.filter((t) => !t.requirement).length ? html`<p class="muted small">Other measures: ${targets.filter((t) => !t.requirement).map((t) => `${t.name} (${t.target})`).join('; ')}</p>` : ''}` : html`<p class="muted">Not saved yet.</p>`}</section>
   <section class="card"><h2>Evidence</h2><p>${criteriaSaved(state, capabilityId) ? coverageText(evidenceCoverage(state, capabilityId)) : 'Set the Requirements first.'}</p></section>`}
   <section class="card"><h2>People</h2><p>Owner: <strong>${person(pm.owner).name}</strong>. Reviewers: ${pm.reviewers.length ? pm.reviewers.map((k) => person(k).name).join(', ') : 'none'}. Stakeholders: ${others.length ? others.map((k) => person(k).name).join(', ') : 'none'}.</p></section>
+  ${noHardQuality(state, capabilityId) ? notice('watch', NO_HARD_QUALITY.title, NO_HARD_QUALITY.text, { link: `#/capabilities/${cap.id}/criteria/edit`, linkText: 'Edit the Requirements' }) : ''}
   ${r.open.length ? html`<section class="card"><h2>Open, and allowed at confirmation</h2><ul class="plain-list">${r.open.map((o) => html`<li>${o}</li>`)}</ul></section>` : ''}
   ${confirmed ? '' : r.ready ? html`<div class="card authorize">
       <p class="eyebrow">Confirm</p>
