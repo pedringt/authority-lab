@@ -100,7 +100,7 @@ test('State\'s real run is judged through the normal model: the approved bar, Dr
   assert.equal(rec.externalEvidence[0].config.prompt, 'p-3c1347d6ec36');
   // Evals aren't real use.
   assert.equal(realUseEvidence(s, ID), false);
-  assert.throws(() => proposeAuthority(s, ID, 3, { by: PAIGE }), /Level 3 needs evidence from real use/);
+  assert.throws(() => proposeAuthority(s, ID, 3, { by: PAIGE }), /Level 3 needs at least 20 cases from real use/);
 });
 
 test('Decide doesn\'t call one person with no position "all agree"', async () => {

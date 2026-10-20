@@ -134,7 +134,7 @@ test('D2: a real workspace can propose beyond Draft, one level at a time; Level 
   assert.equal(getCapability(s, id).authority.level, 2);
   assert.equal(readyToPropose(s, id), false, 'eval results alone are not real use');
   setPeople(people(s)); setToday(s.today);
-  assert.match(page({ ...s, actingAs: ANA }, id, 'decide'), /Level 3, Act Within Limits, needs evidence from real use/);
+  assert.match(page({ ...s, actingAs: ANA }, id, 'decide'), /Level 3, Act Within Limits, needs at least 20 cases from real use/);
   s = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 48, total: 50, kind: 'production', by: BEN });
   assert.equal(readyToPropose(s, id), true);
   assert.match(page({ ...s, actingAs: ANA }, id, 'decide'), /When the evidence supports more, it starts with a new Proposal\. Propose a move to Level 3/);

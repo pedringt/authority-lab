@@ -506,7 +506,8 @@ document.addEventListener('click', (e) => {
   if (action === 'proposal-approve') {
     const pid = btn.dataset.proposal;
     const route = `#/capabilities/${capId}/proposals/${pid}`;
-    dispatchOr(route, () => { store.dispatch('approveProposal', capId, pid, { by: actor(store.get(), capId) }); clearErrorOn(route, 'error'); });
+    const ack = document.querySelector(`[data-risk-ack="${pid}"]`);
+    dispatchOr(route, () => { store.dispatch('approveProposal', capId, pid, { by: actor(store.get(), capId), riskAck: Boolean(ack && ack.checked) }); clearErrorOn(route, 'error'); });
     return;
   }
   if (action === 'row-add') {
@@ -718,7 +719,7 @@ document.addEventListener('submit', (e) => {
     const fields = { by: actor(store.get(), capId), label: v('label'), kind: v('kind'), type: v('type'), passed: v('passed'), total: v('total'), value: v('value'), segment: v('segment'), severity: v('severity'), observedAt: v('observedAt'), note: v('note'), url: v('url') };
     dispatchOr(here(), () => {
       // From a Requirement or Target row (#142): the row's own metric.
-      if (evForm.dataset.row) { store.dispatch('recordResult', capId, { ...fields, label: undefined, rowKind: evForm.dataset.rowKind, rowId: evForm.dataset.row }); location.hash = `#/capabilities/${capId}/evidence/configure`; return; }
+      if (evForm.dataset.row) { store.dispatch('recordResult', capId, { ...fields, label: undefined, counts: v('counts') || undefined, rowKind: evForm.dataset.rowKind, rowId: evForm.dataset.row }); location.hash = `#/capabilities/${capId}/evidence/configure`; return; }
       store.dispatch('recordManualEvidence', capId, fields);
       location.hash = `#/capabilities/${capId}?tab=decide&show=all`;
     });
@@ -834,6 +835,13 @@ document.addEventListener('submit', (e) => {
     // Stay where the decision was made: Status or the full approvals list.
     const route = here();
     dispatchOr(route, () => { store.dispatch(decision, id, { by: actor(store.get(), item && item.capabilityId), reason }); clearErrorOn(route, 'error'); render(); });
+    return;
+  }
+  const policyForm = e.target.closest('[data-form="approval-policy"]');
+  if (policyForm) {
+    e.preventDefault();
+    const f = new FormData(policyForm);
+    dispatchOr('#/people?focus=workspace', () => { store.dispatch('setFormalRiskApprovals', { on: f.get('on') === 'on', by: actor(store.get()), reason: f.get('reason') }); location.hash = '#/people?focus=workspace'; render(); });
     return;
   }
   const renameForm = e.target.closest('[data-form="rename-workspace"]');

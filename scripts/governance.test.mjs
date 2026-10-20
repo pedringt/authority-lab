@@ -137,7 +137,7 @@ test('guards: only someone named records; a bar raised during an open decision s
 test('classifyChange names each part in plain words', () => {
   const [s, id] = firm();
   const c = classifyChange(s, id, 'criteria', reqs(s, id, (r) => [...r.map((x) => (x.id === 'accuracy' ? { ...x, text: 'Overall accuracy ≥ 95%' } : x.id === 'tone' ? { ...x, consideration: false } : x))]));
-  assert.deepEqual(c, { recorded: ['Tightens "Overall accuracy ≥ 90%": Overall accuracy ≥ 90% → Overall accuracy ≥ 95%.', 'Makes "Clients find the tone friendly" a hard Requirement.'], governed: [], raises: true });
+  assert.deepEqual(c, { recorded: ['Tightens "Overall accuracy ≥ 90%": Overall accuracy ≥ 90% → Overall accuracy ≥ 95%.', 'Makes "Clients find the tone friendly" a hard Requirement.'], governed: [], raises: true, kinds: ['tighten', 'harden'] });
 });
 
 test('screen: a proposal says why it needs sign-off', () => {

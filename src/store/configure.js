@@ -8,7 +8,7 @@
 import { getCapability } from './state.js';
 import { current } from './selectors.js';
 import { saveCriteria, criteriaLocked, barFromWords } from './evidence.js';
-import { proposeAmendment } from './proposals.js';
+import { proposeAmendment, provisionalLink } from './proposals.js';
 import { measureProblems } from './measures.js';
 
 export { barFromWords };
@@ -57,6 +57,7 @@ export function mapEvidence(state, capabilityId, { rowKind, rowId, measure, by, 
   }
   // After results (#155, R6): linking a row that had no evidence is recorded;
   // changing or removing an existing link needs approval. Either way, a reason.
-  if (why.length < 10) throw new Error(`Results already exist, so say why (a sentence or more). ${row.measure ? 'Changing which evidence judges this row needs approval.' : 'Linking it to its evidence is recorded with your name and reason; it needs no approval.'}`);
+  const provisional = row.measure && provisionalLink(state, capabilityId, rowKind === 'target' ? 'criteria' : 'requirements', rowId);
+  if (why.length < 10) throw new Error(`Results already exist, so say why (a sentence or more). ${row.measure && !provisional ? 'Changing which evidence judges this row needs approval.' : provisional ? 'Authority Lab made this link, so correcting it is recorded with your name and reason; it needs no approval.' : 'Linking it to its evidence is recorded with your name and reason; it needs no approval.'}`);
   return proposeAmendment(state, capabilityId, 'criteria', { value, by, reason: why });
 }

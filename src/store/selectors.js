@@ -107,7 +107,9 @@ export function amendmentsAfterEvidenceFor(state, record) {
   for (const kind of ['criteria', 'requirements']) {
     const inForce = record.versions[kind] || 0;
     for (const v of capData(state, record.capabilityId).versions[kind] || []) {
-      if (v.version > 1 && v.version <= inForce && v.afterEvidence) out.push({ kind, ...v });
+      // Linking evidence to the existing bar isn't a change to what counts as
+      // success (#157), so it isn't an "amended after evidence" version.
+      if (v.version > 1 && v.version <= inForce && v.afterEvidence && !v.linksOnly) out.push({ kind, ...v });
     }
   }
   return out;

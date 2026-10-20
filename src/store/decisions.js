@@ -2,6 +2,8 @@
 // scope copy, authorizing, and proposing a new level.
 
 import { getCapability, capData, updateCap, logEvent } from './state.js';
+import { MIN_PRODUCTION_SAMPLE } from './measures.js';
+import { measurementSample } from './external.js';
 import { versionsInForce, proposedAuthority, decisionRequired, levelName, authorityLabel, readiness, testSummary, performanceResultsSeen } from './selectors.js';
 import { people, snapshotPerson, requireActive, isActivePerson } from './people.js';
 import { setupConfirmed, UNCONFIRMED_REASON } from './setup.js';
@@ -482,9 +484,24 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
 
 // Evidence from real use (#126): a pilot, or any production result, imported
 // or recorded by hand. Evals and in-app tests are not real use.
-export function realUseEvidence(state, capabilityId) {
+// Real use (#157): Level 3 and above need at least MIN_PRODUCTION_SAMPLE
+// (20) cases from real use, a pilot or production results, on top of the
+// team's own hard Requirements. Results for the same metric add up (like
+// compatible reviews); different metrics may share cases, so the largest
+// single body of real-use cases counts, never a sum across metrics.
+export function realUseCases(state, capabilityId) {
   const d = capData(state, capabilityId);
-  return Boolean(d.pilot) || d.evidence.some((e) => e.external && e.external.kind === 'production');
+  const pilot = d.pilot ? Number(d.pilot.cases) || 0 : 0;
+  const byMetric = new Map();
+  for (const e of d.evidence) {
+    if (!e.external || e.external.kind !== 'production' || !e.measure) continue;
+    const key = e.measure.metric || e.metric || e.id;
+    byMetric.set(key, (byMetric.get(key) || 0) + (Number(measurementSample(e.measure)) || 0));
+  }
+  return Math.max(pilot, ...byMetric.values(), 0);
+}
+export function realUseEvidence(state, capabilityId) {
+  return realUseCases(state, capabilityId) >= MIN_PRODUCTION_SAMPLE;
 }
 
 // Whether the next level can be proposed now (#149: every level up to 4, one
@@ -516,7 +533,7 @@ function proposalChecks(state, capabilityId, target, by, what) {
   if (cap.status === 'not-delegated') throw new Error('This work is not delegated by design: it was deliberately kept with people, so the AI has no authority here.');
   if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
   if (!performanceResultsSeen(state, capabilityId)) throw new Error('There is no evidence yet. Run the tests, record a result, or have a connected source send results, then propose more authority.');
-  if (target >= 3 && !realUseEvidence(state, capabilityId)) throw new Error('Level 3 needs evidence from real use: a pilot at Draft, or production results from a connected source or recorded by hand.');
+  if (target >= 3 && !realUseEvidence(state, capabilityId)) throw new Error(`Level 3 needs at least ${MIN_PRODUCTION_SAMPLE} cases from real use: a pilot at Draft, or production results from a connected source or recorded by hand. So far: ${realUseCases(state, capabilityId)}.`);
   // #149 (R1-B): no expansion beyond observed behavior while it runs above
   // approved Authority. Governing the observed level is allowed.
   const gap = gapBlocks(state, capabilityId, target);

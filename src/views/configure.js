@@ -6,6 +6,7 @@
 import { html, notice, lede, badge, fmtDate } from '../ui.js';
 import {
   getCapability, actor, people, criteriaLocked, evidenceSources, evidenceCoverage, coverageText, COVERAGE_WORDS, MEASURE_STAT_WORDS, barFromWords, SOURCE_KINDS, TESTS_SOURCE, MANUAL_SOURCE, findSource, isCoverageRule, isIncidentRequirement, judgedBy, rowMetric,
+  provisionalLink,
 } from '../store/index.js';
 import { RESULT_STATUS_TONE, unlinkedNotice } from './lightweight.js';
 
@@ -71,6 +72,8 @@ function editForm(state, cap, c, locked) {
   const m = c.row.measure || (isCoverageRule(c.row) ? {} : { source: MANUAL_SOURCE, metric: rowMetric(c.kind, c.id) });
   const words = c.kind === 'target' ? c.row.target : c.row.text;
   const bar = barFromWords(words);
+  // A link Authority Lab made is provisional (#157): correcting it is recorded.
+  const provisional = c.mapped && provisionalLink(state, cap.id, c.kind === 'target' ? 'criteria' : 'requirements', c.id);
   const metrics = sources.flatMap((s) => s.metrics.map((x) => ({ ...x, source: s.name })));
   const segments = [...new Set(metrics.flatMap((x) => x.segments || []))];
   const opWords = { '>=': 'at least', '>': 'more than', '<=': 'at most', '<': 'less than', '=': 'exactly' };
@@ -89,9 +92,9 @@ function editForm(state, cap, c, locked) {
       <label>At least this many cases (optional) <input type="number" name="minSample" min="1" step="1" value="${m.minSample || ''}"></label>
       <label>Count results from <select name="kind"><option value="">Test cases and real use</option><option value="eval" ${m.kind === 'eval' ? 'selected' : ''}>Test cases only</option><option value="production" ${m.kind === 'production' ? 'selected' : ''}>Real use only</option></select></label>
     </div>
-    ${locked ? html`<label>${c.mapped ? 'Why (results exist, so changing its evidence needs approval)' : 'Why (results exist: linking it is recorded with your name, no approval needed)'} <input type="text" name="reason" maxlength="240" required placeholder="A sentence on why this evidence should judge it"></label>` : ''}
+    ${locked ? html`<label>${provisional ? 'Why (Authority Lab made this link: correcting it is recorded with your name, no approval needed)' : c.mapped ? 'Why (results exist, so changing its evidence needs approval)' : 'Why (results exist: linking it is recorded with your name, no approval needed)'} <input type="text" name="reason" maxlength="240" required placeholder="A sentence on why this evidence should judge it"></label>` : ''}
     <div class="form-actions">
-      <button class="btn btn-primary" type="submit" name="op" value="map" ${bar ? '' : 'disabled'}>${locked ? (c.mapped ? 'Propose this change' : 'Record this link') : 'Save'}</button>
+      <button class="btn btn-primary" type="submit" name="op" value="map" ${bar ? '' : 'disabled'}>${locked ? (provisional ? 'Record this correction' : c.mapped ? 'Propose this change' : 'Record this link') : 'Save'}</button>
       ${c.mapped ? html`<button class="btn" type="submit" name="op" value="unmap">${locked ? 'Propose removing it' : 'Remove the mapping'}</button>` : ''}
       <a class="btn btn-ghost" href="#/capabilities/${cap.id}/evidence/configure">Cancel</a>
     </div>

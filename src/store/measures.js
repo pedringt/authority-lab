@@ -33,7 +33,9 @@ export const MEASURE_STATS = ['rate', 'fail-rate', 'share', 'count', 'value', 's
 export const MEASURE_OPS = ['>=', '>', '<=', '<', '='];
 // `source` (#126) names the evidence source the metric comes from; without it,
 // any source's result for the metric counts.
-const KEYS = ['source', 'metric', 'segment', 'stat', 'op', 'value', 'minSample', 'kind'];
+// `auto`: Authority Lab made this link when the row's first result was
+// recorded (#157). It stays provisional until a person confirms or changes it.
+const KEYS = ['source', 'metric', 'segment', 'stat', 'op', 'value', 'minSample', 'kind', 'auto'];
 const PCT = new Set(['rate', 'fail-rate', 'share']);
 
 export function measureProblems(m) {
@@ -48,6 +50,7 @@ export function measureProblems(m) {
   if (typeof m.value !== 'number' || !Number.isFinite(m.value)) out.push('A measure needs a number to compare with.');
   if (m.minSample !== undefined && (!Number.isInteger(m.minSample) || m.minSample < 1)) out.push('A measure\'s minimum sample must be a whole number of cases.');
   if (m.kind !== undefined && !['eval', 'production'].includes(m.kind)) out.push('A measure\'s kind must be eval or production.');
+  if (m.auto !== undefined && m.auto !== true) out.push('A measure\'s auto flag can only be true.');
   if (m.source !== undefined && (typeof m.source !== 'string' || !/^[a-z0-9][a-z0-9-]{0,59}$/.test(m.source))) out.push('A measure\'s source must be an evidence source id.');
   return out;
 }
@@ -482,3 +485,15 @@ export function evidenceSignals(state, capabilityId) {
   }
   return out;
 }
+
+// No hard quality Requirement (#157): the only hard Requirements are coverage
+// rules (how many cases), so nothing about how well it works has to be Met
+// before authority expands. A warning, never a block.
+export function noHardQuality(state, capabilityId) {
+  const reqs = requirementsNow(state, capabilityId);
+  return reqs.length > 0 && !reqs.some((r) => !r.consideration && !isCoverageRule(r));
+}
+export const NO_HARD_QUALITY = {
+  title: 'No hard quality Requirement is currently required for expansion.',
+  text: 'Only how many cases there are has to be met. Every Requirement about quality or safety is a consideration, so none of them has to be Met before authority expands. That is allowed; make one hard if it should block.',
+};

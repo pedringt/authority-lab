@@ -298,7 +298,20 @@ function findRow(state, capabilityId, rowKind, rowId) {
 // The metric a row's results are recorded under. A row with no evidence
 // linked yet is linked to manual results here, before any results exist (the
 // usual rule); after results, linking it needs a proposal (Configure evidence).
-export function linkRowForResults(state, capabilityId, { rowKind, rowId, type, kind, by }) {
+// What a share in a row's bar counts (#157), from the bar's direction: an
+// "at most" share counts cases with the problem (factual errors ≤ 5%), an "at
+// least" share counts cases that passed (accuracy ≥ 90%). An exact bar says
+// neither, so the person is asked.
+export function shareCounts(words) {
+  const bar = barFromWords(words);
+  if (!bar) return null;
+  if (bar.op === '<=' || bar.op === '<') return 'problem';
+  if (bar.op === '>=' || bar.op === '>') return 'passed';
+  return null;
+}
+export const COUNTS_WORDS = { problem: 'cases with the problem (errors, failures, misses)', passed: 'cases that passed' };
+
+export function linkRowForResults(state, capabilityId, { rowKind, rowId, type, kind, counts, by }) {
   const row = findRow(state, capabilityId, rowKind, rowId);
   const label = rowKind === 'target' ? row.name : row.text;
   if (row.bar === 'needs-decision') throw new Error(`"${label}" has no bar yet: decide its number first.`);
@@ -326,9 +339,17 @@ export function linkRowForResults(state, capabilityId, { rowKind, rowId, type, k
   if (!bar) throw new Error(`"${label}" doesn't say a number to check. Give it a number first.`);
   if (criteriaLocked(state, capabilityId)) throw new Error(`Results already exist, so linking evidence to "${label}" needs approval. Propose it under Configure evidence.`);
   const metric = rowMetric(rowKind, rowId);
-  const stat = ROW_STAT[type];
+  let stat = ROW_STAT[type];
   if (!stat) throw new Error('Choose what kind of result this is.');
-  const measure = { source: MANUAL_SOURCE, metric, stat, op: bar.op, value: bar.value };
+  // A share is read the way the bar is written (#157): "≤ 5%" is a share
+  // with the problem, "≥ 90%" a share that passed. Only an exact bar asks.
+  if (type === 'rate') {
+    const reads = shareCounts(words) || counts;
+    if (!reads) throw new Error(`"${label}" doesn't say whether its share counts problems or passes. Say what the first number counts.`);
+    stat = reads === 'problem' ? 'fail-rate' : 'rate';
+  }
+  // Made by Authority Lab, not chosen by a person: provisional (#157).
+  const measure = { source: MANUAL_SOURCE, metric, stat, op: bar.op, value: bar.value, auto: true };
   const edit = (list) => list.map((r) => (r.id === rowId ? { ...r, measure } : r));
   const criteria = current(state, capabilityId, 'criteria');
   const requirements = current(state, capabilityId, 'requirements');
@@ -338,11 +359,25 @@ export function linkRowForResults(state, capabilityId, { rowKind, rowId, type, k
 }
 
 // Record evidence against one Requirement or Target row.
-export function recordResult(state, capabilityId, { rowKind, rowId, by, ...fields } = {}) {
+// `counts` (#157): what the first number of a share counts, 'problem' or
+// 'passed'. It defaults to how the row's bar reads. Stored results always
+// count passes, so a count of problems is turned into one.
+export function recordResult(state, capabilityId, { rowKind, rowId, by, counts, ...fields } = {}) {
   requireNamed(state, capabilityId, by, 'record evidence');
   const row = findRow(state, capabilityId, rowKind, rowId);
-  const linked = linkRowForResults(state, capabilityId, { rowKind, rowId, type: fields.type, kind: fields.kind, by });
-  return recordManualEvidence(linked.state, capabilityId, { ...fields, by, label: fields.label || (rowKind === 'target' ? row.name : row.text), metric: linked.metric });
+  const linked = linkRowForResults(state, capabilityId, { rowKind, rowId, type: fields.type, kind: fields.kind, counts, by });
+  let entry = fields;
+  if (fields.type === 'rate') {
+    const reads = counts || shareCounts(rowKind === 'target' ? row.target : row.text) || 'passed';
+    if (!['problem', 'passed'].includes(reads)) throw new Error('Say what the first number counts: cases with the problem, or cases that passed.');
+    if (reads === 'problem') {
+      const n = Number(fields.passed);
+      const total = Number(fields.total);
+      if (!Number.isFinite(n) || !Number.isFinite(total) || n < 0 || n > total) throw new Error('The number with the problem must be between 0 and the number of cases.');
+      entry = { ...fields, passed: String(total - n) };
+    }
+  }
+  return recordManualEvidence(linked.state, capabilityId, { ...entry, by, label: fields.label || (rowKind === 'target' ? row.name : row.text), metric: linked.metric });
 }
 
 // --- Uploads --------------------------------------------------------------

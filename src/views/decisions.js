@@ -6,7 +6,7 @@ import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -326,6 +326,11 @@ function hardRequirementsNotice(state, cap) {
     <p class="small"><a href="#/capabilities/${cap.id}?tab=decide&show=requirements">See every Requirement</a> · <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a></p></div></div>`;
 }
 
+// No hard quality Requirement (#157): a warning, never a block.
+function noHardQualityNotice(state, cap) {
+  return noHardQuality(state, cap.id) ? notice('watch', NO_HARD_QUALITY.title, NO_HARD_QUALITY.text, { link: `#/capabilities/${cap.id}?tab=decide&show=requirements`, linkText: 'See the Requirements' }) : '';
+}
+
 // Operating above approved Authority (#149), said on Decide too.
 function gapNotice(state, cap) {
   const g = authorityGap(state, cap.id);
@@ -341,7 +346,7 @@ function notProposableWhy(state, cap) {
   return cap.status === 'not-delegated' ? 'This work is kept with people by design, so there is nothing to decide.'
     : n > 4 ? 'It already has the most autonomy there is.'
       : gapBlocks(state, cap.id, n) ? gapBlocks(state, cap.id, n)
-        : n >= 3 && performanceResultsSeen(state, cap.id) && !realUseEvidence(state, cap.id) ? html`Level ${n}, ${levelName(n)}, needs evidence from real use: a pilot, or production results recorded by hand or from a connected source. Tests and evals alone aren't real use. <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a>`
+        : n >= 3 && performanceResultsSeen(state, cap.id) && !realUseEvidence(state, cap.id) ? html`Level ${n}, ${levelName(n)}, needs at least ${MIN_PRODUCTION_SAMPLE} cases from real use: a pilot, or production results recorded by hand or from a connected source. So far: ${realUseCases(state, cap.id)}. Tests and evals alone aren't real use. <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a>`
           : !performanceResultsSeen(state, cap.id) ? html`There is no evidence yet. Once there is some (a test run, a result recorded by hand, or results from a connected source), a move to Level ${n}, ${levelName(n)}, can be proposed. <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a>`
             : html`No one has proposed a move to Level ${n}, ${levelName(n)}, yet.`;
 }
@@ -391,6 +396,7 @@ function noDecisionView(state, cap, d, { runs, query = new URLSearchParams() }) 
   }
   return html`<div class="decide-flow">
     ${lead}
+    ${noHardQualityNotice(state, cap)}
     <section class="decide-step"><h2>What do we know?</h2>${whatWeKnow(state, cap, { runs })}</section>
     ${last ? html`<p class="muted small">Last decision: <a href="#/records/${last.id}">${optionLabel(last.option)}, ${fmtDate(last.date)}</a>. Every decision is in <a href="#/capabilities/${cap.id}?tab=history">History</a>.</p>` : ''}
   </div>`;
@@ -503,6 +509,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     ${gapNotice(state, cap)}
     <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded. Evidence never grants authority on its own.</p>${proposalBanner(state, cap, ps)}</div>
     ${hardRequirementsNotice(state, cap)}
+    ${noHardQualityNotice(state, cap)}
     ${restorationBlock(ps.prop ? ps.prop.restoration : restorationContext(state, cap.id), cap)}
     ${step('What changes if I approve this?', change)}
     ${step('What do we know?', html`${whatWeKnow(state, cap, { runs })}${frozenResults(ps.prop, ps.staleness)}`)}

@@ -2,6 +2,7 @@
 // breach, and the automatic restriction it triggers.
 
 import { getCapability, capData, updateCap, closeOpenProposal } from './state.js';
+import { formalRiskApprovals } from './policy.js';
 import { versionsInForce, authorityLabel, current, currentVersion, levelName } from './selectors.js';
 import { people, snapshotPerson, isActivePerson, isRiskApprover, soloHint } from './people.js';
 import { isHighOrFinancial } from './coverage.js';
@@ -265,8 +266,14 @@ export function reviewEligibility(state, capabilityId, personKey) {
   if (!p) return { ok: false, reason: 'Choose who is acting.' };
   if (!isActivePerson(state, personKey)) return { ok: false, reason: `${p.name} is deactivated and can't record a review.` };
   const risk = isRiskApprover(state, personKey);
-  if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so only a Risk approver can record this review. ${p.name} isn't a Risk approver.${soloHint(state)}` };
-  if (personKey !== cap.owner && !risk) return { ok: false, reason: `Only the owner (${people(state)[cap.owner].name}) or a Risk approver can record this review.` };
+  if (formalRiskApprovals(state)) {
+    if (isHighOrFinancial(state, capabilityId) && !risk) return { ok: false, reason: `${cap.name} is High impact or Financial, so only a Risk approver can record this review. ${p.name} isn't a Risk approver.${soloHint(state)}` };
+    if (personKey !== cap.owner && !risk) return { ok: false, reason: `Only the owner (${people(state)[cap.owner].name}) or a Risk approver can record this review.` };
+  } else {
+    // Without formal Risk approvals (#157): the owner or a named Reviewer.
+    const reviewer = current(state, capabilityId, 'stakeholders').some((st) => st.person === personKey && st.role === 'reviewer');
+    if (personKey !== cap.owner && !reviewer && !risk) return { ok: false, reason: `Only the owner (${people(state)[cap.owner].name}) or a named Reviewer can record this review.` };
+  }
   const expansion = restrictedExpansion(state, capabilityId);
   if (expansion && expansion.authorizedBy === personKey) return { ok: false, reason: `${p.name} approved the authority that was just reduced (${expansion.id}), so someone else needs to review it.${soloHint(state)}` };
   return { ok: true, reason: null };

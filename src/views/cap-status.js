@@ -7,7 +7,7 @@
 import { DATA_FIELDS } from '../data/seed.js';
 import { setupSequence } from './setupflow.js';
 import { html, badge, kv, fmtDate, person, personAt, notice, tabIntro, SWITCH_PERSON } from '../ui.js';
-import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText, authorityGap, actsThroughGate } from '../store/index.js';
+import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText, authorityGap, actsThroughGate, boundaries } from '../store/index.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
 import { proposalsList, amendLink } from './proposals.js';
@@ -395,7 +395,15 @@ function positions(state, cap, d) {
 export function contractTab(state, cap, d) {
   const c = current(state, cap.id, 'contract');
   const risk = current(state, cap.id, 'risk');
-  const lines = (items) => (items.length ? html`<ul class="contract-list">${items.map((i) => html`<li>${i}</li>`)}</ul>` : html`<p class="muted">None.</p>`);
+  // Each line says whether software enforces it or people follow it (#157,
+  // D7): "Written Boundary" or "Enforced Boundary", never inferred by the reader.
+  const b = boundaries(state, cap.id);
+  const how = new Map([...b.categories.flatMap((x) => x.lines), ...b.restrictions].map((l) => [l.text, l.enforcement]));
+  const label = (t) => {
+    const e = how.get(t) || 'documented';
+    return e === 'enforced' ? badge('pass', 'Enforced Boundary') : e === 'model-reported' ? badge('watch', 'Checked against the model\'s report') : badge('neutral', 'Written Boundary');
+  };
+  const lines = (items) => (items.length ? html`<ul class="contract-list">${items.map((i) => html`<li><span>${i}</span> ${label(i)}</li>`)}</ul>` : html`<p class="muted">None.</p>`);
   const part = (cls, title, body) => html`<section class="st-rule ${cls}"><h3>${title}</h3>${body}</section>`;
   const riskBlock = part('st-rule-risk', 'Risk profile', html`<p class="muted small">The higher the risk, the more evidence it needs before its autonomy expands.</p>${kv([
     ['How serious would a bad decision be?', risk.impact],
@@ -418,7 +426,7 @@ export function contractTab(state, cap, d) {
       ${part('st-rule-ask', 'Requires human review', html`<div class="st-two"><div><p class="fact-label">For these cases</p>${lines(c.mustAsk)}</div>
         <div><p class="fact-label">Whenever this comes up</p>${lines(c.escalation)}${c.escalation.some((l) => /confidence/i.test(l)) ? html`<p class="muted small">Confidence is reported by the model and can't be verified, so low confidence can send a case to human review, but high confidence never lets an action through on its own.</p>` : ''}</div></div>`)}
       ${part('st-rule-never', 'Never allowed', lines(c.mustNever))}
-      ${part('st-rule-auto', 'Automation is pulled back if', html`${lines(c.autoRestriction)}<p class="muted small">Only a person can expand autonomy. Software pulls it back on its own when one of these happens.</p>`)}
+      ${part('st-rule-auto', 'Automation is pulled back if', html`${lines(c.autoRestriction)}<p class="muted small">Only a person can expand autonomy. Where a line is enforced, software pulls autonomy back on its own when it happens; a written one is watched by people.</p>`)}
       ${dataBoundary(c)}
       ${riskBlock}
     </div>`;

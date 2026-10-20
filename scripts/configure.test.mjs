@@ -149,7 +149,7 @@ test('more authority can be proposed on any measured evidence, without in-app te
   const atDraft = authorize(replaceProposal(requirementsMet(setRationale(ready, id, 'The connected eval meets every Requirement.'), id), id, { by: 'maya' }), id, { by: 'maya' });
   assert.equal(getCapability(atDraft, id).authority.level, 2);
   assert.equal(realUseEvidence(atDraft, id), false);
-  assert.throws(() => proposeAuthority(atDraft, id, 3, { by: 'maya' }), /Level 3 needs evidence from real use/);
+  assert.throws(() => proposeAuthority(atDraft, id, 3, { by: 'maya' }), /Level 3 needs at least 20 cases from real use/);
   // Production results, connected or recorded by hand, are real use.
   const prod = importEvidence(atDraft, evalEnv(id, { id: 'evals:production:1', kind: 'production', measurements: [{ metric: 'answer-quality', type: 'rate', passed: 40, total: 44 }] }));
   assert.ok(proposeAuthority(prod, id, 3, { by: 'maya' }).capabilityData[id].decision.proposed);

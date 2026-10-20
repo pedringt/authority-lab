@@ -95,6 +95,17 @@ Implemented in PR 4 (#155):
 - Proposals carry `needsSignoffBecause`, shown as "Why this needs sign-off".
 - Fixed on the way: change requests can now switch a Requirement between hard and consideration (the merge used to keep the stored value); a recorded change to a capability with no Targets keeps `noTargets`, so it never unlocks the bar.
 
+Guardrail pass before Phase 6 (#157; Paige, 2026-10-20, after the post-remediation re-walk):
+- Result entry reads the row's bar. An "at most" share ("Factual errors ≤ 5%") counts cases with the problem and is measured as a fail rate; an "at least" share counts passes. The form asks what "How many" counts, defaulting from the bar, and asks outright when the bar doesn't say (an exact bar). 1 error in 25 drafts is 4%, Met.
+- A link Authority Lab makes on a row's first result is marked `auto` and is provisional. Confirming, correcting or removing it is recorded, not governed, until an expansion Decision has relied on it. A link a person chose keeps R6's rule.
+- Formal Risk approvals are an optional workspace policy (People → Workspace, workspace admin, with a reason). Off by default for real workspaces; on for the Northstar demo. Without it, a consequential governed change (High impact or legal/financial consequences) needs one named Reviewer, or the owner if a Reviewer proposed it, who confirms they considered the risk; the coverage warning and the Risk-only safety review apply only under the policy.
+- Level 3 and above need at least 20 real-use cases (`MIN_PRODUCTION_SAMPLE`): a pilot, or production results. Results for the same metric add up; different metrics may share cases, so the largest single body of cases counts. The team's own stricter hard Requirements still apply.
+- When every hard Requirement is a coverage rule, Decide and the setup Review say "No hard quality Requirement is currently required for expansion." A warning, never a block.
+- A recorded change that only links evidence (`linksOnly`) is not an "amended after evidence" version, so it doesn't trigger "Targets changed after results were seen". Tightening still does.
+- Each Boundary line on Status shows "Written Boundary" or "Enforced Boundary" (or "Checked against the model's report").
+- Implementation calls for Paige to confirm: a Reviewer-proposed consequential change can be approved by the owner; a provisional link stops being provisional once any expansion Decision was recorded with it in force; the risk acknowledgment is a checkbox, with no note.
+- Left for Phase 6: the Decision form's input count, the Context form and description extraction.
+
 Consequence fixes: "Proposal" is reserved for authority Proposals (amendments P-1, P-2… are **Change requests**); **Requirements** everywhere (not Checks or Decision requirements); No evidence, Not enough evidence, Unknown and Not met look different; no raw keys; refund-specific controls leave generic setup (PR 3); Welcome offers "Start your own workspace"; Overview shows the next action when Decide says a capability is ready.
 
 Held positions stay: no exceptions system yet, Investigate stays an activity, material changes stay date-only.

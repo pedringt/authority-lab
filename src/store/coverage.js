@@ -1,6 +1,7 @@
 // Coverage warnings (#25). Warnings never block anything; they explain a gap.
 
 import { getCapability, capData } from './state.js';
+import { formalRiskApprovals } from './policy.js';
 import { current } from './selectors.js';
 import { people, isActivePerson, isRiskApprover, RIGHT_LABELS } from './people.js';
 import { namedStakeholders } from './proposals.js';
@@ -14,7 +15,8 @@ export function isHighOrFinancial(state, capabilityId) {
 // Financial capability needs two, because one of them could be the proposer.
 export function riskCoverage(state, capabilityId) {
   const approvers = namedStakeholders(state, capabilityId).filter((k) => isRiskApprover(state, k));
-  const needed = isHighOrFinancial(state, capabilityId) ? 2 : 0;
+  // Only under formal Risk approvals (#157).
+  const needed = isHighOrFinancial(state, capabilityId) && formalRiskApprovals(state) ? 2 : 0;
   return { approvers, needed, short: approvers.length < needed };
 }
 

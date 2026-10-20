@@ -157,7 +157,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
   ${p.status === 'open' ? section('Approval', html`<div class="card authorize">
     <p class="eyebrow">Demo as ${who.name}, ${who.role}</p>
     ${elig.ok
-      ? html`<p>${who.name} can approve as ${roleLabel(elig.role)}.</p><button class="btn btn-primary" data-action="proposal-approve" data-capability="${cap.id}" data-proposal="${p.id}">Approve</button>`
+      ? html`<p>${who.name} can approve as ${roleLabel(elig.role)}.</p>${p.required.riskAck ? html`<label class="check"><input type="checkbox" id="risk-ack-${p.id}" data-risk-ack="${p.id}"><span>I've considered what could go wrong with this change, and I accept the risk.</span></label>` : ''}<button class="btn btn-primary" data-action="proposal-approve" data-capability="${cap.id}" data-proposal="${p.id}">Approve</button>`
       : html`<p class="muted">${elig.reason}</p>`}
     ${acting === p.proposedBy
       ? html`<form class="line-add reject-form" data-form="withdraw-proposal" data-proposal="${p.id}">

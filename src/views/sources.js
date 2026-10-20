@@ -3,9 +3,9 @@
 // the implementation team's job and never happens here; this page shows what
 // is connected and what each source has sent.
 
-import { html, notice, lede, fmtDate, badge, SWITCH_PERSON } from '../ui.js';
+import { raw, html, notice, lede, fmtDate, badge, SWITCH_PERSON } from '../ui.js';
 import { unlinkedNotice } from './lightweight.js';
-import { unlinkedBeforeResults, current, evidenceSources, SOURCE_KINDS, CONNECTIONS, getCapability, actor, manualEntryEligibility, people, workspaceOf, resultsLockWarning } from '../store/index.js';
+import { unlinkedBeforeResults, current, evidenceSources, SOURCE_KINDS, CONNECTIONS, getCapability, actor, manualEntryEligibility, people, workspaceOf, resultsLockWarning, shareCounts, COUNTS_WORDS } from '../store/index.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
@@ -45,6 +45,9 @@ export function recordEvidenceView(state, capabilityId, query) {
   const row = rowId ? (rowKind === 'target' ? current(state, capabilityId, 'criteria') : current(state, capabilityId, 'requirements')).find((r) => r.id === rowId) : null;
   const rowLabel = row ? (rowKind === 'target' ? `${row.name} (${row.target})` : row.text) : null;
   const back = row ? `#/capabilities/${cap.id}/evidence/configure` : `#/capabilities/${cap.id}?tab=decide&show=all`;
+  // What a share counts (#157): read from how the row is measured, or from
+  // its bar ("≤ 5%" counts problems). Asked when neither says.
+  const reads = !row ? null : row.measure ? (row.measure.stat === 'fail-rate' ? 'problem' : row.measure.stat === 'rate' ? 'passed' : null) : shareCounts(rowKind === 'target' ? row.target : row.text);
   return html`<div class="page-head"><div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Evidence</p>
       <h1>${row ? 'Record result' : 'Record a result'}</h1>${row ? html`<p class="lede">For: <strong>${rowLabel}</strong></p>` : ''}
@@ -53,7 +56,7 @@ export function recordEvidenceView(state, capabilityId, query) {
     ${error ? notice('fail', 'Couldn\'t record the result', error) : ''}
     ${unlinkedBeforeResults(state, cap.id) ? unlinkedNotice(state, cap) : resultsLockWarning(state, cap.id) ? notice('watch', 'Before you record results', resultsLockWarning(state, cap.id)) : ''}
     ${ok.ok ? '' : notice('watch', 'You can\'t record results for this capability', `${ok.reason}`)}
-    ${row && !row.measure ? notice('neutral', 'This links the row to results people record', 'Recording the first result links this row to manual results, so later results for it combine. After results exist, changing which evidence judges a row needs approval.') : ''}
+    ${row && !row.measure ? notice('neutral', 'This links the row to results people record', 'Recording the first result links this row to manual results, so later results for it combine. Authority Lab makes that link, so if it reads the results the wrong way, correcting it needs no approval.') : ''}
     <form class="card form-stack" data-form="record-evidence" data-capability="${cap.id}" ${row ? html`data-row-kind="${rowKind}" data-row="${rowId}"` : ''}>
       ${row ? '' : html`<label>What was measured <input type="text" name="label" maxlength="80" required placeholder="Policy compliance in a Risk review"></label>`}
       <fieldset class="choice-row"><legend>Measured on</legend>
@@ -65,8 +68,12 @@ export function recordEvidenceView(state, capabilityId, query) {
         <label><input type="radio" name="type" value="count"> A number of events (failures, incidents)</label>
         <label><input type="radio" name="type" value="value"> A single number</label>
       </fieldset>
+      ${row ? html`<fieldset class="choice-row"><legend>For a share, "How many" counts</legend>
+        ${['problem', 'passed'].map((k) => html`<label><input type="radio" name="counts" value="${k}" ${reads === k ? raw('checked') : ''}> ${COUNTS_WORDS[k]}</label>`)}
+        <p class="muted small">${reads ? `Set from the bar: ${rowKind === 'target' ? row.target : row.text}. Change it only if your number counts the other way.` : 'The bar doesn\'t say which way it counts, so choose one.'}</p>
+      </fieldset>` : ''}
       <div class="field-row">
-        <label>Passed <input type="number" name="passed" min="0" step="1" inputmode="numeric"></label>
+        <label>${row ? 'How many' : 'Passed'} <input type="number" name="passed" min="0" step="1" inputmode="numeric"></label>
         <label>Events or number <input type="number" name="value" step="any"></label>
         <label>Out of how many cases <input type="number" name="total" min="0" step="1" inputmode="numeric"></label>
       </div>
