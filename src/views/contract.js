@@ -3,6 +3,7 @@ import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.
 import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS, isSuggestion, suggestionOrigin, SUGGESTION_LABELS, setupState } from '../store/index.js';
 import { hasBlank } from '../data/templates.js';
 import { diffTable } from './activity.js';
+import { lowRiskNotice } from './setupflow.js';
 
 const SECTION_HELP = {
   may: 'What the AI can do on its own, inside this capability.',
@@ -28,9 +29,10 @@ export function contractBuilderView(state, capabilityId, query) {
 
   if (!draft) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}${cap.setup ? '/setup' : ''}">${cap.name}${cap.setup ? ' · Setup' : ''}</a></p><h1>Boundaries</h1>${cap.setup
-      ? lede(html`Where should the AI stop or involve a person?`, html`Authority Lab suggests Boundaries from the starting point and your risk answers. Each one says where it came from. Review every suggestion on its own: accept, edit or reject it. Where a number goes, the suggestion leaves a blank for you to fill in.`)
+      ? lede(html`Where should the AI stop or involve a person?`, html`Authority Lab suggests Boundaries from the kind of work, your risk answers and confirmed Context. Each one says where it came from. Review every suggestion on its own: accept, edit or reject it. Where a number goes, the suggestion leaves a blank for you to fill in.`)
       : lede(html`We'll start you with Boundaries suited to this risk level (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown exposure').toLowerCase()}).`, html`We also add suggestions based on the capability's name and summary, each marked <strong>Based on your answers</strong>. Review each one, confirm every section, fix anything the checks flag, and then a named person saves them.`)}</div></div>
       ${error ? notice('fail', 'We couldn\'t start the Boundaries', error) : ''}
+      ${lowRiskNotice(state, capabilityId)}
       <div class="card"><p>Starting as <strong>${acting.name}</strong>, ${acting.role}.</p><button class="btn btn-primary" data-action="contract-start" data-capability="${cap.id}">Start with suggested Boundaries</button></div>`;
   }
 
@@ -80,6 +82,7 @@ export function contractBuilderView(state, capabilityId, query) {
     </div>
   </div>
   ${error ? notice('fail', 'We couldn\'t make that change', error) : ''}
+  ${lowRiskNotice(state, capabilityId)}
   <div class="card progress-card">
     <div class="progress-facts">
       <div><span class="fact-label">Sections confirmed</span><strong>${confirmedCount} of ${SECTION_KEYS.length}</strong></div>

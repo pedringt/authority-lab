@@ -154,7 +154,8 @@ test('suggested Requirements and Targets carry no numbers; measurable ones get a
   assert.ok(d.criteria.length > 0 && d.criteria.every((c) => c.bar === 'needs-decision' && c.target === 'Needs decision' && d.requirements.some((r) => r.id === c.requirement)));
   const min = d.requirements.find((r) => r.id === 'min-cases');
   assert.deepEqual([min.kind, min.bar, isCoverageRule(min)], ['coverage', 'needs-decision', true]);
-  assert.ok(d.requirements.some((r) => r.id === 'high-value' && r.bar === 'needs-decision'), 'financial exposure adds a high-value coverage rule, number open');
+  // #153 (D4): high-value cases are a question only for work that acts on money.
+  assert.ok(!d.requirements.some((r) => r.id === 'high-value'), 'financial consequences alone add no high-value rule');
   assert.ok(d.requirements.some((r) => r.source === 'Template suggestion'));
   assert.ok(d.requirements.some((r) => r.source === 'Authority Lab suggestion'));
   assert.ok(d.requirements.some((r) => r.id === 'incidents' && !d.criteria.some((c) => c.requirement === 'incidents')), 'a non-measurable Requirement needs no Target');

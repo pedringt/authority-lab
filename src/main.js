@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, setResidualRisk, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS } from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, setResidualRisk, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS, withBarsAsTargets } from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -231,7 +231,7 @@ function render() {
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
       else if (sub && action === 'setup') { view = getCapability(state, sub) && getCapability(state, sub).setup ? setupHubView(state, sub, query) : setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Boundaries'; }
-      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = getCapability(state, sub) && getCapability(state, sub).setup ? 'Requirements and Targets' : 'Targets and Requirements'; }
+      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = getCapability(state, sub) && getCapability(state, sub).setup ? 'Requirements' : 'Targets and Requirements'; }
       else if (sub && action === 'stakeholders' && parts[3] === 'edit') { view = stakeholdersEditorView(state, sub, query); title = 'Stakeholders'; }
       else if (sub && action === 'scenarios' && parts[3] === 'edit') { view = scenariosEditorView(state, sub, query); title = 'Tests'; }
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Propose a change'; }
@@ -581,7 +581,9 @@ function readCriteriaRows(form) {
   const val = (tr, name) => (tr.querySelector(`[name="${name}"]`) || {}).value || '';
   const criteria = rows('criteria').map((tr) => ({ id: val(tr, 'c-id') || undefined, name: val(tr, 'c-name'), target: val(tr, 'c-target'), note: val(tr, 'c-note'), source: val(tr, 'c-source') || undefined, current: val(tr, 'c-current') || undefined, status: val(tr, 'c-status') || undefined, requirement: val(tr, 'c-requirement') || undefined }));
   const requirements = rows('requirements').map((tr) => ({ id: val(tr, 'r-id') || undefined, text: val(tr, 'r-text'), source: val(tr, 'r-source') || undefined, kind: val(tr, 'r-kind') || undefined, judgment: val(tr, 'r-judgment') || undefined, ...(val(tr, 'r-weight') ? { consideration: val(tr, 'r-weight') === 'consideration' } : {}) }));
-  return { criteria, requirements };
+  // The bar written beside a Requirement is saved as its Target (#153).
+  const bars = rows('requirements').map((tr) => ({ id: val(tr, 'rt-id') || undefined, name: val(tr, 'rt-name'), target: val(tr, 'rt-target'), note: val(tr, 'rt-note'), source: val(tr, 'rt-source') || undefined }));
+  return withBarsAsTargets(criteria, requirements, bars);
 }
 
 document.addEventListener('submit', (e) => {
@@ -867,7 +869,8 @@ document.addEventListener('submit', (e) => {
     dispatchOr(`#/capabilities/${capId}/criteria/edit`, () => {
       // Suggestions are added one by one, by ticking each (#139).
       const picked = [...critForm.querySelectorAll('[name="use-suggestion"]:checked')].map((el) => JSON.parse(el.value));
-      store.dispatch('saveCriteria', capId, { criteria: [...criteria, ...picked.filter((x) => x.kind === 'target').map((x) => x.row)], requirements: [...requirements, ...picked.filter((x) => x.kind === 'requirement').map((x) => x.row)], by: actor(store.get(), capId), reason: critForm.reason.value });
+      // A suggested Requirement brings its suggested bar with it (#153).
+      store.dispatch('saveCriteria', capId, { criteria: [...criteria, ...picked.flatMap((x) => (x.kind === 'target' ? [x.row] : x.targets || []))], requirements: [...requirements, ...picked.filter((x) => x.kind === 'requirement').map((x) => x.row)], by: actor(store.get(), capId), reason: critForm.reason.value });
       location.hash = getCapability(store.get(), capId).setup ? `#/capabilities/${capId}/setup` : `#/capabilities/${capId}?tab=decide&show=targets`;
     });
     return;

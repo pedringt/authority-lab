@@ -761,3 +761,10 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .evidence-item, .decision-main, .decision-side { min-width: 0; }
 .evidence-item { overflow-wrap: anywhere; }
 .evidence-head > div { min-width: 0; } .evidence-head .badge { flex-shrink: 0; }
+
+/* Requirements first (#153): one Requirement, how you'll know, and its bar. */
+.req-row td { vertical-align: top; }
+.req-row .req-how, .req-row .req-what-bar, .req-row .req-blocks { margin-top: 8px; }
+.req-row .fact-label { display: block; margin-bottom: 4px; }
+.req-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.other-measures summary { cursor: pointer; font-weight: 600; }

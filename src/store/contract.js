@@ -8,6 +8,8 @@ import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionList, performanceResultsSeen } from './selectors.js';
 import { people, snapshotPerson, requireActive } from './people.js';
 import { measureProblems } from './measures.js';
+import { exposureFacts, suggestionContext } from './exposure.js';
+import { actsThroughGate } from './boundaries.js';
 
 export const SECTION_KEYS = CONTRACT_SECTIONS.map(([k]) => k);
 export const SECTION_LABELS = Object.fromEntries(CONTRACT_SECTIONS);
@@ -77,7 +79,7 @@ function startSetupBoundaries(state, cap, risk, by) {
     lines.push({ id: `L${++n}`, section, text, source: 'suggestion', origin, status: 'pending', original: text, because });
   };
   for (const section of SECTION_KEYS) for (const text of family.boundaries[section] || []) push(section, text, 'template', family.name);
-  const fromRisk = riskBoundaries(risk);
+  const fromRisk = riskBoundaries(risk, suggestionContext(state, cap.id));
   for (const section of SECTION_KEYS) for (const text of fromRisk[section] || []) push(section, text, 'answers', 'your risk answers');
   const draft = {
     templateId: family.id,
@@ -194,8 +196,12 @@ export function contractValueChecks(state, capabilityId, value) {
   const risk = current(state, capabilityId, 'risk');
   const out = [];
   const aboveLow = risk.impact && risk.impact !== 'Low';
-  if (aboveLow && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `Add at least one "${SECTION_LABELS.mustNever}" rule. ${risk.impact}-impact capabilities need one.` });
-  if (aboveLow && !value.autoRestriction.length) out.push({ id: 'empty-auto', level: 'block', section: 'autoRestriction', text: `Add at least one rule under "${SECTION_LABELS.autoRestriction}". For a ${risk.impact.toLowerCase()}-impact capability, autonomy needs a limit that pulls it back.` });
+  // A Low label keeps the baseline when confirmed facts show exposure (#153, D5).
+  const facts = aboveLow ? [] : exposureFacts(state, capabilityId);
+  const baseline = aboveLow || facts.length > 0;
+  const why = aboveLow ? `${risk.impact}-impact capabilities need one.` : `It is marked Low, but ${facts.map((f) => f.label.charAt(0).toLowerCase() + f.label.slice(1)).join('; ')}, so it needs one.`;
+  if (baseline && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `Add at least one "${SECTION_LABELS.mustNever}" rule. ${why}` });
+  if (baseline && !value.autoRestriction.length) out.push({ id: 'empty-auto', level: 'block', section: 'autoRestriction', text: `Add at least one rule under "${SECTION_LABELS.autoRestriction}". ${aboveLow ? `For a ${risk.impact.toLowerCase()}-impact capability, autonomy needs a limit that pulls it back.` : `${why.replace(/ so it needs one\.$/, '')}, so autonomy needs a limit that pulls it back.`}` });
   // The data section lists known fields only, never a restricted one (A2).
   for (const f of value.dataSeen || []) {
     const known = DATA_FIELDS.find((x) => x.id === f);
@@ -215,11 +221,15 @@ export function contractValueChecks(state, capabilityId, value) {
   for (const t of value.autoRestriction) {
     if (!hasNumber(t) || !hasWindow(t)) out.push({ id: `rule-${norm(t).slice(0, 20)}`, level: 'block', section: 'autoRestriction', text: `"${t}" has no ${!hasNumber(t) ? 'number' : 'time or case window'}. It needs a number and a time or case window, e.g. "above 5% over 7 days", so software can check it.` });
   }
-  if (risk.exposure === 'Financial / consequential') {
+  // No money limit is required because of financial consequences alone
+  // (#153, D4): it is a suggestion for work that acts on money, and a person
+  // may reject it. Where actions go through Authority Lab's gate, the value
+  // limit is an enforced control the gate reads, so those rules keep one.
+  if (actsThroughGate(capabilityId) && risk.exposure === 'Financial / consequential') {
     // A ceiling in "may" or a threshold in "must ask" counts. A limit that
     // only appears under "must never" is not an operating limit.
     const limited = [...value.may, ...value.mustAsk].some(hasValueLimit);
-    if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: `Set a money limit: these rules set no value limit for a financial capability. Add a ceiling under "${SECTION_LABELS.may}", or a threshold like "Refunds over $100" under "${SECTION_LABELS.mustAsk}". A limit that appears only under "${SECTION_LABELS.mustNever}" doesn't count.` });
+    if (!limited) out.push({ id: 'no-value-limit', level: 'block', section: 'mustAsk', text: `Set a money limit: its actions go through the gate, which needs a value limit to enforce. Add a ceiling under "${SECTION_LABELS.may}", or a threshold like "Refunds over $100" under "${SECTION_LABELS.mustAsk}". A limit that appears only under "${SECTION_LABELS.mustNever}" doesn't count.` });
   }
   for (const k of ['may', 'escalation']) if (!value[k].length) out.push({ id: `empty-${k}`, level: 'warn', section: k, text: `"${SECTION_LABELS[k]}" has no rules yet.` });
   return out;

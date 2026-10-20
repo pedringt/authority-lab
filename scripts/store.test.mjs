@@ -756,7 +756,7 @@ test('lines can be added, edited and removed; any change unconfirms the section'
   assert.throws(() => addContractLine(s, id, 'may', ''), /Type the rule first/);
 });
 
-test('software checks: empty hard limits above Low, contradictions, rules without a number or window, financial without a value limit', () => {
+test('software checks: empty hard limits above Low, contradictions, rules without a number or window; no money limit forced outside the gate', () => {
   let [s, id] = withNewCap();
   s = startContractDraft(s, id);
   s = reviewAll(s, id, 'reject');
@@ -772,19 +772,9 @@ test('software checks: empty hard limits above Low, contradictions, rules withou
   s = addContractLine(s, id, 'may', 'Override a fraud restriction.');
   s = addContractLine(s, id, 'mustNever', 'Override a fraud restriction.');
   assert.ok(contractChecks(s, id).some((c) => c.id.startsWith('contra-')));
-  // Financial without a value limit: remove template lines that mention value, and the "over $100" suggestion was rejected.
+  // Financial consequences alone never require a money limit (#153, D4):
+  // this capability's actions don't go through the gate, so nothing asks for one.
   for (const l of capData(s, id).contractDraft.lines.filter((l) => /value limit|above the value/i.test(l.text) && l.status !== 'removed' && l.source !== 'ai')) s = removeContractLine(s, id, l.id);
-  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
-  // A limit that only appears under "must never" does not count.
-  s = addContractLine(s, id, 'mustNever', 'Issue a refund above $500.');
-  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'), 'must never alone is not an operating limit');
-  // A threshold under "must ask" does.
-  s = addContractLine(s, id, 'mustAsk', 'Refunds over $100.');
-  assert.ok(!contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
-  // So does a ceiling under "may".
-  s = removeContractLine(s, id, capData(s, id).contractDraft.lines.find((l) => l.text === 'Refunds over $100.').id);
-  assert.ok(contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
-  s = addContractLine(s, id, 'may', 'Issue refunds of $50 or less.');
   assert.ok(!contractChecks(s, id).some((c) => c.id === 'no-value-limit'));
   assert.equal(canFinalizeContract(s, id).ok, false);
   // Low impact, internal: empty hard limits are allowed.
@@ -1212,7 +1202,7 @@ test('a proposed contract must pass the builder checks before it can be submitte
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: { ...c, autoRestriction: ['Too many errors returns the capability to Draft.'] }, by: 'priya', reason: 'A vague rule.' }), /has no number/);
   // Value limit only under "must never" on a financial capability.
   const noLimit = { ...c, mustAsk: c.mustAsk.filter((t) => !/\$/.test(t)), may: c.may.filter((t) => !/\$/.test(t)), mustNever: [...c.mustNever, 'Issue a refund above $500.'] };
-  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: noLimit, by: 'priya', reason: 'Moving the limit to must never.' }), /these rules set no value limit/);
+  assert.throws(() => proposeAmendment(s, RR, 'contract', { value: noLimit, by: 'priya', reason: 'Moving the limit to must never.' }), /its actions go through the gate, which needs a value limit to enforce/);
   // A valid change goes through.
   const ok = proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [...c.mustNever, 'Issue a refund while a fraud review is open.'] }, by: 'priya', reason: 'Close the gap found in INC-01.' });
   assert.ok(openProposal(ok, RR, 'contract'));

@@ -11,7 +11,7 @@ import { html, raw, badge, notice, selectField, person, fmtDate, lede } from '..
 import {
   getCapability, capData, current, versionList, actor, activePeople, workflowOf, RISK_OPTIONS, levelName,
   CONTEXT_FIELDS, contextNow, confirmedContext, contextDescription, LIFECYCLE, BASELINE_FIELDS, baselineNow, baselineVersions, authorityBaseline,
-  LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, setupState, setupReview, setupConfirmation, resultsLockWarning,
+  LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, lowRiskMismatch, setupState, setupReview, setupConfirmation, resultsLockWarning,
   BASELINE_REQUIRED, boundaries, ENFORCEMENT, peopleModel, criteriaSaved, evidenceCoverage, coverageText, performanceResultsSeen, enforcementTerms,
 } from '../store/index.js';
 import { STARTING_POINTS, findStartingPoint, familiesFor } from '../data/templates.js';
@@ -155,6 +155,13 @@ export function todayStepView(state, capabilityId, query) {
 // Risk and starting authority
 // ---------------------------------------------------------------------------
 
+// R5-B (#153): a Low label next to confirmed facts that suggest exposure is
+// shown, never overruled. The baseline safeguards stay either way.
+export function lowRiskNotice(state, capabilityId) {
+  const m = lowRiskMismatch(state, capabilityId);
+  return m ? notice('watch', m.title, m.text) : '';
+}
+
 export function riskStepView(state, capabilityId, query) {
   const cap = getCapability(state, capabilityId);
   const error = query.get('error');
@@ -165,6 +172,7 @@ export function riskStepView(state, capabilityId, query) {
   return html`${stepHead(cap, 'Risk and authority', 'What could go wrong, how serious it would be, and how independently the AI should operate right now.', 'Risk informs Authority. Overall Risk is worked out from Severity and Likelihood with a fixed table, never typed in.')}
   ${draftNotice(state, cap)}${error ? notice('fail', 'Couldn\'t save that', error) : ''}
   ${saved ? notice(v.overall === 'Unknown' ? 'watch' : 'neutral', `Overall Risk: ${v.overall}`, v.why) : ''}
+  ${saved ? lowRiskNotice(state, capabilityId) : ''}
   <form class="setup-form onboard-form" data-form="setup-risk" data-capability="${cap.id}" novalidate>
     <div class="onboard-group"><h2 class="onboard-q">Risk</h2>
       <div class="three-col">
@@ -216,7 +224,7 @@ export function setupSequence(state, capabilityId) {
     { id: 'risk', title: 'Risk and authority', done: riskSaved && Boolean(cap.setup.today), text: riskSaved ? `Overall Risk ${v.overall} (Severity ${v.severityLabel}, Likelihood ${v.likelihood}).${cap.setup.today ? ` Starts at ${notDelegated ? 'Level 0, not delegated' : `Level ${cap.setup.today === 'nothing' ? 0 : 1}`} once confirmed.` : ' Choose the starting authority.'}` : 'Severity, Likelihood, Scale, who is affected, and where it starts.', link: `${base}/setup/risk` },
     ...(notDelegated ? [] : [
       { id: 'boundaries', title: 'Boundaries', done: boundariesSaved, text: boundariesSaved ? 'Saved.' : draftLines ? `${draftLines.lines.filter((l) => l.status === 'pending').length} suggestions still to review.` : 'Where it must stop or involve a person. Every suggestion is reviewed one at a time.', link: `${base}/contract/build`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },
-      { id: 'requirements', title: 'Requirements and Targets', done: reqs, text: reqs ? `${current(state, capabilityId, 'requirements').length} Requirements, ${current(state, capabilityId, 'criteria').length} Targets.` : 'What must be true before it gets more authority, and a measurable bar only where one is needed.', link: `${base}/criteria/edit`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },
+      { id: 'requirements', title: 'Requirements', done: reqs, text: reqs ? `${current(state, capabilityId, 'requirements').length} Requirements, ${new Set(current(state, capabilityId, 'criteria').filter((t) => t.requirement).map((t) => t.requirement)).size} with a measured bar.` : 'What must be true before it gets more authority, and a measurable bar only where one is needed.', link: `${base}/criteria/edit`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },
       { id: 'evidence', title: 'Evidence', optional: true, done: reqs && cov.total > 0 && cov.mapped === cov.total, text: reqs ? coverageText(cov) : 'Which evidence will judge each Requirement.', link: `${base}/evidence/configure`, needs: reqs, needsText: 'Save the Requirements first.' },
     ]),
     { id: 'people', title: 'People', optional: true, done: current(state, capabilityId, 'stakeholders').length > 0, text: `Owner: ${person(pm.owner).name}. ${pm.reviewers.length} Reviewer${pm.reviewers.length === 1 ? '' : 's'}, ${others.length} Stakeholder${others.length === 1 ? '' : 's'}.`, link: `${base}/stakeholders/edit` },
@@ -283,9 +291,9 @@ export function reviewView(state, capabilityId, query) {
     <p><strong>${confirmed ? `It started at Level ${snap ? snap.startingLevel : getCapability(state, capabilityId).authority.level}.` : sentence}</strong>${s.authority.effective && s.authority.effective.status === 'recorded' ? ` What it does today was recorded as Level ${s.authority.effective.level} — ${s.authority.effective.name}; that is shown, not granted.` : ''}</p>
   </section>
   <section class="card"><h2>Context</h2>${ctx.length ? html`<ul class="plain-list">${ctx.map(([k, v]) => html`<li><span class="fact-label">${FIELD[k].label}</span> ${factText(v)}</li>`)}</ul>` : html`<p class="muted">No confirmed facts.</p>`}</section>
-  <section class="card"><h2>Risk</h2><p>Overall Risk <strong>${s.risk.overall}</strong>. ${s.risk.why}</p><p class="muted small">Scale: ${s.risk.scale || 'not answered'}. Can it be undone: ${s.risk.reversibility || 'not answered'}. Affected: ${s.risk.exposure || 'not answered'}.</p></section>
+  <section class="card"><h2>Risk</h2><p>Overall Risk <strong>${s.risk.overall}</strong>. ${s.risk.why}</p><p class="muted small">Scale: ${s.risk.scale || 'not answered'}. Can it be undone: ${s.risk.reversibility || 'not answered'}. Affected: ${s.risk.exposure || 'not answered'}.</p>${lowRiskNotice(state, capabilityId)}</section>
   ${r.notDelegated ? '' : html`<section class="card"><h2>Boundaries</h2>${versionList(state, capabilityId, 'contract').length ? boundariesSummary(state, capabilityId) : html`<p class="muted">Not saved yet.</p>`}</section>
-  <section class="card"><h2>Requirements and Targets</h2>${reqs.length ? html`<ul class="plain-list">${reqs.map((q) => html`<li>${q.text}${q.kind === 'coverage' ? html` <span class="muted small">coverage rule</span>` : ''}${q.bar === 'needs-decision' ? html` ${badge('decision', 'Needs decision')}` : ''}${targets.filter((t) => t.requirement === q.id).map((t) => html`<div class="muted small">Target: ${t.name}, ${t.bar === 'needs-decision' ? html`${badge('decision', 'Needs decision')}` : t.target}</div>`)}</li>`)}</ul>${targets.filter((t) => !t.requirement).length ? html`<p class="muted small">Other Targets: ${targets.filter((t) => !t.requirement).map((t) => `${t.name} (${t.target})`).join('; ')}</p>` : ''}` : html`<p class="muted">Not saved yet.</p>`}</section>
+  <section class="card"><h2>Requirements</h2>${reqs.length ? html`<ul class="plain-list">${reqs.map((q) => html`<li>${q.text}${q.kind === 'coverage' ? html` <span class="muted small">coverage rule</span>` : ''}${q.bar === 'needs-decision' ? html` ${badge('decision', 'Needs decision')}` : ''}${targets.filter((t) => t.requirement === q.id).map((t) => html`<div class="muted small">Measured as ${t.name}, bar ${t.bar === 'needs-decision' ? html`${badge('decision', 'Needs decision')}` : t.target}</div>`)}</li>`)}</ul>${targets.filter((t) => !t.requirement).length ? html`<p class="muted small">Other measures: ${targets.filter((t) => !t.requirement).map((t) => `${t.name} (${t.target})`).join('; ')}</p>` : ''}` : html`<p class="muted">Not saved yet.</p>`}</section>
   <section class="card"><h2>Evidence</h2><p>${criteriaSaved(state, capabilityId) ? coverageText(evidenceCoverage(state, capabilityId)) : 'Set the Requirements first.'}</p></section>`}
   <section class="card"><h2>People</h2><p>Owner: <strong>${person(pm.owner).name}</strong>. Reviewers: ${pm.reviewers.length ? pm.reviewers.map((k) => person(k).name).join(', ') : 'none'}. Stakeholders: ${others.length ? others.map((k) => person(k).name).join(', ') : 'none'}.</p></section>
   ${r.open.length ? html`<section class="card"><h2>Open, and allowed at confirmation</h2><ul class="plain-list">${r.open.map((o) => html`<li>${o}</li>`)}</ul></section>` : ''}
