@@ -1,5 +1,5 @@
 // Configure evidence (#126): the product person says which source's metric
-// judges each target and decision requirement. The comparison and number come
+// judges each target and Requirement. The comparison and number come
 // from the row's own wording, so the words a person reads and the check
 // software runs can't disagree. Mapping is a change to how the bar is
 // measured, so it goes through the usual paths: a direct save before any
@@ -26,7 +26,7 @@ export const MEASURE_STAT_WORDS = {
 export function mapEvidence(state, capabilityId, { rowKind, rowId, measure, by, reason } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error('This capability no longer exists.');
-  if (!['target', 'requirement'].includes(rowKind)) throw new Error('Choose a target or a decision requirement.');
+  if (!['target', 'requirement'].includes(rowKind)) throw new Error('Choose a target or a Requirement.');
   const criteria = current(state, capabilityId, 'criteria');
   const requirements = current(state, capabilityId, 'requirements');
   const rows = rowKind === 'target' ? criteria : requirements;

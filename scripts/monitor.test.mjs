@@ -188,15 +188,15 @@ test('History: one timeline, newest first, of what happened to Refund recommenda
   assert.ok(titles.includes('Test run: 24 of 26 passed'));
   assert.ok(titles.includes('Incident: fraud escalation missed'), 'incidents read without their id');
   assert.ok(titles.includes('Software gate added for fraud-flagged accounts'));
-  assert.ok(titles.includes('Rules v1, Targets v1, Decision requirements v1, Risk profile v1 and Stakeholders v1 set by Maya Chen'), 'versions set together read as one line');
+  assert.ok(titles.includes('Rules v1, Targets v1, Requirements v1, Risk profile v1 and Stakeholders v1 set by Maya Chen'), 'versions set together read as one line');
   assert.equal(items.at(-1).kind, 'version', 'the first versions came first');
   assert.match(text(html), /Expand, authorized by Maya Chen/);
   assert.match(html, /href="#\/records\/AC-02">Decision record<\/a> · <a href="#\/records\/AC-02\/brief">One-page brief<\/a>/);
   // Other capabilities' events stay out.
   assert.doesNotMatch(html, /Authority change #01|Authority change #03/);
   // Under the timeline: Versions, Proposed changes, and all activity.
-  assert.deepEqual(lineTitles(html), ['Versions', 'Proposed changes']);
-  assert.match(html, /<span class="mh-line-meta">Rules v1 · Targets v1 · Decision requirements v1 · Risk profile v1 · Stakeholders v1<\/span>/);
+  assert.deepEqual(lineTitles(html), ['Versions', 'Change requests']);
+  assert.match(html, /<span class="mh-line-meta">Rules v1 · Targets v1 · Requirements v1 · Risk profile v1 · Stakeholders v1<\/span>/);
   for (const k of ['contract', 'criteria', 'requirements', 'stakeholders', 'risk']) assert.match(html, new RegExp(`versions\\?kind=${k}"`), k);
   assert.match(html, /<span class="mh-line-meta">none<\/span>/);
   assert.match(html, /<a href="#\/records\?show=activity&capability=refund-recommendation">All activity for Refund recommendation →<\/a>/);
@@ -225,9 +225,9 @@ test('History: an approved proposed change names the versions it made, and they 
   s = approveProposal(approveProposal(s, RR, 'P-1', { by: 'maya' }), RR, 'P-1', { by: 'daniel' });
   assert.equal(versionsInForce(s, RR).criteria, 2);
   const titles = timeline(history(s)).map((x) => x.title);
-  assert.equal(titles[0], 'Proposed change to the targets approved: now Targets v2, Decision requirements v2');
+  assert.equal(titles[0], 'Change request for the targets approved: now Targets v2, Requirements v2');
   assert.ok(!titles.some((t) => /^Targets v2/.test(t)), 'not repeated as a separate version line');
-  assert.match(history(s), /Targets v2 · Decision requirements v2/);
+  assert.match(history(s), /Targets v2 · Requirements v2/);
 });
 
 test('the minimum production sample: 20 by default, a goal can name its own, and only real actions count', async () => {

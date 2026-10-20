@@ -12,9 +12,17 @@ const text = (h) => String(h).replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").re
 test('the first visit offers a guided demo or the finished workspace, with the idea in plain product language', () => {
   const h = String(welcomeView());
   assert.match(h, /<h1>Decide when an AI workflow is ready for more autonomy\.<\/h1>/);
-  for (const p of ['1. Start with limited autonomy', '2. Evaluate the results', '3. Make the decision', '4. Enforce the boundaries']) assert.ok(h.includes(p), p);
+  for (const p of ['1. Start with limited autonomy', '2. Evaluate the results', '3. Make the decision', '4. Hold the Boundaries']) assert.ok(h.includes(p), p);
   assert.match(h, /href="#\/guide\/1" data-action="welcomed"><h2>Guided demo<\/h2>/);
   assert.match(h, /href="#\/overview" data-action="welcomed"><h2>Explore the finished workspace<\/h2>/);
+  // #149: your own workspace is a first-visit path, and nothing claims software enforces every Boundary.
+  assert.match(h, /data-action="start-empty"><h2>Start your own workspace<\/h2>/);
+  assert.doesNotMatch(text(h), /software enforces them\./);
+  assert.match(text(h), /whether software enforces it or people follow it as written/);
+  // In a real workspace the copy names it and offers no erase.
+  const real = String(welcomeView({ workspace: 'State' }));
+  assert.match(real, /<h2>Open State<\/h2>/);
+  assert.doesNotMatch(real, /start-empty|five fictional/);
   assert.doesNotMatch(text(h), /\bthe AI\b|\ban AI\b(?! workflow)/, 'no anthropomorphic AI phrasing');
 });
 
@@ -47,7 +55,7 @@ test('the guided demo waits for each action, and every action is a real store tr
   for (let i = 0; i < 200 && capData(s, RR).testRun.status === 'running'; i++) s = advanceTestRun(s, RR);
   const tested = { ...g, state: s, tested: true };
   const five = text(guideView(tested, 5));
-  assert.match(five, /5 of 6 checks met/);
+  assert.match(five, /5 of 6 Requirements met/);
   assert.match(five, /24 of 26 tests passed/);
   assert.match(five, /High-value refunds \(> \$100\) 18 of 40 needed 83%/);
   assert.match(String(guideView(tested, 5)), /btn btn-primary" href="#\/guide\/6">Next/);

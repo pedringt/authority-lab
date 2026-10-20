@@ -32,8 +32,8 @@ export function criteriaEditorView(state, capabilityId, query) {
   const v = versionsInForce(state, capabilityId);
 
   if (locked) {
-    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p><h1>Targets and decision requirements</h1><p class="lede">These targets can't be changed directly now that results exist.</p></div></div>
-      ${notice('watch', 'Propose a change instead', 'Submit a target change for review. It takes effect once it is approved. The current targets are on the capability page.', { link: `#/capabilities/${cap.id}?tab=decide&show=targets`, linkText: 'Current targets' })}
+    return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p><h1>Targets and Requirements</h1><p class="lede">These targets can't be changed directly now that results exist.</p></div></div>
+      ${notice('watch', 'Request a change instead', 'Submit a target change for review. It takes effect once it is approved. The current targets are on the capability page.', { link: `#/capabilities/${cap.id}?tab=decide&show=targets`, linkText: 'Current targets' })}
       <a class="btn btn-primary" href="#/capabilities/${cap.id}/amend/criteria">Propose a target change</a>`;
   }
 
@@ -55,7 +55,7 @@ export function criteriaEditorView(state, capabilityId, query) {
   return html`<div class="page-head">
     <div>
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p>
-      <h1>Targets and decision requirements</h1>
+      <h1>Targets and Requirements</h1>
       ${lede('What good looks like, in numbers, and what we need before giving the AI any authority.', html`${saved ? 'Saved. Changes are kept in history.' : `Starting values come from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown').toLowerCase()}${risk.reversibility === 'Difficult to reverse' ? ', difficult to reverse' : ''}). Each row shows where it came from.`} Once the first test runs, these can only be changed with approval.`)}
     </div>
   </div>
@@ -67,11 +67,11 @@ export function criteriaEditorView(state, capabilityId, query) {
     </table></div>
     <button class="btn btn-sm" type="button" data-action="row-add" data-kind="criteria">Add target</button>`, { subtitle: 'Numbers to hit. Current results come from testing and the pilot, not typed here.' })}
 
-    ${section('Decision requirements', html`<div class="card table-card"><table class="table table-edit">
+    ${section('Requirements', html`<div class="card table-card"><table class="table table-edit">
       <thead><tr><th>Must be true before the AI gets any authority</th><th>Source</th><th></th></tr></thead>
       <tbody data-rows="requirements">${requirements.map(rrow)}</tbody>
     </table></div>
-    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add check</button>`, { subtitle: 'What we need before expanding. A checklist, not a score: "Ready for a decision?" shows as "X of Y checks met".' })}
+    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add Requirement</button>`, { subtitle: 'What we need before expanding. A checklist, not a score: "Ready for a decision?" shows as "X of Y Requirements met".' })}
 
     <div class="card authorize">
       <p class="eyebrow">Save</p>

@@ -72,7 +72,7 @@ export function proposalWarning(state, capabilityId, proposal) {
     title: `This change to ${cap.name} can no longer be approved`,
     body: `${r.reason} Who can approve ${proposal.id} was set when it was proposed: ${(proposal.eligible || []).map((k) => people(state)[k] ? people(state)[k].name : k).join(', ')}. To go ahead, whoever proposed it withdraws it and proposes it again, so the current people can approve it.`,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
-    linkText: 'Open the proposed change',
+    linkText: 'Open the change request',
   };
 }
 

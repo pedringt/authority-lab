@@ -7,7 +7,7 @@
 import { DATA_FIELDS } from '../data/seed.js';
 import { setupSequence } from './setupflow.js';
 import { html, badge, kv, fmtDate, person, personAt, notice, tabIntro, SWITCH_PERSON } from '../ui.js';
-import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText } from '../store/index.js';
+import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText, authorityGap, actsThroughGate } from '../store/index.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
 import { proposalsList, amendLink } from './proposals.js';
@@ -118,7 +118,7 @@ export function nextFor(state, cap, d) {
     const p = proposedAuthority(state, cap.id);
     const r = readiness(state, cap.id);
     const gap = r.unmet[0];
-    const checks = r.total ? (r.met === r.total ? ` All ${r.total} checks are met.` : ` ${r.met} of ${r.total} checks are met; still open: ${lowerFirst(firstSentence(gap.gap || gap.text))}`) : '';
+    const checks = r.total ? (r.met === r.total ? ` All ${r.total} Requirements are met.` : ` ${r.met} of ${r.total} Requirements are met; still open: ${lowerFirst(firstSentence(gap.gap || gap.text))}`) : '';
     return {
       kind: 'decision',
       text: `Decide whether it moves to ${LEVEL_TITLE[p.level]}${p.limited && p.level !== 3 ? ', with limits' : ''}.${checks}`,
@@ -166,7 +166,8 @@ function story(state, cap, d) {
   const restricted = cap.status === 'restricted';
   const retired = cap.status === 'retired';
   const title = retired ? 'Retired' : restricted && level === 1 ? 'Recommend only' : LEVEL_TITLE[level];
-  const state1 = review.any ? badge('restricted', 'Needs review') : restricted ? badge('restricted', 'Restricted') : '';
+  const gap = authorityGap(state, cap.id);
+  const state1 = review.any ? badge('restricted', 'Needs review') : restricted ? badge('restricted', 'Restricted') : gap.above ? badge('restricted', 'Operating above approved Authority') : '';
   const why = whyHere(state, cap, d);
   const next = nextFor(state, cap, d);
   const chapter = (k, body) => html`<div class="st-chapter"><span class="st-k">${k}</span><p>${body}</p></div>`;
@@ -175,6 +176,7 @@ function story(state, cap, d) {
   return html`<section class="st-story" data-next="${next.kind}">
     <h2 class="st-title">${title}${retired ? '' : html` <span class="st-lvl">Level ${level}</span>`} ${state1}</h2>
     <p class="st-now">${retired ? 'It no longer operates. Its history and records are kept.' : levelSentence(cap, level, limitsInForce(state, cap), { notDelegated: cap.status === 'not-delegated' })}</p>
+    ${gap.above ? html`<p class="st-gap"><strong>Approved: Level ${gap.approved.level}, ${gap.approved.name} · Observed: Level ${gap.observed.level}, ${gap.observed.name}.</strong> Further expansion is blocked until this is resolved. <a href="${`#/capabilities/${cap.id}?tab=monitor`}">Resolve it in Monitor</a></p>` : ''}
     <div class="st-chapters">
       ${why ? chapter('Why it\'s here', why) : ''}
       ${chapter('What happens next', next.text)}
@@ -394,7 +396,7 @@ export function contractTab(state, cap, d) {
   }
   const latest = contractVersions[contractVersions.length - 1];
   return html`
-    ${tabIntro('What this capability may do on its own, what requires human review, and what is never allowed.', 'Software checks every action against these rules before it happens. The model\'s own judgment can\'t override them.', html`<span class="muted">Last changed by ${personAt(latest.authorAt, latest.author).name}. Changes are kept in <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}`)}
+    ${tabIntro('What this capability may do on its own, what requires human review, and what is never allowed.', actsThroughGate(cap.id) ? 'Its actions go through a gate: software checks each one against the lines marked as enforced before it happens, and the model\'s own judgment can\'t override them.' : 'Each line says how it is enforced. Its actions don\'t go through a gate, so written Boundaries are followed by people, not checked by software.', html`<span class="muted">Last changed by ${personAt(latest.authorAt, latest.author).name}. Changes are kept in <a href="#/capabilities/${cap.id}/versions?kind=contract&version=${latest.version}">history</a>.</span> ${amendLink(state, cap.id, 'contract')}`)}
     ${proposalsList(state, cap.id, 'contract')}
     ${contractReviewView(contractVersions[0].review)}
     <div class="st-rules">

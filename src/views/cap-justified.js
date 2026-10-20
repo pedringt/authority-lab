@@ -9,7 +9,7 @@ import {
   justification, levelName, LEVEL_PLAIN, reviewConditions, MATERIAL_CHANGE_AREAS, actor, namedOn, people, decisionRequired, capData,
 } from '../store/index.js';
 
-const TONE = { supported: 'pass', attention: 'watch', investigate: 'bad', unjustified: 'bad', restricted: 'bad', retired: 'neutral' };
+const TONE = { supported: 'pass', attention: 'watch', investigate: 'bad', unjustified: 'bad', restricted: 'bad', above: 'bad', retired: 'neutral' };
 const SEVERITY = {
   unjustified: ['fail', 'May no longer be justified'],
   investigate: ['fail', 'Investigate'],
@@ -25,6 +25,7 @@ function verdict(j, cap) {
     investigate: 'Something needs looking into before relying on the current Authority. Authority hasn\'t changed.',
     unjustified: 'Something the current Authority rested on when it was decided no longer holds. Only a person can change Authority: look into it, and reduce or keep it in Decide.',
     restricted: `A safety limit agreed in advance was crossed, so ${cap.name} was moved back to ${levelName(j.authority.level)} automatically. A review comes before any new expansion.`,
+    above: `Observed behavior: Level ${j.gap.observed ? j.gap.observed.level : ''}, ${j.gap.observed ? j.gap.observed.name : ''}. Approved Authority: Level ${j.gap.approved.level}, ${j.gap.approved.name}. Further expansion is blocked until this is resolved. Authority Lab doesn't change either on its own.`,
     retired: `${cap.name} was retired on ${j.record ? fmtDate(j.record.date) : ''}. It no longer operates and gets no authority again; its history stays. To use it again, set up a new capability.`,
   }[j.key];
   return html`<div class="mon-verdict mon-answer is-${TONE[j.key]}" role="status"><span class="mon-verdict-title">${j.label}</span><p>${body}</p></div>`;
@@ -37,7 +38,10 @@ function currentState(state, cap, j) {
   const r = j.record;
   const who = r ? (r.authorizedBy === 'system' ? 'software, under a rule agreed in advance' : personAt(r.authorizedByAt, r.authorizedBy).name) : '';
   return kv([
-    ['Authority now', j.key === 'retired' ? html`<strong>Retired</strong>. It no longer operates.` : html`<strong>Level ${j.authority.level} · ${j.authority.name}</strong>. ${LEVEL_PLAIN[j.authority.level] || ''}`],
+    ['Approved Authority', j.key === 'retired' ? html`<strong>Retired</strong>. It no longer operates.` : html`<strong>Level ${j.authority.level} · ${j.authority.name}</strong>. ${LEVEL_PLAIN[j.authority.level] || ''}`],
+    ...(j.key === 'retired' ? [] : [['Observed behavior', j.gap.observed
+      ? html`${j.gap.above ? badge('fail', 'Above approved') : ''} <strong>Level ${j.gap.observed.level} · ${j.gap.observed.name}</strong>. ${j.gap.observed.note}`
+      : j.gap.unknown ? 'Unknown: nobody has said what it really does.' : html`<span class="muted">Not recorded.</span>`]]),
     ['Decision in force', r ? html`<a href="#/records/${r.id}">${r.id}</a>: ${OPTION_WORDS[r.option] || r.option}, ${fmtDate(r.date)}, by ${who}` : html`<span class="muted">None recorded.</span>`],
     ...(j.basis && r && j.basis.id !== r.id ? [['Last decided by a person', html`<a href="#/records/${j.basis.id}">${j.basis.id}</a>, ${fmtDate(j.basis.date)}`]] : []),
     ['Boundaries', b.length ? `${b.length}, of which ${enforced} enforced by software; the rest are written and followed by people.` : 'None written yet.'],
@@ -106,11 +110,42 @@ function actions(state, cap, j) {
     </dl></section>`;
 }
 
+// Operating above approved Authority (#149, R1-B, R2-A): the two ways to
+// resolve it, and a form to record what it really does now. Neither changes
+// Authority by itself.
+function gapSection(state, cap, j) {
+  if (j.key === 'retired') return '';
+  const base = `#/capabilities/${cap.id}`;
+  const named = namedOn(state, cap.id, actor(state, cap.id));
+  const form = html`<details class="mon-material-form" ${j.gap.above ? raw('open') : ''}><summary>${j.gap.observed ? 'Record what it does now' : 'Record what it really does'}</summary>
+    <form data-form="record-observed" data-capability="${cap.id}">
+      <label class="field"><span>What it actually does</span><select name="effective" required>
+        <option value="">Choose</option>
+        ${[0, 1, 2, 3, 4].map((l) => html`<option value="${l}">Level ${l} · ${levelName(l)}: ${LEVEL_PLAIN[l]}</option>`)}
+        <option value="unknown">Unknown</option>
+      </select></label>
+      <label class="field field-stack"><span>How you know</span><textarea name="note" rows="2" required></textarea></label>
+      <label class="field field-stack"><span>Why you're recording it now</span><input type="text" name="reason" required></label>
+      ${named ? '' : html`<p class="form-error" role="status">Only the Owner or someone named on ${cap.name} can record this.</p>`}
+      <button class="btn btn-primary" type="submit" ${named ? '' : raw('disabled')}>Record observed behavior</button>
+      <p class="muted small">This records what people see it doing. It never changes approved Authority.</p>
+    </form></details>`;
+  if (!j.gap.above) return html`<section class="mon-block">${form}</section>`;
+  return html`<section class="mon-block mon-gap"><h2>Resolve the gap</h2>
+    <ol>
+      <li><strong>Bring its behavior back within approved Authority.</strong> Change how it runs, then record what it does now (below).</li>
+      <li><strong>Or govern the observed behavior.</strong> Propose the next level through the normal Proposal and Decision, one level at a time, until approved Authority reaches what it does. <a href="${base}?tab=decide">Decide</a></li>
+    </ol>
+    <p class="muted small">Until then, any expansion beyond Level ${j.gap.observed.level} is blocked. Reducing, pausing or retiring it is never blocked.</p>
+    ${form}</section>`;
+}
+
 export function justifiedSection(state, cap) {
   const j = justification(state, cap.id);
   return html`<section class="mon-justified"><h2 class="mon-question">Is the current Authority still justified?</h2>
     ${verdict(j, cap)}
     ${currentState(state, cap, j)}
+    ${gapSection(state, cap, j)}
     ${changesList(j)}
     ${materialChanges(state, cap, j)}
     ${actions(state, cap, j)}</section>`;

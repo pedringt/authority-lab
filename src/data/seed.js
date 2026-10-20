@@ -773,7 +773,7 @@ export const activity = [
   { id: 'ACT-04', date: '2026-09-02', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Refund recommendation moved from Recommend to Draft. Authorized by Maya Chen.', capabilityId: 'refund-recommendation', link: '#/records/AC-02' },
   { id: 'ACT-03', date: '2026-09-02', kind: 'criteria', surfaced: false, title: 'Targets set',
-    body: 'Seven targets and six decision requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=decide&show=targets' },
+    body: 'Seven targets and six Requirements set for the Level 3 decision before testing began.', capabilityId: 'refund-recommendation', link: '#/capabilities/refund-recommendation?tab=decide&show=targets' },
   { id: 'ACT-02', date: '2026-08-19', kind: 'authority', surfaced: true, title: 'Authority expanded',
     body: 'Ticket classification moved from Draft to Act Within Limits. Authorized by Priya Natarajan.', capabilityId: 'ticket-classification', link: '#/records/AC-01' },
   { id: 'ACT-01', date: '2026-08-12', kind: 'decision', surfaced: true, title: 'Account closure kept at Observe',

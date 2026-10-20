@@ -178,7 +178,7 @@ function evidenceLine(state, cap) {
   const meta = sig.length ? `${plural(sig.length, 'thing')} to look at` : 'nothing to look at';
   return line('Evidence', meta, sig.length
     ? html`<ul class="plain-list mon-signals">${sig.map((x) => html`<li>${badge(SIGNAL_TONE[x.kind], SIGNAL_WORDS[x.kind])} ${x.what}${x.record ? ` (${x.record}, ${fmtDate(x.date)}).` : ''} <span class="muted">${x.why}</span> <a href="${x.link}">Look</a></li>`)}</ul><p class="muted small">Warnings only: none of these blocks anything or changes authority.</p>`
-    : html`<p>The evidence is current, every decision requirement has enough of it, and nothing that was met has slipped.</p>`);
+    : html`<p>The evidence is current, every Requirement has enough of it, and nothing that was met has slipped.</p>`);
 }
 
 function stillSafe(state, cap, d) {

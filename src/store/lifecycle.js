@@ -15,6 +15,7 @@ import { expectedVsActual } from './value.js';
 import { adoptionSignals } from './adoption.js';
 import { openCriticalIncidents, incidentsFor, incidentStatus } from './lightweight.js';
 import { levelName } from './selectors.js';
+import { authorityBaseline } from './context.js';
 
 // The plain-language states, from least to most serious. No score: the
 // state is the most serious kind of change found, and every change says why.
@@ -24,6 +25,8 @@ export const JUSTIFICATION_STATES = {
   investigate: 'Investigation needed',
   unjustified: 'Authority may no longer be justified',
   restricted: 'Restricted automatically',
+  // Remediation 1 (#149, R1-B): observed behavior above approved Authority.
+  above: 'Operating above approved Authority',
   // Not a judgment: retired is terminal (#147, Q6).
   retired: 'Retired',
 };
@@ -156,6 +159,28 @@ export function changesSinceDecision(state, capabilityId) {
   return { record, basis, legacy, changes: out };
 }
 
+// Approved vs observed Authority (#149, R1-B, R2-A). Approved is the level
+// granted by the Decisions on record; observed is what a person has recorded
+// the capability actually does. When observed is higher, the capability is
+// operating above approved Authority: it is shown wherever authority is, and
+// further expansion beyond the observed level is blocked until the gap is
+// resolved, either by bringing behavior back (record what it now does) or by
+// governing the higher behavior through Proposals, one level at a time.
+// Authority Lab never changes Authority because of it.
+export function authorityGap(state, capabilityId) {
+  const b = authorityBaseline(state, capabilityId);
+  const approved = { level: b.declared.level, name: b.declared.name };
+  const observed = b.effective.status === 'recorded' ? { level: b.effective.level, name: b.effective.name, note: b.effective.note } : null;
+  return { approved, observed, above: Boolean(observed && observed.level > approved.level), unknown: b.effective.status === 'unknown' };
+}
+
+// What blocks expanding to `level` because of the gap, or null.
+export function gapBlocks(state, capabilityId, level) {
+  const g = authorityGap(state, capabilityId);
+  if (!g.above || level <= g.observed.level) return null;
+  return `Operating above approved Authority: it is approved for Level ${g.approved.level}, ${g.approved.name}, but observed at Level ${g.observed.level}, ${g.observed.name}. Further expansion is blocked until that is resolved: bring its behavior back within approved Authority, or govern the observed behavior first, one level at a time.`;
+}
+
 // The answer to "Is the current Authority still justified?".
 export function justification(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
@@ -163,7 +188,8 @@ export function justification(state, capabilityId) {
   const { record, basis, legacy, changes } = changesSinceDecision(state, capabilityId);
   const restricted = Boolean(d.reviewRequired && d.monitoring && d.monitoring.breached);
   const worst = changes.reduce((w, c) => (RANK[c.severity] > RANK[w] ? c.severity : w), 'info');
-  const key = cap.status === 'retired' ? 'retired' : restricted ? 'restricted' : worst === 'info' ? 'supported' : worst;
+  const gap = authorityGap(state, capabilityId);
+  const key = cap.status === 'retired' ? 'retired' : restricted ? 'restricted' : gap.above ? 'above' : worst === 'info' ? 'supported' : worst;
   return {
     key,
     label: JUSTIFICATION_STATES[key],
@@ -172,6 +198,7 @@ export function justification(state, capabilityId) {
     basis,
     legacy,
     restricted,
+    gap,
     reviewLock: Boolean(d.reviewRequired),
     changes,
     materialImpact: materialChangesSince(state, capabilityId, record).map((m) => materialChangeImpact(state, capabilityId, m)),

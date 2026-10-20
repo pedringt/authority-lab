@@ -53,11 +53,11 @@ test('Decide step 1: now and proposed, behaviour first and the level second', ()
 test('Decide step 2: one headline, the top gap, a serious failure, and one line per kind of evidence', () => {
   const s = initialState();
   const page = decide(s);
-  assert.match(page, /<p class="decide-big">Almost ready: 5 of 6 checks met<\/p>/);
+  assert.match(page, /<p class="decide-big">Almost ready: 5 of 6 Requirements met<\/p>/);
   assert.match(page, /<p>Still open: minimum 40 high-value refund cases \(now 18\)\.<\/p>/);
   assert.match(page, /<p class="decide-serious">Serious test failure: Fraud flag present\.<\/p>/);
   assert.deepEqual(lines(page), {
-    Checks: '5 of 6 met · 2 targets not met yet',
+    Requirements: '5 of 6 met · 2 targets not met yet',
     Tests: '24 of 26 passed',
     // #126: the example connected sources and Daniel's review, with the weak high-value slice.
     'Evidence from sources': '4 sources: Support platform, Ticketing, Eval harness, Manual review · 1 weak',
@@ -218,10 +218,10 @@ test('Decide after recording: what was decided, who and when, what now runs auto
 test('Decide with no decision open: what has to happen first, the evidence, and no form', () => {
   const s = initialState();
   const tc = decide(s, TC);
-  // Its measured evidence (seeded) is enough to propose (#126): no in-app run needed.
-  assert.match(tc, /<h2>No decision is open<\/h2><p>No one has proposed a move to Level 4, Broad Delegation, yet\./);
+  // Level 4 is offered now (#149), but its seeded results aren't real use.
+  assert.match(tc, /<h2>No decision is open<\/h2><p>Level 4, Broad Delegation, needs evidence from real use/);
   assert.match(tc, /<h2>What do we know\?<\/h2>/);
-  assert.match(tc, /<p class="decide-big">Ready: all 5 checks met<\/p>/);
+  assert.match(tc, /<p class="decide-big">Ready: all 5 Requirements met<\/p>/);
   assert.doesNotMatch(tc, /data-action="(authorize|select-option|propose-authority)"/);
   assert.match(decide(s, 'account-closure'), /kept with people by design, so there is nothing to decide/);
   // Once the tests have run, the first move can be proposed, and proposing opens the flow.

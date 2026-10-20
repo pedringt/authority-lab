@@ -17,7 +17,7 @@ export const norm = (t) => t.toLowerCase().replace(/[^a-z0-9$% ]+/g, ' ').replac
 export function startContractDraft(state, capabilityId, { by } = {}) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
-  if (versionList(state, capabilityId, 'contract').length) throw new Error('These rules are already set. To change them, propose a change.');
+  if (versionList(state, capabilityId, 'contract').length) throw new Error('These rules are already set. To change them, request a change.');
   const d = capData(state, capabilityId);
   if (d.contractDraft && !d.contractDraft.finalizedAt) return state;
   const risk = current(state, capabilityId, 'risk');
@@ -97,7 +97,7 @@ function startSetupBoundaries(state, cap, risk, by) {
 export function withDraft(state, capabilityId, fn) {
   const d = capData(state, capabilityId);
   if (!d.contractDraft) throw new Error('Start a rules draft first.');
-  if (d.contractDraft.finalizedAt) throw new Error('These rules are already set. To change them, propose a change.');
+  if (d.contractDraft.finalizedAt) throw new Error('These rules are already set. To change them, request a change.');
   return updateCap(state, capabilityId, { contractDraft: fn(d.contractDraft) });
 }
 
@@ -195,7 +195,7 @@ export function contractValueChecks(state, capabilityId, value) {
   const out = [];
   const aboveLow = risk.impact && risk.impact !== 'Low';
   if (aboveLow && !value.mustNever.length) out.push({ id: 'empty-never', level: 'block', section: 'mustNever', text: `Add at least one "${SECTION_LABELS.mustNever}" rule. ${risk.impact}-impact capabilities need one.` });
-  if (aboveLow && !value.autoRestriction.length) out.push({ id: 'empty-auto', level: 'block', section: 'autoRestriction', text: `Add at least one rule under "${SECTION_LABELS.autoRestriction}". For a ${risk.impact.toLowerCase()}-impact capability, software needs a limit it can enforce.` });
+  if (aboveLow && !value.autoRestriction.length) out.push({ id: 'empty-auto', level: 'block', section: 'autoRestriction', text: `Add at least one rule under "${SECTION_LABELS.autoRestriction}". For a ${risk.impact.toLowerCase()}-impact capability, autonomy needs a limit that pulls it back.` });
   // The data section lists known fields only, never a restricted one (A2).
   for (const f of value.dataSeen || []) {
     const known = DATA_FIELDS.find((x) => x.id === f);

@@ -519,7 +519,7 @@ export function withdrawProposal(state, capabilityId, proposalId, { by, reason }
     kind: 'proposal',
     outcome: 'withdrawn',
     title: `${CHANGE_KIND[proposal.kind]} withdrawn`,
-    body: `${cap.name}: ${people(state)[by].name} withdrew their proposed change. Reason: ${why}`,
+    body: `${cap.name}: ${people(state)[by].name} withdrew their change request. Reason: ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
   });
@@ -543,7 +543,7 @@ export function rejectProposal(state, capabilityId, proposalId, { by, reason } =
     kind: 'proposal',
     outcome: 'rejected',
     title: `${CHANGE_KIND[proposal.kind]} rejected`,
-    body: `${cap.name}: ${people(state)[by].name} rejected ${people(state)[proposal.proposedBy].name}'s proposed change. Reason: ${why}`,
+    body: `${cap.name}: ${people(state)[by].name} rejected ${people(state)[proposal.proposedBy].name}'s change request. Reason: ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposalId}`,
   });

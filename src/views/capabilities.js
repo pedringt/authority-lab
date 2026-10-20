@@ -10,7 +10,7 @@ export function capabilitiesView(state) {
     return html`<tr>
       <td><a href="#/capabilities/${r.capabilityId}"><strong>${r.cap}</strong></a></td>
       <td>${r.plain}</td>
-      <td>${setupState(state, cap.id) === 'draft' ? 'Not granted yet · setup not confirmed' : html`${r.level}${cap.status === 'restricted' ? ' · Restricted' : cap.status === 'not-delegated' ? ' · Not delegated' : cap.status === 'suspended' ? ' · Paused' : ''}`}</td>
+      <td>${setupState(state, cap.id) === 'draft' ? 'Not granted yet · setup not confirmed' : html`${r.level}${cap.status === 'restricted' ? ' · Restricted' : cap.status === 'not-delegated' ? ' · Not delegated' : cap.status === 'suspended' ? ' · Paused' : ''}${r.above ? ' · Above approved Authority' : ''}`}</td>
       <td class="muted">${person(cap.owner).name}</td>
     </tr>`;
   });

@@ -40,6 +40,38 @@ Earlier redesign mockups and interface directions remain historical context only
 
 ## Decisions
 
+### Remediation after the deep review (Paige, 2026-10-20)
+
+After Phase 5, a read-only whole-product review walked three scenarios (State, a small team, the Northstar demo). Paige's decisions from it:
+
+- **D1.** Declared vs actual behavior is a first-class concept.
+- **D2.** Real workspaces can progress beyond Draft.
+- **D3.** Hard Requirements block expansion; considerations don't.
+- **D4.** Risk shapes the questions, not domain-specific controls. No financial → money-threshold rule.
+- **D5.** A self-declared Low Risk can't erase safeguards.
+- **D6.** Fix small-team governance.
+- **D7.** Written vs enforced Boundaries are never conflated.
+- **D8.** Requirements and Targets stay separate in the model but merge in the user experience.
+
+Mechanics:
+
+- **R1-B.** "Operating above approved Authority" is one of the most serious Monitor states. It blocks expansion until resolved, and never blocks Reduce, Pause, Retire or correcting behavior. Monitor shows the observed behavior, the approved Authority, that further expansion is blocked, and two ways to resolve it: bring behavior back within approved Authority, or govern the higher behavior through Proposal and Decision.
+- **R2-A.** One level at a time. The gap stays visible until declared catches up or behavior comes down.
+- **R3-A** (PR 2). Mark Northstar's high-value sample row as a consideration.
+- **R4-A** (PR 2). A Proposal can be opened while hard Requirements are unresolved; the expansion Decision is what's blocked.
+- **R5-B** (PR 3). Low stays the human's label, but confirmed facts drive the baseline safeguards, with a clear mismatch warning.
+- **R6** (PR 4). After results exist, these need sign-off: lowering or loosening a Target or bar; removing a hard Requirement; changing hard → consideration; changing an existing evidence mapping or source; a Boundary change that permits more; removing a Reviewer; changing Reviewer ↔ Stakeholder role. These are recorded only: linking a previously unlinked Requirement or Target to evidence; adding a Reviewer or Stakeholder; tightening a bar; adding a Requirement; adding or tightening a Boundary.
+
+Consequence fixes: "Proposal" is reserved for authority Proposals (amendments P-1, P-2… are **Change requests**); **Requirements** everywhere (not Checks or Decision requirements); No evidence, Not enough evidence, Unknown and Not met look different; no raw keys; refund-specific controls leave generic setup (PR 3); Welcome offers "Start your own workspace"; Overview shows the next action when Decide says a capability is ready.
+
+Held positions stay: no exceptions system yet, Investigate stays an activity, material changes stay date-only.
+
+Implemented in PR 1 (#149):
+- `authorityGap` / `gapBlocks` (lifecycle.js): the gap is the baseline's recorded effective level above the approved level. Unknown is not a gap. A Proposal up to the observed level governs it and is allowed; anything beyond the observed level is refused by `proposeAuthority` and `canAuthorize`. With one level at a time, the Proposal the gap leaves open is the one that governs the observed behavior. Monitor's form "Record what it does now" calls `recordBaseline` (a named person and a reason).
+- `readyToPropose` (decisions.js): every level up to 4 is offered, one at a time; Level 3 and above still need real-use evidence. Decide, Status and Overview say why when the next level isn't offered.
+- Structured limits (and the limits step in Decide) apply only where actions go through Authority Lab's gate. Elsewhere "Act within limits" means the written Boundaries, and the record says so.
+- Copy: Welcome, Boundaries and the rules panel no longer say software enforces every Boundary. The header tagline ("AI interprets. Software enforces. Humans authorize.") is unchanged: it's the product principle, so changing it is Paige's call.
+
 ### Product reset, Phase 5: Monitor and lifecycle (#147, Paige, 2026-10-19)
 
 The settled model (Paige, 2026-10-19): Monitor answers "Is the current Authority still justified?" Monitoring may trigger attention or another human decision; it never increases or restores Authority. A material change means evidence may need revalidating and a person should look, not that software decides authority is unsafe. Increasing Authority needs evidence and approval; reducing or pausing it should be easier. Authority is never restored automatically: recovery makes a new Proposal possible. Automatic restrictions stay exactly deterministic.

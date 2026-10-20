@@ -18,7 +18,7 @@ export function startTestRun(state, capabilityId) {
   if (!isDemoWorkspace(state)) throw new Error('Authority Lab doesn\'t run your AI. Run each test case through it yourself, then record the outcome.');
   const d = capData(state, capabilityId);
   if (d.testRun.status === 'running' || !d.scenarios.length) return state;
-  if (!criteriaSaved(state, capabilityId)) throw new Error('Set targets and decision requirements before the first test run. They lock when the first results come in, so the bar can\'t move after we see them.');
+  if (!criteriaSaved(state, capabilityId)) throw new Error('Set Targets and Requirements before the first test run. They lock when the first results come in, so the bar can\'t move after we see them.');
   return updateCap(state, capabilityId, { testRun: { ...d.testRun, status: 'running', completed: [] } });
 }
 
@@ -76,7 +76,7 @@ export function finishTestRun(state, capabilityId) {
     s = logEvent(s, {
       kind: 'criteria-locked',
       title: 'Targets locked',
-      body: `${cap.name}: the first test results are in, so the targets (version ${versionsInForce(s, capabilityId).criteria}) and decision requirements (version ${versionsInForce(s, capabilityId).requirements}) can't be changed directly now. That way the bar doesn't move after we've seen the results. To change them, propose a change and get it approved.`,
+      body: `${cap.name}: the first test results are in, so the targets (version ${versionsInForce(s, capabilityId).criteria}) and Requirements (version ${versionsInForce(s, capabilityId).requirements}) can't be changed directly now. That way the bar doesn't move after we've seen the results. To change them, propose a change and get it approved.`,
       capabilityId,
       link: `#/capabilities/${capabilityId}?tab=decide&show=targets`,
     });
@@ -105,7 +105,7 @@ export function criteriaLocked(state, capabilityId) {
 export function canRunSuite(state, capabilityId) {
   const d = capData(state, capabilityId);
   if (!d.scenarios.length) return { ok: false, reason: 'No test cases yet.' };
-  if (!criteriaSaved(state, capabilityId)) return { ok: false, reason: 'Set targets and decision requirements first. They lock when the first results come in.' };
+  if (!criteriaSaved(state, capabilityId)) return { ok: false, reason: 'Set Targets and Requirements first. They lock when the first results come in.' };
   if (d.testRun.status === 'running') return { ok: false, reason: 'The tests are already running.' };
   return { ok: true };
 }
@@ -241,7 +241,7 @@ export function isCoverageRule(r) {
 }
 
 export function cleanRequirements(items) {
-  if (!Array.isArray(items) || !items.length) throw new Error('Add at least one decision requirement.');
+  if (!Array.isArray(items) || !items.length) throw new Error('Add at least one Requirement.');
   const seen = new Set();
   return items.map((r, i) => {
     const text = (r.text || '').trim();
@@ -351,7 +351,7 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error(`Unknown capability: ${capabilityId}`);
   requireActive(state, by, 'save the targets');
-  if (criteriaLocked(state, capabilityId)) throw new Error('These targets can\'t be changed directly now that results exist. Propose a change instead.');
+  if (criteriaLocked(state, capabilityId)) throw new Error('These targets can\'t be changed directly now that results exist. Request a change instead.');
   const baseC = current(state, capabilityId, 'criteria');
   const baseR = current(state, capabilityId, 'requirements');
   const c = cleanCriteria(unchangedMeasuresDropped(criteria, baseC)).map((x) => carryMeasure(x, baseC.find((b) => b.id === x.id), x.target, x.name));
@@ -377,8 +377,8 @@ export function saveCriteria(state, capabilityId, { criteria, requirements, by, 
   // One event per save, naming both version numbers.
   return logEvent(s, {
     kind: 'criteria-saved',
-    title: first ? 'Targets and decision requirements saved' : 'Targets and decision requirements updated',
-    body: `${cap.name}: ${c.length} target${c.length === 1 ? '' : 's'} and ${r.length} decision requirement${r.length === 1 ? '' : 's'} saved by ${people(state)[by].name} (targets v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}).${deviations.length ? ` ${deviations.length} recommended safeguard${deviations.length === 1 ? ' was' : 's were'} weakened or removed: ${text}` : ''} They lock when the first test results come in.`,
+    title: first ? 'Targets and Requirements saved' : 'Targets and Requirements updated',
+    body: `${cap.name}: ${c.length} target${c.length === 1 ? '' : 's'} and ${r.length} Requirement${r.length === 1 ? '' : 's'} saved by ${people(state)[by].name} (targets v${versionsInForce(s, capabilityId).criteria}, requirements v${versionsInForce(s, capabilityId).requirements}).${deviations.length ? ` ${deviations.length} recommended safeguard${deviations.length === 1 ? ' was' : 's were'} weakened or removed: ${text}` : ''} They lock when the first test results come in.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}?tab=decide&show=targets`,
   });

@@ -25,7 +25,7 @@ export function testsView(state, capabilityId, query, { embedded = false } = {})
   const gate = canRunSuite(state, capabilityId);
   const runControl = t.status === 'running'
     ? html`<button class="btn btn-primary" disabled>Running… ${t.completed} of ${t.total}</button>`
-    : html`${gate.ok && setupState(state, cap.id) === 'draft' && resultsLockWarning(state, cap.id) ? html`<p class="muted small">${resultsLockWarning(state, cap.id)}</p>` : ''}<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${gate.ok ? '' : raw('disabled')} title="${gate.ok ? '' : gate.reason}">${t.status === 'complete' ? 'Run tests again' : 'Run tests'}</button>${gate.ok || !t.total ? '' : html`<p class="muted small">${gate.reason} <a href="#/capabilities/${cap.id}/criteria/edit">Set targets and decision requirements</a></p>`}`;
+    : html`${gate.ok && setupState(state, cap.id) === 'draft' && resultsLockWarning(state, cap.id) ? html`<p class="muted small">${resultsLockWarning(state, cap.id)}</p>` : ''}<button class="btn btn-primary" data-action="run-tests" data-capability="${cap.id}" ${gate.ok ? '' : raw('disabled')} title="${gate.ok ? '' : gate.reason}">${t.status === 'complete' ? 'Run tests again' : 'Run tests'}</button>${gate.ok || !t.total ? '' : html`<p class="muted small">${gate.reason} <a href="#/capabilities/${cap.id}/criteria/edit">Set Targets and Requirements</a></p>`}`;
 
   const summaryLine = !t.total
     ? html`No test cases for ${cap.name} yet. Add some to start testing.`

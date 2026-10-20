@@ -76,7 +76,7 @@ export const SURFACED_KINDS = new Set(['authority', 'restriction', 'test', 'mile
 // words change. KIND_LABELS in capabilities.js uses the same terms.
 export const KIND_LABELS_ALL = {
   authority: 'Authority', restriction: 'Authority reduced', failure: 'Failure', mitigation: 'Fix', milestone: 'Milestone',
-  review: 'Review', workspace: 'Workspace', criteria: 'Targets set', 'criteria-locked': 'Targets can no longer be edited directly', 'contract-finalized': 'Rules finalized', 'contract-draft': 'Rules drafted', 'criteria-saved': 'Targets saved', 'scenarios-saved': 'Test cases saved', proposal: 'Proposed change', roster: 'People',
+  review: 'Review', workspace: 'Workspace', criteria: 'Targets set', 'criteria-locked': 'Targets can no longer be edited directly', 'contract-finalized': 'Rules finalized', 'contract-draft': 'Rules drafted', 'criteria-saved': 'Targets saved', 'scenarios-saved': 'Test cases saved', proposal: 'Change request', roster: 'People',
   decision: 'Decision', test: 'Test run', amendment: 'Change', 'roi-assumptions': 'ROI change', 'evidence-imported': 'Evidence', 'evidence-source': 'Evidence source',
   context: 'Context', baseline: 'What it does today', 'material-change': 'Material change', setup: 'Setup', 'setup-confirmed': 'Setup confirmed',
 };

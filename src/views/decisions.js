@@ -6,7 +6,7 @@ import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -25,7 +25,7 @@ export function decisionsListView(state) {
     </div>
     ${pending.length === 1 ? html`<div class="page-actions"><a class="btn btn-primary" href="#/capabilities/${pending[0].id}/decision">Open the decision</a></div>` : ''}
   </div>
-  ${pending.map((c) => notice('decision', `Decision needed: ${c.name}`, `Someone has proposed moving ${c.name} from ${authorityLabel(c.authority)} to ${authorityLabel(proposedAuthority(state, c.id))}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} checks met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
+  ${pending.map((c) => notice('decision', `Decision needed: ${c.name}`, `Someone has proposed moving ${c.name} from ${authorityLabel(c.authority)} to ${authorityLabel(proposedAuthority(state, c.id))}. ${readiness(state, c.id).met} of ${readiness(state, c.id).total} Requirements met.`, { link: `#/capabilities/${c.id}/decision`, linkText: 'Open' }))}
   ${state.capabilities.flatMap((c) => capData(state, c.id).proposals.filter((p) => p.status === 'open').map((p) => notice('watch', `Approval needed: ${c.name}`, `${person(p.proposedBy).name} proposed a ${KIND_NOUN[p.kind]} change. ${requirementLabel(p.required, p.approvals)}.`, { link: `#/capabilities/${c.id}/proposals/${p.id}`, linkText: 'Open' })))}
   ${reviews.map((c) => notice('fail', `Review needed before ${c.name} gets more authority`, `The AI was moved back to ${levelName(c.authority.level)} after crossing a safety limit. Before it can get more authority again, the owner or a Risk approver needs to record what happened and what changed (the post-incident review).`, { link: `#/capabilities/${c.id}?tab=monitor`, linkText: 'Record the review' }))}
   <div class="card table-card"><table class="table">
@@ -213,9 +213,9 @@ export function barChangedNote(state, cap) {
   const changes = barChangesSinceDecisionOpened(state, cap.id);
   if (!changes.length) return '';
   const word = { stricter: 'made stricter', looser: 'made easier to meet', changed: 'changed', added: 'added', removed: 'removed' };
-  return html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>Targets or decision requirements changed after this decision was opened</strong>
-    <ul class="plain-list">${changes.map((c) => html`<li>${c.kind === 'criteria' ? 'Targets' : 'Decision requirements'} v${c.version}, ${fmtDate(c.date)}, ${personAt(c.authorAt, c.author).name}${c.proposalId ? html` (approved, <a href="#/capabilities/${cap.id}/proposals/${c.proposalId}">${c.proposalId}</a>)` : c.tighteningOnly ? ' (made stricter only, no approval needed)' : ''}: ${c.rows.length ? c.rows.map((r, i) => html`${i ? '; ' : ''}${r.label} ${word[r.change]}${r.from && r.to ? ` (${r.from} → ${r.to})` : ''}`) : 'nothing changed'}.</li>`)}</ul>
-    <p class="small">"Ready for a decision?" uses the targets and checks as they are now.</p></div>
+  return html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>Targets or Requirements changed after this decision was opened</strong>
+    <ul class="plain-list">${changes.map((c) => html`<li>${c.kind === 'criteria' ? 'Targets' : 'Requirements'} v${c.version}, ${fmtDate(c.date)}, ${personAt(c.authorAt, c.author).name}${c.proposalId ? html` (approved, <a href="#/capabilities/${cap.id}/proposals/${c.proposalId}">${c.proposalId}</a>)` : c.tighteningOnly ? ' (made stricter only, no approval needed)' : ''}: ${c.rows.length ? c.rows.map((r, i) => html`${i ? '; ' : ''}${r.label} ${word[r.change]}${r.from && r.to ? ` (${r.from} → ${r.to})` : ''}`) : 'nothing changed'}.</li>`)}</ul>
+    <p class="small">"Ready for a decision?" uses the Targets and Requirements as they are now.</p></div>
     <a class="notice-link" href="#/capabilities/${cap.id}/versions?kind=criteria">See history</a></div>`;
 }
 
@@ -225,7 +225,7 @@ export function amendedNote(state, record) {
   const amended = amendmentsAfterEvidenceFor(state, record);
   if (!amended.length) return '';
   const cap = getCapability(state, record.capabilityId);
-  return notice('watch', 'Targets changed after results were seen', `This decision was judged against targets or checks that changed after the results were in. Check that the change was justified. ${amended.map((a) => `${person(a.author).name} changed the ${KIND_NOUN[a.kind] === 'target' ? 'targets' : 'decision requirements'} (v${a.version}): ${a.reason}`).join(' ')}`, { link: `#/capabilities/${cap.id}/versions?kind=${amended[0].kind}&version=${amended[0].version}`, linkText: 'See the change' });
+  return notice('watch', 'Targets changed after results were seen', `This decision was judged against Targets or Requirements that changed after the results were in. Check that the change was justified. ${amended.map((a) => `${person(a.author).name} changed the ${KIND_NOUN[a.kind] === 'target' ? 'targets' : 'Requirements'} (v${a.version}): ${a.reason}`).join(' ')}`, { link: `#/capabilities/${cap.id}/versions?kind=${amended[0].kind}&version=${amended[0].version}`, linkText: 'See the change' });
 }
 
 // Restore (#147, Q5): a normal Proposal, one level at a time, shown with why
@@ -253,8 +253,10 @@ const familyOf = (option) => ({ expand: 'expand', 'expand-limits': 'expand', hol
 
 // Limits only mean something from Act within limits up; a move to Draft or
 // below has a person approving every action anyway.
+// Structured limits exist only where software enforces them (#149): for a
+// capability outside the gate, "within limits" means its written Boundaries.
 function hasLimitsStep(state, cap, option) {
-  return option === 'expand-limits' && nextAuthority(option, cap.authority, proposedAuthority(state, cap.id)).level >= 3;
+  return option === 'expand-limits' && actsThroughGate(cap.id) && nextAuthority(option, cap.authority, proposedAuthority(state, cap.id)).level >= 3;
 }
 
 // The person's words for a recorded option, from where it would move.
@@ -304,16 +306,37 @@ function nowSentence(cap, rec) {
 // (up to Draft), once any measured evidence exists (#126: tests, an import or
 // a result recorded by hand) and no review is pending. proposeAuthority still
 // checks everything itself.
+// Since #149 every level up to 4 is offered, one level at a time (the store's
+// readyToPropose); an open Proposal is handled before this is asked.
 function proposable(state, cap, d, review) {
-  return cap.status !== 'not-delegated' && cap.status !== 'retired' && cap.authority.level < 2 && performanceResultsSeen(state, cap.id) && !review.any;
+  return !review.any && readyToPropose(state, cap.id);
 }
 
-const proposeButton = (cap, { restoreTo = null } = {}) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">${restoreTo === null ? `Propose a move to Level ${cap.authority.level + 1}` : restoreTo === cap.authority.level + 1 ? `Propose: restore toward Level ${restoreTo}` : `Propose Level ${cap.authority.level + 1}: restoring toward Level ${restoreTo}`}</button>`;
+// Operating above approved Authority (#149), said on Decide too.
+function gapNotice(state, cap) {
+  const g = authorityGap(state, cap.id);
+  if (!g.above) return '';
+  return notice('fail', 'Operating above approved Authority', `Observed behavior: Level ${g.observed.level}, ${g.observed.name}. Approved Authority: Level ${g.approved.level}, ${g.approved.name}. Further expansion beyond Level ${g.observed.level} is blocked until this is resolved: bring its behavior back within approved Authority, or govern the observed behavior through Proposals, one level at a time. Reducing, pausing or retiring is never blocked.`, { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'See it in Monitor' });
+}
+
+const proposeButton = (cap, { restoreTo = null, governs = false } = {}) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">${governs ? `Propose Level ${cap.authority.level + 1}: govern the observed behavior` : restoreTo === null ? `Propose a move to Level ${cap.authority.level + 1}` : restoreTo === cap.authority.level + 1 ? `Propose: restore toward Level ${restoreTo}` : `Propose Level ${cap.authority.level + 1}: restoring toward Level ${restoreTo}`}</button>`;
+
+// Why the next level can't be proposed yet, in the order it is checked.
+function notProposableWhy(state, cap) {
+  const n = cap.authority.level + 1;
+  return cap.status === 'not-delegated' ? 'This work is kept with people by design, so there is nothing to decide.'
+    : n > 4 ? 'It already has the most autonomy there is.'
+      : gapBlocks(state, cap.id, n) ? gapBlocks(state, cap.id, n)
+        : n >= 3 && performanceResultsSeen(state, cap.id) && !realUseEvidence(state, cap.id) ? html`Level ${n}, ${levelName(n)}, needs evidence from real use: a pilot, or production results recorded by hand or from a connected source. Tests and evals alone aren't real use. <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a>`
+          : !performanceResultsSeen(state, cap.id) ? html`There is no evidence yet. Once there is some (a test run, a result recorded by hand, or results from a connected source), a move to Level ${n}, ${levelName(n)}, can be proposed. <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a>`
+            : html`No one has proposed a move to Level ${n}, ${levelName(n)}, yet.`;
+}
 
 function recordedView(state, cap, rec, canPropose = false) {
   const who = personAt(rec.authorizedByAt, rec.authorizedBy);
   const expanded = rec.next.level > rec.previous.level;
   return html`<div class="decide-flow">
+    ${gapNotice(state, cap)}
     <div class="decide-recorded" role="status">
       <p class="decide-big">Decision recorded: ${plainOption(rec.option, rec.previous, rec.next)}</p>
       <p class="muted">${who.name} · ${fmtDate(rec.date)}</p>
@@ -321,7 +344,7 @@ function recordedView(state, cap, rec, canPropose = false) {
       <p class="small"><a href="#/records/${rec.id}">See the decision record</a></p>
     </div>
     <p class="next-step"><a href="#/capabilities/${cap.id}?tab=monitor">${expanded ? 'Next: monitor the rollout →' : 'Next: check it in Monitor →'}</a></p>
-    ${canPropose ? html`<div class="decide-start"><p>${rec.next.level < rec.previous.level ? 'Getting authority back is never automatic: it starts with a new Proposal, one level at a time.' : 'When the evidence supports more, it starts with a new Proposal.'}</p>${proposeButton(cap, { restoreTo: restorationContext(state, cap.id) ? restorationContext(state, cap.id).priorAuthority.level : null })}</div>` : ''}
+    ${canPropose ? html`<div class="decide-start"><p>${rec.next.level < rec.previous.level ? 'Getting authority back is never automatic: it starts with a new Proposal, one level at a time.' : 'When the evidence supports more, it starts with a new Proposal.'}</p>${proposeButton(cap, { restoreTo: restorationContext(state, cap.id) ? restorationContext(state, cap.id).priorAuthority.level : null, governs: authorityGap(state, cap.id).above })}</div>` : cap.status !== 'retired' && cap.status !== 'not-delegated' && cap.authority.level < 4 && performanceResultsSeen(state, cap.id) ? html`<div class="decide-start"><p>${notProposableWhy(state, cap)}</p></div>` : ''}
   </div>`;
 }
 
@@ -343,16 +366,14 @@ function noDecisionView(state, cap, d, { runs, query = new URLSearchParams() }) 
       ? `${cap.name} was moved back to ${levelName(cap.authority.level)} after crossing a safety limit. Autonomy can't expand again until someone records what happened and what changed.`
       : 'A safety rule was crossed. Autonomy can\'t expand until someone records what happened and what changed.', { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'Record the review' });
   } else if (proposable(state, cap, d, review)) {
-    lead = html`<div class="decide-start"><h2>Ready to propose Level ${n}, ${levelName(n)}</h2>
+    const governs = authorityGap(state, cap.id).above;
+    lead = html`${gapNotice(state, cap)}<div class="decide-start"><h2>Ready to propose Level ${n}, ${levelName(n)}</h2>
       <p>${LEVEL_PLAIN[n]} A named person makes the call, and the decision is recorded.</p>
-      ${proposeButton(cap)}
+      ${proposeButton(cap, { governs })}
       <p class="muted small">Proposing freezes what is shown below, as it is now, so the decision can be reviewed against it. It isn't a decision, and it gives the AI no authority.</p></div>`;
   } else {
-    const why = cap.status === 'not-delegated' ? 'This work is kept with people by design, so there is nothing to decide.'
-      : n > 4 ? 'It already has the most autonomy there is.'
-        : !performanceResultsSeen(state, cap.id) ? html`There is no evidence yet. Once there is some (a test run, a result recorded by hand, or results from a connected source), a move to Level ${n}, ${levelName(n)}, can be proposed. <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a>`
-          : html`No one has proposed a move to Level ${n}, ${levelName(n)}, yet.`;
-    lead = html`<div class="decide-start"><h2>No decision is open</h2><p>${why}</p></div>`;
+    const why = notProposableWhy(state, cap);
+    lead = html`${gapNotice(state, cap)}<div class="decide-start"><h2>No decision is open</h2><p>${why}</p></div>`;
   }
   return html`<div class="decide-flow">
     ${lead}
@@ -462,6 +483,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     <p class="muted small">${dec.option ? html`Recorded as “${optionName(dec.option)}”, with your name (${authorizer.name}, ${authorizer.role}), your reason and this evidence.` : 'Your name, your reason and this evidence are recorded with the decision.'} Records can't be edited.</p>`;
 
   return html`<div class="decide-flow">
+    ${gapNotice(state, cap)}
     <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded. Evidence never grants authority on its own.</p>${proposalBanner(state, cap, ps)}</div>
     ${restorationBlock(ps.prop ? ps.prop.restoration : restorationContext(state, cap.id), cap)}
     ${step('What changes if I approve this?', change)}

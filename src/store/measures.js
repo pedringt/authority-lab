@@ -1,5 +1,5 @@
 // Measured targets, requirements and restriction rules (#120). A target or
-// decision requirement row, or a contract restriction line, may carry a
+// Requirement row, or a contract restriction line, may carry a
 // `measure`: which imported metric judges it, and how. Imported evidence
 // (#118) then sets its status through the same targets, readiness and
 // monitoring every capability uses. Rows without a measure keep their stored
@@ -216,7 +216,7 @@ export function targetsNow(state, capabilityId) {
   });
 }
 
-// The decision requirements as they stand now: met only on a pass. A
+// The Requirements as they stand now: met only on a pass. A
 // requirement judged by a Target whose bar still needs a decision (#137) is
 // unresolved: not met, because nobody has said what "met" is, and never
 // described as a failed result.
@@ -356,8 +356,8 @@ export function importedRuleReading(state, capabilityId, rule) {
 
 // ---------------------------------------------------------------------------
 // Evidence coverage (#126): which rows have enough evidence to judge, apart
-// from whether they pass. "4 of 5 decision requirements have sufficient
-// evidence" is about coverage; "X of Y checks met" is readiness.
+// from whether they pass. "4 of 5 Requirements have sufficient
+// evidence" is about coverage; "X of Y Requirements met" is readiness.
 // ---------------------------------------------------------------------------
 
 export const COVERAGE_WORDS = {
@@ -421,7 +421,7 @@ export function evidenceCoverage(state, capabilityId) {
   };
 }
 
-// The coverage headline: "4 of 5 decision requirements have sufficient
+// The coverage headline: "4 of 5 Requirements have sufficient
 // evidence; Minimum 40 high-value cases still needs more cases (18 of 40)."
 export function coverageText(cov) {
   if (!cov.total) return 'No Requirements yet.';
@@ -462,7 +462,7 @@ export function evidenceSignals(state, capabilityId) {
   }
   const gaps = cov.requirements.filter((r) => ['insufficient', 'no-data', 'no-source'].includes(r.status));
   if (gaps.length) {
-    out.push({ id: 'coverage', kind: 'coverage', what: coverageText(cov), why: 'A decision requirement without sufficient evidence is judged by people alone, or not at all.', link: link() });
+    out.push({ id: 'coverage', kind: 'coverage', what: coverageText(cov), why: 'A Requirement without sufficient evidence is judged by people alone, or not at all.', link: link() });
   }
   const stances = new Set(current(state, capabilityId, 'stakeholders').map((s) => s.stance).filter(Boolean));
   if (stances.size > 1) {
