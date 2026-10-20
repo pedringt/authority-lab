@@ -111,7 +111,7 @@ test('every suggested Boundary is pending, says where it came from, and none is 
   assert.ok(lines.length > 8);
   assert.ok(lines.every((l) => isSuggestion(l) && l.status === 'pending'), 'a template never decides a Boundary');
   assert.deepEqual([...new Set(lines.map(suggestionOrigin))].sort(), ['answers', 'template']);
-  assert.ok(lines.some((l) => suggestionOrigin(l) === 'answers' && l.because === 'your risk answers'));
+  assert.ok(lines.some((l) => suggestionOrigin(l) === 'answers' && l.because === 'your risk answers and confirmed Context'));
   assert.ok(!lines.some((l) => /refund or credit policy/.test(l.text)), 'the demo\'s keyword suggestions are not used here');
   assert.equal(SUGGESTION_LABELS.template, 'Template suggestion');
   assert.equal(SUGGESTION_LABELS.answers, 'Based on your answers');

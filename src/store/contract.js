@@ -80,7 +80,7 @@ function startSetupBoundaries(state, cap, risk, by) {
   };
   for (const section of SECTION_KEYS) for (const text of family.boundaries[section] || []) push(section, text, 'template', family.name);
   const fromRisk = riskBoundaries(risk, suggestionContext(state, cap.id));
-  for (const section of SECTION_KEYS) for (const text of fromRisk[section] || []) push(section, text, 'answers', 'your risk answers');
+  for (const section of SECTION_KEYS) for (const text of fromRisk[section] || []) push(section, text, 'answers', 'your risk answers and confirmed Context');
   const draft = {
     templateId: family.id,
     templateName: family.name,
