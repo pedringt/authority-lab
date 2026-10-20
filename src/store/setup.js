@@ -17,6 +17,7 @@
 // existing history. Nothing is rewritten.
 
 import { clone, getCapability, capData, emptyCapabilityData, updateCap, logEvent } from './state.js';
+import { CONTEXT_QUESTION_KEYS, contextQuestions } from './exposure.js';
 import { current, currentVersion, versionList, versionsInForce, levelName, performanceResultsSeen } from './selectors.js';
 import { people, isActivePerson, snapshotPerson, requireActive } from './people.js';
 import { slugify, RISK_OPTIONS, TODAY, amend, startingRecord, defaultFailureTypes } from './capabilities.js';
@@ -112,13 +113,16 @@ const RISK_MISSING = { impact: 'Choose how serious a failure would be (Severity)
 
 // Save the risk answers as a version of the risk profile. Likelihood must be
 // answered, and Unknown is an answer.
-export function saveSetupRisk(state, capabilityId, { impact, reversibility, exposure, likelihood, scale, failureTypes, note, by } = {}) {
+export function saveSetupRisk(state, capabilityId, { impact, reversibility, exposure, likelihood, scale, failureTypes, note, contextAnswers, by } = {}) {
   draftCap(state, capabilityId);
   for (const [k, v] of Object.entries({ impact, reversibility, exposure })) if (!RISK_OPTIONS[k].includes(v)) throw new Error(RISK_MISSING[k]);
   if (likelihood === undefined || likelihood === '') throw new Error('Choose a Likelihood. If nobody knows yet, choose Unknown.');
   const extra = cleanLikelihoodScale({ likelihood, ...(scale ? { scale } : {}) });
   const chosen = (failureTypes || []).filter((f) => RISK_OPTIONS.failureTypes.includes(f));
-  const value = { impact, reversibility, exposure, failureTypes: chosen.length ? chosen : defaultFailureTypes({ impact, exposure }), ...(String(note || '').trim() ? { note: String(note).trim() } : {}), ...extra };
+  // This capability's answers to the questions Context raises (#154 review):
+  // only a Yes here makes a workflow fact this capability's own.
+  const answers = Object.fromEntries(Object.entries(contextAnswers || {}).filter(([k, v]) => CONTEXT_QUESTION_KEYS.includes(k) && ['yes', 'no'].includes(v)));
+  const value = { impact, reversibility, exposure, failureTypes: chosen.length ? chosen : defaultFailureTypes({ impact, exposure }), ...(String(note || '').trim() ? { note: String(note).trim() } : {}), ...extra, ...(Object.keys(answers).length ? { contextAnswers: answers } : {}) };
   return amend(state, capabilityId, 'risk', { value, author: by, reason: versionList(state, capabilityId, 'risk').length ? 'Risk updated during setup.' : 'Risk set during setup.' });
 }
 
@@ -171,6 +175,7 @@ export function setupReview(state, capabilityId) {
     ...targets.filter((t) => t.bar === 'needs-decision').map((t) => `Target "${t.name}" has no bar yet: Needs decision.`),
     ...requirements.filter((r) => r.bar === 'needs-decision').map((r) => `Requirement "${r.text}" has no number yet: Needs decision.`),
     ...pendingFacts.map((k) => `Context fact "${k}" is suggested but not confirmed, so it doesn't drive setup.`),
+    ...contextQuestions(state, capabilityId).filter((q) => !q.answer).map((q) => `${q.question} Not answered yet, so it counts only toward suggestions.`),
     ...(s.lifecycle === 'in-use' && baselineVersions(state, capabilityId).length && authorityBaseline(state, capabilityId).effective.status !== 'recorded' ? ['It is already in use, and how independently it really operates today isn\'t known.'] : []),
     ...(current(state, capabilityId, 'stakeholders').length ? [] : ['No Reviewers or Stakeholders are named: the owner decides alone.']),
   ];

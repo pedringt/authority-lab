@@ -111,7 +111,7 @@ test('every suggested Boundary is pending, says where it came from, and none is 
   assert.ok(lines.length > 8);
   assert.ok(lines.every((l) => isSuggestion(l) && l.status === 'pending'), 'a template never decides a Boundary');
   assert.deepEqual([...new Set(lines.map(suggestionOrigin))].sort(), ['answers', 'template']);
-  assert.ok(lines.some((l) => suggestionOrigin(l) === 'answers' && l.because === 'your risk answers'));
+  assert.ok(lines.some((l) => suggestionOrigin(l) === 'answers' && l.because === 'your risk answers and confirmed Context'));
   assert.ok(!lines.some((l) => /refund or credit policy/.test(l.text)), 'the demo\'s keyword suggestions are not used here');
   assert.equal(SUGGESTION_LABELS.template, 'Template suggestion');
   assert.equal(SUGGESTION_LABELS.answers, 'Based on your answers');
@@ -154,7 +154,8 @@ test('suggested Requirements and Targets carry no numbers; measurable ones get a
   assert.ok(d.criteria.length > 0 && d.criteria.every((c) => c.bar === 'needs-decision' && c.target === 'Needs decision' && d.requirements.some((r) => r.id === c.requirement)));
   const min = d.requirements.find((r) => r.id === 'min-cases');
   assert.deepEqual([min.kind, min.bar, isCoverageRule(min)], ['coverage', 'needs-decision', true]);
-  assert.ok(d.requirements.some((r) => r.id === 'high-value' && r.bar === 'needs-decision'), 'financial exposure adds a high-value coverage rule, number open');
+  // #153 (D4): high-value cases are a question only for work that acts on money.
+  assert.ok(!d.requirements.some((r) => r.id === 'high-value'), 'financial consequences alone add no high-value rule');
   assert.ok(d.requirements.some((r) => r.source === 'Template suggestion'));
   assert.ok(d.requirements.some((r) => r.source === 'Authority Lab suggestion'));
   assert.ok(d.requirements.some((r) => r.id === 'incidents' && !d.criteria.some((c) => c.requirement === 'incidents')), 'a non-measurable Requirement needs no Target');

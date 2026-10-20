@@ -97,15 +97,33 @@ export function criteriaEditorView(state, capabilityId, query) {
 // none has a number. The minimum-cases coverage rule is always there, and its
 // number starts as Needs decision.
 function setupChecksView(state, cap, { error, acting, saved, defaults, criteria, requirements }) {
+  // Requirements first (#153, D8): each Requirement asks what must be true,
+  // how you'll know, and the bar if it's measurable. The bar is saved as the
+  // Requirement's Target, so the model keeps both; a person sees one thing.
   const reqIds = new Set(requirements.map((r) => r.id));
   const tIds = new Set(criteria.map((c) => c.id));
+  const firstTarget = new Map();
+  for (const c of criteria) if (c.requirement && reqIds.has(c.requirement) && !firstTarget.has(c.requirement)) firstTarget.set(c.requirement, c);
+  const inline = new Set([...firstTarget.values()].map((c) => c.id));
+  const others = criteria.filter((c) => !inline.has(c.id));
   const sugReqs = defaults.requirements.filter((r) => !reqIds.has(r.id));
-  const sugTargets = defaults.criteria.filter((c) => !tIds.has(c.id));
+  const targetsFor = (id) => defaults.criteria.filter((c) => c.requirement === id && !tIds.has(c.id));
+  const sugBars = defaults.criteria.filter((c) => !tIds.has(c.id) && reqIds.has(c.requirement));
   const reqChoices = requirements.map((r) => [r.id, r.text]);
   const warn = resultsLockWarning(state, cap.id);
-  const rrow = (r, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required>${judgmentField(r)}${weightField(r)}${r.bar === 'needs-decision' ? html`<span class="muted small">Coverage rule: replace "Needs decision" with the number, e.g. "Minimum 50 cases", when you've decided.</span>` : ''}</td>
-    <td>${r.bar === 'needs-decision' ? badge('decision', 'Needs decision') : isCoverageRule(r) ? html`<span class="muted small">Coverage rule</span>` : ''}</td>
+  const barFields = (r, t) => (isCoverageRule(r)
+    ? html`<p class="muted small">${r.bar === 'needs-decision' ? html`${badge('decision', 'Needs decision')} Replace "Needs decision" in the wording with the number, e.g. "Minimum 50 cases", when you've decided.` : 'Its number is in the wording: how many cases are enough to judge.'}</p>`
+    : html`<div class="req-bar"><input type="hidden" name="rt-id" value="${t ? t.id : ''}"><input type="hidden" name="rt-source" value="${t ? t.source || '' : ''}"><input type="hidden" name="rt-note" value="${t ? t.note || '' : ''}">
+      <label class="field"><span>Measured as</span><input type="text" name="rt-name" value="${t ? t.name : ''}" maxlength="60" placeholder="e.g. Factual error rate"></label>
+      <label class="field"><span>Bar</span><input type="text" name="rt-target" value="${t ? t.target : ''}" maxlength="120" placeholder="e.g. ≤ 2%, or Needs decision"></label>
+    </div><p class="muted small">Only when evidence shows it. Leave both empty if a person decides it, or if it isn't measured.</p>`);
+  const rrow = (r, i) => html`<tr class="req-row">
+    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}">
+      <label class="field field-stack"><span>What must be true?</span><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="What must be true?" required></label>
+      <div class="req-how"><span class="fact-label">How will you know?</span> ${judgmentField(r)}</div>
+      <div class="req-what-bar"><span class="fact-label">What bar, if measurable?</span>${barFields(r, firstTarget.get(r.id))}</div>
+      <div class="req-blocks"><span class="fact-label">Does it block expansion?</span> ${weightField(r)}</div>
+    </td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
     <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="You can set its number but not remove it.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove requirement ${i + 1}">Remove</button>`}</td>
   </tr>`;
@@ -114,34 +132,41 @@ function setupChecksView(state, cap, { error, acting, saved, defaults, criteria,
     <td><input type="text" name="c-target" value="${c.target}" maxlength="120" aria-label="Bar" placeholder="e.g. ≥ 90%, or Needs decision" required></td>
     <td><select name="c-requirement" aria-label="For requirement"><option value="">Not tied to one</option>${reqChoices.map(([id, text]) => html`<option value="${id}" ${id === c.requirement ? raw('selected') : ''}>${text}</option>`)}</select></td>
     <td><input type="text" name="c-note" value="${c.note || ''}" maxlength="240" aria-label="Note"></td>
-    <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove target ${i + 1}">Remove</button></td>
+    <td><button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove measure ${i + 1}">Remove</button></td>
   </tr>`;
-  const pick = (kind, row, label, extra) => html`<li><label class="check"><input type="checkbox" name="use-suggestion" value="${JSON.stringify({ kind, row })}"><span><strong>${label}</strong> ${badge('insufficient', row.source)}${extra ? html` <span class="muted small">${extra}</span>` : ''}</span></label></li>`;
+  const pickReq = (r) => {
+    const ts = targetsFor(r.id);
+    return html`<li><label class="check"><input type="checkbox" name="use-suggestion" value="${JSON.stringify({ kind: 'requirement', row: r, targets: ts })}"><span><strong>${r.text}</strong> ${badge('insufficient', r.source)}${ts.length ? html` <span class="muted small">measured as ${ts.map((t) => t.name).join(', ')}, bar Needs decision</span>` : r.why ? html` <span class="muted small">${r.why}</span>` : ''}</span></label></li>`;
+  };
+  const pickBar = (c) => html`<li><label class="check"><input type="checkbox" name="use-suggestion" value="${JSON.stringify({ kind: 'target', row: c })}"><span><strong>${c.name}</strong> for "${(requirements.find((r) => r.id === c.requirement) || {}).text}" ${badge('insufficient', c.source)} <span class="muted small">bar Needs decision</span></span></label></li>`;
   return html`<div class="page-head"><div>
     <p class="eyebrow"><a href="#/capabilities/${cap.id}/setup">${cap.name} · Setup</a></p>
-    <h1>Requirements and Targets</h1>
-    ${lede('What must be true before we\'d consider giving it more authority and, only where it can be measured, the bar that judges it.', 'Suggestions say where they came from and never set a number: a measurable one comes with a Target whose bar is Needs decision until you choose it. Tick each suggestion you want; nothing is added for you. Each Requirement is hard (it blocks expansion until met) unless you make it a consideration.')}
+    <h1>Requirements</h1>
+    ${lede('What must be true before we\'d consider giving it more authority, how you\'ll know, and the bar where it can be measured.', 'Suggestions say where they came from and never set a number: a measurable one comes with its bar as Needs decision until you choose it. Tick each suggestion you want; nothing is added for you. Each Requirement is hard (it blocks expansion until met) unless you make it a consideration.')}
   </div></div>
   ${error ? notice('fail', 'Couldn\'t save', error) : ''}
   ${warn ? notice('watch', 'Before you record results', warn) : ''}
   <form class="setup-form criteria-form" data-form="save-criteria" novalidate>
-    ${section('Requirements', html`<div class="card table-card"><table class="table table-edit">
-      <thead><tr><th>What must be true</th><th></th><th>Source</th><th></th></tr></thead>
+    ${section('Requirements', html`<div class="card table-card"><table class="table table-edit req-table">
+      <thead><tr><th>Requirement</th><th>Source</th><th></th></tr></thead>
       <tbody data-rows="requirements">${requirements.map(rrow)}</tbody>
     </table></div>
     <button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add a Requirement</button>
-    ${sugReqs.length ? html`<div class="card"><p class="fact-label">Suggested Requirements</p><ul class="plain-list">${sugReqs.map((r) => pick('requirement', r, r.text, r.why || (defaults.criteria.some((c) => c.requirement === r.id) ? 'measurable: its Target is suggested below' : '')))}</ul></div>` : ''}`, { subtitle: 'Safety, evidence, sample size, recency, approval or policy conditions. A coverage rule says how much evidence is enough to judge.' })}
-    ${section('Targets', html`<div class="card table-card"><table class="table table-edit">
-      <thead><tr><th>Measure</th><th>Bar</th><th>For requirement</th><th>Note</th><th></th></tr></thead>
-      <tbody data-rows="criteria">${criteria.map(trow)}</tbody>
-    </table></div>
-    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="criteria">Add a Target</button>
-    ${sugTargets.length ? html`<div class="card"><p class="fact-label">Suggested Targets (bar: Needs decision)</p><ul class="plain-list">${sugTargets.map((c) => pick('target', c, c.name, `for "${(defaults.requirements.find((r) => r.id === c.requirement) || {}).text || c.requirement}". Add that Requirement too.`))}</ul></div>` : ''}`, { subtitle: 'Optional. Only where a Requirement needs a measurable bar. "Needs decision" is unresolved: never a pass, never a fail.' })}
+    ${sugReqs.length ? html`<div class="card"><p class="fact-label">Suggested Requirements</p><ul class="plain-list">${sugReqs.map(pickReq)}</ul></div>` : ''}
+    ${sugBars.length ? html`<div class="card"><p class="fact-label">Suggested bars for your Requirements</p><ul class="plain-list">${sugBars.map(pickBar)}</ul></div>` : ''}`, { subtitle: 'Safety, evidence, sample size, recency, approval or policy conditions. A coverage rule says how much evidence is enough to judge.' })}
+    <details class="card other-measures"${others.length ? raw(' open') : ''}><summary>Other measures${others.length ? ` (${others.length})` : ''} <span class="muted small">optional: a second bar for a Requirement, or a measure not tied to one</span></summary>
+      <table class="table table-edit">
+        <thead><tr><th>Measure</th><th>Bar</th><th>For requirement</th><th>Note</th><th></th></tr></thead>
+        <tbody data-rows="criteria">${others.map(trow)}</tbody>
+      </table>
+      <button class="btn btn-sm" type="button" data-action="row-add" data-kind="criteria">Add a measure</button>
+      <p class="muted small">"Needs decision" is unresolved: never a pass, never a fail.</p>
+    </details>
     <div class="card authorize">
       <p class="eyebrow">Save</p>
       <label class="field field-stack"><span>Why? <span class="muted small">(Required when you leave out a suggestion or remove a row.)</span></span><input type="text" name="reason" maxlength="200" placeholder="e.g. Speed doesn't matter for this capability."></label>
       <p class="muted small">Saving as <strong>${acting.name}</strong>, ${acting.role}. Changes are kept in history.</p>
-      <button class="btn btn-primary btn-block" type="submit">${saved ? 'Save changes' : 'Save Requirements and Targets'}</button>
+      <button class="btn btn-primary btn-block" type="submit">${saved ? 'Save changes' : 'Save Requirements'}</button>
     </div>
   </form>
   <template id="row-criteria">${trow({ id: '', name: '', target: '', note: '', source: 'Written by hand' }, 0)}</template>

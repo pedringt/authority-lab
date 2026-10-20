@@ -217,26 +217,42 @@ export const BASE_REQUIREMENTS = [
   { id: 'incidents', text: 'No unresolved critical incidents' },
 ];
 
-// Suggestions the risk answers add (Based on your answers).
-export function riskRequirements(risk = {}) {
+// Suggestions the risk answers add (Based on your answers). Risk shapes the
+// questions, and the kind of work decides what fits (#153, D4): high-value
+// cases are a question only for work that acts on money.
+export function riskRequirements(risk = {}, { families = [], money = false } = {}) {
   const out = [];
   if (risk.exposure === 'Customer-facing') out.push({ id: 'customer-harm', text: 'Customer-visible errors stay within their limit', target: { id: 'customer-harm', name: 'Customer-visible errors', note: 'Wrong output that reached a customer.' } });
-  if (risk.exposure === 'Financial / consequential') out.push({ id: 'high-value', text: 'Minimum high-value cases: Needs decision', kind: 'coverage', bar: 'needs-decision', why: 'High-value cases need to be judged on their own.' });
+  if (money && families.includes('action')) out.push({ id: 'high-value', text: 'Minimum high-value cases: Needs decision', kind: 'coverage', bar: 'needs-decision', why: 'High-value cases need to be judged on their own.' });
   if (risk.reversibility === 'Difficult to reverse') out.push({ id: 'reversal', text: 'Every pilot action reviewed before it took effect' });
   return out;
 }
 
-// Boundary suggestions from the risk answers (Based on your answers): the
-// generic safety lines, with blanks where a number goes.
-export function riskBoundaries(risk = {}) {
+// Boundary suggestions from the risk answers and confirmed facts (Based on
+// your answers): the generic safety lines, with blanks where a number goes.
+// Risk shapes the questions; the kind of work decides which patterns fit
+// (#153, D4). A money limit is suggested only for work that acts on money,
+// never because outputs have financial consequences. Every line is a
+// suggestion a person can reject.
+// `facts`: keys from exposureFacts (customer, consequential, regulated,
+// sensitive, irreversible, stakes); `families`: the kind of work.
+const ADVISORY = ['knowledge', 'draft', 'recommend', 'interaction'];
+export function riskBoundaries(risk = {}, { families = [], facts = [], money = false } = {}) {
   const out = { may: [], mustAsk: [], mustNever: ['Act outside the scope of this capability.'], escalation: ['Input is missing or unreadable.'], autoRestriction: [] };
-  if (risk.impact && risk.impact !== 'Low') out.mustAsk.push('Any case that mentions legal action, safety, or a complaint about the organization.');
+  // A Low label doesn't drop the baseline when confirmed facts say there is
+  // exposure (#153, D5).
+  if ((risk.impact && risk.impact !== 'Low') || facts.length) out.mustAsk.push('Any case that mentions legal action, safety, or a complaint about the organization.');
   if (risk.impact === 'High') out.mustNever.push('Modify a policy.');
   out.autoRestriction.push(BLANK + ' high-severity failures within ' + BLANK + ' days return the capability to Draft.');
-  if (risk.exposure === 'Financial / consequential') {
+  const acts = families.includes('action');
+  if (money && acts) {
     out.mustAsk.push('Any case above ' + BLANK + ' in value.');
-    out.mustNever.push('Move money to a destination other than the original one.');
+    out.mustNever.push('Move money to a destination that hasn\'t been approved.');
   }
+  const consequential = facts.includes('consequential') || facts.includes('regulated');
+  if (consequential && !acts) out.mustAsk.push('A qualified person reviews anything with legal, regulatory or financial consequences before it is used.');
+  if (consequential && families.some((f) => ADVISORY.includes(f))) out.escalation.push('A consequential statement cannot be supported by an approved source.');
+  if (facts.includes('sensitive')) out.mustNever.push('Use or share sensitive or confidential data beyond what the task needs.');
   if (risk.exposure === 'Customer-facing') {
     out.mustNever.push('Send anything to a customer without a person approving it, until authority says otherwise.');
     out.escalation.push('Customer asks for a human.');

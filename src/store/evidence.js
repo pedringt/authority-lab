@@ -5,6 +5,7 @@ import * as seed from '../data/seed.js';
 import { defaultCriteria, defaultRequirements } from '../data/criteria-defaults.js';
 import { starterScenarios } from '../data/scenario-templates.js';
 import { findStartingPoint, START_FROM_SCRATCH, BASE_REQUIREMENTS, riskRequirements } from '../data/templates.js';
+import { suggestionContext } from './exposure.js';
 import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, currentVersion, versionsInForce, performanceResultsSeen, testSummary } from './selectors.js';
 import { people, requireActive } from './people.js';
@@ -118,18 +119,18 @@ export function canRunSuite(state, capabilityId) {
 export function defaultsFor(state, capabilityId) {
   const risk = current(state, capabilityId, 'risk');
   const cap = getCapability(state, capabilityId);
-  if (cap && cap.setup) return suggestedChecks(risk, cap.setup.template);
+  if (cap && cap.setup) return suggestedChecks(risk, cap.setup.template, suggestionContext(state, capabilityId));
   return { criteria: defaultCriteria(risk), requirements: defaultRequirements(risk) };
 }
 
 export const CHECK_SOURCES = { base: 'Authority Lab suggestion', template: 'Template suggestion', answers: 'Based on your answers' };
 
-export function suggestedChecks(risk, templateId) {
+export function suggestedChecks(risk, templateId, context = {}) {
   const family = findStartingPoint(templateId) || START_FROM_SCRATCH;
   const rows = [
     ...BASE_REQUIREMENTS.map((r) => ({ ...r, from: 'base' })),
     ...family.requirements.map((r) => ({ ...r, from: 'template' })),
-    ...riskRequirements(risk).map((r) => ({ ...r, from: 'answers' })),
+    ...riskRequirements(risk, context).map((r) => ({ ...r, from: 'answers' })),
   ];
   const seen = new Set();
   const unique = rows.filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
@@ -138,6 +139,30 @@ export function suggestedChecks(risk, templateId) {
   const requirements = unique.map(({ id, text, kind, bar, from, why, target }) => ({ id, text, source: CHECK_SOURCES[from], judgment: kind === 'coverage' || target ? 'evidence' : 'person', ...(kind ? { kind } : {}), ...(bar ? { bar } : {}), ...(why ? { why } : {}) }));
   const criteria = unique.filter((r) => r.target).map((r) => ({ id: r.target.id, name: r.target.name, target: NEEDS_DECISION_TEXT, bar: NEEDS_DECISION, note: r.target.note || '', requirement: r.id, source: CHECK_SOURCES[r.from] }));
   return { criteria, requirements };
+}
+
+// Requirements first (#153, D8): the bar a person writes beside a
+// Requirement ("Measured as", "Bar") is saved as that Requirement's Target.
+// A new Requirement gets its id here so its Target can point to it. `bars`
+// runs parallel to `requirements`; an empty bar adds nothing.
+export function withBarsAsTargets(criteria, requirements, bars = []) {
+  const used = new Set(requirements.map((r) => r.id).filter(Boolean));
+  const reqs = requirements.map((r, i) => {
+    if (r.id || !String(r.text || '').trim()) return r;
+    const base = slugId(r.text, i);
+    let id = base;
+    for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
+    used.add(id);
+    return { ...r, id };
+  });
+  const linked = [];
+  bars.forEach((b, i) => {
+    const name = String((b && b.name) || '').trim();
+    const target = String((b && b.target) || '').trim();
+    if (!name && !target || !reqs[i]) return;
+    linked.push({ ...(b.id ? { id: b.id } : {}), name: name || String(reqs[i].text).slice(0, 60), target, note: b.note || '', ...(b.source ? { source: b.source } : {}), requirement: reqs[i].id });
+  });
+  return { criteria: [...criteria, ...linked], requirements: reqs };
 }
 
 export const slugId = (text, i) => (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `item-${i + 1}`;
