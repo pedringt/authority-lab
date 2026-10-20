@@ -112,7 +112,7 @@ test('a one-person workspace adds a capability and takes it all the way to its f
   for (const [k, v] of Object.entries({ owner: 'ana-ruiz', scope: 'Lookups for the billing queue only.', startDate: '2026-10-08', feedbackChannel: '#lookup-feedback', reviewerNotes: 'Check each draft before sending it.', reviewDate: '2026-10-21' })) s = setRolloutField(s, id, k, v);
   s = setRationale(s, id, 'Every Requirement is met; a person approves each draft.');
   // #151: 20 starter tests don't meet "Minimum 50 pilot cases"; the gate says so.
-  assert.match(canAuthorize(s, id, { by: 'ana-ruiz' }).reason, /Not yet: "Minimum 50 pilot cases" \(Not met\)/);
+  assert.match(canAuthorize(s, id, { by: 'ana-ruiz' }).reason, /Not yet: "Minimum 50 pilot cases" \(Not enough evidence\)/);
   const evidenceSteps = setupSteps(s, id).filter((st) => st.id === 'configure' || st.id === 'coverage');
   s = authorize(replaceProposal(requirementsMet(s, id), id, { by: 'ana-ruiz' }), id, { by: 'ana-ruiz' });
   assert.deepEqual(getCapability(s, id).authority, { level: 2, limited: false });

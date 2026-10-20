@@ -159,7 +159,7 @@ test('screens: the Requirements list marks considerations, and its copy says har
   const req = strip(capabilityView(s, RR, new URLSearchParams('tab=decide&show=requirements')));
   assert.match(req, /Every hard Requirement has to be Met before authority expands: Not met, Unknown, Conflicting, not enough evidence or a missing bar all block it\. A consideration is shown and recorded with the decision, but doesn't block\./);
   assert.doesNotMatch(req, /go ahead anyway/);
-  assert.match(req, /Minimum 40 high-value refund cases Consideration · Not met/);
+  assert.match(req, /Minimum 40 high-value refund cases Consideration · Not enough evidence: 18 of 40/);
   assert.match(req, /All 5 hard Requirements met · 1 consideration not met\. A consideration is weighed by the person deciding; it never blocks\./);
 });
 
@@ -176,4 +176,24 @@ test('a failed measured Requirement says where the result came from, never a raw
   const r = readiness(s, id).hardUnmet.find((x) => x.id === 'accuracy');
   assert.match(r.gap, /^Measured 75% across 20 cases, from /);
   assert.doesNotMatch(r.gap, /manual:/);
+});
+
+test('a case count short of its minimum is Not enough evidence, never Not met; hard still blocks, a consideration still doesn\'t', () => {
+  // Hard: the firm's coverage rule with 10 of 20 cases blocks, as Not enough evidence.
+  let [s, id] = firm({ accuracy: [10, 10] });
+  const minc = readiness(s, id).hardUnmet.find((x) => x.id === 'min-cases');
+  assert.equal(minc.result.status, 'not-enough');
+  assert.equal(minc.result.label, 'Not enough evidence');
+  assert.match(canAuthorize(ready(s, id), id, { by: ANA }).reason, /"Minimum 20 cases" \(Not enough evidence\)/);
+  setPeople(people(s)); setToday(s.today);
+  assert.match(strip(capabilityView({ ...s, actingAs: ANA }, id, new URLSearchParams('tab=decide&show=requirements'))), /Minimum 20 cases · Not enough evidence: 10 of 20/);
+  // Consideration: Northstar's high-value row reads the same way and doesn't block.
+  const n = initialState();
+  const hv = readiness(n, RR).considerationsOpen.find((x) => x.id === 'high-value');
+  assert.equal(hv.result.status, 'not-enough');
+  assert.equal(hv.current, '18', 'the stored count stays bare for everything that reads it');
+  assert.deepEqual(canAuthorize(setRationale(decideWith(n, RR, 'expand-limits'), RR, 'Standard refunds are ready; high-value stays with a person.'), RR, { by: 'maya' }), { ok: true });
+  // A measured bar that is missed is still Not met.
+  [s, id] = firm({ accuracy: [15, 20] });
+  assert.equal(readiness(s, id).hardUnmet.find((x) => x.id === 'accuracy').result.status, 'not-met');
 });

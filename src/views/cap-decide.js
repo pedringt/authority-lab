@@ -238,7 +238,9 @@ export function requirementsList(state, capabilityId) {
     <ul class="req-list">${reqs.map((q) => {
       const st = resultStatus(q);
       const label = RESULT_WORDS[st];
-      const value = q.current && q.current !== label && !NO_VALUE.has(q.current) ? `: ${q.current}` : '';
+      // A case count short of its minimum reads "18 of 40" (#151).
+      const of = st === 'not-enough' && /^\d[\d,]*$/.test(String(q.current || '').trim()) && String(q.text).match(/^(?:minimum|at least)\s+([\d,]+)/i);
+      const value = q.current && q.current !== label && !NO_VALUE.has(q.current) ? `: ${q.current}${of ? ` of ${of[1]}` : ''}` : '';
       return html`<li class="is-${st}">
       <span class="req-mark" aria-hidden="true">${RESULT_MARK[st]}</span>
       <span class="req-text"><strong>${q.text}</strong>${q.consideration ? html` <span class="req-weight">Consideration</span>` : ''}<span class="muted"> · ${label}${value}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
