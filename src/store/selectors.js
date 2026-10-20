@@ -176,12 +176,25 @@ export function authorityLabel(auth, { short = false } = {}) {
 }
 
 // Requirements bound to a measure are judged from imported evidence (#120).
+// A Requirement is hard unless it is configured as a consideration (#151,
+// D3): a hard one blocks expansion until it is Met; a consideration is shown
+// and recorded but never blocks.
+export const isConsideration = (r) => Boolean(r && r.consideration);
+
 export function readiness(state, capabilityId) {
   const reqs = requirementsNow(state, capabilityId);
   const met = reqs.filter((r) => r.met).length;
-  // `unmet` includes the unresolved ones (they still block); `unresolved`
-  // lists them separately so they're never shown as failed (#137).
-  return { met, total: reqs.length, unmet: reqs.filter((r) => !r.met), unresolved: reqs.filter((r) => r.unresolved) };
+  const hard = reqs.filter((r) => !isConsideration(r));
+  const considerations = reqs.filter(isConsideration);
+  // `unmet` includes the unresolved ones; `unresolved` lists them separately
+  // so they're never shown as failed (#137). Only `hardUnmet` blocks an
+  // expansion: anything short of Met (Not met, Unknown, Conflicting, not
+  // enough or no evidence, or a missing bar) on a hard Requirement.
+  return {
+    met, total: reqs.length, unmet: reqs.filter((r) => !r.met), unresolved: reqs.filter((r) => r.unresolved),
+    hardMet: hard.filter((r) => r.met).length, hardTotal: hard.length, hardUnmet: hard.filter((r) => !r.met),
+    considerations, considerationsOpen: considerations.filter((r) => !r.met),
+  };
 }
 
 export function testSummary(state, capabilityId) {

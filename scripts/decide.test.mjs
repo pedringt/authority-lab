@@ -53,7 +53,7 @@ test('Decide step 1: now and proposed, behaviour first and the level second', ()
 test('Decide step 2: one headline, the top gap, a serious failure, and one line per kind of evidence', () => {
   const s = initialState();
   const page = decide(s);
-  assert.match(page, /<p class="decide-big">Almost ready: 5 of 6 Requirements met<\/p>/);
+  assert.match(page, /<p class="decide-big">Ready: all 5 hard Requirements met · 1 consideration not met<\/p>/);
   assert.match(page, /<p>Still open: minimum 40 high-value refund cases \(now 18\)\.<\/p>/);
   assert.match(page, /<p class="decide-serious">Serious test failure: Fraud flag present\.<\/p>/);
   assert.deepEqual(lines(page), {

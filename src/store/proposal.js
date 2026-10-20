@@ -79,6 +79,7 @@ export function reviewConditions(state, capabilityId) {
     label: r.result ? r.result.label : (r.met ? RESULT_WORDS.met : RESULT_WORDS['no-evidence']),
     why: (r.result && r.result.why) || r.gap || '',
     current: r.current || '',
+    ...(r.consideration ? { consideration: true } : {}),
   }));
   const targets = targetsNow(state, capabilityId).map((t) => ({
     id: t.id,

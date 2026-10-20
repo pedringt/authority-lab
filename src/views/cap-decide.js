@@ -5,7 +5,7 @@
 // requirements, pilot results) stay one link away, through `show=`.
 
 import { html, raw, section, badge, fmtDate, person, notice, empty, tabIntro } from '../ui.js';
-import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams, RESULT_WORDS } from '../store/index.js';
+import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams, RESULT_WORDS, readinessText } from '../store/index.js';
 import { AGENT_RUNS_CAPABILITY } from '../data/seed.js';
 import { testsView } from './tests.js';
 import { emptyState } from './setup.js';
@@ -36,12 +36,21 @@ export function decideTab(state, cap, query, show, { runs = null } = {}) {
 
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
-// "Almost ready: 5 of 6 Requirements met", from the Requirements.
+// "Almost ready: 5 of 6 Requirements met", from the Requirements. Only hard
+// ones decide readiness (#151); open considerations are named after it.
 export function readyHeadline(r) {
   if (!r.total) return 'Not ready yet: no Requirements set';
-  if (r.met === r.total) return `Ready: all ${plural(r.total, 'Requirement')} met`;
-  if (r.total - r.met === 1) return `Almost ready: ${r.met} of ${r.total} Requirements met`;
-  return `Not ready yet: ${r.met} of ${r.total} Requirements met`;
+  const cons = r.considerations || [];
+  if (!cons.length) {
+    if (r.met === r.total) return `Ready: all ${plural(r.total, 'Requirement')} met`;
+    if (r.total - r.met === 1) return `Almost ready: ${r.met} of ${r.total} Requirements met`;
+    return `Not ready yet: ${r.met} of ${r.total} Requirements met`;
+  }
+  const open = r.considerationsOpen.length;
+  const after = open ? ` · ${plural(open, 'consideration')} not met` : '';
+  if (!r.hardUnmet.length) return `Ready: ${r.hardTotal ? `all ${plural(r.hardTotal, 'hard Requirement')} met` : 'no hard Requirements'}${after}`;
+  if (r.hardUnmet.length === 1) return `Almost ready: ${r.hardMet} of ${r.hardTotal} hard Requirements met${after}`;
+  return `Not ready yet: ${r.hardMet} of ${r.hardTotal} hard Requirements met${after}`;
 }
 
 // Were the bar's current versions set before the pilot started?
@@ -201,7 +210,7 @@ export function criteriaTab(state, cap) {
 
 export function requirementsTab(state, cap) {
   if (!criteriaSaved(state, cap.id)) return emptyState(state, cap.id, 'No Requirements yet.', 'criteria');
-  return html`${tabIntro(`What we need before ${proposedChangeLabel(cap, state)}.`, 'A checklist, not a score. Every item has to be met, or a person has to decide to go ahead anyway and say why on the record.')}
+  return html`${tabIntro(`What we need before ${proposedChangeLabel(cap, state)}.`, 'A checklist, not a score. Every hard Requirement has to be Met before authority expands: Not met, Unknown, Conflicting, not enough evidence or a missing bar all block it. A consideration is shown and recorded with the decision, but doesn\'t block.')}
     ${requirementsList(state, cap.id)}`;
 }
 
@@ -232,10 +241,10 @@ export function requirementsList(state, capabilityId) {
       const value = q.current && q.current !== label && !NO_VALUE.has(q.current) ? `: ${q.current}` : '';
       return html`<li class="is-${st}">
       <span class="req-mark" aria-hidden="true">${RESULT_MARK[st]}</span>
-      <span class="req-text"><strong>${q.text}</strong><span class="muted"> · ${label}${value}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
+      <span class="req-text"><strong>${q.text}</strong>${q.consideration ? html` <span class="req-weight">Consideration</span>` : ''}<span class="muted"> · ${label}${value}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
     </li>`;
     })}</ul>
-    <p class="muted small"><strong>${r.met} of ${r.total}</strong> Requirements met.</p>
+    <p class="muted small">${readinessText(r)}${r.considerations.length ? ' A consideration is weighed by the person deciding; it never blocks.' : ''}</p>
   </div>`;
 }
 

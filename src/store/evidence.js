@@ -256,14 +256,19 @@ export function cleanRequirements(items) {
     if (r.judgment !== undefined && !JUDGMENTS.includes(r.judgment)) throw new Error(`Requirement "${text}": say whether a person decides it or evidence shows it.`);
     if (r.judgment === 'person' && (r.kind === 'coverage' || r.id === 'min-cases' || r.measure || r.bar === NEEDS_DECISION)) throw new Error(`Requirement "${text}" is judged by evidence (it ${r.measure ? 'has a measure' : 'is a coverage rule'}), so a person can't decide it.`);
     const judgment = r.judgment ? { judgment: r.judgment } : {};
+    // Hard or consideration (#151, D3). The minimum-cases row is the baseline
+    // amount of evidence, required and never removable, so it stays hard.
+    if (r.consideration !== undefined && typeof r.consideration !== 'boolean') throw new Error(`Requirement "${text}": say whether it is hard or a consideration.`);
+    if (r.consideration && r.id === 'min-cases') throw new Error(`"${text}" is the minimum amount of evidence, so it is always a hard Requirement.`);
+    const weight = r.consideration ? { consideration: true } : {};
     // Only a coverage rule may wait for its number (#139, C3); a measurable
     // Requirement's bar belongs on its Target.
     if (r.bar === NEEDS_DECISION || /\bneeds decision\b/i.test(text)) {
       if (!isCoverageRule(r)) throw new Error(`Requirement "${text}": only a coverage rule (how much evidence is enough) can wait for its number. Put the bar on a Target instead.`);
       if (r.measure) throw new Error(`Requirement "${text}" has no number yet, so it can't be measured. Set its number first.`);
-      return { id, text, current: 'No number set yet', met: false, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...judgment, bar: NEEDS_DECISION };
+      return { id, text, current: 'No number set yet', met: false, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...judgment, ...weight, bar: NEEDS_DECISION };
     }
-    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...judgment, ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
+    return { id, text, current: r.current || 'Not yet measured', met: Boolean(r.met), gap: r.gap, source: r.source || 'Written by hand', ...(r.kind === 'coverage' ? { kind: 'coverage' } : {}), ...judgment, ...weight, ...cleanMeasure(r.measure, text, `Requirement "${text}"`) };
   });
 }
 

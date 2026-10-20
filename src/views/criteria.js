@@ -15,6 +15,13 @@ export function judgmentField(r) {
   return html`<select name="r-judgment" aria-label="How will you know this is true?" ${isNew ? raw('required') : ''}><option value="" ${now ? '' : raw('selected')}>${isNew ? 'How will you know this is true?' : 'Not set yet (older Requirement)'}</option>${JUDGMENTS.map((k) => html`<option value="${k}" ${now === k ? raw('selected') : ''}>${JUDGMENT_WORDS[k]}</option>`)}</select>`;
 }
 
+// Hard or consideration (#151, D3), asked for every Requirement. The
+// minimum-cases row is the baseline amount of evidence and stays hard.
+export function weightField(r) {
+  if (r.id === 'min-cases') return html`<span class="muted small">Hard: blocks expansion until met</span>`;
+  return html`<select name="r-weight" aria-label="Does it block expansion?"><option value="hard" ${r.consideration ? '' : raw('selected')}>Hard: blocks expansion until met</option><option value="consideration" ${r.consideration ? raw('selected') : ''}>Consideration: shown, doesn't block</option></select>`;
+}
+
 // Editor for success criteria and evidence requirements (#6). Before the
 // first test run the editors are open and every save is a new version. After
 // the first run they are read-only and changes go through an amendment (#7).
@@ -47,7 +54,7 @@ export function criteriaEditorView(state, capabilityId, query) {
     <td>${CORE_CRITERIA.includes(c.id) ? html`<span class="muted small" title="You can change the threshold but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove target ${i + 1}">Remove</button>`}</td>
   </tr>`;
   const rrow = (r, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Check" required>${judgmentField(r)}</td>
+    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required>${judgmentField(r)}${weightField(r)}</td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
     <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="You can change the number but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove check ${i + 1}">Remove</button>`}</td>
   </tr>`;
@@ -71,7 +78,7 @@ export function criteriaEditorView(state, capabilityId, query) {
       <thead><tr><th>Must be true before the AI gets any authority</th><th>Source</th><th></th></tr></thead>
       <tbody data-rows="requirements">${requirements.map(rrow)}</tbody>
     </table></div>
-    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add Requirement</button>`, { subtitle: 'What we need before expanding. A checklist, not a score: "Ready for a decision?" shows as "X of Y Requirements met".' })}
+    <button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add Requirement</button>`, { subtitle: 'What we need before expanding. A checklist, not a score. A hard Requirement blocks expansion until it is met; a consideration is shown to the person deciding but doesn\'t block.' })}
 
     <div class="card authorize">
       <p class="eyebrow">Save</p>
@@ -97,7 +104,7 @@ function setupChecksView(state, cap, { error, acting, saved, defaults, criteria,
   const reqChoices = requirements.map((r) => [r.id, r.text]);
   const warn = resultsLockWarning(state, cap.id);
   const rrow = (r, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required>${judgmentField(r)}${r.bar === 'needs-decision' ? html`<span class="muted small">Coverage rule: replace "Needs decision" with the number, e.g. "Minimum 50 cases", when you've decided.</span>` : ''}</td>
+    <td><input type="hidden" name="r-id" value="${r.id || ''}"><input type="hidden" name="r-kind" value="${r.kind || ''}"><input type="hidden" name="r-source" value="${r.source || ''}"><input type="text" name="r-text" value="${r.text}" maxlength="120" aria-label="Requirement" required>${judgmentField(r)}${weightField(r)}${r.bar === 'needs-decision' ? html`<span class="muted small">Coverage rule: replace "Needs decision" with the number, e.g. "Minimum 50 cases", when you've decided.</span>` : ''}</td>
     <td>${r.bar === 'needs-decision' ? badge('decision', 'Needs decision') : isCoverageRule(r) ? html`<span class="muted small">Coverage rule</span>` : ''}</td>
     <td class="muted small">${r.source || 'Written by hand'}</td>
     <td>${CORE_REQUIREMENTS.includes(r.id) ? html`<span class="muted small" title="You can set its number but not remove it.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove requirement ${i + 1}">Remove</button>`}</td>
@@ -113,7 +120,7 @@ function setupChecksView(state, cap, { error, acting, saved, defaults, criteria,
   return html`<div class="page-head"><div>
     <p class="eyebrow"><a href="#/capabilities/${cap.id}/setup">${cap.name} · Setup</a></p>
     <h1>Requirements and Targets</h1>
-    ${lede('What must be true before we\'d consider giving it more authority and, only where it can be measured, the bar that judges it.', 'Suggestions say where they came from and never set a number: a measurable one comes with a Target whose bar is Needs decision until you choose it. Tick each suggestion you want; nothing is added for you.')}
+    ${lede('What must be true before we\'d consider giving it more authority and, only where it can be measured, the bar that judges it.', 'Suggestions say where they came from and never set a number: a measurable one comes with a Target whose bar is Needs decision until you choose it. Tick each suggestion you want; nothing is added for you. Each Requirement is hard (it blocks expansion until met) unless you make it a consideration.')}
   </div></div>
   ${error ? notice('fail', 'Couldn\'t save', error) : ''}
   ${warn ? notice('watch', 'Before you record results', warn) : ''}

@@ -312,6 +312,20 @@ function proposable(state, cap, d, review) {
   return !review.any && readyToPropose(state, cap.id);
 }
 
+// R4-A (#151): the Proposal is where the team sees why it isn't approvable
+// yet. Each hard Requirement that isn't Met, with its result; considerations
+// are named apart, and never block.
+function hardRequirementsNotice(state, cap) {
+  const r = readiness(state, cap.id);
+  if (!r.hardUnmet.length) return '';
+  const each = (x) => html`<li><strong>${x.text}</strong> · ${x.result ? x.result.label : 'Not met'}</li>`;
+  return html`<div class="notice notice-fail" role="status"><div class="notice-body"><strong>Not approvable yet: ${r.hardUnmet.length === 1 ? 'a hard Requirement isn\'t' : `${r.hardUnmet.length} hard Requirements aren't`} met</strong>
+    <p>Authority can't expand until each of these is Met. Not met, Unknown, Conflicting, not enough evidence and a missing bar all count as not met. The Proposal stays open while the evidence comes in; keeping current limits, reducing, pausing and redesign are still open.</p>
+    <ul class="plain-list">${r.hardUnmet.map(each)}</ul>
+    ${r.considerationsOpen.length ? html`<p class="muted small">Considerations, which don't block: ${r.considerationsOpen.map((x) => x.text).join('; ')}.</p>` : ''}
+    <p class="small"><a href="#/capabilities/${cap.id}?tab=decide&show=requirements">See every Requirement</a> · <a href="#/capabilities/${cap.id}/evidence/configure">Configure evidence</a></p></div></div>`;
+}
+
 // Operating above approved Authority (#149), said on Decide too.
 function gapNotice(state, cap) {
   const g = authorityGap(state, cap.id);
@@ -432,17 +446,20 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   const choice = (key, title, desc, { option = null, subs = null, hint = '', note = '', disabled = false } = {}) => html`<div class="decide-choice ${fam === key ? 'is-on' : ''} ${disabled ? 'is-disabled' : ''}">
     <label class="decide-choice-main"><input type="radio" class="decide-family" name="decide-family" value="${option || key}" data-family="${key}" ${option ? raw(`data-action="select-option" data-capability="${cap.id}"`) : ''} ${fam === key ? raw('checked data-stored') : ''} ${disabled ? raw('disabled') : ''}><span><strong>${title}</strong><span class="decide-choice-desc">${desc}</span></span></label>
     ${option ? html`<span class="decide-maps">recorded as “${optionName(option)}”</span>` : ''}
-    ${subs ? html`<div class="decide-sub" role="radiogroup" aria-label="${title}: which">${subs}</div><p class="decide-hint">${hint}</p>` : ''}
+    ${subs && !disabled ? html`<div class="decide-sub" role="radiogroup" aria-label="${title}: which">${subs}</div><p class="decide-hint">${hint}</p>` : ''}
     ${note ? html`<p class="decide-note">${note}</p>` : ''}
   </div>`;
+  const hardUnmet = readiness(state, cap.id).hardUnmet;
+  const hardNote = hardUnmet.length ? `Not available until every hard Requirement is met. Not yet: ${hardUnmet.map((x) => x.text).join('; ')}.` : '';
   const expandChoice = !oneUp
     ? choice('expand', 'Expand autonomy', 'Let more of this work run automatically.', { disabled: true, note: `Not available: this decision was opened for Level ${proposed.level}, but ${cap.name} is now at Level ${cur}. Expanding goes one level at a time, so Level ${cur + 1} has to be proposed instead.` })
     : proposed.level < 3
-      ? choice('expand', 'Expand autonomy', `Move to ${levelName(proposed.level)}: ${LEVEL_PLAIN[proposed.level]}`, { option: 'expand', note: d.reviewRequired ? 'Not available until the review after the automatic restriction is recorded.' : '' })
+      ? choice('expand', 'Expand autonomy', `Move to ${levelName(proposed.level)}: ${LEVEL_PLAIN[proposed.level]}`, { option: 'expand', disabled: Boolean(hardNote), note: d.reviewRequired ? 'Not available until the review after the automatic restriction is recorded.' : hardNote })
       : choice('expand', 'Expand autonomy', `Let more of this work run automatically, at Level ${proposed.level}.`, {
         subs: html`${leaf('expand-limits', 'Within limits')}${leaf('expand', 'Broad autonomy')}`,
         hint: 'Choose one: within limits, or broad autonomy.',
-        note: d.reviewRequired ? 'Not available until the review after the automatic restriction is recorded.' : '',
+        note: d.reviewRequired ? 'Not available until the review after the automatic restriction is recorded.' : hardNote,
+        disabled: Boolean(hardNote),
       });
   const reduceChoice = cur === 0
     ? choice('reduce', 'Reduce autonomy', 'Move it down the ladder.', { disabled: true, note: 'Not available: it is already at Observe, the lowest level.' })
@@ -485,6 +502,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   return html`<div class="decide-flow">
     ${gapNotice(state, cap)}
     <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded. Evidence never grants authority on its own.</p>${proposalBanner(state, cap, ps)}</div>
+    ${hardRequirementsNotice(state, cap)}
     ${restorationBlock(ps.prop ? ps.prop.restoration : restorationContext(state, cap.id), cap)}
     ${step('What changes if I approve this?', change)}
     ${step('What do we know?', html`${whatWeKnow(state, cap, { runs })}${frozenResults(ps.prop, ps.staleness)}`)}

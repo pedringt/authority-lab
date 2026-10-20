@@ -2,7 +2,7 @@
 // Paige in docs/DECISIONS.md: one person can start a workspace, and "What does
 // it do today?" is context, not authority.
 import { test } from 'node:test';
-import { decideWith } from './helpers.mjs';
+import { decideWith, requirementsMet } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import {
   setRationale,
@@ -11,7 +11,7 @@ import {
   addCapability, getCapability, capData, current, startContractDraft, reviewSuggestion, confirmSection, finalizeContract, SECTION_KEYS,
   saveCriteria, defaultsFor, saveStakeholders, addStarterScenarios, startTestRun, advanceTestRun, proposeAuthority, selectDecision,
   setOutcome, setRolloutField, authorize, proposeAmendment, versionList, RISK_OPTIONS,
-  mapEvidence, recordManualEvidence, startCapability, simulateScenario, recordOutcome,
+  mapEvidence, recordManualEvidence, startCapability, simulateScenario, recordOutcome, replaceProposal, canAuthorize,
 } from '../src/store/index.js';
 import { setPeople, setToday } from '../src/ui.js';
 import { workspaceSetupView } from '../src/views/workspace.js';
@@ -110,9 +110,15 @@ test('a one-person workspace adds a capability and takes it all the way to its f
   s = setOutcome(setOutcome(s, id, 0, 'metric', 'Lookup accuracy'), id, 0, 'target', '≥ 95%');
   s = setOutcome(setOutcome(s, id, 1, 'metric', 'Time to first response'), id, 1, 'target', 'at least 25% faster');
   for (const [k, v] of Object.entries({ owner: 'ana-ruiz', scope: 'Lookups for the billing queue only.', startDate: '2026-10-08', feedbackChannel: '#lookup-feedback', reviewerNotes: 'Check each draft before sending it.', reviewDate: '2026-10-21' })) s = setRolloutField(s, id, k, v);
-  s = authorize(setRationale(s, id, 'Every Requirement is met; a person approves each draft.'), id, { by: 'ana-ruiz' });
+  s = setRationale(s, id, 'Every Requirement is met; a person approves each draft.');
+  // #151: 20 starter tests don't meet "Minimum 50 pilot cases"; the gate says so.
+  assert.match(canAuthorize(s, id, { by: 'ana-ruiz' }).reason, /Not yet: "Minimum 50 pilot cases" \(Not met\)/);
+  const evidenceSteps = setupSteps(s, id).filter((st) => st.id === 'configure' || st.id === 'coverage');
+  s = authorize(replaceProposal(requirementsMet(s, id), id, { by: 'ana-ruiz' }), id, { by: 'ana-ruiz' });
   assert.deepEqual(getCapability(s, id).authority, { level: 2, limited: false });
-  assert.equal(setupSteps(s, id).filter((st) => !st.optional).every((st) => st.done), true, 'every required setup step done by one person');
+  // requirementsMet stands in for the evidence, so the evidence steps are read from before it.
+  assert.equal(evidenceSteps.every((st) => st.done), true);
+  assert.equal(setupSteps(s, id).filter((st) => !st.optional && st.id !== 'configure' && st.id !== 'coverage').every((st) => st.done), true, 'every required setup step done by one person');
 });
 
 test('a roster change that needs a second approver is refused just in time, naming what to add', () => {

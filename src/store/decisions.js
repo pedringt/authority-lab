@@ -314,6 +314,11 @@ export function canAuthorize(state, capabilityId, { by } = {}) {
     // #149 (R1-B): never expand beyond observed behavior while above it.
     const gap = gapBlocks(state, capabilityId, nextAuthority(d.option, getCapability(state, capabilityId).authority, d.proposed).level);
     if (gap) return { ok: false, reason: gap, gap: true };
+    // #151 (D3, R4-A): the Proposal may be open, but expanding waits until
+    // every hard Requirement is Met. Considerations never block. Said before
+    // staleness: replacing a Proposal wouldn't make it approvable.
+    const hardUnmet = readiness(state, capabilityId).hardUnmet;
+    if (hardUnmet.length) return { ok: false, reason: hardBlockText(hardUnmet), requirements: hardUnmet.map((r) => r.id) };
     // #144: the frozen Proposal must still describe what is being approved.
     const st = proposalStaleness(state, capabilityId);
     if (st.stale) return { ok: false, reason: `The Proposal is stale: ${st.reasons[0].text} Replace it with a new Proposal before expanding.`, stale: true };
@@ -330,6 +335,12 @@ export function canAuthorize(state, capabilityId, { by } = {}) {
   return { ok: true };
 }
 
+// Why the hard Requirements block an expansion, each with its result.
+export function hardBlockText(unmet) {
+  const each = unmet.map((r) => `"${r.text}" (${r.result ? r.result.label : 'Not met'})`);
+  return `Every hard Requirement has to be Met before authority expands. Not yet: ${each.join('; ')}. Keeping current limits, reducing, pausing or redesign are still open.`;
+}
+
 export const STATUS_BY_OPTION = {
   'expand': 'monitoring',
   'expand-limits': 'monitoring',
@@ -340,12 +351,14 @@ export const STATUS_BY_OPTION = {
 };
 
 export function openConditionText(option, state, capabilityId) {
-  const unmet = readiness(state, capabilityId).unmet;
+  const r = readiness(state, capabilityId);
+  const unmet = r.unmet;
   switch (option) {
     case 'expand':
     case 'expand-limits':
-      return unmet.length
-        ? `${unmet.map((u) => `${u.text} not met yet (currently ${u.current})`).join('; ')}. A person still approves those cases until there is more evidence.`
+      // Every hard Requirement is met by now (#151); only considerations can be open.
+      return r.considerationsOpen.length
+        ? `Every hard Requirement was met. Considerations not met yet: ${r.considerationsOpen.map((u) => `${u.text} (currently ${u.current})`).join('; ')}.`
         : 'All Requirements were met when this decision was made.';
     case 'hold':
       return unmet.length ? `Decide again when: ${unmet.map((u) => u.text.toLowerCase()).join('; ')}.` : 'Decide again when there is new evidence.';

@@ -117,8 +117,9 @@ export function nextFor(state, cap, d) {
   if (decisionRequired(state, cap.id)) {
     const p = proposedAuthority(state, cap.id);
     const r = readiness(state, cap.id);
-    const gap = r.unmet[0];
-    const checks = r.total ? (r.met === r.total ? ` All ${r.total} Requirements are met.` : ` ${r.met} of ${r.total} Requirements are met; still open: ${lowerFirst(firstSentence(gap.gap || gap.text))}`) : '';
+    // Hard Requirements first (#151): they are what block the expansion.
+    const gap = r.hardUnmet[0] || r.unmet[0];
+    const checks = r.total ? (r.hardUnmet.length ? ` ${readinessText(r)} Still open: ${lowerFirst(firstSentence(gap.gap || gap.text))}${r.hardUnmet.length ? ' Expanding waits until every hard Requirement is met.' : ''}` : ` ${readinessText(r)}`) : '';
     return {
       kind: 'decision',
       text: `Decide whether it moves to ${LEVEL_TITLE[p.level]}${p.limited && p.level !== 3 ? ', with limits' : ''}.${checks}`,
