@@ -203,7 +203,7 @@ test('#159: a case count adds test and real-use cases up; it is never Conflictin
   s = recordResult(s, id, { rowKind: 'target', rowId: 'errors', type: 'rate', passed: '0', total: '2', kind: 'production', by: BEN });
   const min = (x) => readinessRow(x, id, 'min-cases');
   assert.equal(min(s).result.status, 'met', 'not Conflicting');
-  assert.match(min(s).current, /^27 \(/);
+  assert.equal(min(s).current, '27 (25 from test cases, 2 from real use)');
   // Below the minimum across all sources, it is short of evidence, not a conflict.
   let [t, tid] = firm();
   t = mapEvidence(t, tid, { rowKind: 'requirement', rowId: 'min-cases', measure: { source: MANUAL_SOURCE, metric: rowMetric('target', 'errors'), stat: 'sample' }, by: ANA });

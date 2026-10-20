@@ -114,7 +114,8 @@ export function judgeMeasure(state, capabilityId, measure) {
     if (counted.length > 1) {
       const total = counted.reduce((n, j) => n + j.actual, 0);
       const ok = compare(total, measure.op, measure.value);
-      const parts = counted.map((j) => `${j.actual} from ${j.label}`).join(', ');
+      const byKind = (k) => counted.filter((j) => (j.kind === 'production') === (k === 'real use')).reduce((n, j) => n + j.actual, 0);
+      const parts = ['test cases', 'real use'].map((k) => [k, byKind(k)]).filter(([, n]) => n > 0).map(([k, n]) => `${n} from ${k}`).join(', ');
       return { ...newestOf(counted), status: ok ? 'pass' : 'fail', actual: total, text: `${total} (${parts})`, results: judged, combined: counted.length, itemIds: counted.flatMap((j) => j.itemIds || []) };
     }
   }
