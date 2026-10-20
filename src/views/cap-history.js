@@ -131,6 +131,10 @@ export function optionLabel(option) {
   if (option === 'auto-restrict') return 'Automatic restriction';
   if (option === 'define') return 'Starting authority';
   if (option === 'not-delegated') return 'Not delegated, by design';
+  // #147: Pause is the Suspend Decision; Retire is final and distinct from
+  // "Not delegated, by design".
+  if (option === 'suspend') return 'Pause';
+  if (option === 'retire') return 'Retired';
   const o = seed.DECISION_OPTIONS.find((x) => x.id === option);
   return o ? o.name : option;
 }

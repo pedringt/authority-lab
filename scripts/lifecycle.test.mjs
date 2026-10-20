@@ -68,7 +68,7 @@ test('right after a Decision, its Authority is still supported, and the record k
   assert.equal(j.legacy, false);
   assert.deepEqual(j.authority, { level: 2, limited: false, name: 'Draft' });
   assert.deepEqual(j.record.materialChangesAtDecision, []);
-  assert.deepEqual(Object.keys(JUSTIFICATION_STATES), ['supported', 'attention', 'investigate', 'unjustified', 'restricted']);
+  assert.deepEqual(Object.keys(JUSTIFICATION_STATES), ['supported', 'attention', 'investigate', 'unjustified', 'restricted', 'retired']);
 });
 
 test('more of the same evidence is information; a result that slips says the Authority may no longer be justified, and changes nothing', () => {
@@ -199,9 +199,9 @@ test('screen: Monitor asks "Is the current Authority still justified?" first, wi
   assert.match(page, /<dt>Decision in force<\/dt><dd><a href="#\/records\/AC-\d+">AC-\d+<\/a>: Expand, .*, by Ana Ruiz<\/dd>/);
   assert.match(page, /<h2>What changed since AC-\d+ \(/);
   assert.match(page, /May no longer be justified<\/span> Requirement &quot;Overall accuracy ≥ 90%&quot;: Met when decided, Not met now\./);
-  assert.match(page, /href="#\/capabilities\/[^"]+\?tab=decide&reduce=1">Pull back authority<\/a>/);
+  assert.match(page, /href="#\/capabilities\/[^"]+\?tab=decide&reduce=1">Reduce or pause<\/a>/);
   assert.match(page, /Restore or expand<\/dt><dd>Never automatic/);
-  assert.match(page, /Pause or retire<\/dt><dd class="muted">Not built yet/);
+  assert.match(page, /<dt>Retire<\/dt><dd>Stop using it for good, keeping its history\. Only the Owner \(Ana Ruiz\) can/);
 });
 
 test('screen: a material change shows which evidence it may affect, and the form only works for someone named', () => {
@@ -225,7 +225,7 @@ test('screen: pulling back from Monitor opens a reduction with no Proposal, reco
   setPeople(people(s0));
   const decide = (s) => String(capabilityView(s, id, new URLSearchParams('tab=decide&reduce=1')));
   let page = decide({ ...s0, actingAs: CARA });
-  assert.match(page, /<h2>Pull back authority<\/h2>/);
+  assert.match(page, /<h2>Reduce or pause<\/h2>/);
   assert.match(page, /One level down, to Recommend/);
   assert.match(page, /data-action="authorize"[^>]*disabled>Record decision as Cara Lim/);
   const chosen = setRationale(selectDecision({ ...s0, actingAs: CARA }, id, 'suspend'), id, 'Pausing while clients are confused.');
@@ -251,6 +251,157 @@ test('screen: after pulling back, Decide offers a new Proposal for the next leve
   const back = authorize(setRationale(selectDecision(s0, id, 'restrict'), id, 'A wrong deadline reached a client; back to suggestions.'), id, { by: CARA });
   const page = String(capabilityView({ ...back, actingAs: ANA }, id, new URLSearchParams('tab=decide')));
   assert.match(page, /Decision recorded: Reduce autonomy one level, to Recommend/);
-  assert.match(page, /Getting authority back is never automatic: it starts with a new Proposal\./);
-  assert.match(page, /data-action="propose-authority" data-capability="[^"]+" data-level="2">Propose a move to Level 2<\/button>/);
+  assert.match(page, /Getting authority back is never automatic: it starts with a new Proposal, one level at a time\./);
+  assert.match(page, /data-action="propose-authority" data-capability="[^"]+" data-level="2">Propose: restore toward Level 2<\/button>/);
+});
+
+// ---------------------------------------------------------------------------
+// Pause, Restore, Retire (Paige, 2026-10-19, Q4–Q6) and no new blocks (Q9)
+// ---------------------------------------------------------------------------
+
+import { setPauseReviewDate, retireCapability, RETIRED_REASON, restorationContext, openAuthorityProposal, authorityProposals } from '../src/store/index.js';
+import { optionLabel } from '../src/views/cap-history.js';
+
+const paused = () => {
+  const [s0, id] = decidedFirm();
+  let s = selectDecision(s0, id, 'suspend');
+  s = setPauseReviewDate(s, id, '2026-11-01');
+  s = authorize(setRationale(s, id, 'A wrong deadline reached a client; pausing until we know why.'), id, { by: CARA });
+  return [s, id];
+};
+
+test('1. Pause records the Suspend Decision with a reason and an optional review date, and never restores itself', () => {
+  const [s0, id] = decidedFirm();
+  assert.match(canAuthorize(setRationale(selectDecision(s0, id, 'suspend'), id, ''), id, { by: CARA }).reason, /Say why/, 'a reason is required');
+  assert.throws(() => setPauseReviewDate(s0, id, '2026-10-01'), /can't be before today/);
+  assert.throws(() => setPauseReviewDate(s0, id, 'next week'), /must be a date/);
+  const [s, pid] = paused();
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual([rec.option, rec.next.level, rec.plannedReviewDate, rec.authorizedBy], ['suspend', 0, '2026-11-01', CARA]);
+  assert.equal(getCapability(s, pid).status, 'suspended');
+  assert.equal(optionLabel('suspend'), 'Pause');
+  const j = justification(s, pid);
+  assert.deepEqual(j.paused, { since: rec.date, plannedReviewDate: '2026-11-01' });
+  // The review date passing changes nothing; neither does better evidence.
+  let later = advanceToday(s, '2026-12-01');
+  later = recordResult(later, pid, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 40, total: 40, kind: 'eval', by: BEN });
+  assert.equal(getCapability(later, pid).authority.level, 0);
+  assert.equal(later.decisionRecords.length, s.decisionRecords.length, 'no Decision without a person');
+  // Without a date, a Pause is just as valid.
+  const [f0, fid] = decidedFirm();
+  const plain = authorize(setRationale(selectDecision(f0, fid, 'suspend'), fid, 'Pausing over the holidays, no new reminders.'), fid, { by: ANA });
+  assert.equal(plain.decisionRecords.at(-1).plannedReviewDate, undefined);
+});
+
+test('2. a paused capability comes back only through new Proposals, one level at a time', () => {
+  const [s, id] = paused();
+  assert.throws(() => proposeAuthority(s, id, 2, { by: ANA }), /one level at a time\. The next level is 1/);
+  const p = proposeAuthority(s, id, 1, { by: ANA });
+  assert.equal(openAuthorityProposal(p, id).to.level, 1);
+  setPeople(people(s));
+  assert.match(String(capabilityView({ ...s, actingAs: ANA }, id, new URLSearchParams('tab=decide'))), />Propose Level 1: restoring toward Level 2<\/button>/);
+  assert.equal(getCapability(p, id).authority.level, 0, 'proposing restores nothing');
+});
+
+test('3. a restoring Proposal carries why it came down and what changed, without changing any rule', () => {
+  const [s0, id] = paused();
+  let s = recordResult(s0, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 20, total: 20, kind: 'eval', by: BEN });
+  const ctx = restorationContext(s, id);
+  assert.deepEqual([ctx.option, ctx.how, ctx.priorAuthority.level, ctx.by], ['suspend', 'paused', 2, 'Cara Lim']);
+  assert.match(ctx.reason, /^A wrong deadline reached a client/);
+  assert.equal(ctx.newEvidence, 1);
+  s = proposeAuthority(s, id, 1, { by: ANA });
+  const prop = openAuthorityProposal(s, id);
+  assert.equal(prop.restoration.recordId, s0.decisionRecords.at(-1).id, 'frozen with the Proposal');
+  setPeople(people(s));
+  const page = String(capabilityView({ ...s, actingAs: ANA }, id, new URLSearchParams('tab=decide')));
+  assert.match(page, /<h2>Restore toward Level 2, Draft<\/h2>/);
+  assert.match(page, /This Proposal is the normal one, one level at a time: nothing is skipped and no rule is relaxed\./);
+  assert.match(page, /<dt>Why it came down<\/dt><dd>A wrong deadline reached a client; pausing until we know why\.<\/dd>/);
+  assert.match(page, /<dt>New evidence since<\/dt><dd>1 result\.<\/dd>/);
+  // Same rules as any expansion: Owner-only, Residual Risk, impact, rollout.
+  const ready = setRationale(selectDecision(s, id, 'expand'), id, 'Fixed the date source; back to suggestions first.');
+  assert.match(canAuthorize(ready, id, { by: ANA }).reason, /^Expected impact|^Rollout plan|^Residual Risk/);
+  assert.match(canAuthorize(ready, id, { by: CARA }).reason, /./);
+  // An automatic restriction gives the same context, with its review.
+  const auto = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
+  const reviewed = recordReview(auto, RR, { by: 'daniel', whatHappened: 'Three automatic refunds were wrong.', cause: 'Return status was not checked first.', changes: 'The rules now check the return before refunding.' });
+  const rc = restorationContext(reviewed, RR);
+  assert.deepEqual([rc.option, rc.priorAuthority.level, rc.review.by], ['auto-restrict', 3, 'Daniel Okafor']);
+});
+
+test('4. Retire is the Owner\'s, needs a reason and is final', () => {
+  const [s0, id] = decidedFirm();
+  assert.throws(() => retireCapability(s0, id, { by: BEN, reason: 'We no longer send these emails at all.' }), /Only the Owner, Ana Ruiz, can retire Draft deadline emails/);
+  assert.throws(() => retireCapability(s0, id, { by: ANA, reason: 'Done.' }), /Say why it is being retired/);
+  const s = retireCapability(s0, id, { by: ANA, reason: 'We now send deadline reminders from the tax software instead.' });
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual([rec.option, rec.previous.level, rec.next.level, rec.authorizedBy], ['retire', 2, 0, ANA]);
+  assert.equal(getCapability(s, id).status, 'retired');
+  assert.ok(Object.isFrozen(rec.reviewed));
+  assert.throws(() => retireCapability(s, id, { by: ANA, reason: 'Trying again to be certain it is retired.' }), /already retired/);
+  for (const option of ['restrict', 'hold', 'expand', 'suspend']) {
+    assert.deepEqual(canAuthorize(setRationale(selectDecision(s, id, option), id, 'Trying to change a retired capability.'), id, { by: ANA }), { ok: false, reason: RETIRED_REASON });
+  }
+  assert.equal(justification(s, id).key, 'retired');
+  // An open Proposal closes when it is retired.
+  const open = proposeAuthority(authorize(setRationale(selectDecision(s0, id, 'restrict'), id, 'Back to Recommend while we decide what to do.'), id, { by: ANA }), id, 2, { by: ANA });
+  const r2 = retireCapability(open, id, { by: ANA, reason: 'We decided to stop using it instead of restoring it.' });
+  assert.equal(r2.decisionRecords.at(-1).proposalClosed, 'AP-02');
+  assert.equal(capData(r2, id).decision.proposed, null);
+});
+
+test('5. Retired is distinct from "Not delegated, by design"', () => {
+  const [s0, id] = decidedFirm();
+  const s = retireCapability(s0, id, { by: ANA, reason: 'We now send deadline reminders from the tax software instead.' });
+  assert.notEqual(getCapability(s, id).status, 'not-delegated');
+  assert.equal(optionLabel('retire'), 'Retired');
+  assert.equal(optionLabel('not-delegated'), 'Not delegated, by design');
+  assert.ok(s.decisionRecords.filter((r) => r.capabilityId === id).some((r) => r.next.level === 2), 'it was used before it was retired');
+});
+
+test('6. a retired capability keeps its history and can\'t start a new Proposal', async () => {
+  const [s0, id] = decidedFirm();
+  const before = s0.decisionRecords.filter((r) => r.capabilityId === id).map((r) => JSON.stringify(r));
+  const s = retireCapability(s0, id, { by: ANA, reason: 'We now send deadline reminders from the tax software instead.' });
+  assert.deepEqual(s.decisionRecords.filter((r) => r.capabilityId === id).slice(0, -1).map((r) => JSON.stringify(r)), before, 'earlier records unchanged');
+  assert.equal(authorityProposals(s, id).length, 1, 'its Proposals stay');
+  assert.throws(() => proposeAuthority(s, id, 1, { by: ANA }), /retired/);
+  setPeople(people(s));
+  const decide = String(capabilityView({ ...s, actingAs: ANA }, id, new URLSearchParams('tab=decide')));
+  assert.match(decide, /<p class="decide-big">Retired<\/p>/);
+  assert.doesNotMatch(decide, /data-action="propose-authority"/);
+  const mon = String(capabilityView({ ...s, actingAs: ANA }, id, new URLSearchParams('tab=monitor')));
+  assert.match(mon, /<span class="mon-verdict-title">Retired<\/span>/);
+  assert.match(mon, /Nothing changes a retired capability/);
+  assert.match(String(capabilityView(s, id, new URLSearchParams('tab=history'))), /Retired/);
+  const { capabilitiesView } = await import('../src/views/capabilities.js');
+  assert.match(String(capabilitiesView(s)), /Observe · Retired/);
+});
+
+test('7. Monitor states never add an authorization block', () => {
+  const [s0, id] = decidedFirm();
+  const holdOk = (s) => canAuthorize(setRationale(selectDecision(s, id, 'hold'), id, 'Keeping Draft while we look into it.'), id, { by: ANA });
+  const backOk = (s) => canAuthorize(setRationale(selectDecision(s, id, 'restrict'), id, 'Back to Recommend while we look into it.'), id, { by: CARA });
+  const unjustified = recordResult(s0, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 2, total: 10, kind: 'eval', by: BEN });
+  const investigate = recordIncident(s0, id, { what: 'An email went out with last year\'s deadline.', severity: 'critical', by: CARA });
+  const attention = recordMaterialChange(advanceToday(s0, '2026-10-20'), id, { areas: ['model'], description: 'Moved to a newer model.', by: ANA });
+  for (const [s, key] of [[s0, 'supported'], [unjustified, 'unjustified'], [investigate, 'investigate'], [attention, 'attention']]) {
+    assert.equal(justification(s, id).key, key);
+    assert.deepEqual(holdOk(s), { ok: true }, `hold under ${key}`);
+    assert.deepEqual(backOk(s), { ok: true }, `reduce under ${key}`);
+  }
+});
+
+test('screen: the reduction screen calls Suspend "Pause" and offers an optional review date', () => {
+  const [s0, id] = decidedFirm();
+  setPeople(people(s0));
+  setToday(s0.today);
+  const page = String(capabilityView(selectDecision({ ...s0, actingAs: CARA }, id, 'suspend'), id, new URLSearchParams('tab=decide&reduce=1')));
+  assert.match(page, /<strong>Pause: all the way to Observe<\/strong> <span class="muted small">It sees requests but does nothing with them\. Recorded as Suspend\.<\/span>/);
+  assert.match(page, /Planned review date <span class="muted small">\(optional: a reminder to look again; nothing changes on it\)<\/span>/);
+  assert.match(page, /data-action="set-pause-review"/);
+  const retire = String(capabilityView({ ...s0, actingAs: CARA }, id, new URLSearchParams('tab=decide&retire=1')));
+  assert.match(retire, /Only the Owner, Ana Ruiz, can retire it\. Cara Lim can reduce or pause it instead\./);
+  assert.match(retire, /type="submit" disabled>Retire as Cara Lim/);
 });

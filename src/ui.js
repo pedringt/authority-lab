@@ -107,8 +107,9 @@ export function capStatusBadge(status) {
     'not-delegated': 'neutral',
     suspended: 'restricted',
     redesign: 'restricted',
+    retired: 'neutral',
   }[status] || 'neutral';
-  const label = STATUS_LABELS[status] || { suspended: 'Suspended', redesign: 'In redesign' }[status] || status;
+  const label = STATUS_LABELS[status] || { suspended: 'Paused', redesign: 'In redesign' }[status] || status;
   return badge(tone, label);
 }
 

@@ -4,9 +4,9 @@ import { people, getCapability, capData, readiness, authorityLabel, canAuthorize
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
-import { reductionView } from './cap-justified.js';
+import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -165,6 +165,8 @@ export function decisionRecordView(state, id) {
       // #119: imported evidence in force, with the configuration it describes.
       ...(x.externalEvidence && x.externalEvidence.length ? [['Imported evidence', externalRecordList(x.externalEvidence)]] : []),
       ['Still to resolve', x.openCondition],
+      // #147: a Pause's planned review date, a reminder only.
+      ...(x.plannedReviewDate ? [['Planned review', `${fmtDate(x.plannedReviewDate)}: a reminder to look again. Nothing changes on that date; authority comes back only through a new Proposal.`]] : []),
       // #144: the Proposal reviewed and what was frozen when it was decided.
       ...recordReviewed(state, x),
       // B1: what an expansion was expected to achieve, fixed on the record.
@@ -226,6 +228,21 @@ export function amendedNote(state, record) {
   return notice('watch', 'Targets changed after results were seen', `This decision was judged against targets or checks that changed after the results were in. Check that the change was justified. ${amended.map((a) => `${person(a.author).name} changed the ${KIND_NOUN[a.kind] === 'target' ? 'targets' : 'decision requirements'} (v${a.version}): ${a.reason}`).join(' ')}`, { link: `#/capabilities/${cap.id}/versions?kind=${amended[0].kind}&version=${amended[0].version}`, linkText: 'See the change' });
 }
 
+// Restore (#147, Q5): a normal Proposal, one level at a time, shown with why
+// the capability came down and what has changed since. Context only.
+function restorationBlock(r, cap) {
+  if (!r) return '';
+  return html`<section class="decide-step decide-restore"><h2>Restore toward Level ${r.priorAuthority.level}, ${r.priorAuthority.name}</h2>
+    <p>${cap.name} was at Level ${r.priorAuthority.level} until ${fmtDate(r.date)}, when it was ${r.how} (<a href="#/records/${r.recordId}">${r.recordId}</a>, by ${r.by}). This Proposal is the normal one, one level at a time: nothing is skipped and no rule is relaxed.</p>
+    ${kv([
+      ['Why it came down', r.reason],
+      ...(r.review ? [['Review', `${r.review.id}, ${fmtDate(r.review.date)}, ${r.review.by}. Cause: ${r.review.cause} What changed: ${r.review.changes}`]] : []),
+      ...(r.incidents.length ? [['Incidents then', html`<ul class="plain-list">${r.incidents.map((x) => html`<li>${x.id} (${x.severity}, ${x.status}): ${x.what}</li>`)}</ul>`]] : []),
+      ['Since then', r.changesSince.length ? html`<ul class="plain-list">${r.changesSince.map((c) => html`<li>${c.text}</li>`)}</ul>` : 'Nothing has changed that Monitor tracks.'],
+      ['New evidence since', r.newEvidence ? `${r.newEvidence} result${r.newEvidence === 1 ? '' : 's'}.` : 'None yet.'],
+    ])}</section>`;
+}
+
 // ---------------------------------------------------------------------------
 // The Decide tab (redesign, 2026-10-12): one reading direction and one action
 // at the end. canAuthorize stays the only judge of whether it can be recorded.
@@ -247,8 +264,8 @@ function plainOption(option, previous, next) {
     case 'expand': return next.level < 3 ? `Expand autonomy, to ${levelName(next.level)}` : 'Expand autonomy, broadly';
     case 'hold': return 'Keep current limits';
     case 'restrict': return `Reduce autonomy one level, to ${levelName(next.level)}`;
-    case 'suspend': return 'Reduce autonomy all the way, to Observe';
-    case 'redesign': return 'Pause and redesign';
+    case 'suspend': return 'Pause: back to Observe';
+    case 'redesign': return 'Send back for redesign';
     default: return optionLabel(option);
   }
 }
@@ -257,7 +274,7 @@ export function plainChoice(state, cap, option) {
   return plainOption(option, cap.authority, nextAuthority(option, cap.authority, proposedAuthority(state, cap.id)));
 }
 
-const RECOMMENDED = { 'expand-limits': 'expand autonomy within limits', expand: 'expand autonomy broadly', hold: 'keep current limits', restrict: 'reduce autonomy one level', suspend: 'reduce autonomy all the way, to Observe', redesign: 'pause and redesign' };
+const RECOMMENDED = { 'expand-limits': 'expand autonomy within limits', expand: 'expand autonomy broadly', hold: 'keep current limits', restrict: 'reduce autonomy one level', suspend: 'pause, back to Observe', redesign: 'send back for redesign' };
 
 const join = (items) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 const upper = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -288,10 +305,10 @@ function nowSentence(cap, rec) {
 // a result recorded by hand) and no review is pending. proposeAuthority still
 // checks everything itself.
 function proposable(state, cap, d, review) {
-  return cap.status !== 'not-delegated' && cap.authority.level < 2 && performanceResultsSeen(state, cap.id) && !review.any;
+  return cap.status !== 'not-delegated' && cap.status !== 'retired' && cap.authority.level < 2 && performanceResultsSeen(state, cap.id) && !review.any;
 }
 
-const proposeButton = (cap) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button>`;
+const proposeButton = (cap, { restoreTo = null } = {}) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">${restoreTo === null ? `Propose a move to Level ${cap.authority.level + 1}` : restoreTo === cap.authority.level + 1 ? `Propose: restore toward Level ${restoreTo}` : `Propose Level ${cap.authority.level + 1}: restoring toward Level ${restoreTo}`}</button>`;
 
 function recordedView(state, cap, rec, canPropose = false) {
   const who = personAt(rec.authorizedByAt, rec.authorizedBy);
@@ -304,12 +321,14 @@ function recordedView(state, cap, rec, canPropose = false) {
       <p class="small"><a href="#/records/${rec.id}">See the decision record</a></p>
     </div>
     <p class="next-step"><a href="#/capabilities/${cap.id}?tab=monitor">${expanded ? 'Next: monitor the rollout →' : 'Next: check it in Monitor →'}</a></p>
-    ${canPropose ? html`<div class="decide-start"><p>${rec.next.level < rec.previous.level ? 'Getting authority back is never automatic: it starts with a new Proposal.' : 'When the evidence supports more, it starts with a new Proposal.'}</p>${proposeButton(cap)}</div>` : ''}
+    ${canPropose ? html`<div class="decide-start"><p>${rec.next.level < rec.previous.level ? 'Getting authority back is never automatic: it starts with a new Proposal, one level at a time.' : 'When the evidence supports more, it starts with a new Proposal.'}</p>${proposeButton(cap, { restoreTo: restorationContext(state, cap.id) ? restorationContext(state, cap.id).priorAuthority.level : null })}</div>` : ''}
   </div>`;
 }
 
 function noDecisionView(state, cap, d, { runs, query = new URLSearchParams() }) {
-  // #147: pulling back without a Proposal, reached from Monitor.
+  // #147: retired is final; pulling back and retiring are reached from Monitor.
+  if (cap.status === 'retired') return retiredView(state, cap);
+  if (query.get('retire')) return retireView(state, cap);
   if (query.get('reduce')) return reductionView(state, cap, canAuthorize(state, cap.id, { by: actor(state, cap.id) }));
   const review = reviewNeeded(state, cap.id);
   const records = state.decisionRecords.filter((x) => x.capabilityId === cap.id);
@@ -407,14 +426,14 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   const reduceChoice = cur === 0
     ? choice('reduce', 'Reduce autonomy', 'Move it down the ladder.', { disabled: true, note: 'Not available: it is already at Observe, the lowest level.' })
     : choice('reduce', 'Reduce autonomy', 'Move it down the ladder.', {
-      subs: html`${leaf('restrict', `One level down${cur > 1 ? `, to ${levelName(cur - 1)}` : ''}`)}${leaf('suspend', 'All the way back to Observe')}`,
-      hint: cur === 1 ? 'Choose one. From Recommend, both end at Observe; the record keeps which you chose.' : 'Choose how far: one level down, or all the way back to Observe.',
+      subs: html`${leaf('restrict', `One level down${cur > 1 ? `, to ${levelName(cur - 1)}` : ''}`)}${leaf('suspend', 'Pause: all the way back to Observe')}`,
+      hint: cur === 1 ? 'Choose one. From Recommend, both end at Observe; the record keeps which you chose.' : 'Choose how far: one level down, or pause all the way back to Observe.',
     });
   const choices = html`<div class="decide-choices">
     ${expandChoice}
     ${choice('hold', 'Keep current limits', `Stay at ${levelName(cur)} while more evidence comes in.`, { option: 'hold' })}
     ${reduceChoice}
-    ${choice('redesign', 'Pause and redesign', 'Stop all automation while it is reworked and tested again.', { option: 'redesign' })}
+    ${choice('redesign', 'Send back for redesign', 'Stop all automation while it is reworked and tested again.', { option: 'redesign' })}
   </div>`;
   const next = dec.option ? nextAuthority(dec.option, cap.authority, proposed) : null;
   const preview = !dec.option ? ''
@@ -444,6 +463,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
 
   return html`<div class="decide-flow">
     <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded. Evidence never grants authority on its own.</p>${proposalBanner(state, cap, ps)}</div>
+    ${restorationBlock(ps.prop ? ps.prop.restoration : restorationContext(state, cap.id), cap)}
     ${step('What changes if I approve this?', change)}
     ${step('What do we know?', html`${whatWeKnow(state, cap, { runs })}${frozenResults(ps.prop, ps.staleness)}`)}
     ${step('Who has said what?', positionsStep(live.positions, { capId: cap.id, missing: reviewerInputMissing(state, cap.id), then: ps.prop && JSON.stringify(ps.prop.positions) !== JSON.stringify(live.positions) ? 'Positions have changed since it was proposed; these are the current ones. The record keeps the ones in force when you decide.' : null }), { sub: 'Reviewers and Stakeholders, as each gave their position.' })}

@@ -129,6 +129,9 @@ export function nextFor(state, cap, d) {
   if (held && held.openCondition) {
     return { kind: 'held', text: held.openCondition, then: `It can be reconsidered for ${LEVEL_TITLE[held.previous.level]}.`, link: null };
   }
+  if (cap.status === 'retired') {
+    return { kind: 'retired', text: 'Retired: it no longer operates, and no Decision or Proposal can follow. Its history stays. To use this work again, set up a new capability.', then: null, link: null };
+  }
   if (cap.status === 'not-delegated') {
     const condition = readiness(state, cap.id).unmet.find((x) => x.source === 'Written by hand');
     return { kind: 'not-delegated', text: 'Nothing is planned: it isn\'t delegated, by design. Changing that takes a new decision.', then: condition ? `It can be reconsidered once this is true: ${lowerFirst(condition.text)}.` : null, link: null };

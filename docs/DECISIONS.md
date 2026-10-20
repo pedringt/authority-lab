@@ -67,21 +67,23 @@ As built:
 
   No new exception or override record was added.
 
-Open questions, not decided (brought to Paige in the PR):
+Paige's answers (2026-10-19, PR #148 review):
 
-1. Which material-change categories invalidate which evidence sources.
-2. The signal-to-state mapping above.
-3. Whether Reviewer disagreement should give a stronger state than "Needs attention".
-4. Pause: reuse Suspend exactly, or distinct semantics.
-5. Restore: how it differs mechanically from proposing the next level.
-6. Retire: who may retire, whether it is reversible, and how it maps to state.
-7. Investigate: activity only (as built) or a persistent lifecycle state.
-8. Exceptions:
-   - who creates and approves them;
-   - which Boundaries may be excepted;
-   - maximum duration;
-   - what counts as repeated.
-9. Whether any Monitor state should become a hard block (none does).
+- **Q1. Material-change applicability: A.** Keep the conservative, date-based "May need new evidence". No category-to-evidence dependency map until there is structured dependency information.
+- **Q2. Monitor states: confirmed as built** (mapping above). No score.
+- **Q3. Reviewer disagreement stays "Needs attention".** Important and visible, but not "Investigation needed" and not a veto, unless there is evidence or an incident behind it.
+- **Q4. Pause = the Suspend Decision, called Pause.** It moves to Level 0 through the existing Suspend mechanics (the internal option stays `suspend`). It needs a reason and takes an optional planned review date (`setPauseReviewDate`, frozen on the record as `plannedReviewDate`). The date is a reminder only: nothing changes on it. There is no special temporary level and no shortcut back; getting authority back takes current evidence and a new Proposal and Decision. The status reads "Paused". "Pause and redesign" was renamed "Send back for redesign" so Pause has one meaning.
+- **Q5. Restore = the normal Proposal path, with restoration context.** One level at a time, same rules. When the capability is below a level it had before a reduction, Pause or automatic restriction, the Proposal freezes `restoration` (`restorationContext`): earlier Authority, why it came down and by whom, the review and incidents around it, what has changed since, and new evidence. Decide shows "Restore toward Level N"; after a reduction the button reads "Propose: restore toward Level N" (or "Propose Level 1: restoring toward Level 2" when more than one step remains).
+- **Q6. Retire: Owner only, reason required, terminal** (`retireCapability`). It writes a record (`option: 'retire'`, with the frozen `reviewed` snapshot), moves to Observe with status "retired", closes any open Proposal, and keeps all history and records. No Decision or Proposal can follow (`RETIRED_REASON`), so there is no Restore. To use the work again, set up a new capability. Kept distinct from "Not delegated, by design", which means it was never delegated.
+- **Q7. Investigate stays an activity for v1:** Monitor's links to evidence, results, judgments and incidents. A formal investigation record may come after the deep review.
+- **Q8. Exceptions: deliberately deferred.** No exception record or approval/duration rules. The settled principles stand:
+  - must-never/prohibited Boundaries are never excepted;
+  - exceptions, if built, are narrow and temporary;
+  - repeated exceptions should become a Monitor signal;
+  - existing human approvals, overrides and blocked attempts stay monitoring evidence and History.
+
+  Unresolved, for the deep review: how an approved exception would interact with the runtime gate. Authority Lab must not record an "approved exception" that enforcement doesn't honor.
+- **Q9. No Monitor state creates a hard block.** Only the existing deterministic mechanisms block: automatic restriction, the post-incident review lock, Boundary enforcement and the Proposal/Decision rules.
 
 ### Product reset, Phase 4: Proposal and Decision (#144, Paige, 2026-10-18)
 

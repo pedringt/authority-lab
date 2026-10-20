@@ -166,11 +166,12 @@ There's no score. Each change has its own line saying how serious it is. A start
 **Material changes** (model, prompt, tools, permissions, workflow, scope, users, data, operating context, jurisdiction, Boundaries) can be recorded from Monitor by the Owner or anyone named. For each change since the Decision, Monitor lists the Requirements and Targets whose current result rests on evidence from before the change: it "may need new evidence". It hasn't failed, and Authority doesn't change.
 
 **What you can do:**
-- **Investigate:** see the evidence, or record a result, a judgment or an incident.
-- **Pull back:** reduce one level, suspend to Observe, or redesign. Anyone named can record it with a reason, and no Proposal is needed.
-- **Restore or expand:** a new Proposal and the Owner's Decision; never automatic.
+- **Investigate:** see the evidence, or record a result, a judgment or an incident. Nothing changes.
+- **Reduce or pause:** reduce one level, **Pause** (all the way to Observe; recorded as Suspend, with an optional planned review date), or send it back for redesign. Anyone named can record it with a reason, and no Proposal is needed. The review date is a reminder; nothing changes on it.
+- **Restore or expand:** never automatic. After a reduction, Pause or automatic restriction, Decide offers "Propose: restore toward Level N". It's the normal Proposal, one level at a time, shown with the earlier Authority, why it came down, any review and incidents, what has changed since, and new evidence.
+- **Retire:** the Owner only, with a reason. It's final. The capability stops operating, any open Proposal closes, no Decision or Proposal can follow, and its history stays. Retired is not the same as "Not delegated, by design". To use the work again, set up a new capability.
 
-Pause and Retire aren't built yet.
+None of Monitor's states blocks anything by itself. Exceptions aren't built yet: how they would interact with the runtime gate is still to be decided.
 
 ### Monitoring and automatic restriction
 

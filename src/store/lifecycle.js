@@ -24,6 +24,8 @@ export const JUSTIFICATION_STATES = {
   investigate: 'Investigation needed',
   unjustified: 'Authority may no longer be justified',
   restricted: 'Restricted automatically',
+  // Not a judgment: retired is terminal (#147, Q6).
+  retired: 'Retired',
 };
 const RANK = { info: 0, attention: 1, investigate: 2, unjustified: 3 };
 
@@ -161,7 +163,7 @@ export function justification(state, capabilityId) {
   const { record, basis, legacy, changes } = changesSinceDecision(state, capabilityId);
   const restricted = Boolean(d.reviewRequired && d.monitoring && d.monitoring.breached);
   const worst = changes.reduce((w, c) => (RANK[c.severity] > RANK[w] ? c.severity : w), 'info');
-  const key = restricted ? 'restricted' : worst === 'info' ? 'supported' : worst;
+  const key = cap.status === 'retired' ? 'retired' : restricted ? 'restricted' : worst === 'info' ? 'supported' : worst;
   return {
     key,
     label: JUSTIFICATION_STATES[key],
@@ -173,6 +175,52 @@ export function justification(state, capabilityId) {
     reviewLock: Boolean(d.reviewRequired),
     changes,
     materialImpact: materialChangesSince(state, capabilityId, record).map((m) => materialChangeImpact(state, capabilityId, m)),
+    paused: record && record.option === 'suspend' ? { since: record.date, plannedReviewDate: record.plannedReviewDate || null } : null,
+    restoration: restorationContext(state, capabilityId),
+  };
+}
+
+// Restore (#147, Q5) is the normal Proposal path, one level at a time. When
+// the capability is below a level it had before a reduction, a Pause or an
+// automatic restriction, a Proposal carries this context: the earlier
+// Authority, why it came down, the review and incidents around it, what has
+// changed since and the new evidence. Null when there is nothing to restore
+// toward. Context only: it changes no rule.
+export function restorationContext(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap || cap.status === 'retired') return null;
+  const recs = state.decisionRecords.filter((r) => r.capabilityId === capabilityId);
+  let reduction = null;
+  for (let i = recs.length - 1; i >= 0; i--) {
+    const r = recs[i];
+    if (r.previous && r.next && r.next.level > r.previous.level) break; // an expansion since: nothing to restore toward from earlier
+    if (r.previous && r.next && r.next.level < r.previous.level) { reduction = r; break; }
+  }
+  if (!reduction || cap.authority.level >= reduction.previous.level) return null;
+  const d = capData(state, capabilityId);
+  const review = (d.reviews || []).find((x) => x.restrictionRecordId === reduction.id) || null;
+  const before = recs.filter((r) => r.number < reduction.number).at(-1);
+  const from = before ? before.date : null;
+  const incidents = incidentsFor(state, capabilityId).filter((x) => x.recordedOn <= reduction.date && (!from || x.recordedOn >= from))
+    .map((x) => ({ id: x.id, severity: x.severity, what: x.what, status: incidentStatus(x) }));
+  const since = changesSinceDecision(state, capabilityId).changes.filter((c) => c.kind !== 'operation');
+  // New since the reduction: not in what it froze; an automatic restriction
+  // froze nothing, so it is compared by date.
+  const known = reduction.reviewed && reduction.reviewed.evidence ? new Set(reduction.reviewed.evidence.items.map((i) => i.id)) : null;
+  const newEvidence = d.evidence.filter((e) => (e.external || e.from === 'manual' || e.from === 'uploaded') && (known ? !known.has(e.id) && e.date >= reduction.date : e.date > reduction.date)).length;
+  const words = { restrict: 'reduced one level', suspend: 'paused', redesign: 'sent back for redesign', 'auto-restrict': 'restricted automatically after crossing a safety limit' };
+  return {
+    recordId: reduction.id,
+    option: reduction.option,
+    how: words[reduction.option] || 'reduced',
+    date: reduction.date,
+    priorAuthority: { ...reduction.previous, name: levelName(reduction.previous.level) },
+    by: reduction.authorizedBy === 'system' ? 'software, under a rule agreed in advance' : (reduction.authorizedByAt || {}).name || reduction.authorizedBy,
+    reason: reduction.rationale,
+    review: review ? { id: review.id, date: review.date, by: (review.byAt || {}).name || review.by, cause: review.cause, changes: review.changes } : null,
+    incidents,
+    changesSince: since.map((c) => ({ severity: c.severity, text: c.text })),
+    newEvidence,
   };
 }
 
