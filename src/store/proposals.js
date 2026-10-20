@@ -347,16 +347,16 @@ function classifyCriteria(base, next) {
   return out;
 }
 
-function classifyStakeholders(base, next) {
+function classifyStakeholders(base, next, nameOf = (k) => k) {
   const out = { recorded: [], governed: [], raises: false };
   const role = (st) => (peopleRoleOf(st) === 'reviewer' ? 'Reviewer' : 'Stakeholder');
   for (const b of base) {
     const a = next.find((x) => x.person === b.person);
-    if (!a) { out.governed.push(`It removes ${role(b)} ${b.person}.`); continue; }
-    if (role(a) !== role(b)) out.governed.push(`It changes ${b.person} from ${role(b)} to ${role(a)}.`);
-    if (String(a.team || '') !== String(b.team || '')) out.governed.push(`It changes ${b.person}'s team label.`);
+    if (!a) { out.governed.push(`It removes ${role(b)} ${nameOf(b.person)}.`); continue; }
+    if (role(a) !== role(b)) out.governed.push(`It changes ${nameOf(b.person)} from ${role(b)} to ${role(a)}.`);
+    if (String(a.team || '') !== String(b.team || '')) out.governed.push(`It changes ${nameOf(b.person)}'s team label.`);
   }
-  for (const a of next) if (!base.some((b) => b.person === a.person)) out.recorded.push(`Adds ${a.person} as a ${role(a)}.`);
+  for (const a of next) if (!base.some((b) => b.person === a.person)) out.recorded.push(`Adds ${nameOf(a.person)} as a ${role(a)}.`);
   return out;
 }
 
@@ -397,7 +397,7 @@ function classifyContract(base, next) {
 // whether it raises the decision bar.
 export function classifyChange(state, capabilityId, kind, value) {
   if (kind === 'criteria') return classifyCriteria({ criteria: current(state, capabilityId, 'criteria'), requirements: current(state, capabilityId, 'requirements') }, value);
-  if (kind === 'stakeholders') return classifyStakeholders(current(state, capabilityId, 'stakeholders'), value);
+  if (kind === 'stakeholders') return classifyStakeholders(current(state, capabilityId, 'stakeholders'), value, (k) => (people(state)[k] || { name: k }).name);
   if (kind === 'contract') return classifyContract(current(state, capabilityId, 'contract'), value);
   throw new Error(`Unknown amendment kind: ${kind}`);
 }

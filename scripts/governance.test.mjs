@@ -72,6 +72,7 @@ test('recorded, no approval: add a Reviewer or Stakeholder, tighten a bar, consi
   s = saveStakeholders(s, id, { stakeholders: [...current(s, id, 'stakeholders'), { person: CARA, team: 'Office', role: 'reviewer', stance: 'undecided' }], by: ANA, reason: 'Cara hears from clients first.' });
   assert.equal(openProposal(s, id, 'stakeholders'), null);
   assert.ok(current(s, id, 'stakeholders').some((x) => x.person === CARA));
+  assert.deepEqual(currentVersion(s, id, 'stakeholders').changes, ['Adds Cara Lim as a Reviewer.'], 'names, never ids');
   const change = (fn, why = WHY) => proposeAmendment(s, id, 'criteria', { value: reqs(s, id, fn), by: ANA, reason: why });
   for (const [label, fn] of [
     ['tighten', (r) => r.map((x) => (x.id === 'accuracy' ? { ...x, text: 'Overall accuracy ≥ 95%' } : x))],
@@ -97,8 +98,8 @@ test('governed, sign-off: loosen a bar, remove a hard Requirement, hard → cons
   opens('criteria', reqs(s, id, (r) => r.filter((x) => x.id !== 'templates')), 'It removes the hard Requirement "The tax lead has approved the templates"');
   opens('criteria', reqs(s, id, (r) => r.map((x) => (x.id === 'templates' ? { ...x, consideration: true } : x))), 'consideration instead of a hard Requirement');
   s = saveStakeholders(s, id, { stakeholders: [...current(s, id, 'stakeholders'), { person: CARA, team: 'Office', role: 'stakeholder', stance: 'undecided' }], by: ANA, reason: 'Cara hears from clients first.' });
-  opens('stakeholders', current(s, id, 'stakeholders').filter((x) => x.person !== BEN), `It removes Reviewer ${BEN}`);
-  opens('stakeholders', current(s, id, 'stakeholders').map((x) => (x.person === CARA ? { ...x, role: 'reviewer' } : x)), `It changes ${CARA} from Stakeholder to Reviewer`);
+  opens('stakeholders', current(s, id, 'stakeholders').filter((x) => x.person !== BEN), 'It removes Reviewer Ben Okoro');
+  opens('stakeholders', current(s, id, 'stakeholders').map((x) => (x.person === CARA ? { ...x, role: 'reviewer' } : x)), 'It changes Cara Lim from Stakeholder to Reviewer');
   // Mixed: one governed part makes the whole change governed.
   opens('criteria', reqs(s, id, (r) => [...r.map((x) => (x.id === 'accuracy' ? { ...x, text: 'Overall accuracy ≥ 80%' } : x)), { id: 'extra', text: 'An extra check', judgment: 'person' }]), 'It loosens');
 });
