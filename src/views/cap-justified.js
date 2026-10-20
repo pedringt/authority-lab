@@ -37,7 +37,7 @@ function currentState(state, cap, j) {
   const r = j.record;
   const who = r ? (r.authorizedBy === 'system' ? 'software, under a rule agreed in advance' : personAt(r.authorizedByAt, r.authorizedBy).name) : '';
   return kv([
-    ['Authority now', html`<strong>Level ${j.authority.level} · ${j.authority.name}</strong>. ${LEVEL_PLAIN[j.authority.level] || ''}`],
+    ['Authority now', j.key === 'retired' ? html`<strong>Retired</strong>. It no longer operates.` : html`<strong>Level ${j.authority.level} · ${j.authority.name}</strong>. ${LEVEL_PLAIN[j.authority.level] || ''}`],
     ['Decision in force', r ? html`<a href="#/records/${r.id}">${r.id}</a>: ${OPTION_WORDS[r.option] || r.option}, ${fmtDate(r.date)}, by ${who}` : html`<span class="muted">None recorded.</span>`],
     ...(j.basis && r && j.basis.id !== r.id ? [['Last decided by a person', html`<a href="#/records/${j.basis.id}">${j.basis.id}</a>, ${fmtDate(j.basis.date)}`]] : []),
     ['Boundaries', b.length ? `${b.length}, of which ${enforced} enforced by software; the rest are written and followed by people.` : 'None written yet.'],

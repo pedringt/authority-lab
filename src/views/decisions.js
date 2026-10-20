@@ -34,7 +34,7 @@ export function decisionsListView(state) {
       <td><a href="#/records/${x.id}"><strong>Authority change #${String(x.number).padStart(2, '0')}</strong></a></td>
       <td>${getCapability(state, x.capabilityId).name}</td>
       <td>${fmtDate(x.date)}</td>
-      <td>${x.previous ? html`${authorityText(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${authorityText(x.next, { short: true })}${x.previous && x.next.level < x.previous.level ? html` <span class="badge badge-restricted">Reduced</span>` : ''}</td>
+      <td>${x.previous ? html`${authorityText(x.previous, { short: true })} → ` : html`<span class="muted">New → </span>`}${x.option === 'retire' ? 'Retired' : authorityText(x.next, { short: true })}${x.previous && x.next.level < x.previous.level && x.option !== 'retire' ? html` <span class="badge badge-restricted">Reduced</span>` : ''}</td>
       <td>${optionLabel(x.option)}</td>
       <td>${personAt(x.authorizedByAt, x.authorizedBy).name}</td>
     </tr>`)}</tbody>
@@ -151,7 +151,7 @@ export function decisionRecordView(state, id) {
     <div class="record-change">
       <div><span class="fact-label">Previous</span>${x.previous ? authorityBadge(x.previous) : html`<span class="muted">None (new capability)</span>`}</div>
       <span class="record-arrow" aria-hidden="true">→</span>
-      <div><span class="fact-label">New</span>${authorityBadge(x.next)}</div>
+      <div><span class="fact-label">New</span>${x.option === 'retire' ? html`<strong>Retired</strong><div class="muted small">No operating authority</div>` : authorityBadge(x.next)}</div>
       <div><span class="fact-label">Decision</span><strong>${optionLabel(x.option)}</strong></div>
       <div><span class="fact-label">${auto ? 'Applied by' : 'Authorized by'}</span><strong>${who.name}</strong><div class="muted small">${who.role}${who.team ? html`, ${who.team}` : ''}${rightsNote(x.authorizedByAt)}</div></div>
       ${x.owner && x.owner !== x.authorizedBy ? html`<div><span class="fact-label">Owner</span><strong>${ownerAt.name}</strong><div class="muted small">${ownerAt.role}${ownerAt.team ? html`, ${ownerAt.team}` : ''}</div></div>` : ''}

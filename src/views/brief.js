@@ -62,8 +62,8 @@ export function decisionBriefView(state, recordId) {
     <div class="brief-actions no-print"><a href="#/records/${rec.id}">← Decision record ${rec.id}</a> <button class="btn btn-primary btn-sm" data-action="print">Print this page</button></div>
     <header class="brief-head">
       <p class="eyebrow">Decision brief · ${rec.id}</p>
-      <h1>${cap ? cap.name : rec.capabilityId}: ${rec.previous ? `Level ${rec.previous.level}` : 'new'} → Level ${rec.next.level}</h1>
-      <p class="brief-meta">${fmtDate(rec.date)} · ${auto ? `The AI was moved back to ${levelName(rec.next.level)} after crossing a safety limit (automatic restriction)` : html`Authorized by <strong>${who.name}</strong>, ${who.role}`} · ${levelText(rec.previous)} → <strong>${levelText(rec.next)}</strong></p>
+      <h1>${cap ? cap.name : rec.capabilityId}: ${rec.previous ? `Level ${rec.previous.level}` : 'new'} → ${rec.option === 'retire' ? 'Retired' : `Level ${rec.next.level}`}</h1>
+      <p class="brief-meta">${fmtDate(rec.date)} · ${auto ? `The AI was moved back to ${levelName(rec.next.level)} after crossing a safety limit (automatic restriction)` : html`Authorized by <strong>${who.name}</strong>, ${who.role}`} · ${levelText(rec.previous)} → <strong>${rec.option === 'retire' ? 'Retired, no operating authority' : levelText(rec.next)}</strong></p>
     </header>
     <div class="brief-grid">
       ${block('What changed', html`<p>${rec.scope}</p>${c ? html`<p class="muted">Limits: up to $${c.maxValue}${c.maxDailyTotal != null ? `, $${c.maxDailyTotal} a day in all` : ''}${c.maxDailyCount != null ? `, ${c.maxDailyCount} ${(cap && cap.actionNoun) || 'actions'} a day in all` : ''}${c.noFraudFlag ? ', no fraud flag' : ''}${c.noChargeback ? ', no chargeback' : ''}${c.policyClear ? ', clear policy' : ''}, confidence at least ${c.minConfidence}% (model-reported, not verified).</p>` : ''}`)}

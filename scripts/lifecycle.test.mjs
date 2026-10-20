@@ -376,7 +376,9 @@ test('6. a retired capability keeps its history and can\'t start a new Proposal'
   assert.match(mon, /Nothing changes a retired capability/);
   assert.match(String(capabilityView(s, id, new URLSearchParams('tab=history'))), /Retired/);
   const { capabilitiesView } = await import('../src/views/capabilities.js');
-  assert.match(String(capabilitiesView(s)), /Observe · Retired/);
+  const list = String(capabilitiesView(s));
+  assert.match(list, /<td>Retired: it no longer operates<\/td>\s*<td>Retired<\/td>/);
+  assert.doesNotMatch(list, /Observe · Retired/);
 });
 
 test('7. Monitor states never add an authorization block', () => {
@@ -404,4 +406,31 @@ test('screen: the reduction screen calls Suspend "Pause" and offers an optional 
   const retire = String(capabilityView({ ...s0, actingAs: CARA }, id, new URLSearchParams('tab=decide&retire=1')));
   assert.match(retire, /Only the Owner, Ana Ruiz, can retire it\. Cara Lim can reduce or pause it instead\./);
   assert.match(retire, /type="submit" disabled>Retire as Cara Lim/);
+});
+
+test('screen: a retired capability reads "Retired", never Observe; a paused one still reads "Observe · Paused"', async () => {
+  const [s0, id] = decidedFirm();
+  const s = retireCapability(s0, id, { by: ANA, reason: 'We now send deadline reminders from the tax software instead.' });
+  setPeople(people(s));
+  const { capabilitiesView } = await import('../src/views/capabilities.js');
+  const { overviewView } = await import('../src/views/overview.js');
+  const { decisionRecordView, decisionsListView } = await import('../src/views/decisions.js');
+  const { decisionBriefView } = await import('../src/views/brief.js');
+  const strip = (h) => String(h).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const rowOf = (h) => (strip(h).match(/Draft deadline emails[^|]*?(?=Ana Ruiz|$)/) || [''])[0];
+  assert.doesNotMatch(rowOf(capabilitiesView(s)), /Observe/, 'Capabilities list');
+  assert.match(strip(overviewView(s)), /Retired/);
+  const status = strip(capabilityView(s, id, new URLSearchParams('tab=status')));
+  assert.match(status, /Retired It no longer operates\. Its history and records are kept\./);
+  assert.match(status, /Retired by Ana Ruiz on .*\. We now send deadline reminders from the tax software instead\./);
+  assert.doesNotMatch(status, /Level 0|Observe/);
+  assert.match(strip(capabilityView(s, id, new URLSearchParams('tab=monitor'))), /Authority now Retired ?\. It no longer operates\./);
+  const rec = s.decisionRecords.at(-1);
+  assert.equal(rec.next.level, 0, 'internally Level 0');
+  assert.match(String(decisionRecordView(s, rec.id)), /<span class="fact-label">New<\/span><strong>Retired<\/strong><div class="muted small">No operating authority<\/div>/);
+  assert.match(strip(decisionsListView(s)), /Level 2 → Retired Retired/);
+  assert.match(String(decisionBriefView(s, rec.id)), /Draft deadline emails: Level 2 → Retired<\/h1>/);
+  // Pause is a temporary Level 0: it still reads Observe.
+  const p = authorize(setRationale(selectDecision(s0, id, 'suspend'), id, 'Pausing over the holidays, no new reminders.'), id, { by: ANA });
+  assert.match(strip(capabilitiesView(p)), /Observe · Paused/);
 });

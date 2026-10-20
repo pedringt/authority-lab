@@ -69,6 +69,7 @@ function whyHere(state, cap, d) {
     return `Moved back from ${LEVEL_TITLE[rec.previous.level]} automatically on ${date}. ${reading ? `It crossed a safety limit: ${reading}.` : firstSentence(rec.rationale)}`;
   }
   const who = personAt(rec.authorizedByAt, rec.authorizedBy).name;
+  if (rec.option === 'retire') return `Retired by ${who} on ${date}. ${firstSentence(rec.rationale)}`;
   if (!rec.previous) {
     return rec.option === 'not-delegated'
       ? `Kept with people by ${who} on ${date} (${OPTION_PLAIN['not-delegated']}). ${firstSentence(rec.rationale)}`
@@ -163,7 +164,8 @@ function story(state, cap, d) {
   const review = reviewNeeded(state, cap.id);
   const level = cap.authority.level;
   const restricted = cap.status === 'restricted';
-  const title = restricted && level === 1 ? 'Recommend only' : LEVEL_TITLE[level];
+  const retired = cap.status === 'retired';
+  const title = retired ? 'Retired' : restricted && level === 1 ? 'Recommend only' : LEVEL_TITLE[level];
   const state1 = review.any ? badge('restricted', 'Needs review') : restricted ? badge('restricted', 'Restricted') : '';
   const why = whyHere(state, cap, d);
   const next = nextFor(state, cap, d);
@@ -171,8 +173,8 @@ function story(state, cap, d) {
   const base = `#/capabilities/${cap.id}`;
   const pulledBack = restricted || cap.status === 'review-required';
   return html`<section class="st-story" data-next="${next.kind}">
-    <h2 class="st-title">${title} <span class="st-lvl">Level ${level}</span> ${state1}</h2>
-    <p class="st-now">${levelSentence(cap, level, limitsInForce(state, cap), { notDelegated: cap.status === 'not-delegated' })}</p>
+    <h2 class="st-title">${title}${retired ? '' : html` <span class="st-lvl">Level ${level}</span>`} ${state1}</h2>
+    <p class="st-now">${retired ? 'It no longer operates. Its history and records are kept.' : levelSentence(cap, level, limitsInForce(state, cap), { notDelegated: cap.status === 'not-delegated' })}</p>
     <div class="st-chapters">
       ${why ? chapter('Why it\'s here', why) : ''}
       ${chapter('What happens next', next.text)}
