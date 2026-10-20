@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, capData, getCapability, people } from '../src/store/index.js';
 import { setPeople } from '../src/ui.js';
@@ -52,7 +53,11 @@ test('the guided demo waits for each action, and every action is a real store tr
   assert.match(String(guideView(tested, 5)), /btn btn-primary" href="#\/guide\/6">Next/);
   // Step 6: the recommendation, then the recorded decision in plain words.
   assert.match(text(guideView(tested, 6)), /Recommended: expand autonomy within limits\./);
-  const a = authorize(selectDecision(s, RR, 'expand-limits'), RR, { by: 'maya' });
+  // #144: the Residual Risk is the viewer's to judge; recording waits for it.
+  assert.match(String(guideView(tested, 6)), /name="guide-residual" value="High" data-action="guide-residual"/);
+  assert.match(String(guideView(tested, 6)), /data-action="guide-decide" disabled>Record decision as Maya Chen/);
+  assert.doesNotMatch(String(guideView({ ...tested, residual: { level: 'High', note: 'High-value refunds are under-tested.' } }, 6)), /data-action="guide-decide" disabled/);
+  const a = authorize(decideWith(s, RR, 'expand-limits'), RR, { by: 'maya' });
   const decided = { ...tested, state: a, decided: a.decisionRecords.at(-1).id };
   const six = text(guideView(decided, 6));
   assert.match(six, /Decision recorded: Expanded autonomy within limits/);

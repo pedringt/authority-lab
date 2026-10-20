@@ -4,7 +4,8 @@
 // whatever has changed since.
 
 import { html, fmtDate, personAt } from '../ui.js';
-import { getCapability, recordVersion, levelName } from '../store/index.js';
+import { getCapability, recordVersion, levelName, isDemoWorkspace, workspaceOf } from '../store/index.js';
+import { provenanceRows } from './proposal.js';
 
 const levelText = (a) => (a ? `Level ${a.level}, ${levelName(a.level)}${a.limited ? ' (limited)' : ''}` : 'none (new capability)');
 const block = (title, body) => html`<section class="brief-block"><h2>${title}</h2>${body}</section>`;
@@ -36,13 +37,26 @@ function watch(rec) {
   return items.length ? html`<ul class="brief-list">${items}</ul>` : none('No rollout plan was recorded.');
 }
 
+// Initial Risk and the Residual Risk the person deciding gave (#144), from
+// the record. No score; nothing here judges whether it was acceptable.
+function risk(rec) {
+  const items = [];
+  if (rec.reviewed) items.push(html`<li><strong>Initial Risk:</strong> ${rec.reviewed.risk.overall}</li>`);
+  if (rec.residualRisk) items.push(html`<li><strong>Residual Risk:</strong> ${rec.residualRisk.level}${rec.residualRisk.note ? `: ${rec.residualRisk.note}` : ''}</li>`);
+  if (rec.proposalId) items.push(html`<li><strong>Proposal reviewed:</strong> ${rec.proposalId}${rec.proposalStale ? ' (it was stale: something it was reviewed against had changed)' : ''}</li>`);
+  return items.length ? html`<ul class="brief-list">${items}</ul>` : none('Not recorded: this decision was made before Risk was frozen on records.');
+}
+
 export function decisionBriefView(state, recordId) {
   const rec = state.decisionRecords.find((r) => r.id === recordId);
   if (!rec) return html`<div class="page-head"><h1>Record not found</h1></div>`;
   const cap = getCapability(state, rec.capabilityId);
   const who = personAt(rec.authorizedByAt, rec.authorizedBy);
   const auto = rec.authorizedBy === 'system';
-  const ev = (rec.evidenceSnapshot || []).slice(0, 8);
+  // #144: evidence recorded by hand has no summary line; say what each
+  // result rested on instead.
+  const prov = rec.reviewed && rec.reviewed.evidence ? provenanceRows(rec.reviewed.evidence) : [];
+  const ev = [...(rec.evidenceSnapshot || []), ...((rec.evidenceSnapshot || []).length ? [] : prov.map((r) => `${r.label}: ${r.parts.join('; ')}`))].slice(0, 8);
   const c = rec.conditions;
   return html`<article class="brief">
     <div class="brief-actions no-print"><a href="#/records/${rec.id}">← Decision record ${rec.id}</a> <button class="btn btn-primary btn-sm" data-action="print">Print this page</button></div>
@@ -59,9 +73,10 @@ export function decisionBriefView(state, recordId) {
       ${block('Expected impact', rec.expectedOutcomes && rec.expectedOutcomes.length
         ? html`<ul class="brief-list">${rec.expectedOutcomes.map((o) => html`<li><strong>${o.metric}:</strong> ${o.target}</li>`)}</ul>`
         : none(auto || !(rec.previous && rec.next.level > rec.previous.level) ? 'Not applicable: authority did not expand.' : 'Not recorded: this decision was made before expected outcomes were required.'))}
+      ${block('Risk', risk(rec))}
       ${block('What we\'ll watch', watch(rec))}
       ${block('When it gets pulled back', pullBack(state, rec))}
     </div>
-    <p class="brief-foot muted">Built only from decision record ${rec.id} and the rules and stakeholders in place on that date, so it reads the same later. Authority Lab · fictional demo data.</p>
+    <p class="brief-foot muted">Built only from decision record ${rec.id} and the rules and stakeholders in place on that date, so it reads the same later. Authority Lab · ${isDemoWorkspace(state) ? 'fictional demo data' : workspaceOf(state).name}.</p>
   </article>`;
 }

@@ -3,6 +3,7 @@
 // same checks on every load.
 
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
@@ -23,7 +24,7 @@ const base = () => importEvidenceFiles(buildWorkspace(stateWorkspace, { today: '
 // A Draft decision made in a browser, the way a person makes it.
 function decideDraft(s, { rationale = 'All five checks are met on State\'s review suite run of Oct 13, with no unsafe-direction misses.' } = {}) {
   s = proposeAuthority(s, ID, 2, { by: PAIGE });
-  s = selectDecision(s, ID, 'expand');
+  s = decideWith(s, ID, 'expand');
   s = setRationale(s, ID, rationale);
   s = setOutcome(setOutcome(s, ID, 0, 'metric', 'Scenarios passed'), ID, 0, 'target', '≥ 93%');
   s = setOutcome(setOutcome(s, ID, 1, 'metric', 'Unsafe-direction misses'), ID, 1, 'target', 'at most 0');

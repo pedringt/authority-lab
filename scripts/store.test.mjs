@@ -1,8 +1,10 @@
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import * as seed from '../src/data/seed.js';
 import {
+  setResidualRisk,
   initialState, startTestRun, advanceTestRun, selectDecision, setCondition, setRationale,
   canAuthorize, authorize, simulateBreach, reset, readiness, testSummary, getCapability, capData,
   focusCapability, conditionsPreview, createStore, STORAGE_KEY,
@@ -140,7 +142,7 @@ test('test suite runs to completion for one capability and updates its evidence 
 test('authorize requires an option and a rationale', () => {
   let s = initialState();
   assert.equal(canAuthorize(s, RR).ok, false);
-  s = selectDecision(s, RR, 'expand-limits');
+  s = decideWith(s, RR, 'expand-limits');
   assert.equal(canAuthorize(s, RR).ok, true);
   s = setRationale(s, RR, '');
   assert.equal(canAuthorize(s, RR).ok, false);
@@ -148,7 +150,7 @@ test('authorize requires an option and a rationale', () => {
 });
 
 test('expand with limits: authority changes, record is written with snapshot and conditions', () => {
-  let s = selectDecision(initialState(), RR, 'expand-limits');
+  let s = decideWith(initialState(), RR, 'expand-limits');
   s = setCondition(s, RR, 'maxValue', 50);
   s = authorize(s, RR, { by: 'maya' });
   assert.deepEqual(cap(s).authority, { level: 3, limited: true });
@@ -176,22 +178,22 @@ test('expand with limits: authority changes, record is written with snapshot and
 });
 
 test('authority can move down: restrict and suspend', () => {
-  let s = authorize(selectDecision(initialState(), RR, 'restrict'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'restrict'), RR);
   assert.deepEqual(cap(s).authority, { level: 1, limited: false });
   assert.equal(cap(s).status, 'restricted');
   assert.equal(capData(s, RR).monitoring, null);
-  s = authorize(selectDecision(initialState(), RR, 'suspend'), RR);
+  s = authorize(decideWith(initialState(), RR, 'suspend'), RR);
   assert.deepEqual(cap(s).authority, { level: 0, limited: false });
 });
 
 test('hold keeps authority and still writes a record', () => {
-  const s = authorize(selectDecision(initialState(), RR, 'hold'), RR);
+  const s = authorize(decideWith(initialState(), RR, 'hold'), RR);
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(s.decisionRecords.length, 4);
 });
 
 test('threshold breach restricts automatically, creates alert, event, record, review-required', () => {
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   s = simulateBreach(s, RR);
   assert.deepEqual(cap(s).authority, { level: 2, limited: false });
   assert.equal(cap(s).status, 'review-required');
@@ -221,19 +223,19 @@ test('threshold breach restricts automatically, creates alert, event, record, re
 });
 
 test('after a breach, expansion cannot be authorized until review', () => {
-  let s = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  let s = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
   s = { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...capData(s, RR), decision: { ...capData(s, RR).decision, proposed: { level: 3, limited: false } } } } };
-  s = selectDecision(s, RR, 'expand');
+  s = setRationale(decideWith(s, RR, 'expand'), RR, 'Trying to expand again after the breach.');
   const check = canAuthorize(s, RR);
   assert.equal(check.ok, false);
   assert.match(check.reason, /review/i);
   // Restricting further is still allowed.
-  assert.equal(canAuthorize(selectDecision(s, RR, 'restrict'), RR).ok, true);
+  assert.equal(canAuthorize(decideWith(s, RR, 'restrict'), RR).ok, true);
 });
 
 test('a second capability gets its own decision and readiness, independent of the first', () => {
   let s = initialState();
-  s = selectDecision(s, TC, 'restrict');
+  s = decideWith(s, TC, 'restrict');
   s = setRationale(s, TC, 'Misroute rate climbed after the queue change; back to Draft while it is investigated.');
   assert.equal(canAuthorize(s, TC).ok, true);
   assert.equal(canAuthorize(s, RR).ok, false, 'refund recommendation still has no option selected');
@@ -252,7 +254,7 @@ test('a second capability gets its own decision and readiness, independent of th
 });
 
 test('reset restores the seeded state', () => {
-  let s = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  let s = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
   s = reset(s);
   assert.deepEqual(s, initialState());
 });
@@ -388,7 +390,7 @@ test('decision records save the version numbers in force at the time', () => {
   s = amend(s, RR, 'contract', { value: current(s, RR, 'contract'), author: 'maya', reason: 'Re-confirmed.' });
   s = amend(s, RR, 'contract', { value: current(s, RR, 'contract'), author: 'maya', reason: 'Re-confirmed again.' });
   s = amend(s, RR, 'criteria', { value: current(s, RR, 'criteria'), author: 'maya', reason: 'Re-confirmed.' });
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
   assert.deepEqual(rec.versions, { contract: 3, criteria: 2, requirements: 1, risk: 1, stakeholders: 1 });
   // A later amendment does not change the record.
@@ -468,7 +470,7 @@ test('a decision relying on criteria amended after evidence is flagged; earlier 
   // The seeded record AC-02 relied on v1 of everything: no note.
   assert.deepEqual(amendmentsAfterEvidenceFor(s, s.decisionRecords[1]), []);
   s = amend(s, RR, 'criteria', { value: current(s, RR, 'criteria').map((c) => (c.id === 'quality' ? { ...c, target: '≥ 90% correct decisions' } : c)), author: 'priya', reason: 'Lower the quality bar.' });
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
   const flagged = amendmentsAfterEvidenceFor(s, rec);
   assert.equal(flagged.length, 1);
@@ -587,7 +589,8 @@ test('whoever is acting is recorded as the authorizer, alongside the owner when 
   assert.equal(rec.authorizedBy, 'daniel');
   assert.match(s.activity[0].body, /added by Daniel Okafor \(owner: Priya Natarajan\)/);
   // Later records carry the owner too.
-  const t = authorize(selectDecision(initialState(), RR, 'hold'), RR, { by: 'daniel' });
+  // Pulling back can be recorded by anyone named on it (#144, Q1).
+  const t = authorize(setRationale(decideWith(initialState(), RR, 'restrict'), RR, 'Pulling back while high-value cases are reviewed.'), RR, { by: 'daniel' });
   const later = t.decisionRecords[t.decisionRecords.length - 1];
   assert.equal(later.owner, 'maya');
   assert.equal(later.authorizedBy, 'daniel');
@@ -609,7 +612,7 @@ test('duplicate names get distinct ids; the second record for a capability is se
   assert.equal(s.capabilities[s.capabilities.length - 1].id, 'ticket-classification-2');
   assert.equal(slugify('  Draft & send replies!! '), 'draft-send-replies');
   // Authorize a hold on the seeded refund capability: that is its second record.
-  s = authorize(selectDecision(s, RR, 'hold'), RR);
+  s = authorize(decideWith(s, RR, 'hold'), RR);
   assert.equal(s.decisionRecords[s.decisionRecords.length - 1].sequence, 2);
 });
 
@@ -633,7 +636,9 @@ test('acting as: defaults to the capability owner, can be overridden, and is the
   assert.equal(actor(s, RR), 'daniel');
   assert.equal(actor(s, TC), 'daniel');
   assert.throws(() => setActingAs(s, 'nobody'), /Unknown person/);
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR, { by: actor(s, RR) });
+  // More authority is the Owner's to record (#144, Q1); pulling back isn't.
+  assert.throws(() => authorize(decideWith(s, RR, 'expand-limits'), RR, { by: actor(s, RR) }), /Only the Owner, Maya Chen, can record more authority/);
+  s = authorize(decideWith(s, RR, 'restrict'), RR, { by: actor(s, RR) });
   assert.equal(s.decisionRecords[s.decisionRecords.length - 1].authorizedBy, 'daniel');
   s = setActingAs(s, null);
   assert.equal(actor(s, TC), 'priya');
@@ -1061,7 +1066,7 @@ test('the proposer cannot approve; the owner alone is not enough for High impact
   assert.equal(s.activity[0].surfaced, true);
   assert.match(s.activity[0].body, /approved by Maya Chen \(the owner\) and Daniel Okafor \(a Risk approver\)/);
   // A later decision is flagged as relying on criteria amended after evidence.
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
   assert.equal(rec.versions.requirements, 2);
   assert.equal(amendmentsAfterEvidenceFor(s, rec).length, 2, 'criteria v2 and requirements v2 were both amended after evidence');
@@ -1299,12 +1304,12 @@ test('a new capability can reach its second record: propose a move to Draft afte
   assert.equal(s.activity[0].kind, 'decision');
   assert.throws(() => proposeAuthority(s, id, 2, { by: 'priya' }), /already open/);
   // B1: a move up needs its expected impact.
-  s = selectDecision(s, id, 'expand');
+  s = decideWith(s, id, 'expand');
   s = setOutcome(setOutcome(s, id, 0, 'metric', 'Edit rate on drafts'), id, 0, 'target', '≤ 20%');
   s = setOutcome(setOutcome(s, id, 1, 'metric', 'Time to first response'), id, 1, 'target', 'at least 25% faster');
   // C1: and its rollout plan.
   for (const [k, v] of Object.entries({ owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' })) s = setRolloutField(s, id, k, v);
-  s = authorize(s, id, { by: 'priya' });
+  s = authorize(setRationale(s, id, 'The first run passed; a person sends every draft.'), id, { by: 'priya' });
   const c = getCapability(s, id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
   assert.equal(c.status, 'pilot');
@@ -1347,6 +1352,7 @@ test('end to end in the store: add → contract → criteria → stakeholders �
   // Decision.
   store.dispatch('proposeAuthority', id, 2, { by: 'priya' });
   store.dispatch('selectDecision', id, 'expand');
+  store.dispatch('setResidualRisk', id, { level: 'Low', note: 'A person sends every draft.' });
   // B1: a move up needs its expected impact.
   store.dispatch('setOutcome', id, 0, 'metric', 'Edit rate on drafts');
   store.dispatch('setOutcome', id, 0, 'target', '≤ 20%');
@@ -1354,6 +1360,7 @@ test('end to end in the store: add → contract → criteria → stakeholders �
   store.dispatch('setOutcome', id, 1, 'target', 'at least 25% faster');
   // C1: and its rollout plan.
   for (const [k, v] of Object.entries({ owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' })) store.dispatch('setRolloutField', id, k, v);
+  store.dispatch('setRationale', id, 'The first run passed; a person sends every draft.');
   store.dispatch('authorize', id, { by: 'priya' });
   const c = getCapability(store.get(), id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
@@ -1570,7 +1577,7 @@ test('decisionRequired, proposed, lastDecisionId and lastEvaluated are derived, 
   assert.equal(decisionRequired(s, TC), false);
   assert.equal(proposedAuthority(s, TC), null);
   // Authorizing clears the pending decision and moves the derived fields.
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR);
   assert.equal(decisionRequired(s, RR), false);
   assert.equal(proposedAuthority(s, RR), null);
   assert.equal(lastDecisionId(s, RR), 'AC-04');
@@ -1581,8 +1588,8 @@ test('decisionRequired, proposed, lastDecisionId and lastEvaluated are derived, 
   assert.equal(lastDecisionId(s, RR), 'AC-05');
   assert.equal(lastEvaluated(s, RR), seed.TODAY);
   // Nothing proposed: cannot authorize.
-  assert.match(canAuthorize(selectDecision(s, RR, 'expand'), RR).reason, /No one has proposed more authority/);
-  assert.equal(canAuthorize(selectDecision(s, RR, 'restrict'), RR).ok, true, 'restricting needs no proposed expansion');
+  assert.match(canAuthorize(decideWith(s, RR, 'expand'), RR).reason, /No one has proposed more authority/);
+  assert.equal(canAuthorize(setRationale(decideWith(s, RR, 'restrict'), RR, 'Pulling back after the breach.'), RR).ok, true, 'restricting needs no proposed expansion');
   // A test run alone moves lastEvaluated.
   let [b, bid] = blankCap();
   assert.equal(lastEvaluated(b, bid), seed.TODAY, 'defined today, no evidence');
@@ -1674,7 +1681,7 @@ test('a deactivated person cannot act, propose, approve, author or be a stakehol
   assert.throws(() => approveProposal(s, RR, p.id, { by: 'elena' }), /deactivated, so they can't approve/);
   assert.throws(() => rejectProposal(s, RR, p.id, { by: 'elena', reason: 'Not from here.' }), /deactivated/);
   assert.throws(() => amend(s, RR, 'risk', { value: current(s, RR, 'risk'), author: 'elena', reason: 'Trying anyway.' }), /deactivated and can't make changes/);
-  assert.throws(() => authorize(selectDecision(s, RR, 'hold'), RR, { by: 'elena' }), /deactivated and cannot make this decision/);
+  assert.throws(() => authorize(decideWith(s, RR, 'hold'), RR, { by: 'elena' }), /deactivated and cannot make this decision/);
   assert.throws(() => addCapability(s, { name: 'X', owner: 'elena', risk: LOW_RISK, startingLevel: 0 }), /deactivated and cannot own/);
   // Stakeholder lists: cannot add; existing entries stop counting as named stakeholders.
   const [t, id] = withNewCap();
@@ -1865,7 +1872,7 @@ test('records, versions, approvals and proposals snapshot the person at write ti
   s = proposeAmendment(s, RR, 'criteria', { value, by: 'priya', reason: REASON });
   s = approveProposal(s, RR, 'P-1', { by: 'maya' });
   s = approveProposal(s, RR, 'P-1', { by: 'daniel' });
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR, { by: 'maya' });
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR, { by: 'maya' });
   const recId = lastDecisionId(s, RR);
   s = editPerson(s, 'maya', { name: 'Maya Chen-Ortiz', title: 'Director of Support Product', team: 'Support Product', by: 'jonas', reason: 'Promotion and name change.' });
   s = proposeRosterChange(s, { kind: 'rights', person: 'daniel', right: 'riskApprover', grant: false, by: 'jonas', reason: 'Daniel rotates off Risk sign-off.' });
@@ -1893,7 +1900,7 @@ test('records, versions, approvals and proposals snapshot the person at write ti
   assert.equal(renameVersion.authorAt.name, 'Jonas Lindqvist');
   // A record written after the changes shows the new values.
   s = { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...capData(s, RR), decision: { ...capData(s, RR).decision, proposed: { level: 4, limited: false } } } } };
-  s = authorize(selectDecision(setRationale(s, RR, 'Testing the snapshot after a rename.'), RR, 'hold'), RR, { by: 'maya' });
+  s = authorize(decideWith(setRationale(s, RR, 'Testing the snapshot after a rename.'), RR, 'hold'), RR, { by: 'maya' });
   assert.equal(s.decisionRecords[s.decisionRecords.length - 1].authorizedByAt.name, 'Maya Chen-Ortiz');
   assert.equal(s.decisionRecords[s.decisionRecords.length - 1].authorizedByAt.title, 'Director of Support Product');
   // Views render the snapshot, not the current roster.
@@ -2143,12 +2150,12 @@ test('a breach returns the capability to the level its contract line names', () 
     assert.equal(b.alerts[0].capabilityId, id);
     assert.ok(capData(b, id).evidence[0].source === 'Incident' && capData(b, id).evidence[0].status === 'fail');
     assert.equal(simulateBreach(b, id), b, 'idempotent');
-    assert.equal(canAuthorize(selectDecision(b, id, 'expand'), id).ok, false, 'no expansion before review');
+    assert.equal(canAuthorize(decideWith(b, id, 'expand'), id).ok, false, 'no expansion before review');
   }
 });
 
 test('the Refund recommendation demo breach still returns it to Draft from its contract rule', () => {
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   assert.ok(breachRule(s, RR), 'at Level 3 the rolling-window rule applies');
   s = simulateBreach(s, RR);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
@@ -2196,8 +2203,8 @@ test('a review clears the lock and the alert but leaves authority reduced', () =
   assert.equal(s.activity[0].kind, 'review');
   assert.equal(s.activity[0].surfaced, true);
   // Expanding again still needs a proposal and a named authorization.
-  assert.equal(canAuthorize(selectDecision(s, TC, 'expand'), TC).ok, false);
-  assert.match(canAuthorize(selectDecision(s, TC, 'expand'), TC).reason, /proposed/);
+  assert.equal(canAuthorize(decideWith(s, TC, 'expand'), TC).ok, false);
+  assert.match(canAuthorize(decideWith(s, TC, 'expand'), TC).reason, /proposed/);
   assert.throws(() => recordReview(s, TC, { by: 'daniel', ...FINDINGS }), /nothing to review/, 'one review per restriction');
 });
 
@@ -2209,7 +2216,7 @@ test('only the owner or a Risk approver records a review; High/Financial needs a
   assert.throws(() => recordReview(s, TC, { by: 'elena', ...FINDINGS }), /owner .* or a Risk approver/);
   assert.throws(() => recordReview(s, TC, { by: 'daniel', ...FINDINGS, cause: 'n/a' }), /what caused it/);
   // High/Financial: the owner alone is not enough without the right.
-  let r = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  let r = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
   const owner = getCapability(r, RR).owner;
   assert.equal(isRiskApprover(r, owner), false);
   assert.match(reviewEligibility(r, RR, owner).reason, /only a Risk approver can record this review/);
@@ -2241,7 +2248,7 @@ test('whoever authorized the restricted expansion cannot record its review', () 
   s = amend(s, RR, 'risk', { value: { ...current(s, RR, 'risk'), impact: 'Medium', exposure: 'Customer-facing' }, author: 'maya', reason: 'Test: a Medium-impact capability.' });
   assert.equal(isHighOrFinancial(s, RR), false);
   const owner = getCapability(s, RR).owner;
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR, { by: owner });
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR, { by: owner });
   const expansion = s.decisionRecords[s.decisionRecords.length - 1];
   s = simulateBreach(s, RR);
   assert.equal(restrictedExpansion(s, RR).id, expansion.id);
@@ -2438,7 +2445,7 @@ test('records keep the workspace and workflow names in force when they were writ
   let s = initialState();
   const old = s.decisionRecords[0];
   s = renameWorkspace(s, { ...RENAME, by: 'maya' });
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR);
   const fresh = s.decisionRecords[s.decisionRecords.length - 1];
   assert.deepEqual([namesAtRecord(s, old).workspace.name, namesAtRecord(s, old).workflow.name], ['Northstar Support', 'Customer Support Resolution'], 'a seeded record keeps the old names');
   assert.equal(namesAtRecord(s, fresh).workspace.name, 'Northstar Care', 'a record written after the rename has the new name');
@@ -2461,7 +2468,7 @@ const TIGHTEN = { criteria: { quality: '≥ 95% correct decisions', cost: 'AI op
 
 test('a tightening-only change applies straight away as a recorded amendment, surfaced, without sign-off', () => {
   // The pending expansion is decided first: no decision is pending.
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   assert.equal(decisionRequired(s, RR), false);
   assert.equal(needsSignoff(s, RR, 'criteria'), true, 'locked: normally needs sign-off');
   const before = versionsInForce(s, RR);
@@ -2533,7 +2540,7 @@ test('repro: a non-stakeholder raising the case minimum while a decision is pend
 });
 
 test('a named stakeholder tightening with no decision pending applies directly', () => {
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   assert.equal(getCapability(s, RR).owner === 'daniel', false);
   assert.equal(namedStakeholders(s, RR).includes('daniel'), true);
   const n = capData(s, RR).proposals.length;
@@ -2541,7 +2548,7 @@ test('a named stakeholder tightening with no decision pending applies directly',
   assert.equal(capData(s, RR).proposals.length, n, 'no proposal');
   assert.equal(currentVersion(s, RR, 'requirements').tighteningOnly, true);
   // Someone who is not a named stakeholder still goes to sign-off with no decision pending.
-  const t = proposeAmendment(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'jonas', reason: 'Raising quality for safety.' });
+  const t = proposeAmendment(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'jonas', reason: 'Raising quality for safety.' });
   assert.equal(capData(t, RR).proposals.at(-1).proposedBy, 'jonas');
 });
 
@@ -2591,7 +2598,7 @@ const ticketFor = (orderId) => {
 };
 const refund = (orderId, amount, extra = {}) => ({ tool: 'issue_refund', args: { orderId, amount, confidence: 95, instructionSource: 'customer', ...extra }, ...(ticketFor(orderId) ? { ticketId: ticketFor(orderId) } : {}) });
 // Refund recommendation authorized to Level 3 with limits (max $50, no fraud, clear policy, confidence ≥ 90, no chargeback).
-const atL3 = () => withSystems(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR));
+const atL3 = () => withSystems(authorize(decideWith(initialState(), RR, 'expand-limits'), RR));
 
 test('gate: Level 3 allows only when every recorded limit holds, and names the rule', () => {
   const s = atL3();
@@ -2711,7 +2718,7 @@ test('gate bypass: built-in object names are never orders or tools, at any level
     ['L2', withSystems(initialState()), RR],
     ['L3', l3, RR],
     ['L4', atLevel(l3, RR, 4), RR],
-    ['no systems', atLevel(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 4), RR],
+    ['no systems', atLevel(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR, 4), RR],
   ];
   for (const [label, s, cap] of states) {
     for (const name of PROTO_NAMES) {
@@ -2740,7 +2747,7 @@ test('gate: confidence is model-reported, listed as not verified, and never a re
 
 test('gate: capability-wide daily caps hold even when every customer is under their own limit', () => {
   const orders = Object.fromEntries(['A', 'B', 'C', 'D', 'E'].map((k) => [`ORD-${k}`, { customerId: `C-${k}`, value: 100, fraudFlag: false, chargeback: false, policyException: false, paymentMethod: `card-${k}` }]));
-  let s = selectDecision(initialState(), RR, 'expand-limits');
+  let s = decideWith(initialState(), RR, 'expand-limits');
   s = setCondition(s, RR, 'maxDailyTotal', 100);
   s = setCondition(s, RR, 'maxDailyCount', 3);
   s = authorize(s, RR);
@@ -2776,7 +2783,7 @@ const WITHHELD = (s) => Object.values(s.systems.customers).flatMap((c) => [c.ful
 const RX = 'refund-execution-high-value';
 
 test('A2: the gate reads facts from the seeded systems of record', () => {
-  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   assert.equal(Object.keys(s.systems.orders).length, 6);
   assert.equal(checkAction(s, RR, refund('ORD-5001', 40)).verdict, 'allow');
   assert.deepEqual([checkAction(s, RR, refund('ORD-5003', 20)).verdict, checkAction(s, RR, refund('ORD-5003', 20)).rule.kind], ['block', 'must-never'], "Mina Park's fraud flag comes from the fraud list");
@@ -2786,7 +2793,7 @@ test('A2: the gate reads facts from the seeded systems of record', () => {
 });
 
 test('A2: lookup_order returns only the fields the contract lets the AI see', () => {
-  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const { result } = callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } });
   assert.deepEqual([result.verdict, result.executed, result.found], ['allow', true, true]);
   assert.deepEqual(result.data.order, { id: 'ORD-5003', date: '2026-09-27', items: ['Espresso machine'], value: 420, status: 'Delivered', refundedSoFar: 0, paymentMethod: 'Mastercard ending 4444' });
@@ -2798,7 +2805,7 @@ test('A2: lookup_order returns only the fields the contract lets the AI see', ()
 });
 
 test('A2: withheld fields never appear in any tool result', () => {
-  const states = [initialState(), authorize(selectDecision(initialState(), RR, 'expand-limits'), RR)];
+  const states = [initialState(), authorize(decideWith(initialState(), RR, 'expand-limits'), RR)];
   for (const s of states) {
     const secrets = WITHHELD(s);
     for (const cap of [RR, RX]) {
@@ -2822,7 +2829,7 @@ test('A2: withheld fields never appear in any tool result', () => {
 
 test('A2: a refusal tells the model the rule, not the record', () => {
   // A contract that lets the AI see only the order id.
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   s = amend(s, RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id'] }, author: 'maya', reason: 'Test: only the order id.' });
   assert.deepEqual(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5003' } }).result.data, { order: { id: 'ORD-5003' } });
   const lie = callTool(s, RR, { ...refund('ORD-5003', 20), claims: { fraudFlag: false } });
@@ -2833,7 +2840,7 @@ test('A2: a refusal tells the model the rule, not the record', () => {
 });
 
 test('A2: issue_refund executes only when the gate allows, and writes the ledger', () => {
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const n = s.systems.refunds.length;
   const first = callTool(s, RR, refund('ORD-5001', 30));
   assert.deepEqual([first.result.verdict, first.result.executed], ['allow', true]);
@@ -2869,17 +2876,17 @@ test('A2: the data section is versioned with the contract and checked by softwar
   assert.match(checks(['customer.address']).join(), /restricted/);
   assert.match(checks(['order.secretSauce']).join(), /isn't data any connected tool provides/);
   // A proposed contract amendment carries the data section through.
-  const after = proposeAmendment(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id', 'order.value'] }, by: 'maya', reason: 'Narrowing what the AI sees.' });
+  const after = proposeAmendment(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id', 'order.value'] }, by: 'maya', reason: 'Narrowing what the AI sees.' });
   const p = capData(after, RR).proposals.at(-1);
   assert.deepEqual(p.value.dataSeen, ['order.id', 'order.value']);
   // Restricted fields never pass the filter, even if a contract lists one.
   let leaky = amend(initialState(), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.cardNumber', 'customer.address', 'order.id'] }, author: 'maya', reason: 'Test: restricted.' });
-  leaky = authorize(selectDecision(leaky, RR, 'expand-limits'), RR);
+  leaky = authorize(decideWith(leaky, RR, 'expand-limits'), RR);
   assert.deepEqual(callTool(leaky, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).result.data, { order: { id: 'ORD-5001' } });
 });
 
 test('A2: a contract with no data section shows the AI nothing from the records', () => {
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const { dataSeen: _drop, ...rest } = current(s, RR, 'contract');
   s = amend(s, RR, 'contract', { value: rest, author: 'maya', reason: 'Test: no data section.' });
   assert.deepEqual(callTool(s, RR, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).result.data, {});
@@ -2896,7 +2903,7 @@ test('A2: the contract tab shows the data boundary', () => {
 });
 
 test('A2 bypass: built-in object names are never orders, through every tool, at every level', () => {
-  const l3 = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const l3 = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const states = [['L0', initialState(), 'account-closure'], ['L1', initialState(), RX], ['L2', initialState(), RR], ['L3', l3, RR], ['L4', atLevel(l3, RR, 4), RR]];
   for (const [label, s, cap] of states) {
     for (const name of PROTO_NAMES) {
@@ -2990,7 +2997,7 @@ test('A4: a rejection is recorded and nothing executes', () => {
 test('A4 bypass: an approved action re-runs the gate when it executes; a restriction in between refuses it', () => {
   // At Level 3, a $60 refund needs a person (over the $50 limit) and waits.
   // (The seeded request on ORD-5005 is rejected first: one waits per order.)
-  let s = authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
   const big = callTool(s, RR, refund('ORD-5005', 60));
   assert.equal(big.result.waiting, true);
   const id = big.result.queueId;
@@ -3003,14 +3010,14 @@ test('A4 bypass: an approved action re-runs the gate when it executes; a restric
   assert.equal(after.systems.refunds.length, restricted.systems.refunds.length, 'nothing executed');
   assert.equal(after.activity[0].kind, 'failure');
   // A person's decision to restrict (no review lock): refused because the level dropped.
-  let r = selectDecision(big.state, RR, 'restrict');
+  let r = setRationale(decideWith(big.state, RR, 'restrict'), RR, 'Pulling back while the refunds are checked.');
   r = authorize(r, RR);
   assert.equal(getCapability(r, RR).authority.level, 2);
   assert.match(queuedAction(approveAction(r, id, { by: 'priya', reason: WHY }), id).decision.refusal, /dropped from Level 3 to Level 2/);
 });
 
 test('A4 bypass: an approval is refused if a cap was crossed, or the order became blocked, since it was queued', () => {
-  let s = selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits');
+  let s = decideWith(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits');
   s = setCondition(s, RR, 'maxDailyTotal', 100);
   s = authorize(s, RR);
   // $70 needs a person (over the $50 value limit) and waits; the day is at $0.
@@ -3107,7 +3114,7 @@ test('A4 bypass: filling the queue blocks new needs-person actions and opens one
 });
 
 test('A4: when the AI asks again after a refused approval, the new item follows the refused one', () => {
-  let s = authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
   const first = callTool(s, RR, refund('ORD-5005', 60));
   s = simulateBreach(first.state, RR);
   s = approveAction(s, first.result.queueId, { by: 'priya', reason: WHY });
@@ -3122,7 +3129,7 @@ test('A4: when the AI asks again after a refused approval, the new item follows 
 // ---------------------------------------------------------------------------
 
 const NEVER_RULE = '3 forbidden attempts or false claims within 7 days return the capability to Draft until reviewed.';
-const expandedRR = () => authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+const expandedRR = () => authorize(decideWith(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
 
 test('A5: every gate check and every decision on a waiting action is logged, with where it came from', () => {
   let s = initialState();
@@ -3374,7 +3381,7 @@ test('A6: the Agent runs view counts refunds on an unverified instruction apart 
 });
 
 // S04 option 2 (Paige, 2026-10-10): who gave the instruction, and who sent the ticket.
-const L3 = () => authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+const L3 = () => authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
 const asked = (orderId, amount, source, ticketId, extra = {}) => ({ tool: 'issue_refund', args: { orderId, amount, confidence: 95, ...(source === undefined ? {} : { instructionSource: source }), ...extra }, ...(ticketId === undefined ? {} : { ticketId }) });
 
 test('instruction source: the customer on their own ticket is allowed; anyone else, or no ticket, needs a person', () => {
@@ -3463,7 +3470,7 @@ test('sender: a refund waiting for a person keeps its ticket, and the approval r
 });
 
 // B1 (#72): expected impact required to authorize an expansion.
-const pendingRR = () => selectDecision(initialState(), RR, 'expand-limits');
+const pendingRR = () => decideWith(initialState(), RR, 'expand-limits');
 const withRows = (s, rows, cap = RR) => {
   for (let i = 0; i < OUTCOMES_MAX; i++) {
     const r = rows[i] || { metric: '', target: '' };
@@ -3529,7 +3536,7 @@ test('B1 bypass: expected outcomes can\'t be edited after authorization', () => 
 
 test('B1: restrict, suspend, redesign and hold need no expected outcomes; any move up does', () => {
   for (const option of ['restrict', 'suspend', 'redesign', 'hold']) {
-    const s = withRows(selectDecision(initialState(), RR, option), []);
+    const s = withRows(decideWith(initialState(), RR, option), []);
     assert.equal(isExpansion(s, RR, option), false, option);
     assert.equal(canAuthorize(s, RR).ok, true, option);
     assert.equal(authorize(s, RR).decisionRecords.at(-1).expectedOutcomes, null, `${option} records none`);
@@ -3551,7 +3558,7 @@ test('B1: the decision workspace asks for expected outcomes on an expansion, and
   assert.match(page, /<h2>What should improve\?<\/h2>/, 'expected impact, in the decision flow');
   assert.match(page, /data-action="set-outcome"/);
   assert.match(page, /Resolution time, standard refunds/);
-  const restrict = String(decisionWorkspaceView(selectDecision(initialState(), RR, 'restrict'), RR));
+  const restrict = String(decisionWorkspaceView(decideWith(initialState(), RR, 'restrict'), RR));
   assert.doesNotMatch(restrict, /data-action="set-outcome"/, 'not asked for a restriction');
   const after = authorize(s, RR);
   const rec = String(decisionRecordView(after, after.decisionRecords.at(-1).id));
@@ -3566,12 +3573,12 @@ test('B1: the decision workspace asks for expected outcomes on an expansion, and
 });
 
 // Review of #89: an open expansion proposal must not survive a drop in authority.
-const atL3WithL4Proposal = () => proposeAuthority(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR, 4, { by: 'maya' });
+const atL3WithL4Proposal = () => proposeAuthority(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR, 4, { by: 'maya' });
 // Select an expansion with a rationale and two outcomes. The outcomes are
 // written straight into the state, as a crafted state would: with no open
 // decision, setOutcome itself refuses, and the checks behind it must hold too.
 const tryExpand = (s, option = 'expand') => {
-  s = setRationale(selectDecision(s, RR, option), RR, 'Going up again after the incident review was recorded.');
+  s = setRationale(decideWith(s, RR, option), RR, 'Going up again after the incident review was recorded.');
   const d = capData(s, RR);
   return { ...s, capabilityData: { ...s.capabilityData, [RR]: { ...d, decision: { ...d.decision, outcomes: [{ metric: 'Resolution time', target: '50% faster' }, { metric: 'Cost per case', target: '< $0.05' }], rollout: { owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' } } } } };
 };
@@ -3588,7 +3595,7 @@ test('#89 loophole: an automatic restriction closes an open proposal, so L2 → 
   s = recordReview(s, RR, { by: 'daniel', whatHappened: 'Severe error rate crossed the threshold.', cause: 'Idempotency check failed on retries.', changes: 'Added a duplicate guard and a test.' });
   // The probe: select Expand, rationale, two outcomes, authorize. Entering
   // outcomes is already refused (no open decision)...
-  assert.throws(() => setOutcome(selectDecision(s, RR, 'expand'), RR, 0, 'metric', 'Resolution time'), /already been made/);
+  assert.throws(() => setOutcome(decideWith(s, RR, 'expand'), RR, 0, 'metric', 'Resolution time'), /already been made/);
   // ...and with them forced into the state, authorizing is refused too.
   const probe = tryExpand(s);
   assert.equal(canAuthorize(probe, RR).ok, false);
@@ -3611,7 +3618,7 @@ test('#89 loophole: a restriction from the gate log closes an open proposal too'
 
 test('#89 loophole: a restrict, suspend or redesign decided while a proposal is open closes it, and says so', () => {
   for (const option of ['restrict', 'suspend', 'redesign']) {
-    let s = setRationale(selectDecision(atL3WithL4Proposal(), RR, option), RR, `Deciding to ${option} instead of expanding further.`);
+    let s = setRationale(decideWith(atL3WithL4Proposal(), RR, option), RR, `Deciding to ${option} instead of expanding further.`);
     s = authorize(s, RR);
     assert.ok(getCapability(s, RR).authority.level < 3, option);
     assert.equal(capData(s, RR).decision.proposed, null, `${option}: proposal closed`);
@@ -3621,7 +3628,7 @@ test('#89 loophole: a restrict, suspend or redesign decided while a proposal is 
 });
 
 test('#89 loophole: a stale proposal (equal, below, or more than one level up) never authorizes, and never falls back to Level 3', () => {
-  const base = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR); // at Level 3
+  const base = authorize(decideWith(initialState(), RR, 'expand-limits'), RR); // at Level 3
   const withProposal = (s, level) => ({ ...s, capabilityData: { ...s.capabilityData, [RR]: { ...capData(s, RR), decision: { ...capData(s, RR).decision, proposed: { level, limited: false } } } } });
   for (const level of [3, 2, 1, 5]) {
     const s = tryExpand(withProposal(base, level));
@@ -3637,7 +3644,7 @@ test('#89 loophole: a stale proposal (equal, below, or more than one level up) n
 });
 
 // B2 (#73): expected vs actual, and a simple ROI with versioned assumptions.
-const expandedRRB2 = () => authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+const expandedRRB2 = () => authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
 
 test('B2: each expected outcome is compared with its actual, with the gap and where the number came from', () => {
   const s = expandedRRB2();
@@ -3656,7 +3663,7 @@ test('B2: each expected outcome is compared with its actual, with the gap and wh
 });
 
 test('B2: targets read as ceilings or floors from their words, "−40%" on time means faster, and unmatched outcomes are not guessed', () => {
-  let s = selectDecision(initialState(), RR, 'expand-limits');
+  let s = decideWith(initialState(), RR, 'expand-limits');
   const rows = [
     { metric: 'Handling time', target: '−40%' },
     { metric: 'AI cost per case', target: 'at most $0.10' },
@@ -3810,7 +3817,7 @@ test('C1 bypass: the rollout plan can\'t be edited after authorization', () => {
 
 test('C1: restrict, suspend, redesign and hold need no rollout plan', () => {
   for (const option of ['restrict', 'suspend', 'redesign', 'hold']) {
-    let s = selectDecision(initialState(), RR, option);
+    let s = decideWith(initialState(), RR, option);
     for (const f of ROLLOUT_FIELDS) s = setRolloutField(s, RR, f.key, '');
     assert.equal(canAuthorize(s, RR).ok, true, option);
     assert.equal(authorize(s, RR).decisionRecords.at(-1).rolloutPlan, null, `${option} records none`);
@@ -3873,7 +3880,7 @@ test('C2 escalations left waiting: raised by an action waiting more than 2 days;
 });
 
 test('C2 work-arounds: raised by a refund issued by hand after the expansion; not by the AI, the queue, or before', () => {
-  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   assert.ok(!ids(s).includes('workarounds'));
   const add = (st, entry) => ({ ...st, systems: { ...st.systems, refunds: [...st.systems.refunds, { id: `RF-${st.systems.refunds.length + 1}`, orderId: 'ORD-5002', customerId: 'C-1001', amount: 20, date: st.today, capabilityId: RR, ...entry }] } });
   const raised = adoptionSignals(add(s, { by: 'priya' }), RR).find((x) => x.id === 'workarounds');
@@ -3886,13 +3893,13 @@ test('C2 work-arounds: raised by a refund issued by hand after the expansion; no
 });
 
 test('C2: adoption signals never block: the gate, the queue and authorizing behave the same with every signal raised', () => {
-  let loud = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let loud = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   loud = { ...loud, actionQueue: loud.actionQueue.map((x) => ({ ...x, date: '2026-10-01' })), systems: { ...loud.systems, refunds: [...loud.systems.refunds, { id: 'RF-X', orderId: 'ORD-5002', customerId: 'C-1001', amount: 20, date: loud.today, by: 'priya', capabilityId: RR }] } };
   assert.deepEqual(ids(loud).sort(), ['rising-overrides', 'rubber-stamping', 'waiting-too-long', 'workarounds']);
   const quiet = withAdoption(loud, null);
   const call = refund('ORD-5006', 10);
   assert.deepEqual(checkAction(loud, RR, call), checkAction(quiet, RR, call), 'the gate ignores them');
-  assert.equal(canAuthorize(selectDecision(initialState(), RR, 'expand-limits'), RR).ok, true);
+  assert.equal(canAuthorize(decideWith(initialState(), RR, 'expand-limits'), RR).ok, true);
   const approved = approveAction(loud, 'WA-001', { by: 'maya', reason: 'Checked the order and the return; fine to refund.' });
   assert.ok(['executed', 'refused'].includes(queuedAction(approved, 'WA-001').status), 'a person can still decide');
 });
@@ -4013,7 +4020,7 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
 });
 
 test('#95: Monitoring has a Still safe? view and a Delivering value? view; the second counts what needs a look', () => {
-  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
   assert.match(health, /class="chip is-active"[^>]*>Still safe\?/);
   assert.match(health, /Safety limits/);
@@ -4041,8 +4048,14 @@ test('#96: the decision flow numbers its steps and the checklist says exactly wh
   assert.match(none, /data-action="authorize"[^>]*disabled/);
   // The seeded expansion: every step done, recording enabled.
   const ready = String(decisionWorkspaceView(pendingRR(), RR));
-  assert.deepEqual(marks(ready), ['Decision: Expand autonomy, within limits:✓', 'Limits:✓', 'What should improve:✓', 'Rollout plan:✓', 'Your reason:✓']);
-  assert.deepEqual(steps(ready), ['1 What are we deciding?', '2 What do we know?', '3 Recommendation', '4 Your decision', '5 Limits', '6 What should improve?', '7 Rollout plan', '8 Why are you making this decision?', '9 Review and record']);
+  assert.deepEqual(marks(ready), ['Decision: Expand autonomy, within limits:✓', 'Limits:✓', 'What should improve:✓', 'Rollout plan:✓', 'Proposal is current:✓', 'Every Reviewer has given a position:✓', 'Residual Risk:✓', 'Your reason:✓', 'Recorded by the Owner:✓']);
+  // #144: without a Residual Risk, or as someone other than the Owner, it says so.
+  const noRisk = String(decisionWorkspaceView(setResidualRisk(pendingRR(), RR, { level: null }), RR));
+  assert.match(noRisk, /Residual Risk<\/strong><span class="muted small">: choose Low, Moderate, High or Unknown, and say why\./);
+  const notOwner = String(decisionWorkspaceView(setActingAs(pendingRR(), 'daniel'), RR));
+  assert.match(notOwner, /Recorded by the Owner<\/strong><span class="muted small">: Only the Owner, Maya Chen, can record more authority/);
+  assert.match(notOwner, /data-action="authorize"[^>]*disabled/);
+  assert.deepEqual(steps(ready), ['1 What changes if I approve this?', '2 What do we know?', '3 Who has said what?', '4 Risk', '5 Recommendation', '6 Your decision', '7 Limits', '8 What should improve?', '9 Rollout plan', '10 Why are you making this decision?', '11 Review and record']);
   // The evidence is on the page, not behind a closed panel: its headline shows.
   assert.match(ready, /<p class="decide-big">Almost ready: 5 of 6 checks met<\/p>/);
   assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);
@@ -4076,7 +4089,7 @@ test('D1: a one-page brief for seeded, new and automatic decisions, from recorde
   }
   assert.match(text(initialState(), 'AC-02'), /made before expected outcomes were required/);
   // A new expansion carries its expected impact, rollout and the positions as recorded.
-  let s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  let s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const t4 = text(s, 'AC-04');
   assert.match(t4, /Refund recommendation: Level 2 → Level 3/);
   assert.match(t4, /Authorized by Maya Chen/);
@@ -4161,7 +4174,7 @@ test('Overview: To do, Approvals needed, Important results, Current autonomy, in
 });
 
 test('Overview after an automatic restriction: the review comes first, the result explains it, the decision has gone', () => {
-  let s = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  let s = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
   setPeople(people(s));
   const out = String(overviewView(s));
   const todo = out.slice(out.indexOf('id="todo"'), out.indexOf('id="approvals"'));
@@ -4250,9 +4263,9 @@ test('copy: the decision preview says what WOULD happen; the record says what is
   assert.match(page, /The AI would approve standard refunds of \$50 or less/);
   assert.doesNotMatch(page, /The AI can now/);
   // Other options preview the level they would move to, from the open proposal.
-  const hold = String(decisionWorkspaceView(selectDecision(initialState(), RR, 'hold'), RR));
+  const hold = String(decisionWorkspaceView(decideWith(initialState(), RR, 'hold'), RR));
   assert.match(hold, /No change\. The AI stays at Draft while more evidence comes in\./);
-  const expand = String(decisionWorkspaceView(selectDecision(initialState(), RR, 'expand'), RR));
+  const expand = String(decisionWorkspaceView(decideWith(initialState(), RR, 'expand'), RR));
   assert.match(expand, /would move from Level 2 — Draft to Level 3 — Act Within Limits\./);
   // Once authorized, the stored scope is present tense, and the record and the brief show it.
   const after = authorize(s, RR);
@@ -4313,7 +4326,7 @@ test('copy: the approval rule reads as a sentence and as progress, and assembled
 
 test('copy: an activity message names the decision option, never its id', () => {
   let s = atL3WithL4Proposal();
-  s = authorize(setRationale(selectDecision(s, RR, 'restrict'), RR, 'Pulling back while the new limits settle in.'), RR, { by: 'maya' });
+  s = authorize(setRationale(decideWith(s, RR, 'restrict'), RR, 'Pulling back while the new limits settle in.'), RR, { by: 'maya' });
   const note = closedNote(s);
   assert.match(note.body, /Maya Chen decided Restrict \(AC-05\), which moved it to Level 2, so the proposal to move to Level 4 was closed\. To give it more authority later, propose Level 3\./);
   for (const a of s.activity.slice(0, 3)) for (const o of seed.DECISION_OPTIONS) assert.doesNotMatch(`${a.title} ${a.body}`, new RegExp(`\\b${o.id} decision\\b`));
@@ -4384,7 +4397,7 @@ test('Model runs: verdicts, rule kinds and claims have plain words for every id 
   for (const v of ['allow', 'needs-person', 'block']) assert.ok(VERDICT_LABELS[v]);
   assert.equal(claimsText({ orderValue: 80, fraudFlag: false }), 'an order value of $80, no fraud flag');
   // A false claim's reason names the fact in words: no camelCase key, no JSON quoting.
-  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+  const s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const lie = checkAction(s, RR, { ...refund('ORD-5001', 10), claims: { orderValue: 80 } });
   assert.equal(lie.rule.kind, 'fact-mismatch');
   assert.match(lie.reason, /^The AI claimed an order value of \$80; the record shows an order value of \$42\.$/);

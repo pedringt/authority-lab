@@ -1,6 +1,7 @@
 // Overview and Capabilities list (redesign, 2026-10-12): what needs action,
 // as work rows that say the work, marked for the person in "Demo as".
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import {
   initialState, selectDecision, authorize, simulateBreach, setActingAs, people, proposeAmendment, current,
@@ -146,7 +147,7 @@ test('current autonomy: a compact table that leads with what each capability han
 });
 
 test('after expand-with-limits and a crossed limit: the review leads, emphasized, and the decision has gone', () => {
-  const s = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  const s = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
   const out = render(s);
   const todo = rows(part(out, 'todo', 'approvals'));
   assert.match(todo[0], /^is-hot">/);

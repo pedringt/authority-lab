@@ -4,7 +4,7 @@ import { initialState, reset } from './state.js';
 import { addPerson, editPerson, deactivatePerson, proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, setActingAs } from './people.js';
 import { addCapability, amend } from './capabilities.js';
 import { startContractDraft, reviewSuggestion, addContractLine, editContractLine, removeContractLine, confirmSection, finalizeContract } from './contract.js';
-import { selectDecision, setCondition, setRationale, setOutcome, setRolloutField, authorize, proposeAuthority } from './decisions.js';
+import { selectDecision, setCondition, setRationale, setOutcome, setRolloutField, authorize, proposeAuthority, replaceProposal } from './decisions.js';
 import { setRoiAssumptions } from './value.js';
 import { startTestRun, advanceTestRun, saveCriteria, saveScenarios, addStarterScenarios } from './evidence.js';
 import { proposeAmendment, approveProposal, withdrawProposal, rejectProposal, saveStakeholders } from './proposals.js';
@@ -65,6 +65,7 @@ export const ACTIONS = {
   saveScenarios,
   addStarterScenarios,
   proposeAuthority,
+  replaceProposal,
   proposeAmendment,
   approveProposal,
   rejectProposal,

@@ -41,7 +41,7 @@ A first visit opens a welcome page (`#/welcome`) with two paths: **Guided demo**
 3. **Decide → What do we know? → Tests → See every test and run the suite**, then **Run tests**: 24 of 26 pass. H-04 (fraud flag present) is a serious miss.
 4. **Decide → Pilot results**: 218 cases at 94%, but 18 high-value cases at 83%.
 5. **Decide → Stakeholder positions** (or **People involved** on Status): not unanimous. Support Operations wants to expand; Risk wants anything over $50 kept with a person.
-6. **Decide, Your decision**: choose **Expand autonomy → Within limits**, check the limits, what should improve and the rollout plan (all prefilled for the demo), write why, and **Record decision**.
+6. **Decide, Your decision**: choose **Expand autonomy → Within limits**, check the limits, what should improve and the rollout plan (all prefilled for the demo), give a Residual Risk with why (yours to judge), write why you're deciding, and **Record decision** as the Owner.
 7. **Authority change #04** (`AC-04`) is written with the evidence snapshot. Current autonomy on the Overview updates to Act within limits.
 8. **Monitor → Still safe? → Simulate a safety-limit breach**: severe errors exceed 5% of the rolling 50; software moves the capability back to Draft, writes a restriction record, raises an alert and an activity event, and locks expansion until a review is recorded. The verdict reads "Autonomy reduced".
 9. **Monitor → Needs review**: Refund recommendation is High impact, so switch **Demo as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changes as a result, and **Save review**. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
@@ -52,7 +52,7 @@ A first visit opens a welcome page (`#/welcome`) with two paths: **Guided demo**
 A dark bar across the top holds three places: **Overview** (To do, Approvals needed, Important results, Current autonomy), **Capabilities** (one table, plus **Add capability**) and **Records** (Decisions and Activity). On the right sit **Demo as** (a demo stand-in for sign-in) and the **Settings** gear: **People**, **Workspace**, **Guided demo**, **Start empty** and **Reset demo**. A capability opens with a header panel and four tabs:
 
 - **Status**: what it can do now, why it's here, what happens next, then. **Needs a decision** lists single actions waiting for a person; one-line **Boundaries** and **People involved** follow. The full rules are at `?tab=status&show=rules`; every waiting action at `?tab=status&show=approvals`.
-- **Decide**: one flow (what are we deciding, what do we know, the recommendation, your decision, limits, what should improve, rollout plan, why, review and record). Full evidence views open with `show=tests`, `runs`, `all`, `targets`, `requirements` or `results`.
+- **Decide**: one flow (what changes if I approve this, what do we know, who has said what, Risk, the recommendation, your decision, limits, what should improve, rollout plan, why, review and record). A move up starts from a Proposal, frozen when a person proposes it; only the Owner records an expansion or a hold, after every Reviewer's position and a Residual Risk, and a stale Proposal is replaced, never edited (#144). Full evidence views open with `show=tests`, `runs`, `all`, `targets`, `requirements` or `results`.
 - **Monitor**: **Still safe?** and **Delivering value?**, each leading with a verdict.
 - **History**: one timeline of records, reviews, test runs, proposed changes and versions.
 

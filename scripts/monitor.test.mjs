@@ -1,6 +1,7 @@
 // Monitor and History (redesign, 2026-10-12): each Monitor view leads with one
 // verdict, the detail opens on demand, and History is one timeline.
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import * as seed from '../src/data/seed.js';
 import {
@@ -21,7 +22,7 @@ const verdicts = (html) => [...html.matchAll(/<div class="mon-verdict is-([a-z]+
 const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&#39;/g, '\'').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
 const lineTitles = (html) => [...html.matchAll(/<details class="mh-line"[^>]*><summary><strong>([^<]+)<\/strong>/g)].map((m) => m[1]);
 
-const expanded = () => authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+const expanded = () => authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
 const breached = () => simulateBreach(expanded(), RR);
 const REVIEW = { whatHappened: 'Three automatic refunds were wrong.', cause: 'Return status was not checked first.', changes: 'The rules now check the return before refunding.' };
 
@@ -136,7 +137,7 @@ test('Delivering value? on pilot numbers is "Too early to judge", neutral, not a
 });
 
 test('Delivering value? on real logged numbers: too early until 20 production cases, then "N of M rollout goals on track", and misses count on the chip', () => {
-  let s = selectDecision(initialState(), RR, 'expand-limits');
+  let s = decideWith(initialState(), RR, 'expand-limits');
   const rows = [{ metric: 'Share done automatically', target: '≥ 50%' }, { metric: 'Escalation rate', target: '≤ 30%' }];
   for (let i = 0; i < OUTCOMES_MAX; i++) {
     const r = rows[i] || { metric: '', target: '' };

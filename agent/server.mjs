@@ -20,7 +20,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { initialState, authorize, selectDecision, decisionRequired, getCapability } from '../src/store/index.js';
+import { initialState, authorize, selectDecision, setResidualRisk, REPLAY_RESIDUAL_RISK, decisionRequired, getCapability } from '../src/store/index.js';
 import { createAgentServer } from './gate-server.mjs';
 
 const argv = process.argv.slice(2);
@@ -38,7 +38,8 @@ function seedState() {
   if (!getCapability(s, capabilityId)) throw new Error(`Unknown capability "${capabilityId}".`);
   if (flag('expand')) {
     if (!decisionRequired(s, capabilityId)) throw new Error(`--expand: no decision is pending for ${capabilityId}.`);
-    s = authorize(selectDecision(s, capabilityId, 'expand-limits'), capabilityId);
+    // Same labelled demo Residual Risk as a recorded run's replay (#144).
+    s = authorize(setResidualRisk(selectDecision(s, capabilityId, 'expand-limits'), capabilityId, REPLAY_RESIDUAL_RISK), capabilityId);
   }
   return s;
 }

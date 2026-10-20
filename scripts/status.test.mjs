@@ -3,6 +3,7 @@
 // each for boundaries and people. Uses the real seed and store transitions.
 
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import {
   initialState, authorize, selectDecision, simulateBreach, addCapability, setActingAs, people, approveAction, rejectAction, waitingActions, capData,
@@ -31,7 +32,7 @@ function onePage(h, kind) {
   assert.match(h, /href="#\/capabilities\/[^"]+\/stakeholders\/edit">Manage stakeholders/);
 }
 
-const breached = () => simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+const breached = () => simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
 
 test('Status, Refund recommendation (a decision is open): the level in plain words, why, the decision, what it unlocks, one link to Decide', () => {
   const s = initialState();

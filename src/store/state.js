@@ -77,6 +77,8 @@ export function seededCapabilityData(id) {
       option: null,
       conditions: s.defaultConditions ? clone(s.defaultConditions) : base.decision.conditions,
       rationale: s.defaultRationale || '',
+      // Seeded demo wording, labelled until someone edits it (#144, Q5).
+      rationalePrefilled: Boolean(s.defaultRationale),
       // Expected impact for an expansion (B1), prefilled for the seeded decision.
       outcomes: s.defaultOutcomes ? clone(s.defaultOutcomes) : [],
       // Shown as "prefilled for the demo" until someone edits them.
@@ -182,7 +184,7 @@ export function closeOpenProposal(state, capabilityId, previous, next) {
   const d = capData(state, capabilityId);
   const p = d && d.decision && d.decision.proposed;
   if (!p || !(next.level < previous.level)) return state;
-  const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false, rollout: {}, rolloutPrefilled: false, residualRisk: null } }));
+  const s = updateCap(state, capabilityId, (x) => ({ ...x, decision: { ...x.decision, proposed: null, proposalId: null, option: null, openedAt: null, versionsAtOpen: null, outcomes: [], outcomesPrefilled: false, rollout: {}, rolloutPrefilled: false, residualRisk: null } }));
   const cap = getCapability(state, capabilityId);
   return logEvent(s, { kind: 'decision', surfaced: true, title: `Proposal closed: authority changed from Level ${previous.level} to Level ${next.level}`, body: `${cap.name} dropped from Level ${previous.level} to Level ${next.level}, so the proposed move to Level ${p.level} no longer applies. To expand again, propose a move to Level ${next.level + 1}.`, capabilityId, link: `#/capabilities/${capabilityId}/decision` });
 }

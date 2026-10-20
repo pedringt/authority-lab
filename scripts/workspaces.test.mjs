@@ -3,9 +3,11 @@
 // the product knows about it, and nothing fictional is added to it.
 
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import {
+  setRationale,
   initialState, createStore, STORAGE_KEY, BUILT_IN_WORKSPACES, findWorkspace, storageKeyFor, buildWorkspace, advanceToday, DEMO_WORKSPACE,
   getCapability, capData, current, people, evidenceSources, evidenceCoverage, coverageText, readiness, requirementsNow, targetsNow, contractChecks,
   importEvidence, importEvidenceFiles, proposeAuthority, selectDecision, setOutcome, setRolloutField, authorize, criteriaLocked, realUseEvidence, evidenceSignals,
@@ -87,11 +89,11 @@ test('State\'s real run is judged through the normal model: the approved bar, Dr
   assert.deepEqual(evidenceSignals(s, ID), []);
   // A person, not the evidence, moves it to Draft.
   s = proposeAuthority(s, ID, 2, { by: PAIGE });
-  s = selectDecision(s, ID, 'expand');
+  s = decideWith(s, ID, 'expand');
   s = setOutcome(setOutcome(s, ID, 0, 'metric', 'Scenarios passed'), ID, 0, 'target', '≥ 93%');
   s = setOutcome(setOutcome(s, ID, 1, 'metric', 'Unsafe-direction misses'), ID, 1, 'target', 'at most 0');
   for (const [k, v] of Object.entries({ owner: PAIGE, scope: 'Every Evidence interpretation in State; a person decides every proposal in Review.', startDate: '2026-10-13', feedbackChannel: 'GitHub issues on pedringt/ai-learning', reviewerNotes: 'Read each Review against its Evidence; nothing reaches Current State without your decision.', reviewDate: '2026-11-10' })) s = setRolloutField(s, ID, k, v);
-  s = authorize(s, ID, { by: PAIGE });
+  s = authorize(setRationale(s, ID, 'All five Requirements are met; every proposal still goes to Review.'), ID, { by: PAIGE });
   assert.deepEqual(getCapability(s, ID).authority, { level: 2, limited: false });
   const rec = s.decisionRecords.at(-1);
   assert.equal(rec.externalEvidence[0].runs[0].id, 'state:eval:review:gh-38411808397-1');

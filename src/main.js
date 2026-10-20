@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS } from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, setResidualRisk, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS } from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -157,18 +157,26 @@ const focusId = () => { const f = focusCapability(store.get()); return f ? f.id 
 let guide = null;
 function newGuide() {
   const state = initialState();
-  return { state, capabilityId: focusCapability(state).id, role: focusCapability(state).owner, tested: false, decided: null, breached: false };
+  return { state, capabilityId: focusCapability(state).id, role: focusCapability(state).owner, tested: false, decided: null, breached: false, residual: { level: null, note: '' } };
 }
 const guideDo = {
   runTests() { let s = startTestRun(guide.state, guide.capabilityId); for (let i = 0; i < 200 && capData(s, guide.capabilityId).testRun.status === 'running'; i++) s = advanceTestRun(s, guide.capabilityId); guide = { ...guide, state: s, tested: true }; },
-  decide() { const owner = getCapability(guide.state, guide.capabilityId).owner; const s = authorize(selectDecision(guide.state, guide.capabilityId, 'expand-limits'), guide.capabilityId, { by: owner }); guide = { ...guide, state: s, decided: s.decisionRecords.at(-1).id }; },
+  // The Residual Risk is the viewer's own judgment in step 6 (#144; Paige,
+  // 2026-10-19): software never supplies it, so without one nothing is decided.
+  decide() {
+    const r = guide.residual;
+    if (!r || !r.level || String(r.note || '').trim().length < 10) return;
+    const owner = getCapability(guide.state, guide.capabilityId).owner;
+    const s = authorize(setResidualRisk(selectDecision(guide.state, guide.capabilityId, 'expand-limits'), guide.capabilityId, r), guide.capabilityId, { by: owner });
+    guide = { ...guide, state: s, decided: s.decisionRecords.at(-1).id };
+  },
   breach() { guide = { ...guide, state: simulateBreach(guide.state, guide.capabilityId), breached: true }; },
 };
-// Opening a later step directly does the earlier steps' actions first.
+// Opening a later step directly runs the tests first; the decision is never
+// made for the viewer (the route sends them to step 6 for it).
 function guideAt(step) {
   if (!guide) guide = newGuide();
   if (step > 5 && !guide.tested) guideDo.runTests();
-  if (step > 6 && !guide.decided) guideDo.decide();
   return guide;
 }
 const WELCOMED = 'authority-lab-welcomed';
@@ -255,7 +263,15 @@ function render() {
     case 'people': view = peopleView(state, query); title = 'People'; break;
     case 'sources': view = sourcesView(state); title = 'Evidence sources'; break;
     case 'welcome': view = welcomeView(); title = 'Welcome'; break;
-    case 'guide': { const n = Math.min(Math.max(Number(sub) || 1, 1), GUIDE_STEPS.length); view = guideView(guideAt(n), n); title = `Guided demo: ${GUIDE_STEPS[n - 1]}`; break; }
+    case 'guide': {
+      // A later step needs the decision made in step 6 by the viewer; opening
+      // one directly lands on step 6 instead of deciding for them.
+      const asked = Math.min(Math.max(Number(sub) || 1, 1), GUIDE_STEPS.length);
+      const g = guideAt(asked);
+      const n = asked > 6 && !g.decided ? 6 : asked;
+      if (n !== asked) history.replaceState(null, '', '#/guide/6');
+      view = guideView(g, n); title = `Guided demo: ${GUIDE_STEPS[n - 1]}`; break;
+    }
     default: view = empty ? noCapabilitiesView(state, 'Overview') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;
@@ -301,7 +317,7 @@ function render() {
   const opened = lastRoute === location.hash ? [...app.querySelectorAll('details[id][open]')].map((el) => el.id) : [];
   // A field being typed into (expected impact, rationale) keeps its focus and
   // caret across the re-render its own debounced dispatch causes.
-  const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale', 'set-rollout'].includes(document.activeElement.dataset.action)
+  const focused = document.activeElement && app.contains(document.activeElement) && ['set-outcome', 'set-rationale', 'set-rollout', 'set-residual-note'].includes(document.activeElement.dataset.action)
     ? { action: document.activeElement.dataset.action, index: document.activeElement.dataset.index || '', field: document.activeElement.dataset.field || '', start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd }
     : null;
   app.innerHTML = String(html`${workspaceBanner()}${view}`);
@@ -453,6 +469,8 @@ document.addEventListener('click', (e) => {
     const route = `#/capabilities/${capId}/setup/review`;
     dispatchOr(route, () => { store.dispatch('confirmSetup', capId, { by: actor(store.get(), capId) }); location.hash = route; render(); });
   }
+  if (action === 'clear-residual-risk') store.dispatch('setResidualRisk', capId, { level: null });
+  if (action === 'replace-proposal') dispatchOr(here(), () => { store.dispatch('replaceProposal', capId, { by: actor(store.get(), capId) }); });
   if (action === 'authorize') {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
@@ -541,7 +559,13 @@ document.addEventListener('change', (e) => {
     return;
   }
   if (el.dataset.action === 'choose-owner') { store.dispatch('setActingAs', el.value || null); return; }
+  if (el.dataset.action === 'guide-residual' && guide) { guide = { ...guide, residual: { ...guide.residual, level: el.value } }; render(); return; }
   if (el.dataset.action === 'select-option') store.dispatch('selectDecision', capId, el.value);
+  // Residual Risk (#144): optional, a person's judgment, kept with its note.
+  if (el.dataset.action === 'set-residual-risk') {
+    const note = ((capData(store.get(), capId).decision.residualRisk) || {}).note || '';
+    store.dispatch('setResidualRisk', capId, { level: el.value, note });
+  }
   if (el.dataset.action === 'set-condition') {
     const key = el.dataset.key;
     const value = el.type === 'checkbox' ? el.checked : Number(el.value);
@@ -879,6 +903,25 @@ document.addEventListener('input', (e) => {
     const value = ro.value;
     clearTimeout(outcomeTimers[`rollout-${field}`]);
     outcomeTimers[`rollout-${field}`] = setTimeout(() => store.dispatch('setRolloutField', capability, field, value), ro.tagName === 'SELECT' || ro.type === 'date' ? 0 : 300);
+    return;
+  }
+  const gn = e.target.closest('[data-action="guide-residual-note"]');
+  if (gn && guide) {
+    // Kept without a re-render while typing; the button checks on click.
+    guide = { ...guide, residual: { ...guide.residual, note: gn.value } };
+    const btn = app.querySelector('[data-action="guide-decide"]');
+    if (btn) btn.disabled = !(guide.residual.level && gn.value.trim().length >= 10);
+    return;
+  }
+  const rn = e.target.closest('[data-action="set-residual-note"]');
+  if (rn) {
+    const capId = rn.dataset.capability;
+    const value = rn.value;
+    clearTimeout(outcomeTimers['residual-note']);
+    outcomeTimers['residual-note'] = setTimeout(() => {
+      const rr = capData(store.get(), capId).decision.residualRisk;
+      if (rr) store.dispatch('setResidualRisk', capId, { level: rr.level, note: value });
+    }, 300);
     return;
   }
   const out = e.target.closest('[data-action="set-outcome"]');
