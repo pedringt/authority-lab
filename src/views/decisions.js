@@ -356,6 +356,7 @@ function recordedView(state, cap, rec, canPropose = false) {
   const expanded = rec.next.level > rec.previous.level;
   return html`<div class="decide-flow">
     ${gapNotice(state, cap)}
+    ${noHardQualityNotice(state, cap)}
     <div class="decide-recorded" role="status">
       <p class="decide-big">Decision recorded: ${plainOption(rec.option, rec.previous, rec.next)}</p>
       <p class="muted">${who.name} · ${fmtDate(rec.date)}</p>

@@ -92,6 +92,8 @@ export function measuredEvidence(state, capabilityId, measure) {
   return items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0] || null;
 }
 
+const newestOf = (list) => list.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0];
+
 // Judge a measure against the imported evidence:
 // - `pending`: nothing measured yet;
 // - `insufficient`: an eval result on fewer cases than the measure's minSample;
@@ -105,6 +107,18 @@ export function judgeMeasure(state, capabilityId, measure) {
   const candidates = candidateResults(state, capabilityId, measure);
   if (!candidates.length) return { status: 'pending', text: 'No results yet' };
   const judged = candidates.map((c) => judgeOne(state, measure, c));
+  // A case count (#159): cases from different sources, test cases and real
+  // use, are more cases, never a disagreement. They add up.
+  if (measure.stat === 'sample' && judged.length > 1) {
+    const counted = judged.filter((j) => Number.isFinite(j.actual));
+    if (counted.length > 1) {
+      const total = counted.reduce((n, j) => n + j.actual, 0);
+      const ok = compare(total, measure.op, measure.value);
+      const byKind = (k) => counted.filter((j) => (j.kind === 'production') === (k === 'real use')).reduce((n, j) => n + j.actual, 0);
+      const parts = ['test cases', 'real use'].map((k) => [k, byKind(k)]).filter(([, n]) => n > 0).map(([k, n]) => `${n} from ${k}`).join(', ');
+      return { ...newestOf(counted), status: ok ? 'pass' : 'fail', actual: total, text: `${total} (${parts})`, results: judged, combined: counted.length, itemIds: counted.flatMap((j) => j.itemIds || []) };
+    }
+  }
   const decisive = judged.filter((j) => j.status === 'pass' || j.status === 'fail');
   // Stale results never create a conflict (#142, P5); they still count when
   // nothing fresher judges the row.
