@@ -306,7 +306,7 @@ function judgedRequirement(state, capabilityId, r) {
     const gap = j.status === 'pass' ? undefined
       : j.status === 'conflicting' ? `${j.text}. Conflicting evidence is never a pass: look into it, or collect more.`
       : r.gap ? r.gap
-      : j.status === 'fail' ? `Measured ${j.text} in ${j.importId}.`
+      : j.status === 'fail' ? `Measured ${j.text}, from ${j.label}.`
         : j.status === 'pending' ? 'No results measure this yet.'
           : `${MEASURE_WORDS[j.status]}: ${j.text}.`;
     const from = j.combined > 1 ? ` (${j.combined} compatible results combined)` : '';

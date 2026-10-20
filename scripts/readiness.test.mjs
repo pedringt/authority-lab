@@ -170,3 +170,10 @@ test('screens: the editors ask whether each Requirement blocks; minimum cases al
   assert.match(h, /<select name="r-weight" aria-label="Does it block expansion\?"><option value="hard" selected>Hard: blocks expansion until met<\/option><option value="consideration" >Consideration: shown, doesn't block<\/option><\/select>/);
   assert.match(h, /Hard: blocks expansion until met<\/span>/, 'minimum cases: no choice');
 });
+
+test('a failed measured Requirement says where the result came from, never a raw run id', () => {
+  const [s, id] = firm({ accuracy: [15, 20] });
+  const r = readiness(s, id).hardUnmet.find((x) => x.id === 'accuracy');
+  assert.match(r.gap, /^Measured 75% across 20 cases, from /);
+  assert.doesNotMatch(r.gap, /manual:/);
+});

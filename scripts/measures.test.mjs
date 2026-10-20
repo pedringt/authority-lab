@@ -111,7 +111,7 @@ test('one severe failure blocks readiness on its own, even when everything else 
   ] }));
   assert.equal(req(s, id, 'accuracy').met, true);
   assert.equal(req(s, id, 'no-false-certainty').met, false);
-  assert.equal(req(s, id, 'no-false-certainty').gap, 'Measured 1 across 60 cases in src:eval:1.');
+  assert.equal(req(s, id, 'no-false-certainty').gap, 'Measured 1 across 60 cases, from Src · Notes.');
   assert.ok(readiness(s, id).unmet.some((x) => x.id === 'no-false-certainty'));
   // Even below the production sample: a failure that happened can't be outvoted by more cases.
   const prod = importEvidence(s0, env(id, { id: 'src:production:1', kind: 'production', measurements: [{ metric: 'false-certainty', type: 'count', value: 1, total: 3 }] }));
