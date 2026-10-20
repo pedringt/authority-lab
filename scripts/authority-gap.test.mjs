@@ -8,7 +8,7 @@ import {
   initialState, startEmpty, setUpWorkspace, addPerson, addCapability, getCapability, capData, buildWorkspace, importEvidence,
   saveCriteria, saveStakeholders, mapEvidence, rowMetric, MANUAL_SOURCE, recordResult, recordJudgment,
   proposeAuthority, selectDecision, setRationale, setOutcome, setRolloutField, setResidualRisk, canAuthorize, authorize, people,
-  justification, authorityGap, gapBlocks, recordBaseline, readyToPropose, retireCapability, authorityRows, actsThroughGate,
+  justification, authorityGap, requirementsNow, gapBlocks, recordBaseline, readyToPropose, retireCapability, authorityRows, actsThroughGate,
 } from '../src/store/index.js';
 import { stateWorkspace } from '../src/data/workspaces/state.js';
 import { setPeople, setToday } from '../src/ui.js';
@@ -166,4 +166,14 @@ test('display: Requirement results read differently, and no raw status key shows
   assert.doesNotMatch(strip(d), /needs-decision|too-early|not-enough/);
   assert.match(strip(d), /Requirements \d+ of \d+ met/);
   assert.doesNotMatch(strip(d), /\bChecks\b|Decision requirements/);
+});
+
+test('display: a minimum-cases row with some cases is "Not enough evidence", never "No evidence yet"', () => {
+  const s = initialState();
+  setPeople(people(s)); setToday(s.today);
+  const r = requirementsNow(s, 'refund-execution-high-value').find((x) => x.id === 'min-cases');
+  assert.equal(r.result.status, 'not-enough');
+  const d = strip(capabilityView(s, 'refund-execution-high-value', new URLSearchParams('tab=decide')));
+  assert.match(d, /Minimum 200 pilot cases · Not enough evidence: 96/);
+  assert.match(d, /No unresolved critical incidents · Not met:/);
 });

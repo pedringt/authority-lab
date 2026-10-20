@@ -289,6 +289,9 @@ function personJudged(state, capabilityId, row) {
   // A legacy row's stored result stands as it was (Paige, 2026-10-17): not
   // met with a recorded value reads Not met, with its stored reason.
   if (by === 'legacy' && row.current && row.current !== 'Not yet measured') return withResult(row, 'not-met', row.gap || `Not met: ${row.current}.`);
+  // A minimum-cases row with a stored count below its bar has evidence, just
+  // not enough of it (#149); "No evidence yet: 96" contradicted itself.
+  if (isCoverageRule(row) && row.current && /^\d[\d,]*$/.test(String(row.current).trim())) return withResult(row, 'not-enough', row.gap || `Not enough evidence: ${row.current} so far.`);
   const how = by === 'person' ? 'the Owner or a Reviewer can record a judgment' : by === 'legacy' ? 'choose its evidence, or say how it is judged' : isCoverageRule(row) ? 'choose which results it counts' : 'choose its evidence';
   const why = row.gap || `No evidence yet: ${how}.${note}`;
   return withResult({ ...row, gap: why }, 'no-evidence', why);
