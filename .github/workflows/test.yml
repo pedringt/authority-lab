@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets the Project Health dashboard (contextswitch.tech/project-health) start a run on main.
+  workflow_dispatch:
 
 permissions:
   contents: read
