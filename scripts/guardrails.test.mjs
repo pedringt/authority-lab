@@ -185,6 +185,7 @@ test('screens: the result form says what "How many" counts; Configure offers "Re
   const form = String(recordEvidenceView({ ...s, actingAs: BEN }, id, new URLSearchParams('row=target:errors')));
   assert.match(form, /<input type="radio" name="counts" value="problem" checked> cases with the problem/);
   assert.match(strip(form), /Set from the bar: ≤ 5% of drafts\./);
+  assert.match(form, /value="rate" checked> A share: some of a number of cases/, 'never "passed" when the row counts problems');
   s = recordResult(s, id, { rowKind: 'target', rowId: 'errors', type: 'rate', passed: '1', total: '25', kind: 'eval', by: BEN });
   const cfg = strip(configureEvidenceView({ ...s, actingAs: ANA }, id, new URLSearchParams('row=target:errors')));
   assert.match(cfg, /Why \(Authority Lab made this link: correcting it is recorded with your name, no approval needed\)/);

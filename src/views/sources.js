@@ -64,7 +64,7 @@ export function recordEvidenceView(state, capabilityId, query) {
         <label><input type="radio" name="kind" value="eval"> Test cases</label>
       </fieldset>
       <fieldset class="choice-row"><legend>The result</legend>
-        <label><input type="radio" name="type" value="rate" checked> Some of a number of cases passed</label>
+        <label><input type="radio" name="type" value="rate" checked> ${row ? 'A share: some of a number of cases' : 'Some of a number of cases passed'}</label>
         <label><input type="radio" name="type" value="count"> A number of events (failures, incidents)</label>
         <label><input type="radio" name="type" value="value"> A single number</label>
       </fieldset>
