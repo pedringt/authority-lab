@@ -15,6 +15,8 @@ import { namedStakeholders, approvalEligibility } from './proposals.js';
 import { reviewNeeded } from './monitoring.js';
 import { expectedVsActual } from './value.js';
 import { setupState } from './setup.js';
+import { authorityGap } from './lifecycle.js';
+import { readyToPropose } from './decisions.js';
 
 // What each level lets the AI do, in a sentence a product person can read.
 export const LEVEL_PLAIN = [
@@ -43,9 +45,9 @@ function automaticRestriction(state, capabilityId) {
 }
 
 export function readinessText(r) {
-  if (!r.total) return 'No decision requirements set yet.';
-  if (r.met === r.total) return `All ${r.total} checks met.`;
-  return `${r.met} of ${r.total} checks met.`;
+  if (!r.total) return 'No Requirements set yet.';
+  if (r.met === r.total) return `All ${r.total} Requirements met.`;
+  return `${r.met} of ${r.total} Requirements met.`;
 }
 
 // A requirement as concrete work, parsed from its text and current value:
@@ -106,6 +108,15 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
         sub: 'A safety limit was crossed; autonomy didn\'t change. A review comes before any expansion.',
         action: 'Record the review', href: link('?tab=monitor') });
     }
+    // Operating above approved Authority (#149): one of the most serious
+    // states, so it leads the to-do list after any review.
+    const gap = authorityGap(state, cap.id);
+    if (gap.above) {
+      row({ kind: 'gap', urgent: true,
+        title: `Resolve: ${cap.name} is operating above approved Authority`,
+        sub: `Approved: Level ${gap.approved.level}, ${gap.approved.name} · Observed: Level ${gap.observed.level}, ${gap.observed.name} · Further expansion is blocked until this is resolved`,
+        action: 'Resolve the gap', href: link('?tab=monitor') });
+    }
     if (decisionRequired(state, cap.id)) {
       const r = readiness(state, cap.id);
       row({ kind: 'decision',
@@ -141,16 +152,16 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
     } else {
       const p = capData(state, cap.id).proposals.find((x) => x.id === w.proposalId);
       out.push({ ...base, kind: 'stuck', ...(p ? { owner: p.proposedBy, ownerName: nameOf(state, p.proposedBy), mine: p.proposedBy === me, ownerRole: 'Proposed by' } : {}),
-        title: 'Withdraw and re-propose a change that can no longer be approved',
+        title: 'Withdraw and re-submit a change request that can no longer be approved',
         sub: 'The people who could approve it have changed since it was proposed.',
         action: 'Open', href: w.link });
     }
   }
   // Evidence work on a capability with an open decision sits next to it.
-  const rank = { review: 0, decision: 1, stuck: 2, evidence: 3, condition: 4, coverage: 5 };
+  const rank = { review: 0, gap: 0.5, decision: 1, stuck: 2, evidence: 3, condition: 4, coverage: 5 };
   const deciding = new Set(out.filter((t) => t.kind === 'decision').map((t) => t.capabilityId));
   const sorted = out.map((t, i) => [t, i]).sort(([a, i], [b, j]) => rank[a.kind] - rank[b.kind] || (deciding.has(b.capabilityId) - deciding.has(a.capabilityId)) || i - j).map(([t]) => t);
-  return sorted.map((t, i) => ({ ...t, emphasis: i === 0 && (t.kind === 'review' || t.kind === 'decision') }));
+  return sorted.map((t, i) => ({ ...t, emphasis: i === 0 && (t.kind === 'review' || t.kind === 'gap' || t.kind === 'decision') }));
 }
 
 const CHANGE_KIND = { contract: 'Rule change', criteria: 'Target change', stakeholders: 'Stakeholder change' };
@@ -286,27 +297,31 @@ export function handlesNow(cap) {
   ][cap.authority.level] || LEVEL_PLAIN[cap.authority.level] || '';
 }
 
-// One row per capability: what it handles now, and what's next. Only three
-// states earn a badge in "next": Ready, Restricted and Needs review.
+// One row per capability: what it handles now, and what's next. Badges in
+// "next": Ready, Ready to propose, Restricted, Needs review, and (#149)
+// Above approved Authority.
 export function authorityRows(state) {
   return state.capabilities.map((cap) => {
     const r = readiness(state, cap.id);
     const review = reviewNeeded(state, cap.id);
     const held = personRestriction(state, cap.id);
+    const gap = authorityGap(state, cap.id);
     let next;
     if (setupState(state, cap.id) === 'draft') next = { badge: ['decision', 'In setup'], text: 'nothing granted until the setup is confirmed' };
     else if (review.restriction) next = { badge: ['restricted', 'Needs review'], text: 'before any expansion' };
     else if (decisionRequired(state, cap.id)) { const p = proposedAuthority(state, cap.id); next = { badge: ['decision', 'Ready'], text: `to decide on expanding ${p.level >= 4 ? 'broadly' : p.level === 3 ? 'within limits' : `to ${levelName(p.level)}`}` }; }
+    else if (gap.above) next = { badge: ['restricted', 'Above approved Authority'], text: `observed at ${gap.observed.name}; resolve it before any expansion` };
     else if (cap.status === 'not-delegated') next = { text: 'Not delegated, by design' };
     else if (cap.status === 'retired') next = { text: 'No further decisions' };
     else if (held && cap.status === 'restricted') next = { badge: ['restricted', 'Restricted'], text: `until it meets the requirements to return to ${levelName(held.previous.level)}` };
     else if (review.any) next = { badge: ['restricted', 'Needs review'], text: 'an incident is open' };
-    else if (r.total && r.met < r.total) { const w = requirementWork(r.unmet[0]); next = { text: w.short ? w.short.replace(/^./, (c) => c.toUpperCase()) : `${r.met} of ${r.total} checks met` }; }
+    else if (r.total && r.met < r.total) { const w = requirementWork(r.unmet[0]); next = { text: w.short ? w.short.replace(/^./, (c) => c.toUpperCase()) : `${r.met} of ${r.total} Requirements met` }; }
+    else if (setupState(state, cap.id) !== 'draft' && readyToPropose(state, cap.id)) next = { badge: ['decision', 'Ready to propose'], text: `a move to ${levelName(cap.authority.level + 1)}` };
     else next = { text: 'No change planned' };
     // Retired (#147) overrides the level: internally Level 0, but Observe
     // would suggest it still sees requests; it no longer operates at all.
     const retired = cap.status === 'retired';
     return { capabilityId: cap.id, cap: cap.name, authority: cap.authority, plain: retired ? 'Retired: it no longer operates' : handlesNow(cap),
-      level: setupState(state, cap.id) === 'draft' ? 'Not granted yet' : retired ? 'Retired' : `${levelName(cap.authority.level)}${cap.authority.limited ? ', with limits' : ''}`, movedBack: Boolean(review.restriction), next };
+      level: setupState(state, cap.id) === 'draft' ? 'Not granted yet' : retired ? 'Retired' : `${levelName(cap.authority.level)}${cap.authority.limited ? ', with limits' : ''}${gap.above ? ` · observed ${gap.observed.name}` : ''}`, above: gap.above, movedBack: Boolean(review.restriction), next };
   });
 }

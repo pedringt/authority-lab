@@ -64,7 +64,7 @@ export function historyEvents(state, cap) {
     const word = { approved: 'approved', rejected: 'rejected', withdrawn: 'withdrawn' }[p.status] || p.status;
     const applied = p.status === 'approved' && p.applied ? Object.entries(p.applied).filter(([k, n]) => VERSIONED_KINDS.includes(k) && n) : [];
     for (const [k, n] of applied) madeBy.add(`${k}:${n}`);
-    add(p.closedAt || p.date, 50, { kind: 'proposal', title: `Proposed change to ${PROPOSAL_KIND[p.kind] || p.kind} ${word}${applied.length ? `: now ${applied.map(([k, n]) => `${KIND_LABELS[k]} v${n}`).join(', ')}` : ''}`, sub: html`Proposed by ${personAt(p.proposedByAt, p.proposedBy).name}: ${p.reason} · <a href="#/capabilities/${cap.id}/proposals/${p.id}">Proposed change</a>` });
+    add(p.closedAt || p.date, 50, { kind: 'proposal', title: `Change request for ${PROPOSAL_KIND[p.kind] || p.kind} ${word}${applied.length ? `: now ${applied.map(([k, n]) => `${KIND_LABELS[k]} v${n}`).join(', ')}` : ''}`, sub: html`Proposed by ${personAt(p.proposedByAt, p.proposedBy).name}: ${p.reason} · <a href="#/capabilities/${cap.id}/proposals/${p.id}">Proposed change</a>` });
   }
 
   // Version changes not already named by an approved proposal. Versions set on
@@ -116,7 +116,7 @@ export function historyTab(state, cap) {
   const all = capData(state, cap.id).proposals;
   const open = all.filter((p) => p.status === 'open').length;
   const changes = ['contract', 'criteria', 'stakeholders'].map((k) => proposalsList(state, cap.id, k)).filter((x) => String(x));
-  const proposed = line('Proposed changes', all.length ? `${all.length} in total${open ? `, ${open} waiting for approval` : ''}` : 'none',
+  const proposed = line('Change requests', all.length ? `${all.length} in total${open ? `, ${open} waiting for approval` : ''}` : 'none',
     changes.length ? html`${changes}` : html`<p class="muted small">After results exist, changes to the rules, targets or stakeholders need approval. They appear here with their approvals.</p>`);
 
   // #144: every authority Proposal, frozen, with what became of it.

@@ -68,7 +68,7 @@ test('right after a Decision, its Authority is still supported, and the record k
   assert.equal(j.legacy, false);
   assert.deepEqual(j.authority, { level: 2, limited: false, name: 'Draft' });
   assert.deepEqual(j.record.materialChangesAtDecision, []);
-  assert.deepEqual(Object.keys(JUSTIFICATION_STATES), ['supported', 'attention', 'investigate', 'unjustified', 'restricted', 'retired']);
+  assert.deepEqual(Object.keys(JUSTIFICATION_STATES), ['supported', 'attention', 'investigate', 'unjustified', 'restricted', 'above', 'retired']);
 });
 
 test('more of the same evidence is information; a result that slips says the Authority may no longer be justified, and changes nothing', () => {
@@ -152,16 +152,18 @@ test('State: its starting record has nothing to compare with, so unmet next-leve
   const ID = 'interpret-incoming-project-evidence';
   const s0 = buildWorkspace(stateWorkspace, { today: '2026-10-19' });
   const j0 = justification(s0, ID);
-  assert.equal(j0.key, 'supported');
+  // Approved for Recommend, observed at Draft (#149): above approved Authority.
+  assert.equal(j0.key, 'above');
   assert.equal(j0.legacy, true);
   assert.equal(j0.record.option, 'define');
   const run = JSON.parse(readFileSync(new URL('../src/data/external-evidence/state-eval-review-gh-38411808397-1.json', import.meta.url), 'utf8'));
   let s = importEvidence(s0, run);
-  assert.equal(justification(s, ID).key, 'supported');
+  assert.equal(justification(s, ID).key, 'above');
+  assert.equal(justification(s, ID).materialImpact.length, 0);
   s = advanceToday(s, '2026-10-21');
   s = recordMaterialChange(s, ID, { areas: ['model'], description: 'State moved its interpretation to a newer model.', effectiveOn: '2026-10-21', by: 'paige-edrington' });
   const j = justification(s, ID);
-  assert.equal(j.key, 'attention');
+  assert.equal(j.key, 'above', 'the gap outranks the change; the change is still listed');
   assert.ok(j.materialImpact[0].rows.length >= 5, 'every Requirement judged by the imported run predates the change');
   assert.ok(j.materialImpact[0].rows.every((r) => r.onlyBefore));
   assert.deepEqual(getCapability(s, ID).authority, getCapability(s0, ID).authority, 'Authority intact');
@@ -239,7 +241,7 @@ test('a material change recorded the same day as the Decision in force still cou
   assert.deepEqual(s0.decisionRecords.find((r) => r.capabilityId === ID).materialChangesAtDecision, [], 'the starting record lists what it knew');
   const s = recordMaterialChange(s0, ID, { areas: ['model'], description: 'State moved its interpretation to a newer model.', by: 'paige-edrington' });
   assert.equal(justification(s, ID).materialImpact.length, 1);
-  assert.equal(justification(s, ID).key, 'attention');
+  assert.equal(justification(s, ID).key, 'above');
   // An automatic restriction records what it knew too.
   const r = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
   assert.deepEqual(r.decisionRecords.at(-1).materialChangesAtDecision, []);
@@ -424,7 +426,7 @@ test('screen: a retired capability reads "Retired", never Observe; a paused one 
   assert.match(status, /Retired It no longer operates\. Its history and records are kept\./);
   assert.match(status, /Retired by Ana Ruiz on .*\. We now send deadline reminders from the tax software instead\./);
   assert.doesNotMatch(status, /Level 0|Observe/);
-  assert.match(strip(capabilityView(s, id, new URLSearchParams('tab=monitor'))), /Authority now Retired ?\. It no longer operates\./);
+  assert.match(strip(capabilityView(s, id, new URLSearchParams('tab=monitor'))), /Approved Authority Retired ?\. It no longer operates\./);
   const rec = s.decisionRecords.at(-1);
   assert.equal(rec.next.level, 0, 'internally Level 0');
   assert.match(String(decisionRecordView(s, rec.id)), /<span class="fact-label">New<\/span><strong>Retired<\/strong><div class="muted small">No operating authority<\/div>/);

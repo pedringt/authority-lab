@@ -7,7 +7,7 @@ import { diffTable } from './activity.js';
 
 // A proposed change's name, and what it changes.
 const KIND_TITLE = { criteria: 'Target change', contract: 'Rule change', stakeholders: 'Stakeholder change' };
-const KIND_OBJECT = { criteria: 'targets and decision requirements', contract: 'rules', stakeholders: 'stakeholders' };
+const KIND_OBJECT = { criteria: 'Targets and Requirements', contract: 'rules', stakeholders: 'stakeholders' };
 
 // Propose (or, before the gate, apply) a change to a locked object.
 export function proposeView(state, capabilityId, kind, query) {
@@ -29,7 +29,7 @@ export function proposeView(state, capabilityId, kind, query) {
 
   const head = html`<div class="page-head">
     <div>
-      <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${gated ? `Proposed ${KIND_TITLE[kind].toLowerCase()}` : KIND_TITLE[kind]}</p>
+      <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · ${gated ? `Change request: ${KIND_TITLE[kind].toLowerCase()}` : KIND_TITLE[kind]}</p>
       <h1>Change the ${KIND_OBJECT[kind]}</h1>
       <p class="lede">${gated
         ? kind === 'criteria'
@@ -71,7 +71,7 @@ export function proposeView(state, capabilityId, kind, query) {
   return html`${head}
   <form class="setup-form criteria-form" data-form="propose-criteria" novalidate>
     ${section('Targets', html`<div class="card table-card"><table class="table table-edit"><thead><tr><th>Measure</th><th>Target</th><th>Note</th><th></th></tr></thead><tbody data-rows="criteria">${criteria.map(row)}</tbody></table></div><button class="btn btn-sm" type="button" data-action="row-add" data-kind="criteria">Add target</button>`)}
-    ${section('Decision requirements', html`<div class="card table-card"><table class="table table-edit"><thead><tr><th>Check</th><th>Current</th><th></th></tr></thead><tbody data-rows="requirements">${requirements.map(rrow)}</tbody></table></div><button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add check</button>`, { subtitle: 'What we need before expanding. Current results don\'t change; if you change a threshold, we re-check whether it\'s met.' })}
+    ${section('Requirements', html`<div class="card table-card"><table class="table table-edit"><thead><tr><th>Requirement</th><th>Current</th><th></th></tr></thead><tbody data-rows="requirements">${requirements.map(rrow)}</tbody></table></div><button class="btn btn-sm" type="button" data-action="row-add" data-kind="requirements">Add Requirement</button>`, { subtitle: 'What we need before expanding. Current results don\'t change; if you change a threshold, we re-check whether it\'s met.' })}
     ${reasonAndSubmit(state, cap, kind, gated, required, acting)}
   </form>
   <template id="row-criteria">${row({ id: '', name: '', target: '', note: '', source: 'Written by hand' }, 0)}</template>
@@ -123,11 +123,11 @@ export function proposalView(state, capabilityId, proposalId, query) {
     ? diffTable(before, p.value)
     : p.kind === 'stakeholders'
       ? diffTable(stakeholderKey(before), stakeholderKey(p.value))
-      : html`<h4 class="version-sub">Targets</h4>${diffTable(before.criteria, p.value.criteria)}<h4 class="version-sub">Decision requirements</h4>${diffTable(before.requirements, p.value.requirements)}`;
+      : html`<h4 class="version-sub">Targets</h4>${diffTable(before.criteria, p.value.criteria)}<h4 class="version-sub">Requirements</h4>${diffTable(before.requirements, p.value.requirements)}`;
 
   return html`<div class="page-head">
     <div>
-      <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Proposed change ${p.id}</p>
+      <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Change request ${p.id}</p>
       <h1>${KIND_TITLE[p.kind]}</h1>
       <p class="lede">${status} Proposed by <strong>${personAt(p.proposedByAt, p.proposedBy).name}</strong> on ${fmtDate(p.date)}.</p>
     </div>
@@ -138,7 +138,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
   <div class="card">${kv([
     ['Why', p.reason],
     ['Approvals', html`${badge(p.approvals.length >= req.approvers ? 'pass' : 'neutral', `${p.approvals.length} of ${req.approvers} approval${req.approvers === 1 ? '' : 's'}`)} ${req.riskRequired ? html`<span class="signoff-role">${riskDone ? badge('pass', 'Risk approved') : badge('neutral', 'Risk approval still needed')}</span>` : ''} <span class="muted small">${requirementLabel(req)} The person who proposed it can't approve it. Risk approval comes from someone with the Risk approver right (set on People).</span>`],
-    ['Who can approve', html`<span class="muted small">${(p.eligible || []).map((k) => person(k).name).join(', ') || 'No one'}. This list was fixed when the change was proposed.</span>`],
+    ['Who can approve', html`<span class="muted small">${(p.eligible || []).map((k) => person(k).name).join(', ') || 'No one'}. This list was fixed when the change was requested.</span>`],
     ['Approvals so far', p.approvals.length ? html`<ul class="plain-list">${p.approvals.map((a) => html`<li>${personAt(a.byAt, a.by).name} as ${roleLabel(a.role)}, ${fmtDate(a.date)}${rightsNote(a.byAt)}</li>`)}</ul>` : html`<span class="muted">None yet</span>`],
     ...(p.rejection ? [['Rejected', html`${personAt(p.rejection.byAt, p.rejection.by).name}, ${fmtDate(p.rejection.date)}: ${p.rejection.reason}`]] : []),
     ...(p.withdrawal ? [['Withdrawn', html`${personAt(p.withdrawal.byAt, p.withdrawal.by).name}, ${fmtDate(p.withdrawal.date)}: ${p.withdrawal.reason}`]] : []),
@@ -146,8 +146,8 @@ export function proposalView(state, capabilityId, proposalId, query) {
   ])}</div>
 
   ${p.kind === 'criteria' ? section('Ready for a decision? Before and after this change', html`<div class="card readiness-compare">
-    <div><span class="fact-label">Today</span><strong>${r.now.met} of ${r.now.total} checks met</strong>${r.now.unmet.length ? html`<p class="muted small">Not met: ${r.now.unmet.map((u) => u.text).join('; ')}</p>` : ''}</div>
-    <div><span class="fact-label">If approved</span><strong>${r.proposed.met} of ${r.proposed.total} checks met</strong>${r.proposed.unmet.length ? html`<p class="muted small">Not met: ${r.proposed.unmet.map((u) => u.text).join('; ')}</p>` : ''}</div>
+    <div><span class="fact-label">Today</span><strong>${r.now.met} of ${r.now.total} Requirements met</strong>${r.now.unmet.length ? html`<p class="muted small">Not met: ${r.now.unmet.map((u) => u.text).join('; ')}</p>` : ''}</div>
+    <div><span class="fact-label">If approved</span><strong>${r.proposed.met} of ${r.proposed.total} Requirements met</strong>${r.proposed.unmet.length ? html`<p class="muted small">Not met: ${r.proposed.unmet.map((u) => u.text).join('; ')}</p>` : ''}</div>
     ${r.proposed.met > r.now.met ? notice('watch', 'This change makes the AI look more ready, with no new evidence.', 'That can be fine if a check was set wrong. It can also be moving the goalposts after seeing the results. Approve only if you are satisfied it is the first; otherwise reject it and say why.') : ''}
   </div>`, { subtitle: 'Results stay the same; only the thresholds change.' }) : ''}
 
@@ -167,7 +167,7 @@ export function proposalView(state, capabilityId, proposalId, query) {
           <input type="text" name="reason" maxlength="240" placeholder="Why are you rejecting it?" aria-label="Rejection reason">
           <button class="btn btn-sm btn-danger" type="submit">Reject</button>
         </form>`}
-    <p class="muted small">To approve as someone else, switch the person at the top of the page. The person who proposed a change can withdraw it; anyone else who can approve it can reject it. Both are kept in history.</p>
+    <p class="muted small">To approve as someone else, switch the person at the top of the page. The person who requested a change can withdraw it; anyone else who can approve it can reject it. Both are kept in history.</p>
   </div>`) : ''}`;
 }
 
@@ -175,12 +175,12 @@ export function proposalView(state, capabilityId, proposalId, query) {
 export function proposalsList(state, capabilityId, kind) {
   const list = capData(state, capabilityId).proposals.filter((p) => p.kind === kind);
   if (!list.length) return '';
-  return html`<div class="card"><p class="eyebrow">Proposed changes</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${personAt(p.proposedByAt, p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Approval needed') : p.status === 'approved' ? badge('pass', 'Approved') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected')}${proposalWarning(state, capabilityId, p) ? html` ${badge('watch', 'Can no longer be approved')}` : ''} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
+  return html`<div class="card"><p class="eyebrow">Change requests</p><ul class="plain-list">${list.slice().reverse().map((p) => html`<li><a href="#/capabilities/${capabilityId}/proposals/${p.id}">${p.id}</a> · ${personAt(p.proposedByAt, p.proposedBy).name}, ${fmtDate(p.date)} · ${p.status === 'open' ? badge('decision', 'Approval needed') : p.status === 'approved' ? badge('pass', 'Approved') : p.status === 'withdrawn' ? badge('neutral', 'Withdrawn') : badge('fail', 'Rejected')}${proposalWarning(state, capabilityId, p) ? html` ${badge('watch', 'Can no longer be approved')}` : ''} <span class="muted small">${p.reason}</span></li>`)}</ul></div>`;
 }
 
 export function amendLink(state, capabilityId, kind) {
   const gated = needsSignoff(state, capabilityId, kind);
   const open = openProposal(state, capabilityId, kind);
-  if (open) return html`<a class="btn btn-sm" href="#/capabilities/${capabilityId}/proposals/${open.id}">Open the proposed change</a>`;
-  return html`<a class="btn btn-sm" href="#/capabilities/${capabilityId}/amend/${kind}">${gated ? 'Propose a change' : 'Edit'}</a>`;
+  if (open) return html`<a class="btn btn-sm" href="#/capabilities/${capabilityId}/proposals/${open.id}">Open the change request</a>`;
+  return html`<a class="btn btn-sm" href="#/capabilities/${capabilityId}/amend/${kind}">${gated ? 'Request a change' : 'Edit'}</a>`;
 }

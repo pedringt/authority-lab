@@ -231,11 +231,11 @@ function render() {
       else if (sub && action === 'versions') { view = versionsView(state, sub, query); title = 'History'; }
       else if (sub && action === 'setup') { view = getCapability(state, sub) && getCapability(state, sub).setup ? setupHubView(state, sub, query) : setupView(state, sub, query); title = 'Setup'; }
       else if (sub && action === 'contract' && parts[3] === 'build') { view = contractBuilderView(state, sub, query); title = 'Boundaries'; }
-      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = getCapability(state, sub) && getCapability(state, sub).setup ? 'Requirements and Targets' : 'Targets and decision requirements'; }
+      else if (sub && action === 'criteria' && parts[3] === 'edit') { view = criteriaEditorView(state, sub, query); title = getCapability(state, sub) && getCapability(state, sub).setup ? 'Requirements and Targets' : 'Targets and Requirements'; }
       else if (sub && action === 'stakeholders' && parts[3] === 'edit') { view = stakeholdersEditorView(state, sub, query); title = 'Stakeholders'; }
       else if (sub && action === 'scenarios' && parts[3] === 'edit') { view = scenariosEditorView(state, sub, query); title = 'Tests'; }
       else if (sub && action === 'amend' && parts[3]) { view = proposeView(state, sub, parts[3], query); title = 'Propose a change'; }
-      else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Proposed change'; }
+      else if (sub && action === 'proposals' && parts[3]) { view = proposalView(state, sub, parts[3], query); title = 'Change request'; }
       else if (sub) {
         // Decide summarizes the recorded model runs; its runs view lists them.
         if (query.get('tab') === 'decide' && (!query.get('show') || query.get('show') === 'runs')) loadAgentRuns();
@@ -262,7 +262,7 @@ function render() {
     }
     case 'people': view = peopleView(state, query); title = 'People'; break;
     case 'sources': view = sourcesView(state); title = 'Evidence sources'; break;
-    case 'welcome': view = welcomeView(); title = 'Welcome'; break;
+    case 'welcome': view = welcomeView({ workspace: isClient() ? openWorkspace.name : null }); title = 'Welcome'; break;
     case 'guide': {
       // A later step needs the decision made in step 6 by the viewer; opening
       // one directly lands on step 6 instead of deciding for them.
@@ -358,7 +358,7 @@ function restoreForms(saved) {
     const values = saved[form.dataset.form];
     // Ticked suggestions (#139) survive a refused save; the rows re-render from state.
     if (values && form.dataset.form === 'save-criteria') for (const el of form.querySelectorAll('[name="use-suggestion"]')) { if (`use-suggestion=${el.value}` in values) el.checked = values[`use-suggestion=${el.value}`]; }
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change' || form.dataset.form === 'retire-capability') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change' || form.dataset.form === 'retire-capability' || form.dataset.form === 'record-observed') continue;
     for (const el of form.elements) {
       if (!el.name || el.type === 'file') continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -538,6 +538,8 @@ document.addEventListener('click', (e) => {
     const kind = pendingErase;
     closeEraseConfirm(false);
     store.dispatch(kind === 'start-empty' ? 'startEmpty' : 'reset');
+    // Starting your own from Welcome (#149) counts as having been welcomed.
+    if (kind === 'start-empty') { try { window.localStorage.setItem(WELCOMED, '1'); } catch { /* storage blocked */ } }
     applyExternalEvidence();
     readOnlyTried = false;
     stopSuite();
@@ -763,6 +765,20 @@ document.addEventListener('submit', (e) => {
     dispatchOr(here(), () => {
       store.dispatch('mapEvidence', capId, { rowKind: mapForm.dataset.kind, rowId: mapForm.dataset.row, measure, by: actor(store.get(), capId), reason: v('reason') });
       location.hash = `#/capabilities/${capId}/evidence/configure`;
+    });
+    return;
+  }
+  // #149: what it actually does now (observed behavior). Never changes Authority.
+  const obsForm = e.target.closest('[data-form="record-observed"]');
+  if (obsForm) {
+    e.preventDefault();
+    const capId = obsForm.dataset.capability;
+    const f = new FormData(obsForm);
+    const eff = f.get('effective');
+    dispatchOr(here(), () => {
+      store.dispatch('recordBaseline', capId, { effective: eff === 'unknown' ? { status: 'unknown', note: f.get('note') } : { level: Number(eff), note: f.get('note') }, by: actor(store.get(), capId), reason: f.get('reason') });
+      clearErrorOn(here(), 'error');
+      render();
     });
     return;
   }

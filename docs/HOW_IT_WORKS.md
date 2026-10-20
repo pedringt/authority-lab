@@ -8,7 +8,7 @@ Building an AI workflow is getting easier. Deciding how much to let it do on its
 
 The whole product rests on one rule:
 
-> **AI interprets. Software enforces. Humans authorize.**
+> **AI interprets. Software enforces configured controls. Humans authorize.**
 
 The AI reads cases and makes recommendations. Software applies the limits and can pull authority back automatically. Only a named person can give the AI more authority.
 
@@ -171,7 +171,9 @@ There's no score. Each change has its own line saying how serious it is. A start
 - **Restore or expand:** never automatic. After a reduction, Pause or automatic restriction, Decide offers "Propose: restore toward Level N". It's the normal Proposal, one level at a time, shown with the earlier Authority, why it came down, any review and incidents, what has changed since, and new evidence.
 - **Retire:** the Owner only, with a reason. It's final. The capability stops operating, any open Proposal closes, no Decision or Proposal can follow, and its history stays. Retired is not the same as "Not delegated, by design". To use the work again, set up a new capability.
 
-None of Monitor's states blocks anything by itself. Exceptions aren't built yet: how they would interact with the runtime gate is still to be decided.
+**Operating above approved Authority** (#149) is one of the most serious states. When the recorded observed behavior (the baseline's effective level) is above the approved Authority, Monitor shows both, says further expansion is blocked, and offers two ways to resolve it: bring behavior back within approved Authority and record what it does now, or govern the observed behavior through the normal Proposal and Decision, one level at a time. Status, Decide, Overview and Capabilities show the gap too, and it is the first item in Overview's To do (after any safety review). It never blocks reducing, pausing, retiring or recording corrected behavior, and Authority Lab changes neither level on its own. State starts in this state: approved for Recommend, observed at Draft.
+
+Apart from that one, none of Monitor's states blocks anything by itself. Exceptions aren't built yet: how they would interact with the runtime gate is still to be decided.
 
 ### Monitoring and automatic restriction
 
@@ -257,7 +259,7 @@ Template lines start accepted. Each AI suggestion is pending until you **accept*
 
 In the builder the five sections are The AI may, Ask a person for these cases, The AI must never, Ask a person whenever this comes up, and Authority is reduced automatically when. Software checks run on the draft and block saving when: "The AI must never" or "Authority is reduced automatically when" is empty above Low impact; the same line appears under "may" and "must never" (or "ask a person for these cases"); a restriction rule has no number or no time/case window; a financial capability sets no value limit in "may" (a ceiling) or "ask a person for these cases" (a threshold); a limit that only appears under "must never" does not count. The "Approve the rules" panel shows a plain-English summary, what changed from the template, and who is saving. **Save rules** writes contract v1, with the full review behind it (template, suggestions accepted, edited and rejected, lines added by hand), and records a "Rules saved" event. It does not change authority or status; those follow decisions only.
 
-### Setting targets and decision requirements
+### Setting Targets and Requirements
 
 Setup's **Set what good looks like** (**Review the checks**) opens the **Targets and decision requirements** editor, pre-filled from the risk profile: quality and severe-error thresholds scale with impact, the minimum pilot size scales with impact, financial exposure adds a minimum number of high-value cases, customer-facing exposure adds a customer-visible-errors criterion, and difficult-to-reverse actions add a review-before-effect requirement. Every row says where its default came from; you can edit, remove and add rows. Targets are optional (#137): a capability may have Requirements and no Targets, and a Target whose number isn't settled can say **Needs decision**. One core row, the minimum case count (a coverage rule), can be adjusted but not removed. Lowering a default threshold, reducing a default case count or removing a default row needs a short reason, which is stored on the version and shown beside its diff. "Current" values are not typed; evidence fills them in later.
 

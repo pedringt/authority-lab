@@ -708,7 +708,7 @@ test('starting a draft builds template lines (accepted) plus AI suggestions (pen
   // Starting again is a no-op while a draft is open.
   assert.equal(startContractDraft(s, id), s);
   // The seeded refund capability already has a contract.
-  assert.throws(() => startContractDraft(initialState(), RR), /These rules are already set. To change them, propose a change/);
+  assert.throws(() => startContractDraft(initialState(), RR), /These rules are already set. To change them, request a change/);
 });
 
 test('suggestions are reviewed one at a time; edits keep the original; rejections are kept', () => {
@@ -827,7 +827,7 @@ test('finalize needs every suggestion reviewed, every section confirmed and no b
   // Finalized drafts are closed to edits.
   assert.throws(() => addContractLine(s, id, 'may', 'More.'), /These rules are already set/);
   assert.throws(() => finalizeContract(s, id, { by: 'priya' }), /These rules are already saved/);
-  assert.throws(() => startContractDraft(s, id), /These rules are already set. To change them, propose a change/);
+  assert.throws(() => startContractDraft(s, id), /These rules are already set. To change them, request a change/);
   assert.match(contractSummary(v.value, getCapability(s, id)), /must never/);
 });
 
@@ -898,7 +898,7 @@ test('the run gate: no run until criteria are saved; the first run locks them an
   let [s, id] = withNewCap({ impact: 'Low', reversibility: 'Easy to reverse', exposure: 'Internal only' }, 'Ticket tagging', 'Adds routing tags.');
   s = { ...s, capabilityData: { ...s.capabilityData, [id]: { ...capData(s, id), scenarios: seed.scenarios.slice(0, 3) } } };
   assert.equal(canRunSuite(s, id).ok, false);
-  assert.match(canRunSuite(s, id).reason, /Set targets and decision requirements first/);
+  assert.match(canRunSuite(s, id).reason, /Set Targets and Requirements first/);
   assert.throws(() => startTestRun(s, id), /before the first test run/);
   const d = defaultsFor(s, id);
   s = saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' });
@@ -909,7 +909,7 @@ test('the run gate: no run until criteria are saved; the first run locks them an
   assert.equal(criteriaLocked(s, id), true, 'performanceResultsSeen after the first run');
   assert.equal(s.activity[0].kind, 'criteria-locked');
   assert.equal(s.activity[0].surfaced, true);
-  assert.match(s.activity[0].body, /targets \(version 1\) and decision requirements \(version 1\)/);
+  assert.match(s.activity[0].body, /targets \(version 1\) and Requirements \(version 1\)/);
   // Locked: saving throws; a second run does not log the lock again.
   assert.throws(() => saveCriteria(s, id, { criteria: d.criteria, requirements: d.requirements, by: 'priya' }), /can't be changed directly now that results exist/);
   const before = s.activity.filter((e) => e.kind === 'criteria-locked').length;
@@ -3987,7 +3987,7 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   // Status: the level, what it does now, the proposed level, the open gap, and whether it's ready, told once.
   assert.match(page, /Draft <span class="st-lvl">Level 2<\/span>/);
   assert.match(page, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
-  assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 checks are met; still open: high-value refund performance needs more evidence\./);
+  assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 Requirements are met; still open: high-value refund performance needs more evidence\./);
   assert.match(page, /Then<\/span><p>Standard refunds up to \$50 would run without review\./);
   assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=decide">Next: review the evidence/);
   // Below: this capability's waiting actions, and the people involved, with positions.
@@ -4057,7 +4057,7 @@ test('#96: the decision flow numbers its steps and the checklist says exactly wh
   assert.match(notOwner, /data-action="authorize"[^>]*disabled/);
   assert.deepEqual(steps(ready), ['1 What changes if I approve this?', '2 What do we know?', '3 Who has said what?', '4 Risk', '5 Recommendation', '6 Your decision', '7 Limits', '8 What should improve?', '9 Rollout plan', '10 Why are you making this decision?', '11 Review and record']);
   // The evidence is on the page, not behind a closed panel: its headline shows.
-  assert.match(ready, /<p class="decide-big">Almost ready: 5 of 6 checks met<\/p>/);
+  assert.match(ready, /<p class="decide-big">Almost ready: 5 of 6 Requirements met<\/p>/);
   assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);
   // Each blocker shows against its own part, with its first problem.
   const noPlan = String(decisionWorkspaceView(setRolloutField(pendingRR(), RR, 'reviewDate', ''), RR));
@@ -4149,7 +4149,7 @@ test('Overview: To do, Approvals needed, Important results, Current autonomy, in
   // To do: the pending decision leads, with how ready it is and who owns it.
   const todo = out.slice(at('todo'), at('approvals'));
   assert.match(todo, /^[\s\S]*?<p class="ov-cap">Refund recommendation<\/p>\s*<p class="ov-title">Decide whether to expand autonomy within limits<\/p>/, 'the decision is the first to-do');
-  assert.match(todo, /5 of 6 checks met · high-value refund performance needs more evidence/);
+  assert.match(todo, /5 of 6 Requirements met · high-value refund performance needs more evidence/);
   assert.match(todo, /Owner: Maya Chen/);
   assert.match(todo, /href="#\/capabilities\/refund-recommendation\?tab=decide">Review →/);
   assert.match(todo, /Complete the requirements to return to Draft<\/p>\s*<p class="ov-sub">A redesigned idempotency check and 100 clean executions in a replay environment\./);
@@ -4379,7 +4379,7 @@ test('Activity: each event kind has exactly one tone; criteria-locked is no long
 test('Activity: badges use the agreed terms, and a change names what it changed', () => {
   assert.equal(KIND_LABELS_ALL['criteria-locked'], 'Targets can no longer be edited directly');
   assert.equal(KIND_LABELS_ALL['contract-finalized'], 'Rules finalized');
-  assert.equal(KIND_LABELS_ALL.proposal, 'Proposed change');
+  assert.equal(KIND_LABELS_ALL.proposal, 'Change request');
   assert.ok(!Object.values(KIND_LABELS_ALL).some((l) => /criteria|contract|amendment|scenario/i.test(l)), 'no old terms');
   let s = initialState();
   s = amend(s, RR, 'contract', { value: current(s, RR, 'contract'), author: 'maya', reason: 'Test: a rule change.' });

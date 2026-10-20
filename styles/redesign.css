@@ -47,6 +47,7 @@
 .st-lvl { font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
 .st-title .badge { align-self: center; }
 .st-now { font-size: 16.5px; color: var(--text-2); margin: 4px 0 0; max-width: 62ch; }
+.st-gap { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--restr); background: var(--surface-2, transparent); max-width: 62ch; }
 .st-chapters { margin-top: 18px; display: grid; gap: 14px; max-width: 72ch; }
 .st-chapter { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 4px 16px; padding-top: 14px; border-top: 1px solid var(--border); }
 .st-chapter p { margin: 0; font-size: 15.5px; }
@@ -293,8 +294,8 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .welcome-idea { font-size: 18px; color: var(--text-2); margin: 10px 0 0; max-width: 60ch; }
 .welcome-four { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 28px; margin-top: 24px; color: var(--text-2); }
 .welcome-four strong { display: block; color: var(--text); margin-bottom: 2px; }
-.welcome-paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
-.welcome-path { display: block; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; color: var(--text); }
+.welcome-paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 28px; }
+.welcome-path { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; color: var(--text); }
 .welcome-path:hover { text-decoration: none; border-color: var(--accent); }
 .welcome-path.is-main { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .welcome-path h2 { margin-bottom: 4px; }

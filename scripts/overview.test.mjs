@@ -49,9 +49,9 @@ test('to-do titles say the work, derived from the seeded requirements and decisi
     'Raise accuracy to 90%',
     'Complete the requirements to return to Draft',
   ]);
-  assert.match(todo, /Decide whether to expand autonomy within limits<\/p>\s*<p class="ov-sub">5 of 6 checks met · high-value refund performance needs more evidence<\/p>/);
-  assert.match(todo, /Collect 22 more high-value refund cases<\/p>\s*<p class="ov-sub">18 of 40 collected · 5 of 6 checks met<\/p>/);
-  assert.match(todo, /Raise accuracy to 90%<\/p>\s*<p class="ov-sub">Currently 88% · 4 of 5 checks met<\/p>/);
+  assert.match(todo, /Decide whether to expand autonomy within limits<\/p>\s*<p class="ov-sub">5 of 6 Requirements met · high-value refund performance needs more evidence<\/p>/);
+  assert.match(todo, /Collect 22 more high-value refund cases<\/p>\s*<p class="ov-sub">18 of 40 collected · 5 of 6 Requirements met<\/p>/);
+  assert.match(todo, /Raise accuracy to 90%<\/p>\s*<p class="ov-sub">Currently 88% · 4 of 5 Requirements met<\/p>/);
   assert.match(todo, /Complete the requirements to return to Draft<\/p>\s*<p class="ov-sub">A redesigned idempotency check and 100 clean executions in a replay environment\.<\/p>/);
   // Links: the decision opens Decide; the open requirements open Status.
   assert.match(todo, /href="#\/capabilities\/refund-recommendation\?tab=decide">Review →/);

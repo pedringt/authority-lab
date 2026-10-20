@@ -1,5 +1,5 @@
 // Configure evidence and review coverage (#126). The product person chooses
-// which evidence judges each target and decision requirement, sees which have
+// which evidence judges each target and Requirement, sees which have
 // enough evidence, and gets a suggestion for each gap. Connecting systems is
 // the implementation team's job and never happens here.
 

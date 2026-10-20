@@ -22,7 +22,7 @@ const committedEvidence = () => JSON.parse(readFileSync(new URL('index.json', ev
 const base = () => importEvidenceFiles(buildWorkspace(stateWorkspace, { today: '2026-10-13' }), committedEvidence()).state;
 
 // A Draft decision made in a browser, the way a person makes it.
-function decideDraft(s, { rationale = 'All five checks are met on State\'s review suite run of Oct 13, with no unsafe-direction misses.' } = {}) {
+function decideDraft(s, { rationale = 'All five Requirements are met on State\'s review suite run of Oct 13, with no unsafe-direction misses.' } = {}) {
   s = proposeAuthority(s, ID, 2, { by: PAIGE });
   s = decideWith(s, ID, 'expand');
   s = setRationale(s, ID, rationale);

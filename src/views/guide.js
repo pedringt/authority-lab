@@ -21,20 +21,25 @@ const LADDER = [
 ];
 
 // The first visit: the idea in one sentence, the four principles, two paths.
-export function welcomeView() {
+// `workspace`: the open workspace's name when it is a real one (a client
+// workspace such as State), so the copy doesn't promise the Northstar demo.
+export function welcomeView({ workspace = null } = {}) {
   return html`<div class="welcome">
     <p class="eyebrow">Authority Lab</p>
     <h1>Decide when an AI workflow is ready for more autonomy.</h1>
-    <p class="welcome-idea">Use test results and production evidence to decide how much autonomy to allow. People set the boundaries, and software enforces them.</p>
+    <p class="welcome-idea">Use test results and production evidence to decide how much autonomy to allow. People set the Boundaries, and each one says whether software enforces it or people follow it as written.</p>
     <div class="welcome-four">
       <div><strong>1. Start with limited autonomy</strong>Define what the workflow can do and where human review is required.</div>
       <div><strong>2. Evaluate the results</strong>Tests, pilot data and real outcomes show whether more autonomy is justified.</div>
       <div><strong>3. Make the decision</strong>A named person approves any increase in autonomy.</div>
-      <div><strong>4. Enforce the boundaries</strong>Software keeps execution inside the approved limits and pulls it back when a safety threshold is crossed.</div>
+      <div><strong>4. Hold the Boundaries</strong>Where actions go through a gate, software keeps them inside the approved limits and pulls autonomy back when a safety threshold is crossed. Elsewhere, people follow the written Boundaries, and Monitor shows when behavior goes beyond what was approved.</div>
     </div>
     <div class="welcome-paths">
-      <a class="welcome-path is-main" href="#/guide/1" data-action="welcomed"><h2>Guided demo</h2><p>Follow a refund workflow from human review to limited autonomous execution. About 5 minutes.</p><span>Start the guided demo →</span></a>
-      <a class="welcome-path" href="#/overview" data-action="welcomed"><h2>Explore the finished workspace</h2><p>Explore five AI capabilities operating at different levels of autonomy.</p><span>Explore →</span></a>
+      <a class="welcome-path is-main" href="#/guide/1" data-action="welcomed"><h2>Guided demo</h2><p>Follow a refund workflow from human review to limited autonomous execution, on a copy of the fictional Northstar demo. About 5 minutes.</p><span>Start the guided demo →</span></a>
+      ${workspace
+    ? html`<a class="welcome-path" href="#/overview" data-action="welcomed"><h2>Open ${workspace}</h2><p>A real configuration: its capabilities, the Authority approved for each, and its evidence.</p><span>Open ${workspace} →</span></a>`
+    : html`<a class="welcome-path" href="#/overview" data-action="welcomed"><h2>Explore the finished workspace</h2><p>Explore five fictional AI capabilities operating at different levels of autonomy.</p><span>Explore →</span></a>
+      <button type="button" class="welcome-path" data-action="start-empty"><h2>Start your own workspace</h2><p>Set up your own team and capabilities in a blank workspace. It replaces the Northstar demo in this browser, so you'll be asked to confirm; Reset demo brings Northstar back.</p><span>Start your own →</span></button>`}
     </div>
   </div>`;
 }
@@ -64,7 +69,7 @@ export function guideView(g, step) {
     body = html`${teach('Set the boundaries first.', 'Define what can happen automatically, when human review is required, and what is never allowed. Software checks every action against those rules rather than relying on model judgment.')}
       <div class="guide-panel">${boundaries(current(s, cap.id, 'contract'))}</div>`;
   } else if (n === 4) {
-    body = html`${teach('What would we need to see before expanding autonomy?', 'These checks were set before the pilot, so the bar doesn\'t move after the results come in.')}
+    body = html`${teach('What would we need to see before expanding autonomy?', 'These Requirements were set before the pilot, so the bar doesn\'t move after the results come in.')}
       <p class="small muted">Evaluated after the pilot.</p>
       <ul class="guide-checks">${current(s, cap.id, 'requirements').map((r) => html`<li>${r.text}</li>`)}</ul>`;
   } else if (n === 5) {
@@ -74,7 +79,7 @@ export function guideView(g, step) {
     const weak = p.segments.filter((x) => x.status === 'insufficient');
     const gap = r.unmet[0];
     body = html`${teach('Overall performance is strong, but high-value refunds are still under-tested.', `The test suite and ${p.cases}-case pilot look good overall. High-value refunds are the remaining evidence gap, and that should shape the decision.`)}
-      ${g.tested ? html`<div class="guide-panel"><p class="guide-big">${r.met} of ${r.total} checks met</p>
+      ${g.tested ? html`<div class="guide-panel"><p class="guide-big">${r.met} of ${r.total} Requirements met</p>
           <p>${t.passed} of ${t.total} tests passed. One severe miss: a $420 refund recommended on a fraud-flagged account. Automatic action is now blocked whenever an account has a fraud flag.</p>
           <table class="table guide-table"><thead><tr><th>Type of case</th><th class="num">Cases</th><th class="num">Accuracy</th></tr></thead><tbody>${p.segments.map((x) => html`<tr class="${weak.includes(x) ? 'is-weak' : ''}"><td>${x.name}</td><td class="num">${weak.includes(x) && gap ? `${x.cases} of ${String(gap.text).match(/\d+/) ? String(gap.text).match(/\d+/)[0] : '?'} needed` : x.cases}</td><td class="num">${x.accuracy}%</td></tr>`)}</tbody></table></div>`
         : html`<div class="guide-panel"><p>Run the test suite and reveal the pilot results.</p><p><button class="btn btn-primary" data-action="guide-run-tests">Run the tests</button></p></div>`}`;

@@ -7,7 +7,7 @@ import { diffTable } from './activity.js';
 const SECTION_HELP = {
   may: 'What the AI can do on its own, inside this capability.',
   mustAsk: 'What always needs a person, even after the AI gets more authority.',
-  mustNever: 'Hard limits. Software blocks these whatever the AI suggests.',
+  mustNever: 'Hard limits. Where actions go through a gate, software blocks these whatever the AI suggests; otherwise they are written Boundaries people follow.',
   escalation: 'When the AI should stop and hand the case to a person.',
   autoRestriction: 'Measurable limits that move the AI back automatically. Each needs a number and a time period or number of cases.',
 };
@@ -23,7 +23,7 @@ export function contractBuilderView(state, capabilityId, query) {
 
   if (versionList(state, capabilityId, 'contract').length) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Boundaries</h1><p class="lede">${cap.name} already has its Boundaries. To change them, propose a change; it needs approval.</p></div></div>
-      ${notice('neutral', 'Boundaries are already set', 'See them on the capability\'s Rules tab, where you can also propose a change.', { link: cap.setup ? `#/capabilities/${cap.id}/setup` : `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: cap.setup ? 'Back to setup' : 'See them' })}`;
+      ${notice('neutral', 'Boundaries are already set', 'See them on the capability\'s Status tab, under Boundaries, where you can also request a change.', { link: cap.setup ? `#/capabilities/${cap.id}/setup` : `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: cap.setup ? 'Back to setup' : 'See them' })}`;
   }
 
   if (!draft) {
@@ -90,7 +90,7 @@ export function contractBuilderView(state, capabilityId, query) {
   </div>
   <div class="contract-builder">${sections}</div>
 
-  ${section('Checks', html`<div class="card">${checks.length ? html`<ul class="check-list">${checks.map((c) => html`<li>${badge(c.level === 'block' ? 'fail' : 'watch', c.level === 'block' ? 'Must fix' : 'Warning')} ${c.text}${c.section ? html` <span class="muted">(${SECTION_LABELS[c.section]})</span>` : ''}</li>`)}</ul>` : html`<p class="muted">All checks passed.</p>`}</div>`, { subtitle: 'You can\'t save until these are fixed: an empty "Never allowed" or "Automation is pulled back if" section (unless impact is Low), rules that contradict each other, safety limits without a number or time period, and a financial capability without a spending limit.' })}
+  ${section('Before you save', html`<div class="card">${checks.length ? html`<ul class="check-list">${checks.map((c) => html`<li>${badge(c.level === 'block' ? 'fail' : 'watch', c.level === 'block' ? 'Must fix' : 'Warning')} ${c.text}${c.section ? html` <span class="muted">(${SECTION_LABELS[c.section]})</span>` : ''}</li>`)}</ul>` : html`<p class="muted">All checks passed.</p>`}</div>`, { subtitle: 'You can\'t save until these are fixed: an empty "Never allowed" or "Automation is pulled back if" section (unless impact is Low), rules that contradict each other, safety limits without a number or time period, and a financial capability without a spending limit.' })}
 
   ${section('Save the Boundaries', html`
     <div class="card">

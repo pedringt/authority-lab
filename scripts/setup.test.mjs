@@ -309,7 +309,7 @@ test('setup shows its steps as Define, Evidence and Decide; tests are one way to
   assert.match(words, /1\. Define 1 of 2 done[\s\S]*2\. Evidence 0 of 4 done[\s\S]*3\. Decide 0 of 2 done/);
   // Strong defaults to review, derived from the risk profile.
   assert.match(words, /These are the default safety limits for this risk profile: \d+ starter rules for a high-impact financial capability\./);
-  assert.match(words, /For a high-impact financial capability, we recommend these checks: 7 targets and 7 decision requirements\./);
+  assert.match(words, /For a high-impact financial capability, we recommend these checks: 7 targets and 7 Requirements\./);
   assert.match(words, /Configure evidence[\s\S]*a connected source, Authority Lab tests, or a manual review/);
   assert.match(words, /Not every capability needs local tests: a connected eval can be enough\./);
   assert.match(words, /Name them before the first results come in/);

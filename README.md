@@ -6,7 +6,7 @@ A product prototype for one question:
 
 It walks one AI capability, **Refund recommendation** in the fictional Northstar Support workspace, through the full lifecycle: Define → Test → Pilot → Evaluate → Decide → Monitor. Authority is explicit, earned through evidence, conditional, reversible and authorized by a named person.
 
-**AI interprets. Software enforces. Humans authorize.**
+**AI interprets. Software enforces configured controls. Humans authorize.**
 
 ## Read about it
 
@@ -53,7 +53,7 @@ A dark bar across the top holds three places: **Overview** (To do, Approvals nee
 
 - **Status**: what it can do now, why it's here, what happens next, then. **Needs a decision** lists single actions waiting for a person; one-line **Boundaries** and **People involved** follow. The full rules are at `?tab=status&show=rules`; every waiting action at `?tab=status&show=approvals`.
 - **Decide**: one flow (what changes if I approve this, what do we know, who has said what, Risk, the recommendation, your decision, limits, what should improve, rollout plan, why, review and record). A move up starts from a Proposal, frozen when a person proposes it; only the Owner records an expansion or a hold, after every Reviewer's position and a Residual Risk, and a stale Proposal is replaced, never edited (#144). Full evidence views open with `show=tests`, `runs`, `all`, `targets`, `requirements` or `results`.
-- **Monitor**: **Still justified?** (is the current Authority still justified: the Decision in force against current conditions, material changes and the evidence they may affect, and Investigate, Reduce or Pause, Restore through a new Proposal, and Retire; then the automatic safety limits) and **Delivering value?**.
+- **Monitor**: **Still justified?** (is the current Authority still justified: the Decision in force against current conditions, material changes and the evidence they may affect, and Investigate, Reduce or Pause, Restore through a new Proposal, and Retire; then the automatic safety limits) and **Delivering value?**. When recorded behavior is above the approved Authority (State starts approved for Recommend, observed at Draft), it reads **Operating above approved Authority**, blocks expansion past the observed level, and offers two ways to resolve it (#149).
 - **History**: one timeline of records, reviews, test runs, proposed changes and versions.
 
 Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/…`, and old tabs such as `?tab=summary`, `?tab=rules`, `?tab=evidence`, `?tab=decision`, `?tab=monitoring`, `?tab=contract`, `?tab=criteria`, `?tab=waiting`) are rewritten to where they live now (`src/routes.js`).
@@ -90,9 +90,9 @@ Since #139, **Capabilities → Add capability** starts a setup draft: Context, a
 
 For a new capability, **Setup → Set the boundaries** (**Review the rules**) starts from a template picked by the risk profile plus seeded keyword suggestions labelled "Suggested by AI". Each suggestion is accepted, edited or rejected on its own (no accept-all; rejections stay in the record), all five sections are confirmed (The AI may, Ask a person for these cases, The AI must never, Ask a person whenever this comes up, Authority is reduced automatically when), software checks block empty hard limits above Low impact, contradictions, restriction rules without a number or window, and financial capabilities without a value limit in "may" or "must ask", and a named person saves the rules (**Save rules**) as contract v1. Templates and suggestion rules live in `src/data/contract-templates.js`.
 
-## Success criteria and evidence requirements (Targets and Decision requirements in the app)
+## Success criteria and evidence requirements (Targets and Requirements in the app)
 
-Setup's **Set what good looks like** (**Review the checks**) opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Targets are optional and may be "Needs decision" (#137); the minimum-cases row cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a proposed change (**Propose a target change**, #7). Defaults live in `src/data/criteria-defaults.js`.
+Setup's **Set what good looks like** (**Review the checks**) opens an editor pre-filled from the risk profile, each row labelled with where its default came from. Saving writes v1 of both objects; saves before the first test run write new versions, one activity event per save. Targets are optional and may be "Needs decision" (#137); the minimum-cases row cannot be removed, and loosening or removing a risk-derived default needs a reason that is kept on the version. The suite cannot run until they are saved, and the first run locks them (`criteriaLocked` = saved and `performanceResultsSeen`). After the lock the editor is read-only and changes go through a change request (**Request a change**, #7). Defaults live in `src/data/criteria-defaults.js`.
 
 ## Sign-off rules in one place
 
@@ -120,7 +120,7 @@ Expanding authority needs a pending proposal; restricting, suspending or redesig
 4. **Setup → Configure evidence**: choose which evidence judges each decision requirement (a connected source, Authority Lab tests, or a manual review); **Review evidence coverage** shows what's covered.
 5. **Setup → Fill the gaps** (optional): add test cases and run them, record a result by hand, or let a connected source send results. The first measured result locks the targets.
 6. **Setup → Name who decides**: the people whose positions will be recorded (best before the first results: after them, changing who is involved needs sign-off).
-7. **Setup or Decide → Propose a move to Level N** (once any measured result exists), then **Record decision** in the Decide flow: the capability's second record; a move to Draft sets status Pilot.
+7. **Setup or Decide → Propose a move to Level N** (once any measured result exists), then **Record decision** in the Decide flow: the capability's second record; a move to Draft sets status Pilot. Later levels follow the same way, one at a time, up to Level 4; Level 3 and above also need evidence from real use (#149).
 
 ## People and rights
 

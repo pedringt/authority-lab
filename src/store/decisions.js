@@ -8,7 +8,9 @@ import { setupConfirmed, UNCONFIRMED_REASON } from './setup.js';
 import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
 import { freezeProposal, reviewConditions, openAuthorityProposal, proposalStaleness } from './proposal.js';
-import { peopleModel } from './boundaries.js';
+import { gapBlocks } from './lifecycle.js';
+import { reviewNeeded } from './monitoring.js';
+import { peopleModel, actsThroughGate } from './boundaries.js';
 import { namedOn, materialChanges } from './context.js';
 import { current } from './selectors.js';
 
@@ -54,6 +56,9 @@ export function scopeText(option, conditions, cap, next = null) {
     case 'expand':
       return `The AI handles all eligible ${noun} on its own, within policy.`;
     case 'expand-limits':
+      // #149: structured limits exist only where software enforces them (the
+      // gate). Elsewhere "within limits" means its written Boundaries.
+      if (!cap || !actsThroughGate(cap.id)) return `The AI handles ${noun} on its own only within its written Boundaries. Everything they send to a person still goes to a person.`;
       return `The AI handles ${noun} of $${conditions.maxValue} or less on its own, within policy` +
         `${conditions.noFraudFlag ? ', with no fraud flag' : ''}` +
         `${conditions.noChargeback ? ', with no active chargeback' : ''}` +
@@ -306,6 +311,9 @@ export function canAuthorize(state, capabilityId, { by } = {}) {
     return { ok: false, reason: 'The AI was moved back after crossing a safety limit. Record what happened (the post-incident review) before giving it more authority.' };
   }
   if (expanding) {
+    // #149 (R1-B): never expand beyond observed behavior while above it.
+    const gap = gapBlocks(state, capabilityId, nextAuthority(d.option, getCapability(state, capabilityId).authority, d.proposed).level);
+    if (gap) return { ok: false, reason: gap, gap: true };
     // #144: the frozen Proposal must still describe what is being approved.
     const st = proposalStaleness(state, capabilityId);
     if (st.stale) return { ok: false, reason: `The Proposal is stale: ${st.reasons[0].text} Replace it with a new Proposal before expanding.`, stale: true };
@@ -338,7 +346,7 @@ export function openConditionText(option, state, capabilityId) {
     case 'expand-limits':
       return unmet.length
         ? `${unmet.map((u) => `${u.text} not met yet (currently ${u.current})`).join('; ')}. A person still approves those cases until there is more evidence.`
-        : 'All checks were met when this decision was made.';
+        : 'All Requirements were met when this decision was made.';
     case 'hold':
       return unmet.length ? `Decide again when: ${unmet.map((u) => u.text.toLowerCase()).join('; ')}.` : 'Decide again when there is new evidence.';
     case 'restrict': return 'Going back to the previous level needs a new decision with new evidence.';
@@ -387,7 +395,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     // #119: imported evidence in force, with the configuration it describes.
     ...(externalSnapshot(state, capabilityId).length ? { externalEvidence: deepFreeze(externalSnapshot(state, capabilityId)) } : {}),
     openCondition: openConditionText(option, state, capabilityId),
-    conditions: option === 'expand-limits' && next.level >= 3 ? { ...d.decision.conditions } : null,
+    // Structured limits are recorded only where the gate enforces them (#149).
+    conditions: option === 'expand-limits' && next.level >= 3 && actsThroughGate(cap.id) ? { ...d.decision.conditions } : null,
     // B1: what this expansion is expected to achieve, fixed from here on.
     expectedOutcomes: next.level > previous.level ? deepFreeze(outcomeChecks(d.decision.outcomes).outcomes) : null,
     // Authorized as prefilled for the demo, unedited: the record says so.
@@ -465,6 +474,18 @@ export function realUseEvidence(state, capabilityId) {
   return Boolean(d.pilot) || d.evidence.some((e) => e.external && e.external.kind === 'production');
 }
 
+// Whether the next level can be proposed now (#149: every level up to 4, one
+// at a time; it was Draft only). Nothing open, no review pending, a measured
+// result, real use for Level 3 and above, and no expansion past the observed
+// level while it operates above approved Authority.
+export function readyToPropose(state, capabilityId) {
+  const cap = getCapability(state, capabilityId);
+  const n = cap.authority.level + 1;
+  return cap.status !== 'not-delegated' && cap.status !== 'retired' && n <= 4 && setupConfirmed(state, capabilityId)
+    && !decisionRequired(state, capabilityId) && !reviewNeeded(state, capabilityId).any && performanceResultsSeen(state, capabilityId)
+    && (n < 3 || realUseEvidence(state, capabilityId)) && !gapBlocks(state, capabilityId, n);
+}
+
 // Open an authority decision for a capability: propose the next level. Needs
 // a measured result from any source: an in-app test run, an imported result
 // or one recorded by hand (Paige, 2026-10-13, #126; it was the in-app tests).
@@ -483,6 +504,10 @@ function proposalChecks(state, capabilityId, target, by, what) {
   if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
   if (!performanceResultsSeen(state, capabilityId)) throw new Error('There is no evidence yet. Run the tests, record a result, or have a connected source send results, then propose more authority.');
   if (target >= 3 && !realUseEvidence(state, capabilityId)) throw new Error('Level 3 needs evidence from real use: a pilot at Draft, or production results from a connected source or recorded by hand.');
+  // #149 (R1-B): no expansion beyond observed behavior while it runs above
+  // approved Authority. Governing the observed level is allowed.
+  const gap = gapBlocks(state, capabilityId, target);
+  if (gap) throw new Error(gap);
   return cap;
 }
 

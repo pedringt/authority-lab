@@ -244,6 +244,10 @@ button { font: inherit; }
 .req-mark { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
 .is-met .req-mark { background: var(--pass-bg); color: var(--pass); border: 1px solid var(--pass-bd); }
 .is-unmet .req-mark { background: var(--insuf-bg); color: var(--insuf); border: 1px solid var(--insuf-bd); }
+.is-not-met .req-mark { background: var(--fail-bg); color: var(--fail); border: 1px solid var(--fail-bd); }
+.is-no-evidence .req-mark, .is-unknown .req-mark { background: var(--neutral-bg); color: var(--neutral); border: 1px dashed var(--neutral-bd); }
+.is-not-enough .req-mark, .is-conflicting .req-mark { background: var(--insuf-bg); color: var(--insuf); border: 1px solid var(--insuf-bd); }
+.is-needs-decision .req-mark { background: var(--restr-bg); color: var(--restr); border: 1px solid var(--restr-bd); }
 .req-gap { margin: 4px 0 0; color: var(--insuf); font-size: 14px; }
 
 .pilot-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 14px; }

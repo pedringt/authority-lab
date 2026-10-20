@@ -156,8 +156,8 @@ export function startingRecord(state, cap, { level, notDelegated, now, today, re
     openCondition: notDelegated
       ? 'Deliberately not delegated. Revisit only with a new decision.'
       : now && now.note
-        ? 'Next: set the rules, targets and decision requirements, then run the first test. The first authority decision reviews what it already does today, one level at a time.'
-        : 'Next: set the rules, targets and decision requirements, then run the first test.',
+        ? 'Next: set the rules, Targets and Requirements, then run the first test. The first authority decision reviews what it already does today, one level at a time.'
+        : 'Next: set the rules, Targets and Requirements, then run the first test.',
     // What it does in the real world today: context, never authority.
     ...(now ? { context: { today, label: now.label, note: now.note || null } } : {}),
     conditions: null,
@@ -206,7 +206,7 @@ export function amend(state, capabilityId, kind, { value, author, reason, meta =
   });
 }
 
-export const KIND_LABELS = { contract: 'Rules', criteria: 'Targets', requirements: 'Decision requirements', risk: 'Risk profile', stakeholders: 'Stakeholders' };
+export const KIND_LABELS = { contract: 'Rules', criteria: 'Targets', requirements: 'Requirements', risk: 'Risk profile', stakeholders: 'Stakeholders' };
 
 // Where each versioned object is shown on the capability page.
 const KIND_TABS = { contract: '?tab=status&show=rules', risk: '?tab=status&show=rules', criteria: '?tab=decide&show=targets', requirements: '?tab=decide&show=requirements', stakeholders: '' };

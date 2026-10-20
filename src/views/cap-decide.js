@@ -5,7 +5,7 @@
 // requirements, pilot results) stay one link away, through `show=`.
 
 import { html, raw, section, badge, fmtDate, person, notice, empty, tabIntro } from '../ui.js';
-import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams} from '../store/index.js';
+import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams, RESULT_WORDS } from '../store/index.js';
 import { AGENT_RUNS_CAPABILITY } from '../data/seed.js';
 import { testsView } from './tests.js';
 import { emptyState } from './setup.js';
@@ -36,12 +36,12 @@ export function decideTab(state, cap, query, show, { runs = null } = {}) {
 
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
-// "Almost ready: 5 of 6 checks met", from the decision requirements.
+// "Almost ready: 5 of 6 Requirements met", from the Requirements.
 export function readyHeadline(r) {
-  if (!r.total) return 'Not ready yet: no checks set';
-  if (r.met === r.total) return `Ready: all ${plural(r.total, 'check')} met`;
-  if (r.total - r.met === 1) return `Almost ready: ${r.met} of ${r.total} checks met`;
-  return `Not ready yet: ${r.met} of ${r.total} checks met`;
+  if (!r.total) return 'Not ready yet: no Requirements set';
+  if (r.met === r.total) return `Ready: all ${plural(r.total, 'Requirement')} met`;
+  if (r.total - r.met === 1) return `Almost ready: ${r.met} of ${r.total} Requirements met`;
+  return `Not ready yet: ${r.met} of ${r.total} Requirements met`;
 }
 
 // Were the bar's current versions set before the pilot started?
@@ -70,14 +70,15 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
   const reqs = requirementsNow(state, cap.id);
   const criteria = targetsNow(state, cap.id);
   const before = setBeforePilot(state, cap, d);
-  const targetsOpen = criteria.filter((c) => c.status !== 'pass').length;
+  const targetsOpen = criteria.filter((c) => c.status !== 'pass' && c.status !== 'pending' && c.status !== 'needs-decision').length;
+  const targetsNoEvidence = criteria.filter((c) => c.status === 'pending').length;
 
   const checks = html`<p class="decide-line-lead">What needs to be true first.</p>
-    ${reqs.length ? requirementsList(state, cap.id) : html`<p class="muted">No decision requirements set yet.${criteriaSaved(state, cap.id) ? '' : html` <a href="#/capabilities/${cap.id}/criteria/edit">Set them</a>`}</p>`}
+    ${reqs.length ? requirementsList(state, cap.id) : html`<p class="muted">No Requirements set yet.${criteriaSaved(state, cap.id) ? '' : html` <a href="#/capabilities/${cap.id}/criteria/edit">Set them</a>`}</p>`}
     ${criteria.length ? html`<table class="table decide-targets"><thead><tr><th>Target</th><th>Goal</th><th>Now</th><th>Status</th></tr></thead>
-      <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}</td><td>${c.status === 'pending' ? html`<span class="muted">Not measured yet</span>` : c.judged && ['fail', 'insufficient', 'too-early'].includes(c.status) ? html`<span class="decide-weak">${TARGET_WORDS[c.status]}</span>` : TARGET_WORDS[c.status] || c.status}</td></tr>`)}</tbody></table>` : ''}
+      <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}</td><td>${targetStatus(c)}</td></tr>`)}</tbody></table>` : ''}
     ${before === true ? html`<p class="muted small">Set before the pilot started, so the bar didn't move after the results came in.</p>` : before === false ? html`<p class="muted small">Changed after the pilot started. Every change is in <a href="#/capabilities/${cap.id}/versions?kind=criteria">history</a>.</p>` : ''}
-    <p class="small"><a href="${base}&show=requirements">Decision requirements</a> · <a href="${base}&show=targets">Targets</a></p>`;
+    <p class="small"><a href="${base}&show=requirements">Requirements</a> · <a href="${base}&show=targets">Targets</a></p>`;
 
   const testsMeta = !t.total ? 'none yet'
     : t.status === 'complete' ? `${t.passed} of ${t.total} passed today`
@@ -108,7 +109,7 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
     ${barChangedNote(state, cap)}
     ${amendedNote(state, { capabilityId: cap.id, versions: versionsInForce(state, cap.id) })}
     <div class="decide-lines">
-      ${line('Checks', `${r.total ? `${r.met} of ${r.total} met` : 'none set'}${targetsOpen ? ` · ${plural(targetsOpen, 'target')} not met yet` : ''}`, checks)}
+      ${line('Requirements', `${r.total ? `${r.met} of ${r.total} met` : 'none set'}${targetsOpen ? ` · ${plural(targetsOpen, 'target')} not met yet` : ''}${targetsNoEvidence ? ` · ${plural(targetsNoEvidence, 'target')} with no evidence yet` : ''}`, checks)}
       ${line('Tests', testsMeta, tests)}
       ${importedLine(state, cap, base, line)}
       ${line('Pilot results', p ? `${p.cases} cases, ${p.accuracy}% accurate` : 'none yet', pilot)}
@@ -161,6 +162,14 @@ export function gateActivityCard(state, cap) {
     </table></div>`, { subtitle: `${g.events} actions, from: ${g.sources.map((x) => GATE_SOURCES[x] || x).join(', ')}. Every action is checked against the rules and logged. These numbers feed the results and the safety limits.` });
 }
 
+// A Target's status in words (#149): never a raw key; no evidence is a gap,
+// not a failure, and a missing number needs a decision.
+function targetStatus(c) {
+  if (c.status === 'pending') return html`<span class="muted">No evidence yet</span>`;
+  if (c.status === 'needs-decision') return html`<span class="muted">Needs decision</span>`;
+  const words = TARGET_WORDS[c.status] || 'Unknown';
+  return c.judged && ['fail', 'insufficient', 'too-early'].includes(c.status) ? html`<span class="decide-weak">${words}</span>` : words;
+}
 const TARGET_WORDS = { pass: 'Met', watch: 'Not met yet', fail: 'Not met', insufficient: 'Not enough data yet', 'too-early': 'Too early to judge' };
 
 const SEGMENT_WORDS = { pass: 'Looks good', watch: 'Watch', fail: 'Problem', insufficient: 'Not enough data yet' };
@@ -191,7 +200,7 @@ export function criteriaTab(state, cap) {
 }
 
 export function requirementsTab(state, cap) {
-  if (!criteriaSaved(state, cap.id)) return emptyState(state, cap.id, 'No decision requirements yet.', 'criteria');
+  if (!criteriaSaved(state, cap.id)) return emptyState(state, cap.id, 'No Requirements yet.', 'criteria');
   return html`${tabIntro(`What we need before ${proposedChangeLabel(cap, state)}.`, 'A checklist, not a score. Every item has to be met, or a person has to decide to go ahead anyway and say why on the record.')}
     ${requirementsList(state, cap.id)}`;
 }
@@ -201,16 +210,32 @@ export function proposedChangeLabel(cap, state) {
   return proposed ? `${authorityLabel(cap.authority, { short: true })} → ${authorityLabel(proposed, { short: true })}` : 'the next authority change';
 }
 
+// Each result reads differently (#149): no evidence and not enough evidence
+// are gaps, Unknown is neither, and only Not met is a failure.
+const RESULT_MARK = { met: '✓', 'not-met': '✕', unknown: '?', conflicting: '≠', 'not-enough': '◔', 'no-evidence': '○', 'needs-decision': '•' };
+const NO_VALUE = new Set(['No results yet', 'Not yet measured']);
+function resultStatus(q) {
+  if (q.result) return q.result.status;
+  if (q.met) return 'met';
+  const j = q.judged && q.judged.status;
+  return j === 'pending' ? 'no-evidence' : j === 'insufficient' || j === 'too-early' ? 'not-enough' : 'not-met';
+}
+
 export function requirementsList(state, capabilityId) {
   const r = readiness(state, capabilityId);
   const reqs = requirementsNow(state, capabilityId);
-  if (!reqs.length) return empty('No decision requirements set.');
+  if (!reqs.length) return empty('No Requirements set.');
   return html`<div class="card">
-    <ul class="req-list">${reqs.map((q) => html`<li class="${q.met ? 'is-met' : 'is-unmet'}">
-      <span class="req-mark" aria-hidden="true">${q.met ? '✓' : '⚠'}</span>
-      <span class="req-text"><strong>${q.text}</strong><span class="muted"> · ${q.met ? 'Met' : q.judged && ['too-early', 'insufficient', 'pending'].includes(q.judged.status) ? TARGET_WORDS[q.judged.status] || 'No results yet' : 'Not met'}: ${q.current}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
-    </li>`)}</ul>
-    <p class="muted small"><strong>${r.met} of ${r.total}</strong> checks met.</p>
+    <ul class="req-list">${reqs.map((q) => {
+      const st = resultStatus(q);
+      const label = RESULT_WORDS[st];
+      const value = q.current && q.current !== label && !NO_VALUE.has(q.current) ? `: ${q.current}` : '';
+      return html`<li class="is-${st}">
+      <span class="req-mark" aria-hidden="true">${RESULT_MARK[st]}</span>
+      <span class="req-text"><strong>${q.text}</strong><span class="muted"> · ${label}${value}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
+    </li>`;
+    })}</ul>
+    <p class="muted small"><strong>${r.met} of ${r.total}</strong> Requirements met.</p>
   </div>`;
 }
 

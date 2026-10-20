@@ -1,6 +1,6 @@
 # Authority Lab: notes for Claude Code
 
-A prototype for deciding what an AI capability should be allowed to do, based on evidence. **AI interprets. Software enforces. Humans authorize.**
+A prototype for deciding what an AI capability should be allowed to do, based on evidence. **AI interprets. Software enforces configured controls. Humans authorize.**
 
 Read before working:
 - `docs/HANDOFF.md`: where the work stands right now and what to pick up next. Read it first, then check it against `gh pr list`.
