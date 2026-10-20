@@ -55,6 +55,6 @@ export function capabilityView(state, id, query, { runs = null } = {}) {
   </header>
   ${setupState(state, cap.id) === 'draft' ? notice('decision', 'Setup isn\'t confirmed yet', 'No authority is granted until the owner reviews and confirms the setup. Until then the AI can\'t act, and no one can propose more authority. Tests and evidence can still be gathered.', { link: `${base}/setup`, linkText: 'Continue setup' }) : ''}
   ${query.get('error') ? notice('fail', 'That didn\'t work', query.get('error')) : ''}
-  ${query.get('tightened') ? notice('pass', 'Targets tightened', 'Every change only made a target stricter, so it applied straight away. Changes are kept in history.', { link: `${base}?tab=history`, linkText: 'See history' }) : ''}
+  ${query.get('recorded') ? notice('pass', 'Recorded, no approval needed', 'It only completes or strengthens the bar, so it applied straight away, with your name and reason. Changes are kept in history.', { link: `${base}?tab=history`, linkText: 'See history' }) : ''}
   <div class="tab-panel">${body}</div>`;
 }

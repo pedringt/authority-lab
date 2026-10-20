@@ -55,7 +55,8 @@ export function mapEvidence(state, capabilityId, { rowKind, rowId, measure, by, 
   if (!criteriaLocked(state, capabilityId)) {
     return saveCriteria(state, capabilityId, { ...value, by, reason: why || `Evidence ${next ? 'mapped' : 'unmapped'} for "${label}".` });
   }
-  // After results, how a row is measured changes only with approval.
-  if (why.length < 10) throw new Error('Results already exist, so changing which evidence judges this row needs approval. Say why (a sentence or more).');
+  // After results (#155, R6): linking a row that had no evidence is recorded;
+  // changing or removing an existing link needs approval. Either way, a reason.
+  if (why.length < 10) throw new Error(`Results already exist, so say why (a sentence or more). ${row.measure ? 'Changing which evidence judges this row needs approval.' : 'Linking it to its evidence is recorded with your name and reason; it needs no approval.'}`);
   return proposeAmendment(state, capabilityId, 'criteria', { value, by, reason: why });
 }

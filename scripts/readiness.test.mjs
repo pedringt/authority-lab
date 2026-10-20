@@ -9,7 +9,7 @@ import {
   initialState, startEmpty, setUpWorkspace, addPerson, addCapability, getCapability, capData, current,
   saveCriteria, saveStakeholders, mapEvidence, rowMetric, MANUAL_SOURCE, recordResult, recordJudgment,
   proposeAuthority, replaceProposal, selectDecision, setRationale, setOutcome, setRolloutField, setResidualRisk, canAuthorize, authorize, people,
-  readiness, isConsideration, tighteningOnly, reviewConditions,
+  readiness, isConsideration, classifyChange, reviewConditions,
 } from '../src/store/index.js';
 import { cleanRequirements } from '../src/store/evidence.js';
 import { setPeople, setToday } from '../src/ui.js';
@@ -146,11 +146,12 @@ test('the model: a consideration is kept; the minimum-cases row is always hard',
   assert.throws(() => cleanRequirements([{ id: 'a', text: 'A', judgment: 'person', consideration: 'yes' }]), /hard or a consideration/);
 });
 
-test('changing a Requirement between hard and consideration is never a tightening shortcut', () => {
-  const base = { criteria: [], requirements: [{ id: 'tone', text: 'Clients find the tone friendly', judgment: 'person' }] };
-  const soft = { criteria: [], requirements: [{ id: 'tone', text: 'Clients find the tone friendly', judgment: 'person', consideration: true }] };
-  assert.deepEqual(tighteningOnly(base, soft), { ok: false, reason: 'It changes whether "Clients find the tone friendly" is a hard Requirement or a consideration.', changes: [] });
-  assert.equal(tighteningOnly(soft, base).ok, false);
+test('after results, hard → consideration needs sign-off; consideration → hard is recorded (#155, R6)', () => {
+  const [s, id] = firm();
+  const soften = classifyChange(s, id, 'criteria', { criteria: current(s, id, 'criteria'), requirements: current(s, id, 'requirements').map((r) => (r.id === 'templates' ? { ...r, consideration: true } : r)) });
+  assert.deepEqual(soften.governed, ['It makes "The tax lead has approved the templates" a consideration instead of a hard Requirement.']);
+  const harden = classifyChange(s, id, 'criteria', { criteria: current(s, id, 'criteria'), requirements: current(s, id, 'requirements').map((r) => (r.id === 'tone' ? { ...r, consideration: false } : r)) });
+  assert.deepEqual([harden.recorded, harden.governed, harden.raises], [['Makes "Clients find the tone friendly" a hard Requirement.'], [], true]);
 });
 
 test('screens: the Requirements list marks considerations, and its copy says hard Requirements block', () => {

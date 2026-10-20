@@ -214,7 +214,7 @@ export function barChangedNote(state, cap) {
   if (!changes.length) return '';
   const word = { stricter: 'made stricter', looser: 'made easier to meet', changed: 'changed', added: 'added', removed: 'removed' };
   return html`<div class="notice notice-watch" role="status"><div class="notice-body"><strong>Targets or Requirements changed after this decision was opened</strong>
-    <ul class="plain-list">${changes.map((c) => html`<li>${c.kind === 'criteria' ? 'Targets' : 'Requirements'} v${c.version}, ${fmtDate(c.date)}, ${personAt(c.authorAt, c.author).name}${c.proposalId ? html` (approved, <a href="#/capabilities/${cap.id}/proposals/${c.proposalId}">${c.proposalId}</a>)` : c.tighteningOnly ? ' (made stricter only, no approval needed)' : ''}: ${c.rows.length ? c.rows.map((r, i) => html`${i ? '; ' : ''}${r.label} ${word[r.change]}${r.from && r.to ? ` (${r.from} → ${r.to})` : ''}`) : 'nothing changed'}.</li>`)}</ul>
+    <ul class="plain-list">${changes.map((c) => html`<li>${c.kind === 'criteria' ? 'Targets' : 'Requirements'} v${c.version}, ${fmtDate(c.date)}, ${personAt(c.authorAt, c.author).name}${c.proposalId ? html` (approved, <a href="#/capabilities/${cap.id}/proposals/${c.proposalId}">${c.proposalId}</a>)` : c.tighteningOnly ? ' (made stricter only, no approval needed)' : c.recorded ? ' (recorded, no approval needed)' : ''}: ${c.rows.length ? c.rows.map((r, i) => html`${i ? '; ' : ''}${r.label} ${word[r.change]}${r.from && r.to ? ` (${r.from} → ${r.to})` : ''}`) : 'nothing changed'}.</li>`)}</ul>
     <p class="small">"Ready for a decision?" uses the Targets and Requirements as they are now.</p></div>
     <a class="notice-link" href="#/capabilities/${cap.id}/versions?kind=criteria">See history</a></div>`;
 }

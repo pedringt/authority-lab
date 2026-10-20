@@ -4,7 +4,7 @@ import { getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, versionList, versionsInForce, performanceResultsSeen, readiness, decisionRequired } from './selectors.js';
 import { people, activePeople, isActivePerson, isRiskApprover, snapshotPerson, requireActive, soloHint } from './people.js';
 import { amend } from './capabilities.js';
-import { SECTION_KEYS, contractValueChecks } from './contract.js';
+import { SECTION_KEYS, SECTION_LABELS, contractValueChecks, norm } from './contract.js';
 import { requirementsNow, judgeMeasure } from './measures.js';
 import { effectiveJudgment } from './lightweight.js';
 import { criteriaLocked, defaultsFor, cleanCriteria, cleanRequirements, checkTargetLinks, isUnresolvedTarget, CORE_LABELS, threshold, defaultDeviations, saveCriteria, CORE_CRITERIA, CORE_REQUIREMENTS, carryMeasure, unchangedMeasuresDropped } from './evidence.js';
@@ -143,10 +143,13 @@ export function cleanAmendmentValue(state, capabilityId, kind, value) {
     const { kind, bar, ...bRest } = unmeasured(b);
     // A coverage rule's number set, or cleared to Needs decision (#139).
     const status = x.bar ? { bar: x.bar, current: x.current, met: false } : bar ? { current: 'Not yet measured', met: false } : {};
-    const { judgment: bJudgment, ...bRest2 } = bRest;
+    const { judgment: bJudgment, consideration: bConsideration, ...bRest2 } = bRest;
     // How it is judged is part of the Requirement (#143 review): kept unless the change says otherwise.
     const judgment = x.judgment || bJudgment;
-    return carryMeasure({ ...bRest2, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...(judgment ? { judgment } : {}), ...status, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text);
+    // Hard or consideration (#151): kept unless the change says, either way.
+    const raw = ((value && value.requirements) || []).find((y) => y && y.id === x.id) || {};
+    const consideration = Object.hasOwn(raw, 'consideration') ? Boolean(raw.consideration) : Boolean(bConsideration);
+    return carryMeasure({ ...bRest2, text: x.text, ...(x.kind ? { kind: x.kind } : {}), ...(judgment ? { judgment } : {}), ...(consideration ? { consideration: true } : {}), ...status, ...(Object.hasOwn(x, 'measure') ? { measure: x.measure } : {}) }, b, x.text, x.text);
   });
   checkTargetLinks(criteria, requirements);
   return { criteria, requirements };
@@ -237,18 +240,6 @@ export function tighteningOnly(base, next) {
   return { ok: true, reason: null, changes };
 }
 
-// Who may use the tightening shortcut, and when (Paige, 2026-10-09): only the
-// capability owner or a named stakeholder, and never while an expansion
-// decision is pending, because raising the bar then can block the decision.
-// Otherwise a tightening-only change goes to normal sign-off like any other.
-export function tighteningShortcut(state, capabilityId, by) {
-  if (!namedStakeholders(state, capabilityId).includes(by)) {
-    const who = (people(state)[by] || { name: by }).name;
-    return { ok: false, reason: `Only the owner or a listed stakeholder can make targets stricter without approval. ${who} isn't either, so this change needs approval.` };
-  }
-  if (decisionRequired(state, capabilityId)) return { ok: false, reason: 'A decision about more authority is open, so any target change needs approval until it is made.' };
-  return { ok: true, reason: null };
-}
 
 // The bar (criteria and requirements) as it changed since the pending
 // decision opened: every newer version, with each changed row marked stricter,
@@ -273,7 +264,7 @@ export function barChangesSinceDecisionOpened(state, capabilityId) {
       }
       for (const b of before) if (!v.value.some((a) => a.id === b.id)) rows.push({ label: label(b), change: 'removed', from: b[field] });
       // Both objects get a new version together; skip the one where no row changed.
-      if (rows.length) out.push({ kind, version: v.version, date: v.date, author: v.author, authorAt: v.authorAt, reason: v.reason, tighteningOnly: Boolean(v.tighteningOnly), proposalId: v.proposalId || null, rows });
+      if (rows.length) out.push({ kind, version: v.version, date: v.date, author: v.author, authorAt: v.authorAt, reason: v.reason, tighteningOnly: Boolean(v.tighteningOnly), recorded: Boolean(v.recorded), proposalId: v.proposalId || null, rows });
     }
   }
   return out;
@@ -281,6 +272,174 @@ export function barChangesSinceDecisionOpened(state, capabilityId) {
 
 export function applyCriteriaDirect(state, capabilityId, value, by, reason) {
   return saveCriteria(state, capabilityId, { criteria: value.criteria, requirements: value.requirements, by, reason });
+}
+
+// ---------------------------------------------------------------------------
+// What needs sign-off after results (#155, D6, R6; Paige, 2026-10-20).
+// Changing the decision bar is governed; completing or strengthening it is
+// recorded, with a named person and a reason, and no approval:
+//   recorded: linking a Requirement or Target that had no evidence; adding a
+//     Reviewer or Stakeholder; tightening a bar; consideration -> hard;
+//     adding a Requirement; adding or tightening a Boundary.
+//   governed: loosening a Target or bar; removing a hard Requirement; hard ->
+//     consideration; changing an existing evidence mapping or source; a
+//     Boundary change that permits more; removing a Reviewer; changing
+//     Reviewer <-> Stakeholder.
+// The recorded list is exhaustive: anything it doesn't name keeps sign-off,
+// as before. One governed part makes the whole change governed.
+// ---------------------------------------------------------------------------
+
+const RESTRICTIVE = ['mustAsk', 'mustNever', 'escalation', 'autoRestriction'];
+const measureRest = (m) => (m ? JSON.stringify({ ...m, value: undefined }) : null);
+
+// Compare a row's bar wording; 'stricter', 'same' or a reason it's not.
+function barMove(before, after) {
+  if (String(before || '') === String(after || '')) return 'same';
+  const p = thresholdParts(before);
+  const q = thresholdParts(after);
+  if (!p || !q) return 'no-number';
+  if (p.skeleton !== q.skeleton) return 'reworded';
+  if (q.n === p.n) return 'rewritten';
+  return (p.atLeast ? q.n > p.n : q.n < p.n) ? 'stricter' : 'looser';
+}
+
+function classifyCriteria(base, next) {
+  const out = { recorded: [], governed: [], raises: false };
+  const rec = (t, raises = false) => { out.recorded.push(t); if (raises) out.raises = true; };
+  const gov = (t) => out.governed.push(t);
+  const evidenceMove = (b, a, label) => {
+    if (!b.measure && a.measure) rec(`Links "${label}" to its evidence.`);
+    else if (b.measure && !a.measure) gov(`It removes the evidence that judges "${label}".`);
+    else if (b.measure && a.measure && measureRest(b.measure) !== measureRest(a.measure)) gov(`It changes the evidence that judges "${label}".`);
+  };
+  const bar = (b, a, field, label) => {
+    const move = barMove(b[field], a[field]);
+    if (move === 'stricter') rec(`Tightens "${label}": ${b[field]} → ${a[field]}.`, true);
+    else if (move === 'looser') gov(`It loosens "${label}": ${b[field]} → ${a[field]}.`);
+    else if (move === 'reworded') gov(`It rewords "${label}", not only its number.`);
+    else if (move === 'rewritten') gov(`It rewrites "${label}" without making it stricter.`);
+    else if (move === 'no-number') gov(`It changes "${label}" in a way that can't be compared as stricter: ${b[field]} → ${a[field]}.`);
+    else if (b.measure && a.measure && b.measure.value !== a.measure.value) gov(`It changes how "${label}" is measured.`);
+  };
+  const br = base.requirements || [];
+  const nr = next.requirements || [];
+  for (const b of br) if (!nr.some((a) => a.id === b.id)) gov(b.consideration ? `It removes the consideration "${b.text}".` : `It removes the hard Requirement "${b.text}".`);
+  for (const a of nr) {
+    const b = br.find((x) => x.id === a.id);
+    if (!b) { rec(`Adds the Requirement "${a.text}"${a.consideration ? ', as a consideration' : ''}.`, !a.consideration); continue; }
+    if (b.consideration && !a.consideration) rec(`Makes "${b.text}" a hard Requirement.`, true);
+    if (!b.consideration && a.consideration) gov(`It makes "${b.text}" a consideration instead of a hard Requirement.`);
+    if (effectiveJudgment(a) !== effectiveJudgment(b)) gov(`It changes how "${b.text}" is judged.`);
+    for (const f of ['kind', 'bar']) if (String(a[f] || '') !== String(b[f] || '')) gov(`It changes the ${f === 'bar' ? 'bar' : 'kind'} of "${b.text}".`);
+    evidenceMove(b, a, b.text);
+    bar(b, a, 'text', b.text);
+  }
+  const bc = base.criteria || [];
+  const nc = next.criteria || [];
+  for (const b of bc) if (!nc.some((a) => a.id === b.id)) gov(`It removes the Target "${b.name}".`);
+  for (const a of nc) {
+    const b = bc.find((x) => x.id === a.id);
+    if (!b) { gov(`It adds the Target "${a.name}".`); continue; }
+    for (const f of ['name', 'note', 'requirement', 'bar']) if (String(a[f] || '') !== String(b[f] || '')) gov(`It changes the ${f === 'requirement' ? 'Requirement it judges' : f} of "${b.name}".`);
+    evidenceMove(b, a, b.name);
+    bar(b, a, 'target', b.name);
+  }
+  return out;
+}
+
+function classifyStakeholders(base, next, nameOf = (k) => k) {
+  const out = { recorded: [], governed: [], raises: false };
+  const role = (st) => (peopleRoleOf(st) === 'reviewer' ? 'Reviewer' : 'Stakeholder');
+  for (const b of base) {
+    const a = next.find((x) => x.person === b.person);
+    if (!a) { out.governed.push(`It removes ${role(b)} ${nameOf(b.person)}.`); continue; }
+    if (role(a) !== role(b)) out.governed.push(`It changes ${nameOf(b.person)} from ${role(b)} to ${role(a)}.`);
+    if (String(a.team || '') !== String(b.team || '')) out.governed.push(`It changes ${nameOf(b.person)}'s team label.`);
+  }
+  for (const a of next) if (!base.some((b) => b.person === a.person)) out.recorded.push(`Adds ${nameOf(a.person)} as a ${role(a)}.`);
+  return out;
+}
+
+function classifyContract(base, next) {
+  const out = { recorded: [], governed: [], raises: false };
+  const n = (list) => (list || []).map(norm);
+  for (const k of SECTION_KEYS) {
+    const b = base[k] || [];
+    const a = next[k] || [];
+    const added = a.filter((t) => !n(b).includes(norm(t)));
+    const removed = b.filter((t) => !n(a).includes(norm(t)));
+    const label = SECTION_LABELS[k];
+    if (RESTRICTIVE.includes(k)) {
+      for (const t of added) out.recorded.push(`Adds the Boundary "${t}" under "${label}".`);
+      for (const t of removed) out.governed.push(`It removes the Boundary "${t}" from "${label}", which permits more.`);
+    } else {
+      for (const t of removed) out.recorded.push(`No longer allows "${t}".`);
+      for (const t of added) out.governed.push(`It allows "${t}", which permits more.`);
+    }
+  }
+  const bd = base.dataSeen || [];
+  const ad = next.dataSeen || [];
+  for (const f of ad) if (!bd.includes(f)) out.governed.push(`It lets the AI see "${f}".`);
+  for (const f of bd) if (!ad.includes(f)) out.recorded.push(`Stops the AI seeing "${f}".`);
+  const bm = base.ruleMeasures || {};
+  const am = next.ruleMeasures || {};
+  for (const line of new Set([...Object.keys(bm), ...Object.keys(am)])) {
+    if (JSON.stringify(bm[line] || null) === JSON.stringify(am[line] || null)) continue;
+    const newLine = !(base.autoRestriction || []).includes(line) && (next.autoRestriction || []).includes(line);
+    if (newLine && !bm[line]) continue;
+    out.governed.push(`It changes how "${line}" is measured.`);
+  }
+  for (const k of Object.keys(next)) if (![...SECTION_KEYS, 'dataSeen', 'ruleMeasures'].includes(k) && JSON.stringify(next[k]) !== JSON.stringify(base[k])) out.governed.push(`It changes ${k}.`);
+  return out;
+}
+
+// What a change after results is: what it records, what needs sign-off, and
+// whether it raises the decision bar.
+export function classifyChange(state, capabilityId, kind, value) {
+  if (kind === 'criteria') return classifyCriteria({ criteria: current(state, capabilityId, 'criteria'), requirements: current(state, capabilityId, 'requirements') }, value);
+  if (kind === 'stakeholders') return classifyStakeholders(current(state, capabilityId, 'stakeholders'), value, (k) => (people(state)[k] || { name: k }).name);
+  if (kind === 'contract') return classifyContract(current(state, capabilityId, 'contract'), value);
+  throw new Error(`Unknown amendment kind: ${kind}`);
+}
+
+// Who may make a recorded change: the owner or someone named on the
+// capability. While an expansion decision is open, a change that raises the
+// bar still needs approval, because it could block that decision (Paige,
+// 2026-10-09); linking evidence, adding people and adding Boundaries don't.
+export function recordedChange(state, capabilityId, by, c) {
+  if (!namedStakeholders(state, capabilityId).includes(by)) {
+    const who = (people(state)[by] || { name: by }).name;
+    return { ok: false, reason: `Only the owner or someone named on it can make this change without approval. ${who} isn't either, so it needs approval.` };
+  }
+  if (c.raises && decisionRequired(state, capabilityId)) return { ok: false, reason: 'A decision about more authority is open, so a change that raises the bar needs approval until it is made.' };
+  return { ok: true, reason: null };
+}
+
+const RECORDED_TITLE = { criteria: 'Requirements or Targets changed after results, recorded', stakeholders: 'People added after results, recorded', contract: 'Boundaries tightened, recorded' };
+function applyRecorded(state, capabilityId, kind, value, by, reason, changes) {
+  const cap = getCapability(state, capabilityId);
+  const meta = { recorded: true, changes };
+  let s;
+  if (kind === 'criteria') {
+    const requirements = proposalReadiness(state, capabilityId, { kind: 'criteria', value }).proposed.requirements;
+    // A capability with no Targets keeps saying so, or the bar would unlock.
+    s = amend(state, capabilityId, 'criteria', { value: value.criteria, author: by, reason, meta: { ...meta, ...(value.criteria.length ? {} : { noTargets: true }) }, silent: true });
+    s = amend(s, capabilityId, 'requirements', { value: requirements, author: by, reason, meta, silent: true });
+  } else {
+    s = amend(state, capabilityId, kind, { value, author: by, reason, meta, silent: true });
+  }
+  const v = versionsInForce(s, capabilityId);
+  return logEvent(s, {
+    kind: 'amendment',
+    afterEvidence: true,
+    objectKind: kind,
+    version: v[kind],
+    recorded: true,
+    title: RECORDED_TITLE[kind],
+    body: `${cap.name}: ${people(state)[by].name} recorded this without approval, because it only completes or strengthens the bar: ${changes.join(' ')} Reason: ${reason}`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/versions?kind=${kind}&version=${v[kind]}`,
+  });
 }
 
 // Propose a change to locked criteria/requirements, or to the contract once a
@@ -304,17 +463,15 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     return amend(state, capabilityId, 'contract', { value: clean, author: by, reason: why });
   }
   if (openProposal(state, capabilityId, kind)) throw new Error('A change to this already needs approval. It has to be approved, rejected or withdrawn first.');
-  // A tightening-only change skips sign-off, but only for the owner or a named
-  // stakeholder and only while no expansion decision is pending. If it would
-  // have qualified otherwise, the proposal records why it didn't.
+  // R6 (#155): a change that only completes or strengthens the bar is
+  // recorded, not approved, when the owner or someone named makes it. If it
+  // would have qualified otherwise, the proposal records why it didn't.
+  const c = classifyChange(state, capabilityId, kind, clean);
   let shortcutDeclined = null;
-  if (kind === 'criteria') {
-    const check = tighteningOnly({ criteria: current(state, capabilityId, 'criteria'), requirements: current(state, capabilityId, 'requirements') }, clean);
-    if (check.ok) {
-      const allowed = tighteningShortcut(state, capabilityId, by);
-      if (allowed.ok) return applyTightening(state, capabilityId, clean, by, why, check.changes);
-      shortcutDeclined = allowed.reason;
-    }
+  if (c.recorded.length && !c.governed.length) {
+    const allowed = recordedChange(state, capabilityId, by, c);
+    if (allowed.ok) return applyRecorded(state, capabilityId, kind, clean, by, why, c.recorded);
+    shortcutDeclined = allowed.reason;
   }
   const required = signoffRequirements(state, capabilityId, by);
   const eligible = namedStakeholders(state, capabilityId).filter((k) => k !== by);
@@ -340,6 +497,8 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     rejection: null,
     applied: null,
     shortcutDeclined,
+    // Why it needs sign-off (#155), in the person's words.
+    needsSignoffBecause: c.governed,
   };
   const s = updateCap(state, capabilityId, { proposals: [...d.proposals, proposal] });
   const who = people(state)[by];
@@ -350,29 +509,6 @@ export function proposeAmendment(state, capabilityId, kind, { value, by, reason 
     body: `${cap.name}: ${who.name} proposed a ${CHANGE_KIND[kind].toLowerCase()} after results were in. ${requirementLabel(proposal.required)} ${who.name} can't approve it. Reason: ${why}`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/proposals/${proposal.id}`,
-  });
-}
-
-// Apply a tightening-only change straight away: new versions of both objects,
-// authored by whoever is acting, marked as tightening only, with a surfaced
-// amendment event after evidence. No proposal, no approvers.
-function applyTightening(state, capabilityId, value, by, reason, changes) {
-  const cap = getCapability(state, capabilityId);
-  const requirements = proposalReadiness(state, capabilityId, { kind: 'criteria', value }).proposed.requirements;
-  const meta = { tighteningOnly: true, tightened: changes };
-  let s = amend(state, capabilityId, 'criteria', { value: value.criteria, author: by, reason, meta, silent: true });
-  s = amend(s, capabilityId, 'requirements', { value: requirements, author: by, reason, meta, silent: true });
-  const v = versionsInForce(s, capabilityId);
-  return logEvent(s, {
-    kind: 'amendment',
-    afterEvidence: true,
-    objectKind: 'criteria',
-    version: v.criteria,
-    tighteningOnly: true,
-    title: 'Targets made stricter after results were in',
-    body: `${cap.name}: ${people(state)[by].name} made these stricter: ${changes.map((c) => `${c.label} (${c.from} → ${c.to})`).join('; ')}. No approval was needed because every change only made a target stricter and nothing was added, removed or reworded. Reason: ${reason}`,
-    capabilityId,
-    link: `#/capabilities/${capabilityId}/versions?kind=criteria&version=${v.criteria}`,
   });
 }
 
