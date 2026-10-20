@@ -11,8 +11,9 @@ import {
   saveCriteria, saveStakeholders, mapEvidence, recordResult, recordManualEvidence, MANUAL_SOURCE, rowMetric, targetsNow, criteriaLocked,
   proposeAmendment, openProposal, approveProposal, proposeAuthority, setRationale, setOutcome, setRolloutField, setResidualRisk, selectDecision, authorize,
   formalRiskApprovals, setFormalRiskApprovals, coverageWarning, reviewEligibility, realUseEvidence, realUseCases, readyToPropose,
-  noHardQuality, amendmentsAfterEvidenceFor, buildWorkspace, people, provisionalLink, signoffRequirements,
+  noHardQuality, amendmentsAfterEvidenceFor, buildWorkspace, people, provisionalLink, signoffRequirements, requirementsNow,
 } from '../src/store/index.js';
+const readinessRow = (s, id, rid) => requirementsNow(s, id).find((r) => r.id === rid);
 import { stateWorkspace } from '../src/data/workspaces/state.js';
 import { setPeople, setToday } from '../src/ui.js';
 import { capabilityView } from '../src/views/capability.js';
@@ -193,4 +194,38 @@ test('screens: the result form says what "How many" counts; Configure offers "Re
   s = proposeAmendment(s, id, 'criteria', { value: { criteria: current(s, id, 'criteria').map((c) => ({ ...c, target: '≤ 10% of drafts' })), requirements: current(s, id, 'requirements') }, by: ANA, reason: 'Five percent is out of reach this season.' });
   const pv = String(proposalView({ ...s, actingAs: BEN }, id, openProposal(s, id, 'criteria').id, new URLSearchParams()));
   assert.match(strip(pv), /I've considered what could go wrong with this change, and I accept the risk\./);
+});
+
+test('#159: a case count adds test and real-use cases up; it is never Conflicting', () => {
+  let [s, id] = firm();
+  s = mapEvidence(s, id, { rowKind: 'requirement', rowId: 'min-cases', measure: { source: MANUAL_SOURCE, metric: rowMetric('target', 'errors'), stat: 'sample' }, by: ANA });
+  s = recordResult(s, id, { rowKind: 'target', rowId: 'errors', type: 'rate', passed: '1', total: '25', kind: 'eval', by: BEN });
+  s = recordResult(s, id, { rowKind: 'target', rowId: 'errors', type: 'rate', passed: '0', total: '2', kind: 'production', by: BEN });
+  const min = (x) => readinessRow(x, id, 'min-cases');
+  assert.equal(min(s).result.status, 'met', 'not Conflicting');
+  assert.match(min(s).current, /^27 \(/);
+  // Below the minimum across all sources, it is short of evidence, not a conflict.
+  let [t, tid] = firm();
+  t = mapEvidence(t, tid, { rowKind: 'requirement', rowId: 'min-cases', measure: { source: MANUAL_SOURCE, metric: rowMetric('target', 'errors'), stat: 'sample' }, by: ANA });
+  t = recordResult(t, tid, { rowKind: 'target', rowId: 'errors', type: 'rate', passed: '0', total: '10', kind: 'eval', by: BEN });
+  t = recordResult(t, tid, { rowKind: 'target', rowId: 'errors', type: 'rate', passed: '0', total: '5', kind: 'production', by: BEN });
+  assert.equal(readinessRow(t, tid, 'min-cases').result.status, 'not-enough');
+});
+
+test('#159: the no-quality warning shows right after a Decision, where the next Proposal is offered', () => {
+  let [s, id] = firm();
+  s = saveCriteria(s, id, { criteria: current(s, id, 'criteria'), requirements: current(s, id, 'requirements').map((r) => (r.id === 'facts' ? { ...r, consideration: true } : r)), by: ANA, reason: 'Just counting cases for now.' });
+  s = mapEvidence(s, id, { rowKind: 'requirement', rowId: 'min-cases', measure: { source: MANUAL_SOURCE, metric: rowMetric('target', 'errors'), stat: 'sample' }, by: ANA });
+  s = recordResult(s, id, { rowKind: 'target', rowId: 'errors', type: 'rate', passed: '1', total: '25', kind: 'eval', by: BEN });
+  s = saveStakeholders(s, id, { stakeholders: current(s, id, 'stakeholders').map((p) => ({ ...p, position: 'Ready for a pilot.' })), by: BEN });
+  s = proposeAuthority(s, id, 2, { by: ANA });
+  s = selectDecision(s, id, 'expand');
+  s = setOutcome(setOutcome(s, id, 0, 'metric', 'Time to send'), id, 0, 'target', 'at least 30% faster');
+  s = setOutcome(setOutcome(s, id, 1, 'metric', 'Emails corrected'), id, 1, 'target', 'at most 10%');
+  for (const [k, v] of Object.entries({ owner: ANA, scope: 'Every deadline email.', startDate: s.today, feedbackChannel: 'Office inbox', reviewerNotes: 'Read every draft before it goes out.', reviewDate: '2026-12-01' })) s = setRolloutField(s, id, k, v);
+  s = authorize(setRationale(setResidualRisk(s, id, { level: 'Moderate', note: 'A person reads every one.' }), id, 'Every hard Requirement is met; a person reads each email.'), id, { by: ANA });
+  setPeople(people(s)); setToday(s.today);
+  const h = strip(capabilityView({ ...s, actingAs: ANA }, id, new URLSearchParams('tab=decide')));
+  assert.match(h, /Decision recorded: Expand autonomy, to Draft/);
+  assert.match(h, /No hard quality Requirement is currently required for expansion\./);
 });

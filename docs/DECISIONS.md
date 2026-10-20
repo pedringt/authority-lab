@@ -105,6 +105,7 @@ Guardrail pass before Phase 6 (#157; Paige, 2026-10-20, after the post-remediati
 - Each Boundary line on Status shows "Written Boundary" or "Enforced Boundary" (or "Checked against the model's report").
 - Implementation calls for Paige to confirm: a Reviewer-proposed consequential change can be approved by the owner; a provisional link stops being provisional once any expansion Decision was recorded with it in force; the risk acknowledgment is a checkbox, with no note.
 - Left for Phase 6: the Decision form's input count, the Context form and description extraction.
+- Follow-up (#159, after the re-walk): a case-count rule adds up cases from every source for its metric (test cases and real use) instead of calling them Conflicting; 2 real-use cases next to 25 test cases is 27, not a disagreement. Pass/fail measures keep the conflict rule. The no-hard-quality warning also shows on Decide right after a Decision, where the next Proposal is offered.
 
 Consequence fixes: "Proposal" is reserved for authority Proposals (amendments P-1, P-2… are **Change requests**); **Requirements** everywhere (not Checks or Decision requirements); No evidence, Not enough evidence, Unknown and Not met look different; no raw keys; refund-specific controls leave generic setup (PR 3); Welcome offers "Start your own workspace"; Overview shows the next action when Decide says a capability is ready.
 
