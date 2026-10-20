@@ -71,14 +71,17 @@ test('the targets editor keeps a mapping when it saves words only, and moves its
   assert.equal(current(s, id, 'requirements').find((r) => r.id === 'accuracy').measure.value, 90);
 });
 
-test('after results, changing which evidence judges a row is a proposal that needs approval', () => {
+test('after results, linking a row with no evidence is recorded; changing an existing link is a proposal (#155, R6)', () => {
   const { s: s0, id } = fresh();
   const s = importEvidence(s0, evalEnv(id));
   assert.equal(criteriaLocked(s, id), true);
-  assert.throws(() => mapEvidence(s, id, { rowKind: 'requirement', rowId: 'accuracy', measure: { metric: 'answer-quality', stat: 'rate' }, by: 'maya' }), /needs approval\. Say why/);
-  const p = mapEvidence(s, id, { rowKind: 'requirement', rowId: 'accuracy', measure: { metric: 'answer-quality', stat: 'rate' }, by: 'maya', reason: 'Judge accuracy from the connected eval suite.' });
-  assert.ok(openProposal(p, id, 'criteria'), 'a proposed change is open');
-  assert.equal(current(p, id, 'requirements').find((r) => r.id === 'accuracy').measure, undefined, 'nothing changes until it is approved');
+  assert.throws(() => mapEvidence(s, id, { rowKind: 'requirement', rowId: 'accuracy', measure: { metric: 'answer-quality', stat: 'rate' }, by: 'maya' }), /Results already exist, so say why/);
+  const linked = mapEvidence(s, id, { rowKind: 'requirement', rowId: 'accuracy', measure: { metric: 'answer-quality', stat: 'rate' }, by: 'maya', reason: 'Judge accuracy from the connected eval suite.' });
+  assert.equal(openProposal(linked, id, 'criteria'), null, 'no approval to link an unlinked row');
+  assert.equal(current(linked, id, 'requirements').find((r) => r.id === 'accuracy').measure.metric, 'answer-quality');
+  const p = mapEvidence(linked, id, { rowKind: 'requirement', rowId: 'accuracy', measure: { metric: 'other-metric', stat: 'rate' }, by: 'maya', reason: 'Use the other metric instead.' });
+  assert.ok(openProposal(p, id, 'criteria'), 'changing an existing link needs approval');
+  assert.equal(current(p, id, 'requirements').find((r) => r.id === 'accuracy').measure.metric, 'answer-quality', 'nothing changes until it is approved');
 });
 
 test('coverage tells "no source", "no results", "needs more cases", "stale" and "covered" apart, whatever passes', () => {
@@ -170,8 +173,12 @@ test('the Configure evidence page: coverage first, each row\'s evidence, gaps wi
   const edit = String(configureEvidenceView(s, id, new URLSearchParams('row=requirement:severe')));
   assert.match(edit, /data-form="map-evidence" data-capability="summarise-notes" data-row="severe" data-kind="requirement"/);
   assert.match(edit, /The bar comes from its wording: <strong>less than 5<\/strong>\./);
-  assert.match(edit, /Why \(results exist, so this change needs approval\)/);
-  assert.match(edit, />Propose this change</);
+  // #155: this row has no evidence yet, so linking it is recorded, not proposed.
+  assert.match(edit, /Why \(results exist: linking it is recorded with your name, no approval needed\)/);
+  assert.match(edit, />Record this link</);
+  const mapped = String(configureEvidenceView(s, id, new URLSearchParams('row=requirement:accuracy')));
+  assert.match(mapped, /Why \(results exist, so changing its evidence needs approval\)/);
+  assert.match(mapped, />Propose this change</);
   // The setup checklist names the three evidence steps.
   const steps = setupStepsView(s, id).map((x) => x.title);
   assert.deepEqual(steps.slice(2, 6), ['Set what good looks like', 'Configure evidence', 'Review evidence coverage', 'Fill the gaps']);

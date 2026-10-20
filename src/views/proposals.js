@@ -133,7 +133,8 @@ export function proposalView(state, capabilityId, proposalId, query) {
     </div>
   </div>
   ${error ? notice('fail', 'Couldn\'t save that', error) : ''}
-  ${p.shortcutDeclined ? notice('neutral', 'This change only makes targets stricter, but it still needs approval', p.shortcutDeclined) : ''}
+  ${p.needsSignoffBecause && p.needsSignoffBecause.length ? notice('neutral', 'Why this needs sign-off', html`<ul class="plain-list">${p.needsSignoffBecause.map((x) => html`<li>${x}</li>`)}</ul><p class="small">Completing or strengthening the bar (linking evidence a row didn't have, adding people, Requirements or Boundaries, or tightening a bar) is recorded without approval. Changing or loosening it isn't.</p>`) : ''}
+  ${p.shortcutDeclined ? notice('neutral', 'This change could be recorded without approval, but it still needs it', p.shortcutDeclined) : ''}
   ${(() => { const w = proposalWarning(state, capabilityId, p); return w ? warningNotice({ ...w, link: acting === p.proposedBy ? '#withdraw' : '#/people', linkText: acting === p.proposedBy ? 'Withdraw it' : 'Manage people' }) : ''; })()}
   <div class="card">${kv([
     ['Why', p.reason],

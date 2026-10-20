@@ -86,6 +86,15 @@ Implemented in PR 3 (#153):
 - D8: the setup Requirements editor is Requirements first: What must be true? / How will you know? / What bar, if measurable? / Does it block expansion? The bar is saved as the Requirement's linked Target (`withBarsAsTargets`), so the model is unchanged. Extra or unlinked Targets sit under "Other measures". The setup step, review card and page are called "Requirements".
 - Unchanged on purpose: the legacy (pre-#139) rules builder and its refund-flavoured keyword suggestions, reached only by the seeded Northstar capabilities, whose rules already exist.
 
+Implemented in PR 4 (#155):
+- `classifyChange` (proposals.js) splits every change after results into recorded and governed parts, per R6, for Requirements and Targets, Reviewers and Stakeholders, and Boundaries. The recorded list is exhaustive; anything it doesn't name keeps sign-off, as before. One governed part makes the whole change governed.
+- A change with recorded parts only is applied by `applyRecorded`: new versions with author, reason, `recorded: true` and the list of changes, and an "after evidence" Activity event. It replaces the old tightening-only shortcut (tightening is one of the recorded kinds).
+- Kept from before (Paige, 2026-10-09), for Paige to confirm: only the owner or someone named on the capability records a change; while an expansion decision is open, a change that raises the bar (a stricter bar, consideration → hard, a new hard Requirement) still needs approval, because it could block that decision. Linking evidence, adding people and adding Boundaries never wait.
+- Unlisted, so still governed, for Paige to confirm: adding or renaming a Target; setting a number where a Requirement or Target said Needs decision; changing how a Requirement is judged; removing a Stakeholder (as opposed to a Reviewer); changing a team label; editing an existing Boundary line (it counts as removing the old line); removing a consideration.
+- `mapEvidence` after results: linking a row that had no evidence is recorded; changing or removing existing evidence opens a proposal. Configure evidence says which, and the button reads "Record this link" or "Propose this change".
+- Proposals carry `needsSignoffBecause`, shown as "Why this needs sign-off".
+- Fixed on the way: change requests can now switch a Requirement between hard and consideration (the merge used to keep the stored value); a recorded change to a capability with no Targets keeps `noTargets`, so it never unlocks the bar.
+
 Consequence fixes: "Proposal" is reserved for authority Proposals (amendments P-1, P-2… are **Change requests**); **Requirements** everywhere (not Checks or Decision requirements); No evidence, Not enough evidence, Unknown and Not met look different; no raw keys; refund-specific controls leave generic setup (PR 3); Welcome offers "Start your own workspace"; Overview shows the next action when Decide says a capability is ready.
 
 Held positions stay: no exceptions system yet, Investigate stays an activity, material changes stay date-only.

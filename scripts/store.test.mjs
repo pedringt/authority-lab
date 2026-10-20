@@ -21,7 +21,7 @@ import {
   people, personRecord, activePeople, isActivePerson, isWorkspaceAdmin, isRiskApprover, rosterVersions, addPerson, editPerson, deactivatePerson,
   proposeRosterChange, approveRosterChange, rejectRosterChange, withdrawRosterChange, openRosterProposal, getRosterProposal, rosterApprovalEligibility, activeAdmins,
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
-  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
+  parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
   requirementLabel, roleLabel,
   setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, setRolloutField, rolloutChecks, ROLLOUT_FIELDS, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility, adoptionSignals, replaceProposal,
 } from '../src/store/index.js';
@@ -1102,11 +1102,14 @@ test('before the gate, an amendment is applied directly; after a pilot starts, c
   s = proposeAmendment(s, id, 'criteria', { value: { criteria: current(s, id, 'criteria'), requirements: current(s, id, 'requirements') }, by: 'priya', reason: 'Re-saved before any testing.' });
   assert.equal(capData(s, id).proposals.length, 0);
   assert.equal(versionsInForce(s, id).criteria, 2);
-  // Contract on the seeded refund capability: pilot started, so a proposal.
+  // Contract on the seeded refund capability: pilot started. Adding a hard
+  // limit is recorded (#155, R6); allowing more is a proposal.
   let t = initialState();
   const c = current(t, RR, 'contract');
-  const value = { ...c, mustNever: [...c.mustNever, 'Issue a refund while a fraud review is open.'] };
-  t = proposeAmendment(t, RR, 'contract', { value, by: 'maya', reason: 'Close the gap found in INC-01.' });
+  const tighter = proposeAmendment(t, RR, 'contract', { value: { ...c, mustNever: [...c.mustNever, 'Issue a refund while a fraud review is open.'] }, by: 'maya', reason: 'Close the gap found in INC-01.' });
+  assert.deepEqual([capData(tighter, RR).proposals.length, versionsInForce(tighter, RR).contract, currentVersion(tighter, RR, 'contract').recorded], [0, 2, true]);
+  const value = { ...c, may: [...c.may, 'Offer store credit when the customer asks for it.'] };
+  t = proposeAmendment(t, RR, 'contract', { value, by: 'maya', reason: 'Customers keep asking for store credit.' });
   const p = openProposal(t, RR, 'contract');
   assert.ok(p && p.kind === 'contract');
   assert.deepEqual(p.base, { contract: 1 });
@@ -1119,15 +1122,16 @@ test('before the gate, an amendment is applied directly; after a pilot starts, c
   t = approveProposal(t, RR, 'P-1', { by: 'priya' });
   assert.equal(getProposal(t, RR, 'P-1').status, 'approved');
   assert.equal(versionsInForce(t, RR).contract, 2);
-  assert.ok(current(t, RR, 'contract').mustNever.includes('Issue a refund while a fraud review is open.'));
+  assert.ok(current(t, RR, 'contract').may.includes('Offer store credit when the customer asks for it.'));
   assert.equal(currentVersion(t, RR, 'contract').afterEvidence, true);
+  assert.deepEqual(getProposal(t, RR, 'P-1').needsSignoffBecause, ['It allows "Offer store credit when the customer asks for it.", which permits more.']);
   // When someone else proposes a High-impact change, both roles are needed.
-  let w = proposeAmendment(initialState(), RR, 'contract', { value, by: 'priya', reason: 'Close the gap found in INC-01.' });
+  let w = proposeAmendment(initialState(), RR, 'contract', { value, by: 'priya', reason: 'Customers keep asking for store credit.' });
   assert.deepEqual(openProposal(w, RR, 'contract').required, { approvers: 2, riskRequired: true, ownerOnly: false });
   // With the setting off, the same edit on a fresh state is applied directly.
   SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT = false;
   try {
-    const u = proposeAmendment(initialState(), RR, 'contract', { value, by: 'maya', reason: 'Close the gap found in INC-01.' });
+    const u = proposeAmendment(initialState(), RR, 'contract', { value, by: 'maya', reason: 'Customers keep asking for store credit.' });
     assert.equal(versionsInForce(u, RR).contract, 2);
     assert.equal(capData(u, RR).proposals.length, 0);
   } finally { SETTINGS.CONTRACT_EDITS_NEED_SIGNOFF_AFTER_PILOT = true; }
@@ -1203,9 +1207,9 @@ test('a proposed contract must pass the builder checks before it can be submitte
   // Value limit only under "must never" on a financial capability.
   const noLimit = { ...c, mustAsk: c.mustAsk.filter((t) => !/\$/.test(t)), may: c.may.filter((t) => !/\$/.test(t)), mustNever: [...c.mustNever, 'Issue a refund above $500.'] };
   assert.throws(() => proposeAmendment(s, RR, 'contract', { value: noLimit, by: 'priya', reason: 'Moving the limit to must never.' }), /its actions go through the gate, which needs a value limit to enforce/);
-  // A valid change goes through.
+  // A valid change goes through (adding a hard limit: recorded, #155).
   const ok = proposeAmendment(s, RR, 'contract', { value: { ...c, mustNever: [...c.mustNever, 'Issue a refund while a fraud review is open.'] }, by: 'priya', reason: 'Close the gap found in INC-01.' });
-  assert.ok(openProposal(ok, RR, 'contract'));
+  assert.ok(current(ok, RR, 'contract').mustNever.includes('Issue a refund while a fraud review is open.'));
   assert.deepEqual(contractValueChecks(s, RR, c).filter((x) => x.level === 'block'), []);
 });
 
@@ -1412,11 +1416,9 @@ test('eligible approvers are frozen when a proposal opens', () => {
   assert.deepEqual(p.eligible.sort(), ['maya'], 'listed stakeholders minus the proposer, at open time');
   // Adding Elena afterwards (itself a proposal now) does not make her eligible on P-1.
   assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /isn.t on the list of who can approve this change\. That list was fixed when it was proposed/);
-  // Nor does an applied membership change: approve the membership proposal first, then retry.
+  // Nor does an applied membership change. Adding someone is recorded, with no approval (#155, R6).
   s = saveStakeholders(s, TC, { stakeholders: [...current(s, TC, 'stakeholders'), { team: 'Finance', person: 'elena' }], by: 'priya', reason: 'Add Finance.' });
-  const sp = openProposal(s, TC, 'stakeholders');
-  s = approveProposal(s, TC, sp.id, { by: 'maya' });
-  assert.equal(getProposal(s, TC, sp.id).status, 'approved');
+  assert.equal(openProposal(s, TC, 'stakeholders'), null, 'adding a person needs no approval');
   assert.ok(current(s, TC, 'stakeholders').some((x) => x.person === 'elena'), 'Elena is now listed');
   assert.throws(() => approveProposal(s, TC, 'P-1', { by: 'elena' }), /isn.t on the list of who can approve this change\. That list was fixed when it was proposed/, 'P-1 keeps its frozen set');
   s = approveProposal(s, TC, 'P-1', { by: 'maya' });
@@ -2481,12 +2483,13 @@ test('a tightening-only change applies straight away as a recorded amendment, su
   const after = versionsInForce(s, RR);
   assert.deepEqual([after.criteria, after.requirements], [before.criteria + 1, before.requirements + 1]);
   const v = currentVersion(s, RR, 'criteria');
-  assert.deepEqual([v.tighteningOnly, v.author, v.afterEvidence], [true, 'priya', true]);
-  assert.equal(v.tightened.length, 4);
+  // #155 (R6): tightening a bar is a recorded change.
+  assert.deepEqual([v.recorded, v.author, v.afterEvidence], [true, 'priya', true]);
+  assert.equal(v.changes.length, 4);
   assert.equal(current(s, RR, 'criteria').find((x) => x.id === 'quality').target, '≥ 95% correct decisions');
   const e = s.activity[0];
   assert.deepEqual([e.kind, e.afterEvidence, isSurfaced(e)], ['amendment', true, true]);
-  assert.match(e.body, /No approval was needed because every change only made a target stricter/);
+  assert.match(e.body, /recorded this without approval, because it only completes or strengthens the bar: Tightens/);
 });
 
 test('tightening-only is decided by software; every way around it goes to sign-off', () => {
@@ -2539,7 +2542,7 @@ test('repro: a non-stakeholder raising the case minimum while a decision is pend
   assert.equal(capData(s, RR).proposals.length, n + 1, 'a proposal opens');
   assert.deepEqual([readiness(s, RR).met, readiness(s, RR).total], [before.met, before.total], 'readiness unchanged: 5 of 6');
   const p = capData(s, RR).proposals[n];
-  assert.match(p.shortcutDeclined, /Only the owner or a listed stakeholder/);
+  assert.match(p.shortcutDeclined, /Only the owner or someone named on it can make this change without approval/);
 });
 
 test('a named stakeholder tightening with no decision pending applies directly', () => {
@@ -2549,7 +2552,7 @@ test('a named stakeholder tightening with no decision pending applies directly',
   const n = capData(s, RR).proposals.length;
   s = proposeAmendment(s, RR, 'criteria', { value: bar(s, { requirements: { 'min-cases': 'Minimum 250 pilot cases' } }), by: 'daniel', reason: 'More cases before the next review.' });
   assert.equal(capData(s, RR).proposals.length, n, 'no proposal');
-  assert.equal(currentVersion(s, RR, 'requirements').tighteningOnly, true);
+  assert.equal(currentVersion(s, RR, 'requirements').recorded, true);
   // Someone who is not a named stakeholder still goes to sign-off with no decision pending.
   const t = proposeAmendment(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR, 'criteria', { value: bar(s, { criteria: { quality: '≥ 95% correct decisions' } }), by: 'jonas', reason: 'Raising quality for safety.' });
   assert.equal(capData(t, RR).proposals.at(-1).proposedBy, 'jonas');
@@ -2878,10 +2881,14 @@ test('A2: the data section is versioned with the contract and checked by softwar
   assert.match(checks(['order.cardNumber']).join(), /restricted/);
   assert.match(checks(['customer.address']).join(), /restricted/);
   assert.match(checks(['order.secretSauce']).join(), /isn't data any connected tool provides/);
-  // A proposed contract amendment carries the data section through.
-  const after = proposeAmendment(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.id', 'order.value'] }, by: 'maya', reason: 'Narrowing what the AI sees.' });
+  // A contract amendment carries the data section through. Narrowing what
+  // the AI sees is recorded (#155); widening it is a proposal.
+  const base = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
+  const narrowed = proposeAmendment(base, RR, 'contract', { value: { ...current(base, RR, 'contract'), dataSeen: ['order.id'] }, by: 'maya', reason: 'Narrowing what the AI sees.' });
+  assert.deepEqual(current(narrowed, RR, 'contract').dataSeen, ['order.id']);
+  const after = proposeAmendment(base, RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: [...current(base, RR, 'contract').dataSeen, 'customer.email'] }, by: 'maya', reason: 'Show the email to the AI.' });
   const p = capData(after, RR).proposals.at(-1);
-  assert.deepEqual(p.value.dataSeen, ['order.id', 'order.value']);
+  assert.ok(p.value.dataSeen.includes('customer.email'));
   // Restricted fields never pass the filter, even if a contract lists one.
   let leaky = amend(initialState(), RR, 'contract', { value: { ...current(s, RR, 'contract'), dataSeen: ['order.cardNumber', 'customer.address', 'order.id'] }, author: 'maya', reason: 'Test: restricted.' });
   leaky = authorize(decideWith(leaky, RR, 'expand-limits'), RR);

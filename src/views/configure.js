@@ -89,9 +89,9 @@ function editForm(state, cap, c, locked) {
       <label>At least this many cases (optional) <input type="number" name="minSample" min="1" step="1" value="${m.minSample || ''}"></label>
       <label>Count results from <select name="kind"><option value="">Test cases and real use</option><option value="eval" ${m.kind === 'eval' ? 'selected' : ''}>Test cases only</option><option value="production" ${m.kind === 'production' ? 'selected' : ''}>Real use only</option></select></label>
     </div>
-    ${locked ? html`<label>Why (results exist, so this change needs approval) <input type="text" name="reason" maxlength="240" required placeholder="A sentence on why this evidence should judge it"></label>` : ''}
+    ${locked ? html`<label>${c.mapped ? 'Why (results exist, so changing its evidence needs approval)' : 'Why (results exist: linking it is recorded with your name, no approval needed)'} <input type="text" name="reason" maxlength="240" required placeholder="A sentence on why this evidence should judge it"></label>` : ''}
     <div class="form-actions">
-      <button class="btn btn-primary" type="submit" name="op" value="map" ${bar ? '' : 'disabled'}>${locked ? 'Propose this change' : 'Save'}</button>
+      <button class="btn btn-primary" type="submit" name="op" value="map" ${bar ? '' : 'disabled'}>${locked ? (c.mapped ? 'Propose this change' : 'Record this link') : 'Save'}</button>
       ${c.mapped ? html`<button class="btn" type="submit" name="op" value="unmap">${locked ? 'Propose removing it' : 'Remove the mapping'}</button>` : ''}
       <a class="btn btn-ghost" href="#/capabilities/${cap.id}/evidence/configure">Cancel</a>
     </div>
@@ -151,7 +151,7 @@ export function configureEvidenceView(state, capabilityId, query) {
     </div></div>
     ${error ? notice('fail', 'Couldn\'t save that', error) : ''}
     ${unlinkedNotice(state, cap, { here: true })}
-    ${locked ? notice('watch', 'Results already exist', 'Changing which evidence judges a row is a change to the bar, so it is proposed and needs approval, like any other change to the targets.') : ''}
+    ${locked ? notice('watch', 'Results already exist', 'Linking a row that has no evidence yet completes the bar, so it is recorded with your name and reason, with no approval. Changing or removing evidence a row already has changes the bar, so it is proposed and needs approval.') : ''}
     <div class="coverage-summary card"><p class="decide-big">${coverageText(cov)}</p>
       <p class="muted small">${['covered', 'judged', 'stale', 'insufficient', 'conflicting', 'unknown', 'needs-decision', 'no-data', 'no-source'].map((st) => [st, cov.requirements.filter((c) => c.status === st).length]).filter(([, n]) => n).map(([st, n]) => `${n} ${COVERAGE_WORDS[st].toLowerCase()}`).join(' · ')}</p></div>
     ${editing ? editForm(state, cap, editing, locked) : ''}

@@ -100,11 +100,11 @@ Each Requirement is hard (it blocks an expansion until it is Met) or a considera
 
 | Object | Needs sign-off from | Approvers |
 |---|---|---|
-| Criteria and requirements (Targets, Decision requirements) | the first performance results | Low/Medium: 1 (the owner, or another named stakeholder if the owner proposed). High or Financial: 2 distinct, at least one from Risk |
-| Contract (Rules) | a pilot start (setting on) | same |
-| Stakeholder membership and team labels | the first performance results | same; positions and reasoning stay direct |
+| Requirements and Targets (changes not on the recorded list) | the first performance results | Low/Medium: 1 (the owner, or another named stakeholder if the owner proposed). High or Financial: 2 distinct, at least one from Risk |
+| Boundaries that permit more (setting on) | a pilot start | same |
+| Removing a Reviewer, role changes, team labels | the first performance results | same; adding people, positions and reasoning are recorded or direct |
 
-**Tightening only skips sign-off.** A criteria/requirements change where every changed threshold only gets stricter (higher "at least", lower "at most", more required cases) and nothing is removed, added, renamed, reworded or loosened applies directly as a recorded amendment, if the owner or a named stakeholder makes it and no expansion decision is pending. Anything else, or any loosening anywhere, goes to sign-off.
+**Recorded, not signed off (#155).** After results, completing or strengthening the bar is recorded with a named person and a reason, no approval: linking a row that had no evidence, adding a Reviewer or Stakeholder, tightening a bar, consideration → hard, adding a Requirement, adding or tightening a Boundary. Loosening a bar, removing a hard Requirement, hard → consideration, changing existing evidence, a Boundary change that permits more, removing a Reviewer and changing a role still need sign-off, as does anything else not on the recorded list. A small team can finish configuring how an existing bar is measured without a second approver.
 
 The proposer never approves. Risk is the recorded Risk approver right, never a team. Eligible approvers are frozen when the proposal opens, infeasible proposals are refused with a reason, the proposer can withdraw, others can reject, and everything stays in the record.
 

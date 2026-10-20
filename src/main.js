@@ -647,9 +647,9 @@ document.addEventListener('submit', (e) => {
       const before = capData(store.get(), capId).proposals.length;
       store.dispatch('proposeAmendment', capId, kind, { value, by: actor(store.get(), capId), reason: proposeForm.reason.value });
       const after = capData(store.get(), capId).proposals;
-      // A tightening-only change applies without a proposal; say so on arrival.
-      const tightened = kind === 'criteria' && after.length === before && (currentVersion(store.get(), capId, 'criteria') || {}).tighteningOnly;
-      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=${kind === 'contract' ? 'contract' : 'criteria'}${tightened ? `&tightened=${currentVersion(store.get(), capId, 'criteria').version}` : ''}`;
+      // A recorded change (#155) applies without a proposal; say so on arrival.
+      const recorded = after.length === before && (currentVersion(store.get(), capId, kind) || {}).recorded;
+      location.hash = after.length > before ? `#/capabilities/${capId}/proposals/${after[after.length - 1].id}` : `#/capabilities/${capId}?tab=${kind === 'contract' ? 'contract' : 'criteria'}${recorded ? `&recorded=${kind}` : ''}`;
     });
     return;
   }

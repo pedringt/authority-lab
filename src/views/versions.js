@@ -45,7 +45,7 @@ export function versionsView(state, capabilityId, query) {
     return html`<article class="card version ${v.version === highlight ? 'is-highlight' : ''}" id="v${v.version}">
       <div class="version-head">
         <div><span class="eyebrow">${KIND_LABELS[kind]} · version ${v.version}</span><h3>${v.version === 1 ? 'First version' : v.reason}</h3></div>
-        <div class="version-badges">${v.version === versions[0].version ? badge('pass', 'In use') : ''}${v.afterEvidence ? badge('watch', 'Changed after results') : ''}${v.tighteningOnly ? html` <span class="badge badge-pass" title="Every change made a target stricter; nothing was added, removed or reworded.">Stricter only, no approval needed</span>` : ''}</div>
+        <div class="version-badges">${v.version === versions[0].version ? badge('pass', 'In use') : ''}${v.afterEvidence ? badge('watch', 'Changed after results') : ''}${v.tighteningOnly ? html` <span class="badge badge-pass" title="Every change made a target stricter; nothing was added, removed or reworded.">Stricter only, no approval needed</span>` : v.recorded ? html` <span class="badge badge-pass" title="${(v.changes || []).join(' ')}">Recorded, no approval needed</span>` : ''}</div>
       </div>
       ${kv([
         ['Date', fmtDate(v.date)],
