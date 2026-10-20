@@ -152,7 +152,6 @@ const workspaceBanner = () => (!isClient() ? '' : editing
 // Where an old address that named no capability should go.
 const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
 
-const GUIDE_SKIPPED_RISK = { level: 'Unknown', note: 'Guided demo skipped past this step: no one judged Residual Risk.' };
 // The guided demo (redesign) runs on its own copy of the demo state, in
 // memory only, so it never touches the workspace. Its "Demo as" is its own.
 let guide = null;
@@ -162,21 +161,22 @@ function newGuide() {
 }
 const guideDo = {
   runTests() { let s = startTestRun(guide.state, guide.capabilityId); for (let i = 0; i < 200 && capData(s, guide.capabilityId).testRun.status === 'running'; i++) s = advanceTestRun(s, guide.capabilityId); guide = { ...guide, state: s, tested: true }; },
-  // The Residual Risk is the viewer's own choice in step 6 (#144). Skipping
-  // ahead past it records Unknown and says that no one judged it.
+  // The Residual Risk is the viewer's own judgment in step 6 (#144; Paige,
+  // 2026-10-19): software never supplies it, so without one nothing is decided.
   decide() {
+    const r = guide.residual;
+    if (!r || !r.level || String(r.note || '').trim().length < 10) return;
     const owner = getCapability(guide.state, guide.capabilityId).owner;
-    const r = guide.residual && guide.residual.level ? guide.residual : GUIDE_SKIPPED_RISK;
     const s = authorize(setResidualRisk(selectDecision(guide.state, guide.capabilityId, 'expand-limits'), guide.capabilityId, r), guide.capabilityId, { by: owner });
     guide = { ...guide, state: s, decided: s.decisionRecords.at(-1).id };
   },
   breach() { guide = { ...guide, state: simulateBreach(guide.state, guide.capabilityId), breached: true }; },
 };
-// Opening a later step directly does the earlier steps' actions first.
+// Opening a later step directly runs the tests first; the decision is never
+// made for the viewer (the route sends them to step 6 for it).
 function guideAt(step) {
   if (!guide) guide = newGuide();
   if (step > 5 && !guide.tested) guideDo.runTests();
-  if (step > 6 && !guide.decided) guideDo.decide();
   return guide;
 }
 const WELCOMED = 'authority-lab-welcomed';
@@ -263,7 +263,15 @@ function render() {
     case 'people': view = peopleView(state, query); title = 'People'; break;
     case 'sources': view = sourcesView(state); title = 'Evidence sources'; break;
     case 'welcome': view = welcomeView(); title = 'Welcome'; break;
-    case 'guide': { const n = Math.min(Math.max(Number(sub) || 1, 1), GUIDE_STEPS.length); view = guideView(guideAt(n), n); title = `Guided demo: ${GUIDE_STEPS[n - 1]}`; break; }
+    case 'guide': {
+      // A later step needs the decision made in step 6 by the viewer; opening
+      // one directly lands on step 6 instead of deciding for them.
+      const asked = Math.min(Math.max(Number(sub) || 1, 1), GUIDE_STEPS.length);
+      const g = guideAt(asked);
+      const n = asked > 6 && !g.decided ? 6 : asked;
+      if (n !== asked) history.replaceState(null, '', '#/guide/6');
+      view = guideView(g, n); title = `Guided demo: ${GUIDE_STEPS[n - 1]}`; break;
+    }
     default: view = empty ? noCapabilitiesView(state, 'Overview') : overviewView(state); title = 'Overview';
   }
   document.title = `${title} · Authority Lab`;

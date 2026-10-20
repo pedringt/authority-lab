@@ -236,12 +236,14 @@ export function freezeProposal(state, capabilityId, { level, by, replaces = null
   }));
 }
 
+const namesText = (positions) => (positions.length ? positions.map((p) => `${p.name} (${p.role})`).join(', ') : 'no one');
 const KIND_WORDS = { contract: 'Rules (Boundaries)', criteria: 'Targets', requirements: 'Requirements', risk: 'Risk', stakeholders: 'People' };
 
 // Is the open Proposal stale? (Paige, 2026-10-19, Q3.) It is when, since it
 // was frozen:
 // - a versioned object it was reviewed against has a newer version (Rules,
-//   Targets, Requirements, Risk, people);
+//   Targets, Requirements, Risk); for people, only a change to who is named
+//   or their role (Reviewer or Stakeholder), never a position;
 // - a material change was recorded;
 // - a Requirement or Target result changed (Met to Not met, Unknown to Met…);
 // - a row's coverage changed state (sufficient, insufficient, stale,
@@ -252,16 +254,26 @@ const KIND_WORDS = { contract: 'Rules (Boundaries)', criteria: 'Targets', requir
 export function proposalStaleness(state, capabilityId, proposal = openAuthorityProposal(state, capabilityId)) {
   if (!proposal) return { stale: false, reasons: [], resultChanges: [] };
   const now = versionsInForce(state, capabilityId);
+  const live = reviewConditions(state, capabilityId);
   const reasons = [];
   for (const k of VERSIONED_KINDS) {
     const then = proposal.versions[k] || 0;
-    if ((now[k] || 0) > then) reasons.push({ kind: 'version', area: k, text: `${KIND_WORDS[k] || k} changed: v${then || 'none'} when proposed, v${now[k]} now.` });
+    if (!((now[k] || 0) > then)) continue;
+    // People: only who is named, and as Reviewer or Stakeholder, counts.
+    // A position, stance or reasoning given after the Proposal opened is part
+    // of reviewing it, not a change to what it describes (Paige, 2026-10-19).
+    if (k === 'stakeholders') {
+      const roles = (list) => list.map((p) => `${p.person}:${p.role}`).sort().join('|');
+      if (roles(proposal.positions || []) === roles(live.positions)) continue;
+      reasons.push({ kind: 'people', area: k, text: `Who is named, or as what, changed: ${namesText(proposal.positions || [])} when proposed; ${namesText(live.positions)} now.` });
+      continue;
+    }
+    reasons.push({ kind: 'version', area: k, text: `${KIND_WORDS[k] || k} changed: v${then || 'none'} when proposed, v${now[k]} now.` });
   }
   const seen = new Set(proposal.materialChangesAtOpen || []);
   for (const m of materialChanges(state, capabilityId).filter((x) => !seen.has(x.id))) {
     reasons.push({ kind: 'material-change', id: m.id, text: `Material change recorded ${m.recordedOn}: ${m.description}` });
   }
-  const live = reviewConditions(state, capabilityId);
   const resultChanges = [];
   const compare = (kind, thenRows, nowRows, name) => {
     const nowById = new Map(nowRows.map((r) => [r.id, r]));

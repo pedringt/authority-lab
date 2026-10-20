@@ -133,12 +133,13 @@ A move up starts with a **Proposal**: anyone active clicks **Propose a move to L
 
 **Before authority expands**, every Reviewer has given a position, a Residual Risk with a reason is given, and the Proposal is current. A Proposal goes **stale** when, since it was frozen, any of these happens:
 
-- the Rules, Targets, Requirements, Risk or people get a new version;
+- the Rules, Targets, Requirements or Risk get a new version;
+- who is named on the capability, or their role (Reviewer or Stakeholder), changes;
 - a material change is recorded;
 - a Requirement or Target result changes;
 - a row's coverage changes state, for example from sufficient to stale.
 
-More evidence that changes none of these doesn't make it stale. A stale Proposal can't be expanded on. **Replace with a new Proposal** freezes a fresh one from today's conditions; the old one stays as it was, marked as replaced, and History lists both. Keeping the limits or pulling back works on a stale Proposal too, and the record says it was stale. The seeded Northstar decision was opened before Proposals were frozen, and the flow says so instead of showing a snapshot.
+More evidence that changes none of these doesn't make it stale, and neither does a Reviewer or Stakeholder giving or changing their position: that is reviewing it. The flow shows current positions beside the ones frozen with the Proposal, and the record keeps the positions in force when the Decision is made. A stale Proposal can't be expanded on. **Replace with a new Proposal** freezes a fresh one from today's conditions; the old one stays as it was, marked as replaced, and History lists both. Keeping the limits or pulling back works on a stale Proposal too, and the record says it was stale. The seeded Northstar decision was opened before Proposals were frozen, and the flow says so instead of showing a snapshot.
 
 ### The decision record
 

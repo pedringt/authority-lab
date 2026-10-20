@@ -16,6 +16,7 @@ import {
   requirementsNow, proposeAuthority, selectDecision, setRationale, setOutcome, setRolloutField, setResidualRisk, canAuthorize, authorize,
   importEvidence, assessRisk, recordMaterialChange, current,
   authorityProposals, openAuthorityProposal, proposalStatus, proposalStaleness, positionsDiffer, proposalGaps,
+  openProposal, approvalEligibility, approveProposal,
   replaceProposal, proposalClosures, reviewerInputMissing, decisionEligibility, uploadEvidence, advanceToday, findWorkspace, setActingAs,
 } from '../src/store/index.js';
 import { stateWorkspace } from '../src/data/workspaces/state.js';
@@ -174,25 +175,66 @@ test('Q1: the Owner records an expansion or a hold; anyone named records a reduc
   assert.equal(decisionEligibility(s, id, BEN, 'suspend').ok, true);
 });
 
-test('Q2: every active Reviewer gives a position before an expansion; disagreement is shown, not a veto', () => {
+test('Q2: every active Reviewer gives a position before an expansion; giving one keeps the Proposal current; disagreement is shown, not a veto', () => {
   const [s0, id] = firm();
-  const undecided = withStance(s0, id, 'undecided');
-  assert.deepEqual(reviewerInputMissing(undecided, id), [BEN]);
-  let s = readyToRecord(proposeAuthority(undecided, id, 2, { by: ANA }), id, ANA);
+  // 1. A Proposal while Ben (Reviewer) has no position.
+  let s = readyToRecord(proposeAuthority(withStance(s0, id, 'undecided'), id, 2, { by: ANA }), id, ANA);
+  assert.deepEqual(reviewerInputMissing(s, id), [BEN]);
   assert.match(canAuthorize(s, id, { by: ANA }).reason, /^Every Reviewer gives a position before authority expands\. Still waiting for Ben Okoro\.$/);
   // Holding or pulling back doesn't wait for Reviewers.
   assert.deepEqual(canAuthorize(setRationale(selectDecision(s, id, 'hold'), id, 'Holding until Ben has looked.'), id, { by: ANA }), { ok: true });
-  // Ben gives a position against expanding: the Proposal's positions are now
-  // out of date (a new people version), so it is replaced; Ben's Hold is shown
-  // but the Owner may still expand.
+  // 2. Ben records Hold. 3. The Proposal stays current (Paige, 2026-10-19).
   s = withStance(s, id, 'hold');
   assert.deepEqual(reviewerInputMissing(s, id), []);
-  assert.equal(canAuthorize(s, id, { by: ANA }).stale, true);
-  s = replaceProposal(s, id, { by: ANA });
-  assert.deepEqual(canAuthorize(s, id, { by: ANA }), { ok: true }, 'a Reviewer\'s Hold is not a veto');
+  assert.equal(proposalStaleness(s, id).stale, false, 'reviewing is not a change to what was proposed');
+  assert.equal(openAuthorityProposal(s, id).positions.find((p) => p.person === BEN).stance, 'undecided', 'the Proposal keeps the positions it was frozen with');
+  // 4. The screen says Ben now says Hold, beside the positions when proposed.
+  setPeople(people(s));
+  const page = decide({ ...s, actingAs: ANA }, id);
+  assert.match(page, /<strong>Ben Okoro \(Reviewer\) says Hold<\/strong>/);
+  assert.match(page, /Positions have changed since it was proposed; these are the current ones\./);
+  assert.doesNotMatch(page, /This Proposal is stale/);
+  // 5. The Owner may still expand: a Reviewer's Hold is not a veto.
+  assert.deepEqual(canAuthorize(s, id, { by: ANA }), { ok: true });
+  const done = authorize(s, id, { by: ANA });
+  // 6. The record freezes the Hold, and names the same Proposal.
+  const rec = done.decisionRecords.at(-1);
+  assert.equal(rec.proposalId, 'AP-01');
+  assert.equal(rec.proposalStale, undefined);
+  assert.deepEqual(rec.reviewed.positions.filter((p) => p.person === BEN).map((p) => [p.role, p.stance]), [['Reviewer', 'hold']]);
   // A Stakeholder with no position never blocks.
   const cara = saveStakeholders(s0, id, { stakeholders: current(s0, id, 'stakeholders').map((x) => (x.person === CARA ? { ...x, stance: 'undecided', position: '' } : x)), by: ANA });
   assert.deepEqual(reviewerInputMissing(cara, id), []);
+});
+
+test('Q3: who is named, or their role, changing after the Proposal makes it stale; a position never does', () => {
+  const [s0, id] = firm();
+  const s = readyToRecord(proposeAuthority(s0, id, 2, { by: ANA }), id, ANA);
+  const list = current(s, id, 'stakeholders');
+  // Reasoning and stance changes: still current.
+  const reworded = saveStakeholders(s, id, { stakeholders: list.map((x) => (x.person === CARA ? { ...x, stance: 'expand', position: 'Fine after all.' } : x)), by: ANA });
+  assert.equal(proposalStaleness(reworded, id).stale, false);
+  // After results a membership or role change goes to sign-off; it counts
+  // once it is approved and in force.
+  const signedOff = (st) => {
+    let x = st;
+    for (const who of [BEN, CARA]) {
+      const q = openProposal(x, id, 'stakeholders');
+      if (q && approvalEligibility(x, id, q, who).ok) x = approveProposal(x, id, q.id, { by: who });
+    }
+    assert.equal(openProposal(x, id, 'stakeholders'), null, 'signed off');
+    return x;
+  };
+  // Cara becomes a Reviewer: a role change, stale.
+  const role = signedOff(saveStakeholders(s, id, { stakeholders: list.map((x) => (x.person === CARA ? { ...x, role: 'reviewer' } : x)), by: ANA }));
+  const r = proposalStaleness(role, id);
+  assert.equal(r.stale, true);
+  assert.equal(r.reasons[0].kind, 'people');
+  assert.match(r.reasons[0].text, /^Who is named, or as what, changed: Ben Okoro \(Reviewer\), Cara Lim \(Stakeholder\) when proposed; Ben Okoro \(Reviewer\), Cara Lim \(Reviewer\) now\.$/);
+  assert.equal(canAuthorize(role, id, { by: ANA }).stale, true);
+  // Cara removed: membership change, stale.
+  const removed = signedOff(saveStakeholders(s, id, { stakeholders: list.filter((x) => x.person !== CARA), by: ANA }));
+  assert.equal(proposalStaleness(removed, id).reasons[0].kind, 'people');
 });
 
 test('Q4: an expansion needs a Residual Risk with a reason; Unknown and High are valid; holds and reductions don\'t need one', () => {
