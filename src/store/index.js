@@ -50,3 +50,5 @@ export { isDemoWorkspace, judgedBy, effectiveJudgment, unlinkedBeforeResults, ju
 export { outcomeMeasurements } from './sources.js';
 // Product reset, Phase 4: the Proposal as a frozen review object (#144).
 export { authorityProposals, findAuthorityProposal, openAuthorityProposal, proposalStatus, proposalClosures, evidenceProvenance, coverageState, reviewConditions, freezeProposal, proposalStaleness, positionsDiffer, proposalGaps } from './proposal.js';
+// Product reset, Phase 5: is the current Authority still justified? (#147).
+export { JUSTIFICATION_STATES, decisionInForce, materialChangesSince, materialChangeImpact, changesSinceDecision, justification } from './lifecycle.js';

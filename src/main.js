@@ -358,7 +358,7 @@ function restoreForms(saved) {
     const values = saved[form.dataset.form];
     // Ticked suggestions (#139) survive a refused save; the rows re-render from state.
     if (values && form.dataset.form === 'save-criteria') for (const el of form.querySelectorAll('[name="use-suggestion"]')) { if (`use-suggestion=${el.value}` in values) el.checked = values[`use-suggestion=${el.value}`]; }
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change') continue;
     for (const el of form.elements) {
       if (!el.name || el.type === 'file') continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -762,6 +762,20 @@ document.addEventListener('submit', (e) => {
     dispatchOr(here(), () => {
       store.dispatch('mapEvidence', capId, { rowKind: mapForm.dataset.kind, rowId: mapForm.dataset.row, measure, by: actor(store.get(), capId), reason: v('reason') });
       location.hash = `#/capabilities/${capId}/evidence/configure`;
+    });
+    return;
+  }
+  // #147: a material change, recorded from Monitor. It never changes
+  // Authority; Monitor shows which evidence it may affect.
+  const mcForm = e.target.closest('[data-form="record-material-change"]');
+  if (mcForm) {
+    e.preventDefault();
+    const capId = mcForm.dataset.capability;
+    const f = new FormData(mcForm);
+    dispatchOr(here(), () => {
+      store.dispatch('recordMaterialChange', capId, { areas: f.getAll('areas'), description: f.get('description'), effectiveOn: f.get('effectiveOn') || undefined, by: actor(store.get(), capId) });
+      clearErrorOn(here(), 'error');
+      render();
     });
     return;
   }

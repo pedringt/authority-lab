@@ -396,3 +396,13 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .residual-risk { border: 0; padding: 0; margin: 16px 0 0; }
 .residual-risk legend { font-weight: 600; margin-bottom: 8px; }
 .residual-options { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+
+/* Phase 5 (#147): is the current Authority still justified? */
+.mon-justified { margin-bottom: 32px; }
+.mon-question { font-size: 1.15rem; margin: 0 0 12px; }
+.mon-sub-head { font-size: 1rem; margin: 24px 0 8px; }
+.mon-changes li { margin-bottom: 6px; }
+.mon-material { margin-bottom: 12px; }
+.material-areas { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.mon-material-form form { display: grid; gap: 12px; margin-top: 8px; }
+.mon-actions dd .btn { margin-left: 4px; }

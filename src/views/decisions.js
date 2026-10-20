@@ -4,6 +4,7 @@ import { people, getCapability, capData, readiness, authorityLabel, canAuthorize
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
+import { reductionView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed, provenanceList } from './proposal.js';
 import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES } from '../store/index.js';
 
@@ -292,7 +293,7 @@ function proposable(state, cap, d, review) {
 
 const proposeButton = (cap) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">Propose a move to Level ${cap.authority.level + 1}</button>`;
 
-function recordedView(state, cap, rec) {
+function recordedView(state, cap, rec, canPropose = false) {
   const who = personAt(rec.authorizedByAt, rec.authorizedBy);
   const expanded = rec.next.level > rec.previous.level;
   return html`<div class="decide-flow">
@@ -303,14 +304,17 @@ function recordedView(state, cap, rec) {
       <p class="small"><a href="#/records/${rec.id}">See the decision record</a></p>
     </div>
     <p class="next-step"><a href="#/capabilities/${cap.id}?tab=monitor">${expanded ? 'Next: monitor the rollout →' : 'Next: check it in Monitor →'}</a></p>
+    ${canPropose ? html`<div class="decide-start"><p>${rec.next.level < rec.previous.level ? 'Getting authority back is never automatic: it starts with a new Proposal.' : 'When the evidence supports more, it starts with a new Proposal.'}</p>${proposeButton(cap)}</div>` : ''}
   </div>`;
 }
 
-function noDecisionView(state, cap, d, { runs }) {
+function noDecisionView(state, cap, d, { runs, query = new URLSearchParams() }) {
+  // #147: pulling back without a Proposal, reached from Monitor.
+  if (query.get('reduce')) return reductionView(state, cap, canAuthorize(state, cap.id, { by: actor(state, cap.id) }));
   const review = reviewNeeded(state, cap.id);
   const records = state.decisionRecords.filter((x) => x.capabilityId === cap.id);
   const last = records.at(-1);
-  if (d.decision.recordId && last && last.id === d.decision.recordId && !review.any) return recordedView(state, cap, last);
+  if (d.decision.recordId && last && last.id === d.decision.recordId && !review.any) return recordedView(state, cap, last, proposable(state, cap, d, review));
   const n = cap.authority.level + 1;
   const tests = `#/capabilities/${cap.id}?tab=decide&show=tests`;
   let lead;
@@ -345,7 +349,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   const cap = getCapability(state, capabilityId);
   if (!cap) return html`<p class="empty">We couldn't find that capability.</p>`;
   const d = capData(state, capabilityId);
-  if (!decisionRequired(state, capabilityId)) return noDecisionView(state, cap, d, { runs });
+  if (!decisionRequired(state, capabilityId)) return noDecisionView(state, cap, d, { runs, query });
 
   const dec = d.decision;
   const proposed = proposedAuthority(state, capabilityId);

@@ -9,7 +9,7 @@ import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
 import { freezeProposal, reviewConditions, openAuthorityProposal, proposalStaleness } from './proposal.js';
 import { peopleModel } from './boundaries.js';
-import { namedOn } from './context.js';
+import { namedOn, materialChanges } from './context.js';
 import { current } from './selectors.js';
 
 export function actionNoun(cap) {
@@ -396,6 +396,9 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     ...(openProposal ? { proposalId: openProposal.id } : d.decision.proposed ? { proposalLegacy: true } : {}),
     ...(staleness && staleness.stale ? { proposalStale: deepFreeze(JSON.parse(JSON.stringify(staleness.reasons))) } : {}),
     reviewed: deepFreeze(JSON.parse(JSON.stringify(reviewConditions(state, capabilityId)))),
+    // #147: the material changes known when deciding, so Monitor can tell
+    // which came after.
+    materialChangesAtDecision: Object.freeze(materialChanges(state, capabilityId).map((m) => m.id)),
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;

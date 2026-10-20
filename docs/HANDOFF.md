@@ -136,8 +136,9 @@ The information architecture and product model must stabilize first.
 - **Phase 1 — data model (#137): done.** Merged to `main` in #138 (2026-10-16). Paige's answers and the follow-up notes are in `docs/DECISIONS.md` under "Product reset, Phase 1". Treat them as settled.
 - **Phase 2 — setup flow (#139): done.** Merged to `main` in #141. Paige's answers (2026-10-16) are in `docs/DECISIONS.md` under "Product reset, Phase 2".
 - **Phase 3 — lightweight evidence path (#142): done.** Merged to `main` in #143. Paige's answers P1–P8 are in `docs/DECISIONS.md` under "Product reset, Phase 3", with the implementation calls listed there.
-- **Phase 4 — Proposal and Decision (#144): built, PR open, not merged.** What was built and Paige's answers Q1–Q5 (2026-10-19) are in `docs/DECISIONS.md` under "Product reset, Phase 4". Merging needs Paige to name the destination.
-- **Phase 5 — Monitor and lifecycle: not started.** Don't start it until Paige says so.
+- **Phase 4 — Proposal and Decision (#144): done.** Merged to `main` in #145 (1b1cabf, 2026-10-19) and smoke-tested on production. Paige's answers Q1–Q5 are in `docs/DECISIONS.md` under "Product reset, Phase 4".
+- **Phase 5 — Monitor and lifecycle (#147): built, PR open, not merged.** What was built and the open questions are in `docs/DECISIONS.md` under "Product reset, Phase 5". Merging needs Paige to name the destination.
+- **Phase 6 — generative/adaptive UI: not started.** Paige plans a deeper whole-product review first.
 
 Known follow-ups from Phase 2: the Decide, Monitor and record screens still say "Rules" and "Decision requirements"; the Status tab's rules panel doesn't yet separate the written Boundary from its enforcement the way setup's review does; the decision record doesn't link to its Setup confirmed snapshot.
 

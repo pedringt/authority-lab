@@ -40,6 +40,49 @@ Earlier redesign mockups and interface directions remain historical context only
 
 ## Decisions
 
+### Product reset, Phase 5: Monitor and lifecycle (#147, Paige, 2026-10-19)
+
+The settled model (Paige, 2026-10-19): Monitor answers "Is the current Authority still justified?" Monitoring may trigger attention or another human decision; it never increases or restores Authority. A material change means evidence may need revalidating and a person should look, not that software decides authority is unsafe. Increasing Authority needs evidence and approval; reducing or pausing it should be easier. Authority is never restored automatically: recovery makes a new Proposal possible. Automatic restrictions stay exactly deterministic.
+
+As built:
+
+- **Monitor's first question** (`justification`, `src/store/lifecycle.js`; the **Still justified?** view). It has three parts:
+  - **Current state:** Authority, the Decision in force, Boundaries, and any automatic restriction or review lock.
+  - **What changed since the Decision in force:** compared with its frozen snapshot (#144). Covers Requirement and Target results, coverage states, positions, new evidence, stale evidence, disagreement, material changes, incidents (lightweight and rule), restriction rules over their limit, attempts at something never allowed, people's approvals and overrides, rollout goals missed on real numbers, and adoption warnings.
+  - **A plain-language state, no score:** Current Authority still supported / Needs attention / Investigation needed / Authority may no longer be justified / Restricted automatically. The state is the most serious change found, and each change says why.
+
+  The automatic safety limits, the evidence signals and the gate summary follow, unchanged.
+- **Signal to state (the mapping used, for Paige to confirm):**
+  - "May no longer be justified": a result that was Met when decided is now Not met.
+  - "Investigation needed": a result is now Conflicting, a critical incident is open, a rule incident awaits review, or a restriction rule reads over its limit.
+  - "Needs attention": any other change for the worse, stale evidence, a material change, a position change or disagreement, an attempt at something never allowed, a rollout goal missed on real numbers, or an adoption warning.
+  - Information only: new evidence, improvements, people's approvals and overrides.
+  - "Restricted automatically": an active automatic restriction.
+- **No snapshot, no result comparison.** The starting record, or a Decision made before #144, has nothing to compare with. Requirements are the bar for the next level, so one not met now says nothing about the current Authority by itself; only signals that stand on their own count.
+- **Material-change revalidation is date-based and never fails anything** (`materialChangeImpact`). For each change since the Decision, Monitor lists every Requirement and Target whose current result rests on evidence observed before the change took effect: "may need new evidence", or "partly after" once newer evidence exists. No category-to-source invalidation is applied: none is configured. Imported evidence measured under another configuration is already set aside by its own standing. Authority never changes. Records now freeze `materialChangesAtDecision`, so Monitor can tell which changes came after. A material change can be recorded from Monitor by the Owner or anyone named, the Phase 1 rule.
+- **Pulling back from Monitor.** Reduce one level, Suspend or Redesign can be recorded without an open Proposal, by anyone named, with a reason (Phase 4 Q1). The store always allowed this; there was no screen for it. Restore is a new Proposal, one level at a time, and the Owner's Decision; never automatic after better evidence, a resolved incident or a review. After a decision is recorded, Decide now offers **Propose a move to Level N** beneath it when a Proposal could be made (the existing rule: up to Draft, with evidence, no review pending); before, the recorded view never offered it again.
+- **Overrides as monitoring evidence**, from the existing gate log:
+  - attempts at something never allowed (always blocked) need attention;
+  - people's approvals of needs-a-person actions, people's overrides (rejections) and other blocked actions are information.
+
+  No new exception or override record was added.
+
+Open questions, not decided (brought to Paige in the PR):
+
+1. Which material-change categories invalidate which evidence sources.
+2. The signal-to-state mapping above.
+3. Whether Reviewer disagreement should give a stronger state than "Needs attention".
+4. Pause: reuse Suspend exactly, or distinct semantics.
+5. Restore: how it differs mechanically from proposing the next level.
+6. Retire: who may retire, whether it is reversible, and how it maps to state.
+7. Investigate: activity only (as built) or a persistent lifecycle state.
+8. Exceptions:
+   - who creates and approves them;
+   - which Boundaries may be excepted;
+   - maximum duration;
+   - what counts as repeated.
+9. Whether any Monitor state should become a hard block (none does).
+
 ### Product reset, Phase 4: Proposal and Decision (#144, Paige, 2026-10-18)
 
 The settled model (Paige, 2026-10-18): a Proposal is one concrete proposed authority change that a person explicitly creates; it answers "What changes if I approve this?" and is not a Decision. A Decision is the recorded human choice. Evidence never grants authority; AI may prepare the workspace but never records the Decision. Residual Risk is a person's judgment (Low / Moderate / High / Unknown with a reason), never a score. Reviewer disagreement is visible, never averaged away. Every existing approval and expansion rule is kept.
