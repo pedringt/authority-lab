@@ -300,13 +300,18 @@ function personJudged(state, capabilityId, row) {
 function judgedRequirement(state, capabilityId, r) {
   if (!r.measure) return r;
   {
-    const j = judgeMeasure(state, capabilityId, r.measure);
+    const raw = judgeMeasure(state, capabilityId, r.measure);
+    // A minimum number of cases that isn't reached yet is an evidence
+    // sufficiency state, not a failure (Paige, 2026-10-20, #151): "Not enough
+    // evidence: 18 of 40". Readiness is unchanged: only Met counts.
+    const short = raw.status === 'fail' && r.measure.stat === 'sample' && ['>=', '>'].includes(r.measure.op);
+    const j = short ? { ...raw, status: 'insufficient' } : raw;
     // A row's own explanation of its gap, written by a person, is kept while
     // the gap is open; the generated sentence is the fallback.
     const gap = j.status === 'pass' ? undefined
       : j.status === 'conflicting' ? `${j.text}. Conflicting evidence is never a pass: look into it, or collect more.`
       : r.gap ? r.gap
-      : j.status === 'fail' ? `Measured ${j.text} in ${j.importId}.`
+      : j.status === 'fail' ? `Measured ${j.text}, from ${j.label}.`
         : j.status === 'pending' ? 'No results measure this yet.'
           : `${MEASURE_WORDS[j.status]}: ${j.text}.`;
     const from = j.combined > 1 ? ` (${j.combined} compatible results combined)` : '';

@@ -202,7 +202,7 @@ export function tighteningOnly(base, next) {
   const changes = [];
   const kinds = [
     ['criteria', 'target', (x) => x.name, ['name', 'note', 'requirement', 'bar']],
-    ['requirements', 'text', (x) => x.text, ['kind', 'bar', 'judgment']],
+    ['requirements', 'text', (x) => x.text, ['kind', 'bar', 'judgment', 'consideration']],
   ];
   for (const [kind, field, label, fixed] of kinds) {
     const before = base[kind] || [];
@@ -216,7 +216,7 @@ export function tighteningOnly(base, next) {
         // "evidence" for a row that already has a measure is no change; giving
         // a legacy row its judgment, or changing one, is (#143 review).
         const same = f === 'judgment' ? effectiveJudgment(a) === effectiveJudgment(b) : String(a[f] || '') === String(b[f] || '');
-        if (!same) return { ok: false, reason: f === 'judgment' ? `It changes how "${label(b)}" is judged.` : `It changes the ${f} of "${label(b)}".`, changes };
+        if (!same) return { ok: false, reason: f === 'judgment' ? `It changes how "${label(b)}" is judged.` : f === 'consideration' ? `It changes whether "${label(b)}" is a hard Requirement or a consideration.` : `It changes the ${f} of "${label(b)}".`, changes };
       }
       // How a row is measured (#120) may change only in its number, which
       // must move with the wording; anything else is a different bar.

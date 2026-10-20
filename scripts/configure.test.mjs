@@ -3,13 +3,13 @@
 // and tests are one source among several.
 
 import { test } from 'node:test';
-import { decideWith } from './helpers.mjs';
+import { decideWith, requirementsMet } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import {
   setRationale,
   initialState, addCapability, defaultsFor, saveCriteria, current, criteriaLocked, openProposal, getCapability, capData, people, authorize, selectDecision, proposeAuthority,
   importEvidence, EVIDENCE_SCHEMA, recordManualEvidence, mapEvidence, barFromWords, evidenceCoverage, coverageText, rowCoverage, startTestRun, advanceTestRun, addStarterScenarios,
-  saveStakeholders, realUseEvidence, findSource, setOutcome, setRolloutField,
+  saveStakeholders, realUseEvidence, findSource, setOutcome, setRolloutField, replaceProposal,
 } from '../src/store/index.js';
 import { setPeople } from '../src/ui.js';
 import { configureEvidenceView } from '../src/views/configure.js';
@@ -143,7 +143,7 @@ test('more authority can be proposed on any measured evidence, without in-app te
   ready = setOutcome(setOutcome(ready, id, 0, 'metric', 'Summary accuracy'), id, 0, 'target', '≥ 90%');
   ready = setOutcome(setOutcome(ready, id, 1, 'metric', 'Time to read a note'), id, 1, 'target', 'at least 30% faster');
   for (const [k, v] of Object.entries({ owner: 'maya', scope: 'Summaries for the support queue only.', startDate: '2026-10-08', feedbackChannel: '#notes-feedback', reviewerNotes: 'Read each summary against its note.', reviewDate: '2026-10-21' })) ready = setRolloutField(ready, id, k, v);
-  const atDraft = authorize(setRationale(ready, id, 'The connected eval meets every Requirement.'), id, { by: 'maya' });
+  const atDraft = authorize(replaceProposal(requirementsMet(setRationale(ready, id, 'The connected eval meets every Requirement.'), id), id, { by: 'maya' }), id, { by: 'maya' });
   assert.equal(getCapability(atDraft, id).authority.level, 2);
   assert.equal(realUseEvidence(atDraft, id), false);
   assert.throws(() => proposeAuthority(atDraft, id, 3, { by: 'maya' }), /Level 3 needs evidence from real use/);

@@ -8,7 +8,7 @@
 // step teaches one idea, and concepts appear only when they're needed.
 
 import { html, raw, fmtDate } from '../ui.js';
-import { getCapability, capData, current, readiness, testSummary, levelName, reviewEligibility, reviewNeeded, people, workspaceOf, workflowOf, RESIDUAL_RISK_LEVELS } from '../store/index.js';
+import { getCapability, capData, current, readiness, testSummary, levelName, reviewEligibility, reviewNeeded, people, workspaceOf, workflowOf, RESIDUAL_RISK_LEVELS, readinessText } from '../store/index.js';
 
 export const GUIDE_STEPS = ['Define the capability', 'Current autonomy', 'Set the boundaries', 'What would justify more autonomy', 'See the results', 'Make the decision', 'What happens if things go wrong'];
 
@@ -79,7 +79,7 @@ export function guideView(g, step) {
     const weak = p.segments.filter((x) => x.status === 'insufficient');
     const gap = r.unmet[0];
     body = html`${teach('Overall performance is strong, but high-value refunds are still under-tested.', `The test suite and ${p.cases}-case pilot look good overall. High-value refunds are the remaining evidence gap, and that should shape the decision.`)}
-      ${g.tested ? html`<div class="guide-panel"><p class="guide-big">${r.met} of ${r.total} Requirements met</p>
+      ${g.tested ? html`<div class="guide-panel"><p class="guide-big">${readinessText(r)}</p>
           <p>${t.passed} of ${t.total} tests passed. One severe miss: a $420 refund recommended on a fraud-flagged account. Automatic action is now blocked whenever an account has a fraud flag.</p>
           <table class="table guide-table"><thead><tr><th>Type of case</th><th class="num">Cases</th><th class="num">Accuracy</th></tr></thead><tbody>${p.segments.map((x) => html`<tr class="${weak.includes(x) ? 'is-weak' : ''}"><td>${x.name}</td><td class="num">${weak.includes(x) && gap ? `${x.cases} of ${String(gap.text).match(/\d+/) ? String(gap.text).match(/\d+/)[0] : '?'} needed` : x.cases}</td><td class="num">${x.accuracy}%</td></tr>`)}</tbody></table></div>`
         : html`<div class="guide-panel"><p>Run the test suite and reveal the pilot results.</p><p><button class="btn btn-primary" data-action="guide-run-tests">Run the tests</button></p></div>`}`;

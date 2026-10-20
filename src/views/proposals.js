@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
-import { judgmentField } from './criteria.js';
+import { judgmentField, weightField } from './criteria.js';
 import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, kv, warningNotice, lede } from '../ui.js';
 import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store/index.js';
 import { diffTable } from './activity.js';
@@ -64,7 +64,7 @@ export function proposeView(state, capabilityId, kind, query) {
     <td>${CORE_CRITERIA.includes(x.id) ? html`<span class="muted small" title="You can change the threshold but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove target ${i + 1}">Remove</button>`}</td>
   </tr>`;
   const rrow = (x, i) => html`<tr>
-    <td><input type="hidden" name="r-id" value="${x.id || ''}"><input type="hidden" name="r-kind" value="${x.kind || ''}"><input type="hidden" name="r-source" value="${x.source || ''}"><input type="text" name="r-text" value="${x.text}" maxlength="120" aria-label="Check">${judgmentField(x)}</td>
+    <td><input type="hidden" name="r-id" value="${x.id || ''}"><input type="hidden" name="r-kind" value="${x.kind || ''}"><input type="hidden" name="r-source" value="${x.source || ''}"><input type="text" name="r-text" value="${x.text}" maxlength="120" aria-label="Requirement">${judgmentField(x)}${weightField(x)}</td>
     <td class="muted small">${x.current || ''}</td>
     <td>${CORE_REQUIREMENTS.includes(x.id) ? html`<span class="muted small" title="You can change the number but not remove this row.">Required</span>` : html`<button class="btn btn-sm btn-ghost" type="button" data-action="row-remove" aria-label="Remove check ${i + 1}">Remove</button>`}</td>
   </tr>`;

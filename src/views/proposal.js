@@ -72,7 +72,7 @@ export function frozenResults(prop, staleness) {
   const moved = staleness ? [...staleness.resultChanges, ...(staleness.coverageChanges || []).map((c) => ({ ...c, from: `coverage ${c.from}`, to: `coverage ${c.to}` }))] : [];
   return html`<details class="how proposal-frozen"><summary>When it was proposed (${fmtDate(prop.openedAt)}): ${prop.readiness.met} of ${prop.readiness.total} Requirements met${moved.length ? ` · ${moved.length} result${moved.length === 1 ? ' has' : 's have'} moved since` : ''}</summary>
     <table class="table"><thead><tr><th>Requirement</th><th>Result then</th><th>Why</th></tr></thead>
-      <tbody>${prop.requirementResults.map((r) => html`<tr><td>${r.text}</td><td>${badge(RESULT_TONE[r.status] || 'neutral', r.label)}</td><td class="small">${r.why}</td></tr>`)}</tbody></table>
+      <tbody>${prop.requirementResults.map((r) => html`<tr><td>${r.text}${r.consideration ? html` <span class="req-weight">Consideration</span>` : ''}</td><td>${badge(RESULT_TONE[r.status] || 'neutral', r.label)}</td><td class="small">${r.why}</td></tr>`)}</tbody></table>
     ${prop.targetResults.length ? html`<table class="table"><thead><tr><th>Target</th><th>Goal</th><th>Then</th><th>Result then</th></tr></thead>
       <tbody>${prop.targetResults.map((t) => html`<tr><td>${t.name}</td><td>${t.goal}</td><td>${t.current}</td><td>${t.label}</td></tr>`)}</tbody></table>` : ''}
     <p class="small"><strong>Coverage then:</strong> ${prop.coverage.text}</p>
@@ -183,7 +183,7 @@ export function recordReviewed(state, x) {
   }
   if (!v) return rows;
   rows.push(['Initial Risk', html`${v.risk.overall} <span class="muted small">${v.risk.why}</span>`]);
-  rows.push(['Requirements when decided', html`<ul class="plain-list">${v.requirementResults.map((r) => html`<li>${badge(RESULT_TONE[r.status] || 'neutral', r.label)} ${r.text}${r.status !== 'met' && r.why ? html` <span class="muted small">${r.why}</span>` : ''}</li>`)}</ul>${v.targetResults.length ? html`<p class="fact-label">Targets</p><ul class="plain-list">${v.targetResults.map((t) => html`<li>${t.name} (${t.goal}): ${t.label}${t.current ? `, ${t.current}` : ''}</li>`)}</ul>` : ''}<p class="small">${v.coverage.text}</p>`]);
+  rows.push(['Requirements when decided', html`<ul class="plain-list">${v.requirementResults.map((r) => html`<li>${badge(RESULT_TONE[r.status] || 'neutral', r.label)} ${r.text}${r.consideration ? html` <span class="req-weight">Consideration</span>` : ''}${r.status !== 'met' && r.why ? html` <span class="muted small">${r.why}</span>` : ''}</li>`)}</ul>${v.targetResults.length ? html`<p class="fact-label">Targets</p><ul class="plain-list">${v.targetResults.map((t) => html`<li>${t.name} (${t.goal}): ${t.label}${t.current ? `, ${t.current}` : ''}</li>`)}</ul>` : ''}<p class="small">${v.coverage.text}</p>`]);
   const bs = [...v.boundaries.lines, ...v.boundaries.restrictions];
   rows.push(['Boundaries when decided', bs.length ? html`<ul class="plain-list">${bs.map((l) => html`<li>${l.text} ${enforcementBadge(l.enforcement)}</li>`)}</ul>` : html`<span class="muted">None written.</span>`]);
   if (v.positions.length) rows.push(['Positions when decided', positionsStep(v.positions)]);

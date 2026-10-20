@@ -42,13 +42,13 @@ test('Status, Refund recommendation (a decision is open): the level in plain wor
   assert.match(st, /<h2 class="st-title">Draft <span class="st-lvl">Level 2<\/span> <\/h2>/, 'plain name, quiet level, no badge when nothing is wrong');
   assert.match(st, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
   assert.match(st, /Why it&#39;s here<\/span><p>Moved to Draft on Sep 2 by Maya Chen \(expand autonomy\)\. The pilot that followed is done: 218 cases, 94% accurate\./);
-  assert.match(st, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 Requirements are met; still open: high-value refund performance needs more evidence\./);
+  assert.match(st, /What happens next<\/span><p>Decide whether it moves to Act within limits\. All 5 hard Requirements met · 1 consideration not met\./);
   assert.match(st, /Then<\/span><p>Standard refunds up to \$50 would run without review\. Everything else stays under human review\./);
   assert.deepEqual(nextLinks(h), [[`#/capabilities/${RR}?tab=decide`, 'review the evidence and decide whether autonomy should expand →']]);
   assert.match(st, /Owner: Maya Chen/);
   assert.doesNotMatch(st, /View boundaries/, 'boundaries and history links are for a restricted capability');
   // The readiness is said once on the page.
-  assert.equal(count(h, '5 of 6 Requirements'), 1);
+  assert.equal(count(h, 'All 5 hard Requirements met'), 1);
 });
 
 test('Status: the actions waiting for a person, as rows with the approve/reject form, and who is approving', () => {

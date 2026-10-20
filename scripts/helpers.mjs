@@ -9,3 +9,17 @@ export function decideWith(state, capabilityId, option) {
   const s = selectDecision(state, capabilityId, option);
   return option === 'expand' || option === 'expand-limits' ? setResidualRisk(s, capabilityId, TEST_RESIDUAL_RISK) : s;
 }
+
+// Since #151 a hard Requirement that isn't Met blocks an expansion. Tests
+// about something else meet every hard Requirement through this, as if the
+// evidence had come in; scripts/readiness.test.mjs tests the gate itself.
+// It rewrites the stored rows in place (no new version), so nothing else
+// about the capability changes.
+export function requirementsMet(state, capabilityId) {
+  const d = state.capabilityData[capabilityId];
+  const list = d.versions.requirements || [];
+  if (!list.length) return state;
+  const last = list[list.length - 1];
+  const value = last.value.map((r) => (r.consideration ? r : { ...r, met: true, current: r.current && r.current !== 'Not yet measured' && r.current !== 'No number set yet' ? r.current : 'Met', gap: undefined, measure: undefined, bar: undefined }));
+  return { ...state, capabilityData: { ...state.capabilityData, [capabilityId]: { ...d, versions: { ...d.versions, requirements: [...list.slice(0, -1), { ...last, value }] } } } };
+}

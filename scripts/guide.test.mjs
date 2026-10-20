@@ -55,7 +55,7 @@ test('the guided demo waits for each action, and every action is a real store tr
   for (let i = 0; i < 200 && capData(s, RR).testRun.status === 'running'; i++) s = advanceTestRun(s, RR);
   const tested = { ...g, state: s, tested: true };
   const five = text(guideView(tested, 5));
-  assert.match(five, /5 of 6 Requirements met/);
+  assert.match(five, /All 5 hard Requirements met · 1 consideration not met\./);
   assert.match(five, /24 of 26 tests passed/);
   assert.match(five, /High-value refunds \(> \$100\) 18 of 40 needed 83%/);
   assert.match(String(guideView(tested, 5)), /btn btn-primary" href="#\/guide\/6">Next/);

@@ -62,6 +62,19 @@ Mechanics:
 - **R5-B** (PR 3). Low stays the human's label, but confirmed facts drive the baseline safeguards, with a clear mismatch warning.
 - **R6** (PR 4). After results exist, these need sign-off: lowering or loosening a Target or bar; removing a hard Requirement; changing hard → consideration; changing an existing evidence mapping or source; a Boundary change that permits more; removing a Reviewer; changing Reviewer ↔ Stakeholder role. These are recorded only: linking a previously unlinked Requirement or Target to evidence; adding a Reviewer or Stakeholder; tightening a bar; adding a Requirement; adding or tightening a Boundary.
 
+Implemented in PR 2 (#151):
+- A Requirement may be marked `consideration: true`; hard is the default and isn't stored. `readiness()` adds `hardMet`, `hardTotal`, `hardUnmet`, `considerations` and `considerationsOpen`. `canAuthorize` refuses an expansion while any hard Requirement is short of Met (Not met, Unknown, Conflicting, Not enough evidence, No evidence yet or Needs decision), naming each with its result. Hold, Reduce, Pause and Redesign are never blocked by it.
+- R4-A: `proposeAuthority` doesn't check readiness, so the Proposal opens; Decide says "Not approvable yet" with each hard Requirement and its result, lists open considerations apart, and closes the Expand choice with the reason. The hard check is reported before staleness, because replacing a Proposal wouldn't make it approvable. When the evidence later meets the bar, the Proposal is stale (Phase 4 rule) and is replaced before deciding.
+- R3-A: Northstar's "Minimum 40 high-value refund cases" is a consideration, so the guided demo's Act-within-limits decision still works.
+- Confirmed by Paige (2026-10-20, #152 review):
+  - "No evidence yet" blocks a hard Requirement. Hard means it must be Met; No evidence, Not enough evidence, Unknown, Conflicting and Needs decision are different reasons it isn't, and each keeps its own label.
+  - The built-in `min-cases` coverage row is always hard: it is the minimum evidence before readiness is judged at all. This is structural, not text matching: another "Minimum N … cases" Requirement, like Northstar's high-value row, can be a consideration.
+  - A change between hard and consideration needs sign-off in both directions in PR 2, as a temporary conservative state. The settled R6 rule for PR 4: hard → consideration is governed (sign-off), because it weakens the bar; consideration → hard is recorded with no approval, because it tightens it.
+  - The stale-Proposal consequence stays: meeting a hard Requirement after the Proposal froze changes its decision-relevant snapshot, so it is replaced.
+  - A capability added to the Northstar demo stopping at a blocked Proposal stays for now; PR 3 fixes the setup path rather than weakening the gate.
+- A case-count Requirement short of its minimum reads **Not enough evidence** ("Not enough evidence: 18 of 40"), never Not met: it is an evidence-sufficiency state, not a failed bar. Readiness is unchanged: hard still blocks, a consideration still doesn't.
+- Copy: the Requirements view, Decide headline, Status, Overview and the guided demo count hard Requirements and name open considerations; "Every item has to be met, or a person has to decide to go ahead anyway" is gone.
+
 Consequence fixes: "Proposal" is reserved for authority Proposals (amendments P-1, P-2… are **Change requests**); **Requirements** everywhere (not Checks or Decision requirements); No evidence, Not enough evidence, Unknown and Not met look different; no raw keys; refund-specific controls leave generic setup (PR 3); Welcome offers "Start your own workspace"; Overview shows the next action when Decide says a capability is ready.
 
 Held positions stay: no exceptions system yet, Investigate stays an activity, material changes stay date-only.

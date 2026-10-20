@@ -1,5 +1,5 @@
 import { test } from 'node:test';
-import { decideWith } from './helpers.mjs';
+import { decideWith, requirementsMet } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import * as seed from '../src/data/seed.js';
@@ -23,7 +23,7 @@ import {
   snapshotPerson, riskCoverage, coverageWarning, proposalSatisfiable, proposalWarning, coverageWarnings, rosterChangeImpact, isHighOrFinancial,
   parseRestrictionLine, restrictionRules, monitoringStatus, ruleCrossed, breachRule, reviewNeeded, reviewEligibility, recordReview, reviewForRecord, restrictedExpansion, workspaceOf, workflowOf, startEmpty, setupPending, setUpWorkspace, foundingRiskGap, renameWorkspace, namesAtRecord, thresholdParts, tighteningOnly, tighteningShortcut, barChangesSinceDecisionOpened, checkAction, enforcementTerms, callTool, dataSeen, filterForModel, TOOLS, queueApprovers, queuedAction, approveAction, rejectAction, waitingActions, QUEUE_LIMIT, gateSummary, gateEvidence, GATE_SOURCES, gateEvents, replayRun, runStartState, toolCall, setTicketDefinitions, fileTicket,
   requirementLabel, roleLabel,
-  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, setRolloutField, rolloutChecks, ROLLOUT_FIELDS, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility, adoptionSignals,
+  setOutcome, outcomeChecks, parseTarget, isExpansion, OUTCOMES_MAX, nextAuthority, setRolloutField, rolloutChecks, ROLLOUT_FIELDS, expectedVsActual, actionRates, roi, roiVersions, currentRoiAssumptions, setRoiAssumptions, roiEditEligibility, adoptionSignals, replaceProposal,
 } from '../src/store/index.js';
 import { setPeople, personAt } from '../src/ui.js';
 import { decisionRecordView, decisionWorkspaceView } from '../src/views/decisions.js';
@@ -108,10 +108,12 @@ test('readiness is computed per capability', () => {
   assert.equal(r.met, 5);
   assert.equal(r.total, 6);
   assert.equal(r.unmet[0].id, 'high-value');
+  // #151 (R3-A): that row is a consideration, so every hard Requirement is met.
+  assert.deepEqual([r.hardMet, r.hardTotal, r.hardUnmet.length, r.considerationsOpen.map((x) => x.id)], [5, 5, 0, ['high-value']]);
   assert.deepEqual([readiness(s, TC).met, readiness(s, TC).total], [5, 5], 'ticket classification has its own seeded requirements');
   const [b, bid] = blankCap();
-  assert.deepEqual(readiness(b, bid), { met: 0, total: 0, unmet: [], unresolved: [] });
-  assert.deepEqual(readiness(s, 'no-such-capability'), { met: 0, total: 0, unmet: [], unresolved: [] });
+  assert.deepEqual(readiness(b, bid), { met: 0, total: 0, unmet: [], unresolved: [], hardMet: 0, hardTotal: 0, hardUnmet: [], considerations: [], considerationsOpen: [] });
+  assert.deepEqual(readiness(s, 'no-such-capability'), { met: 0, total: 0, unmet: [], unresolved: [], hardMet: 0, hardTotal: 0, hardUnmet: [], considerations: [], considerationsOpen: [] });
 });
 
 test('test suite runs to completion for one capability and updates its evidence only', () => {
@@ -555,7 +557,7 @@ test('adding a capability writes its first record with real dates, risk v1, and 
   assert.equal(currentVersion(s, c.id, 'risk').date, seed.TODAY);
   assert.equal(versionList(s, c.id, 'contract').length, 0);
   assert.deepEqual(current(s, c.id, 'contract').may, []);
-  assert.deepEqual(readiness(s, c.id), { met: 0, total: 0, unmet: [], unresolved: [] });
+  assert.deepEqual(readiness(s, c.id), { met: 0, total: 0, unmet: [], unresolved: [], hardMet: 0, hardTotal: 0, hardUnmet: [], considerations: [], considerationsOpen: [] });
   // Record #01 for this capability.
   assert.equal(s.decisionRecords.length, before + 1);
   const rec = s.decisionRecords[s.decisionRecords.length - 1];
@@ -1309,7 +1311,14 @@ test('a new capability can reach its second record: propose a move to Draft afte
   s = setOutcome(setOutcome(s, id, 1, 'metric', 'Time to first response'), id, 1, 'target', 'at least 25% faster');
   // C1: and its rollout plan.
   for (const [k, v] of Object.entries({ owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' })) s = setRolloutField(s, id, k, v);
-  s = authorize(setRationale(s, id, 'The first run passed; a person sends every draft.'), id, { by: 'priya' });
+  s = setRationale(s, id, 'The first run passed; a person sends every draft.');
+  // #151 (R4-A): the Proposal is open, but its hard Requirements aren't met yet.
+  assert.match(canAuthorize(s, id, { by: 'priya' }).reason, /Every hard Requirement has to be Met before authority expands\. Not yet: "Minimum 100 pilot cases" \(No evidence yet\)/);
+  // Once they are met, the Proposal no longer describes current conditions:
+  // it is replaced (#144), then decided.
+  s = requirementsMet(s, id);
+  assert.match(canAuthorize(s, id, { by: 'priya' }).reason, /The Proposal is stale: Requirement "Minimum 100 pilot cases" changed: No evidence yet when proposed, Met now\./);
+  s = authorize(replaceProposal(s, id, { by: 'priya' }), id, { by: 'priya' });
   const c = getCapability(s, id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
   assert.equal(c.status, 'pilot');
@@ -1361,16 +1370,20 @@ test('end to end in the store: add → contract → criteria → stakeholders �
   // C1: and its rollout plan.
   for (const [k, v] of Object.entries({ owner: 'priya', scope: 'Drafts for the billing queue only, during business hours.', startDate: '2026-10-08', feedbackChannel: '#drafts-feedback', reviewerNotes: 'Every draft needs a person to send it; edit freely and note why.', reviewDate: '2026-10-21' })) store.dispatch('setRolloutField', id, k, v);
   store.dispatch('setRationale', id, 'The first run passed; a person sends every draft.');
-  store.dispatch('authorize', id, { by: 'priya' });
-  const c = getCapability(store.get(), id);
+  // #151: a test run alone doesn't meet the default Requirements (pilot cases and so on).
+  assert.throws(() => store.dispatch('authorize', id, { by: 'priya' }), /Every hard Requirement has to be Met before authority expands/);
+  const met = createStore({ build: () => requirementsMet(store.get(), id) });
+  met.dispatch('replaceProposal', id, { by: 'priya' });
+  met.dispatch('authorize', id, { by: 'priya' });
+  const c = getCapability(met.get(), id);
   assert.deepEqual(c.authority, { level: 2, limited: false });
   assert.equal(c.status, 'pilot');
-  const recs = store.get().decisionRecords.filter((r) => r.capabilityId === id);
+  const recs = met.get().decisionRecords.filter((r) => r.capabilityId === id);
   assert.deepEqual(recs.map((r) => r.sequence), [1, 2]);
   assert.deepEqual(recs[1].versions, { contract: 1, criteria: 1, requirements: 1, risk: 1, stakeholders: 1 });
   // The seeded demo is untouched.
-  assert.equal(decisionRequired(store.get(), RR), true);
-  assert.equal(readiness(store.get(), RR).met, 5);
+  assert.equal(decisionRequired(met.get(), RR), true);
+  assert.equal(readiness(met.get(), RR).met, 5);
 });
 
 // ---------------------------------------------------------------------------
@@ -3987,7 +4000,7 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   // Status: the level, what it does now, the proposed level, the open gap, and whether it's ready, told once.
   assert.match(page, /Draft <span class="st-lvl">Level 2<\/span>/);
   assert.match(page, /Refunds are prepared automatically\. A person approves every one before it takes effect\./);
-  assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. 5 of 6 Requirements are met; still open: high-value refund performance needs more evidence\./);
+  assert.match(page, /What happens next<\/span><p>Decide whether it moves to Act within limits\. All 5 hard Requirements met · 1 consideration not met\./);
   assert.match(page, /Then<\/span><p>Standard refunds up to \$50 would run without review\./);
   assert.match(page, /href="#\/capabilities\/refund-recommendation\?tab=decide">Next: review the evidence/);
   // Below: this capability's waiting actions, and the people involved, with positions.
@@ -4057,7 +4070,7 @@ test('#96: the decision flow numbers its steps and the checklist says exactly wh
   assert.match(notOwner, /data-action="authorize"[^>]*disabled/);
   assert.deepEqual(steps(ready), ['1 What changes if I approve this?', '2 What do we know?', '3 Who has said what?', '4 Risk', '5 Recommendation', '6 Your decision', '7 Limits', '8 What should improve?', '9 Rollout plan', '10 Why are you making this decision?', '11 Review and record']);
   // The evidence is on the page, not behind a closed panel: its headline shows.
-  assert.match(ready, /<p class="decide-big">Almost ready: 5 of 6 Requirements met<\/p>/);
+  assert.match(ready, /<p class="decide-big">Ready: all 5 hard Requirements met · 1 consideration not met<\/p>/);
   assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);
   // Each blocker shows against its own part, with its first problem.
   const noPlan = String(decisionWorkspaceView(setRolloutField(pendingRR(), RR, 'reviewDate', ''), RR));
@@ -4149,7 +4162,7 @@ test('Overview: To do, Approvals needed, Important results, Current autonomy, in
   // To do: the pending decision leads, with how ready it is and who owns it.
   const todo = out.slice(at('todo'), at('approvals'));
   assert.match(todo, /^[\s\S]*?<p class="ov-cap">Refund recommendation<\/p>\s*<p class="ov-title">Decide whether to expand autonomy within limits<\/p>/, 'the decision is the first to-do');
-  assert.match(todo, /5 of 6 Requirements met · high-value refund performance needs more evidence/);
+  assert.match(todo, /All 5 hard Requirements met · 1 consideration not met · high-value refund performance needs more evidence/);
   assert.match(todo, /Owner: Maya Chen/);
   assert.match(todo, /href="#\/capabilities\/refund-recommendation\?tab=decide">Review →/);
   assert.match(todo, /Complete the requirements to return to Draft<\/p>\s*<p class="ov-sub">A redesigned idempotency check and 100 clean executions in a replay environment\./);

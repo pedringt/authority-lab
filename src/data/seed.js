@@ -356,6 +356,9 @@ export const evidenceRequirements = [
     text: 'Minimum 40 high-value refund cases',
     current: '18',
     met: false,
+    // A consideration, not a hard Requirement (Paige, 2026-10-20, R3-A): the
+    // Boundaries already keep refunds over $100 with a person.
+    consideration: true,
     gap: 'High-value refund performance needs more evidence. Only 18 pilot cases over $100 have been observed, and accuracy on them is 83%.',
     measure: { source: 'support-platform-refund-decisions', metric: 'refund-decisions', segment: 'High-value refunds (> $100)', stat: 'sample', op: '>=', value: 40 },
   },

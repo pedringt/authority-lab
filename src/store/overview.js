@@ -44,10 +44,14 @@ function automaticRestriction(state, capabilityId) {
   return m && m.breached && m.breachRecordId ? state.decisionRecords.find((r) => r.id === m.breachRecordId) || null : null;
 }
 
+// Only hard Requirements gate an expansion (#151), so with considerations
+// present the count is of the hard ones, and the considerations follow.
 export function readinessText(r) {
   if (!r.total) return 'No Requirements set yet.';
-  if (r.met === r.total) return `All ${r.total} Requirements met.`;
-  return `${r.met} of ${r.total} Requirements met.`;
+  if (!r.considerations || !r.considerations.length) return r.met === r.total ? `All ${r.total} Requirements met.` : `${r.met} of ${r.total} Requirements met.`;
+  const hard = !r.hardTotal ? 'No hard Requirements' : r.hardMet === r.hardTotal ? `All ${r.hardTotal} hard Requirement${r.hardTotal === 1 ? '' : 's'} met` : `${r.hardMet} of ${r.hardTotal} hard Requirements met`;
+  const open = r.considerationsOpen.length;
+  return `${hard} · ${open ? `${open} consideration${open === 1 ? '' : 's'} not met` : `${r.considerations.length === 1 ? 'the consideration' : `all ${r.considerations.length} considerations`} met`}.`;
 }
 
 // A requirement as concrete work, parsed from its text and current value:
@@ -121,7 +125,7 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
       const r = readiness(state, cap.id);
       row({ kind: 'decision',
         title: `Decide whether to expand autonomy ${expandWords(proposedAuthority(state, cap.id))}`,
-        sub: [readinessText(r).replace(/\.$/, ''), r.unmet[0] ? shortGap(r.unmet[0]) : ''].filter(Boolean).join(' · '),
+        sub: [readinessText(r).replace(/\.$/, ''), (r.hardUnmet[0] || r.unmet[0]) ? shortGap(r.hardUnmet[0] || r.unmet[0]) : ''].filter(Boolean).join(' · '),
         action: 'Review', href: link('?tab=decide') });
     }
     const held = personRestriction(state, cap.id);
