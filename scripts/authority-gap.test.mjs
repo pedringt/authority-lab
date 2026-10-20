@@ -8,7 +8,7 @@ import {
   initialState, startEmpty, setUpWorkspace, addPerson, addCapability, getCapability, capData, buildWorkspace, importEvidence,
   saveCriteria, saveStakeholders, mapEvidence, rowMetric, MANUAL_SOURCE, recordResult, recordJudgment,
   proposeAuthority, selectDecision, setRationale, setOutcome, setRolloutField, setResidualRisk, canAuthorize, authorize, people,
-  justification, authorityGap, requirementsNow, gapBlocks, recordBaseline, readyToPropose, retireCapability, authorityRows, actsThroughGate,
+  justification, authorityGap, requirementsNow, overviewTodos, gapBlocks, recordBaseline, readyToPropose, retireCapability, authorityRows, actsThroughGate,
 } from '../src/store/index.js';
 import { stateWorkspace } from '../src/data/workspaces/state.js';
 import { setPeople, setToday } from '../src/ui.js';
@@ -176,4 +176,46 @@ test('display: a minimum-cases row with some cases is "Not enough evidence", nev
   const d = strip(capabilityView(s, 'refund-execution-high-value', new URLSearchParams('tab=decide')));
   assert.match(d, /Minimum 200 pilot cases · Not enough evidence: 96/);
   assert.match(d, /No unresolved critical incidents · Not met:/);
+});
+
+test('the tagline says software enforces configured controls, not every Boundary', () => {
+  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.equal((index.match(/AI interprets\. Software enforces configured controls\. Humans authorize\./g) || []).length, 2, 'meta description and footer');
+  assert.doesNotMatch(index, /Software enforces\. Humans/);
+});
+
+test('State\'s Status is truthful: set up, not "still being set up"; the gap is what happens next', () => {
+  const st = page(stateWs(), ID, 'status');
+  assert.doesNotMatch(st, /still being set up|Once setup is done/);
+  assert.match(st, /What happens next Resolve the gap first: it is observed at Level 2, Draft, above its approved Level 1, Recommend\. Further expansion is blocked/);
+  assert.match(st, /Next: resolve the gap/);
+  // Once recorded back within approved Authority, it still isn't "being set up".
+  const back = recordBaseline(stateWs(), ID, { effective: { level: 1, note: 'Proposals now only suggest; a person writes each change.' }, by: PAIGE, reason: 'We changed how State runs.' });
+  assert.doesNotMatch(page(back, ID, 'status'), /still being set up/);
+});
+
+test('Overview → To do: the gap is an item with both levels and the block, ahead of evidence and decisions', () => {
+  let s = stateWs();
+  const todos = overviewTodos(s);
+  const g = todos.find((t) => t.kind === 'gap');
+  assert.ok(g, 'a to-do for the gap');
+  assert.equal(todos[0], g, 'first, with no review open');
+  assert.equal(g.title, 'Resolve: Interpret incoming project evidence is operating above approved Authority');
+  assert.equal(g.sub, 'Approved: Level 1, Recommend · Observed: Level 2, Draft · Further expansion is blocked until this is resolved');
+  assert.equal(g.href, `#/capabilities/${ID}?tab=monitor`);
+  assert.equal(g.emphasis, true);
+  assert.match(strip(overviewView(s)), /To do 2 Interpret incoming project evidence Resolve: Interpret incoming project evidence is operating above approved Authority/);
+  // An open decision governing the gap still ranks after it.
+  s = proposeAuthority(importEvidence(s, RUN), ID, 2, { by: PAIGE });
+  assert.deepEqual(overviewTodos(s).map((t) => t.kind).slice(0, 2), ['gap', 'decision']);
+  // Resolved: no item.
+  const back = recordBaseline(stateWs(), ID, { effective: { level: 1, note: 'Proposals now only suggest; a person writes each change.' }, by: PAIGE, reason: 'We changed how State runs.' });
+  assert.equal(overviewTodos(back).some((t) => t.kind === 'gap'), false);
+});
+
+test('the Proposal summary speaks of Boundaries, never "the Rules"', () => {
+  let s = proposeAuthority(importEvidence(stateWs(), RUN), ID, 2, { by: PAIGE });
+  const d = strip(capabilityView(s, ID, new URLSearchParams('tab=decide')));
+  assert.doesNotMatch(d, /in the Rules|within the Rules/);
+  assert.match(d, /Still needs a person/);
 });

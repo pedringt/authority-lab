@@ -8,7 +8,7 @@ Building an AI workflow is getting easier. Deciding how much to let it do on its
 
 The whole product rests on one rule:
 
-> **AI interprets. Software enforces. Humans authorize.**
+> **AI interprets. Software enforces configured controls. Humans authorize.**
 
 The AI reads cases and makes recommendations. Software applies the limits and can pull authority back automatically. Only a named person can give the AI more authority.
 
@@ -171,7 +171,7 @@ There's no score. Each change has its own line saying how serious it is. A start
 - **Restore or expand:** never automatic. After a reduction, Pause or automatic restriction, Decide offers "Propose: restore toward Level N". It's the normal Proposal, one level at a time, shown with the earlier Authority, why it came down, any review and incidents, what has changed since, and new evidence.
 - **Retire:** the Owner only, with a reason. It's final. The capability stops operating, any open Proposal closes, no Decision or Proposal can follow, and its history stays. Retired is not the same as "Not delegated, by design". To use the work again, set up a new capability.
 
-**Operating above approved Authority** (#149) is one of the most serious states. When the recorded observed behavior (the baseline's effective level) is above the approved Authority, Monitor shows both, says further expansion is blocked, and offers two ways to resolve it: bring behavior back within approved Authority and record what it does now, or govern the observed behavior through the normal Proposal and Decision, one level at a time. Status, Decide, Overview and Capabilities show the gap too. It never blocks reducing, pausing, retiring or recording corrected behavior, and Authority Lab changes neither level on its own. State starts in this state: approved for Recommend, observed at Draft.
+**Operating above approved Authority** (#149) is one of the most serious states. When the recorded observed behavior (the baseline's effective level) is above the approved Authority, Monitor shows both, says further expansion is blocked, and offers two ways to resolve it: bring behavior back within approved Authority and record what it does now, or govern the observed behavior through the normal Proposal and Decision, one level at a time. Status, Decide, Overview and Capabilities show the gap too, and it is the first item in Overview's To do (after any safety review). It never blocks reducing, pausing, retiring or recording corrected behavior, and Authority Lab changes neither level on its own. State starts in this state: approved for Recommend, observed at Draft.
 
 Apart from that one, none of Monitor's states blocks anything by itself. Exceptions aren't built yet: how they would interact with the runtime gate is still to be decided.
 

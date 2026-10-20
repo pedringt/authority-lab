@@ -137,7 +137,20 @@ export function nextFor(state, cap, d) {
     const condition = readiness(state, cap.id).unmet.find((x) => x.source === 'Written by hand');
     return { kind: 'not-delegated', text: 'Nothing is planned: it isn\'t delegated, by design. Changing that takes a new decision.', then: condition ? `It can be reconsidered once this is true: ${lowerFirst(condition.text)}.` : null, link: null };
   }
-  const setup = cap.status === 'setup' || !versionList(state, cap.id, 'contract').length || !criteriaSaved(state, cap.id) ? nextStep(state, cap.id) : null;
+  // Operating above approved Authority (#149) comes before any other work.
+  const g = authorityGap(state, cap.id);
+  if (g.above) {
+    return {
+      kind: 'gap',
+      text: `Resolve the gap first: it is observed at Level ${g.observed.level}, ${g.observed.name}, above its approved Level ${g.approved.level}, ${g.approved.name}. Further expansion is blocked until its behavior comes back within approved Authority or the observed behavior is governed through a Proposal.`,
+      then: `A move to ${LEVEL_TITLE[cap.authority.level + 1]} can be proposed now to govern what it already does.`,
+      link: { href: `${base}?tab=monitor`, text: 'Next: resolve the gap' },
+    };
+  }
+  // Setup is unfinished only while its Boundaries or Requirements are missing
+  // (#149): a capability whose first authority change is still to come, like
+  // State, is set up, not "still being set up".
+  const setup = !versionList(state, cap.id, 'contract').length || !criteriaSaved(state, cap.id) ? nextStep(state, cap.id) : null;
   if (setup) {
     return {
       kind: 'setup',

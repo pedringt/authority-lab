@@ -108,6 +108,15 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
         sub: 'A safety limit was crossed; autonomy didn\'t change. A review comes before any expansion.',
         action: 'Record the review', href: link('?tab=monitor') });
     }
+    // Operating above approved Authority (#149): one of the most serious
+    // states, so it leads the to-do list after any review.
+    const gap = authorityGap(state, cap.id);
+    if (gap.above) {
+      row({ kind: 'gap', urgent: true,
+        title: `Resolve: ${cap.name} is operating above approved Authority`,
+        sub: `Approved: Level ${gap.approved.level}, ${gap.approved.name} · Observed: Level ${gap.observed.level}, ${gap.observed.name} · Further expansion is blocked until this is resolved`,
+        action: 'Resolve the gap', href: link('?tab=monitor') });
+    }
     if (decisionRequired(state, cap.id)) {
       const r = readiness(state, cap.id);
       row({ kind: 'decision',
@@ -149,10 +158,10 @@ export function overviewTodos(state, { fmt = (d) => d } = {}) {
     }
   }
   // Evidence work on a capability with an open decision sits next to it.
-  const rank = { review: 0, decision: 1, stuck: 2, evidence: 3, condition: 4, coverage: 5 };
+  const rank = { review: 0, gap: 0.5, decision: 1, stuck: 2, evidence: 3, condition: 4, coverage: 5 };
   const deciding = new Set(out.filter((t) => t.kind === 'decision').map((t) => t.capabilityId));
   const sorted = out.map((t, i) => [t, i]).sort(([a, i], [b, j]) => rank[a.kind] - rank[b.kind] || (deciding.has(b.capabilityId) - deciding.has(a.capabilityId)) || i - j).map(([t]) => t);
-  return sorted.map((t, i) => ({ ...t, emphasis: i === 0 && (t.kind === 'review' || t.kind === 'decision') }));
+  return sorted.map((t, i) => ({ ...t, emphasis: i === 0 && (t.kind === 'review' || t.kind === 'gap' || t.kind === 'decision') }));
 }
 
 const CHANGE_KIND = { contract: 'Rule change', criteria: 'Target change', stakeholders: 'Stakeholder change' };

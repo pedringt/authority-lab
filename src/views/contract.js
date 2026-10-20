@@ -23,7 +23,7 @@ export function contractBuilderView(state, capabilityId, query) {
 
   if (versionList(state, capabilityId, 'contract').length) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a></p><h1>Boundaries</h1><p class="lede">${cap.name} already has its Boundaries. To change them, propose a change; it needs approval.</p></div></div>
-      ${notice('neutral', 'Boundaries are already set', 'See them on the capability\'s Rules tab, where you can also request a change.', { link: cap.setup ? `#/capabilities/${cap.id}/setup` : `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: cap.setup ? 'Back to setup' : 'See them' })}`;
+      ${notice('neutral', 'Boundaries are already set', 'See them on the capability\'s Status tab, under Boundaries, where you can also request a change.', { link: cap.setup ? `#/capabilities/${cap.id}/setup` : `#/capabilities/${cap.id}?tab=status&show=rules`, linkText: cap.setup ? 'Back to setup' : 'See them' })}`;
   }
 
   if (!draft) {

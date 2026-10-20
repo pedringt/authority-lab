@@ -52,9 +52,9 @@ export function changeStep(state, cap, { prop }, proposed) {
   const lines = (section) => b.lines.filter((l) => l.section === section || (section === 'person' && (l.section === 'mustAsk' || l.section === 'escalation')));
   const withBadge = (l) => html`<span>${l.text}</span> ${enforcementBadge(l.enforcement)}`;
   const three = c ? html`<div class="proposal-three">
-      <div><p class="fact-label">Newly permitted</p>${list(c.newlyPermitted)}${c.withinRules && c.withinRules.length ? html`<p class="fact-label">Only within the Rules, which don't change</p>${list(c.withinRules)}` : ''}</div>
-      <div><p class="fact-label">Still needs a person</p>${list(c.stillNeedsPerson, 'Nothing listed in the Rules.')}</div>
-      <div><p class="fact-label">Still prohibited</p>${list(c.prohibited, 'Nothing listed in the Rules.')}</div>
+      <div><p class="fact-label">Newly permitted</p>${list(c.newlyPermitted)}${c.withinRules && c.withinRules.length ? html`<p class="fact-label">Only within the Boundaries, which don't change</p>${list(c.withinRules)}` : ''}</div>
+      <div><p class="fact-label">Still needs a person</p>${list(c.stillNeedsPerson, 'Nothing listed in the Boundaries.')}</div>
+      <div><p class="fact-label">Still prohibited</p>${list(c.prohibited, 'Nothing listed in the Boundaries.')}</div>
     </div>` : '';
   const bounds = html`<details class="how proposal-bounds"${c ? '' : raw(' open')}><summary>Boundaries and how each is enforced${prop ? ' (as proposed)' : ''}</summary>
       ${['may', 'person', 'mustNever'].map((s) => { const ls = lines(s); return ls.length ? html`<p class="fact-label">${{ may: 'Allowed', person: 'Needs human review', mustNever: 'Not allowed' }[s]}</p><ul class="plain-list">${ls.map((l) => html`<li>${withBadge(l)}</li>`)}</ul>` : ''; })}

@@ -6,7 +6,7 @@ A product prototype for one question:
 
 It walks one AI capability, **Refund recommendation** in the fictional Northstar Support workspace, through the full lifecycle: Define → Test → Pilot → Evaluate → Decide → Monitor. Authority is explicit, earned through evidence, conditional, reversible and authorized by a named person.
 
-**AI interprets. Software enforces. Humans authorize.**
+**AI interprets. Software enforces configured controls. Humans authorize.**
 
 ## Read about it
 

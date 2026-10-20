@@ -34,7 +34,7 @@ Earlier redesign mockups and interface directions remain historical context only
 
 ## Principle
 
-**AI interprets. Software enforces. Humans authorize.** The AI reads cases and recommends. Software applies the limits and can pull authority back automatically. Only a named person can give the AI more authority.
+**AI interprets. Software enforces configured controls. Humans authorize.** The AI reads cases and recommends. Where a control is configured, software applies the limits and can pull authority back automatically; written Boundaries are followed by people. Only a named person can give the AI more authority.
 
 **Positioning:** State governs what's true; Authority Lab governs what the AI may do.
 
@@ -68,9 +68,10 @@ Held positions stay: no exceptions system yet, Investigate stays an activity, ma
 
 Implemented in PR 1 (#149):
 - `authorityGap` / `gapBlocks` (lifecycle.js): the gap is the baseline's recorded effective level above the approved level. Unknown is not a gap. A Proposal up to the observed level governs it and is allowed; anything beyond the observed level is refused by `proposeAuthority` and `canAuthorize`. With one level at a time, the Proposal the gap leaves open is the one that governs the observed behavior. Monitor's form "Record what it does now" calls `recordBaseline` (a named person and a reason).
+- After Paige's review of #150 (2026-10-20): the gap is also the first Overview to-do (after any safety review), with both levels, the block and a link to resolve it; State's Status no longer says "still being set up" (setup is unfinished only while Boundaries or Requirements are missing) and leads with the gap; the Proposal summary says Boundaries, not Rules.
 - `readyToPropose` (decisions.js): every level up to 4 is offered, one at a time; Level 3 and above still need real-use evidence. Decide, Status and Overview say why when the next level isn't offered.
 - Structured limits (and the limits step in Decide) apply only where actions go through Authority Lab's gate. Elsewhere "Act within limits" means the written Boundaries, and the record says so.
-- Copy: Welcome, Boundaries and the rules panel no longer say software enforces every Boundary. The header tagline ("AI interprets. Software enforces. Humans authorize.") is unchanged: it's the product principle, so changing it is Paige's call.
+- Copy: Welcome, Boundaries and the rules panel no longer say software enforces every Boundary. The tagline is now "AI interprets. Software enforces configured controls. Humans authorize." (Paige, 2026-10-20): enforcement exists only where a mechanism is configured; a written Boundary still governs without claiming a gate.
 
 ### Product reset, Phase 5: Monitor and lifecycle (#147, Paige, 2026-10-19)
 
