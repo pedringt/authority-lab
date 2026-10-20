@@ -9,7 +9,7 @@ import {
   initialState, capData, current, people, recordContext, suggestContext,
   startCapability, saveSetupRisk, setStartingAuthority, setupReview,
   startContractDraft, reviewSuggestion, confirmSection, finalizeContract, contractChecks, SECTION_KEYS,
-  defaultsFor, saveCriteria, exposureFacts, lowRiskMismatch, workTypes, withBarsAsTargets,
+  defaultsFor, saveCriteria, exposureFacts, lowRiskMismatch, workTypes, withBarsAsTargets, contextQuestions, setupReview as review,
 } from '../src/store/index.js';
 import { TEMPLATE_FAMILIES, BLANK } from '../src/data/templates.js';
 import { setPeople, setToday } from '../src/ui.js';
@@ -19,12 +19,12 @@ import { criteriaEditorView } from '../src/views/criteria.js';
 
 const strip = (h) => String(h).replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ');
 const withPurpose = (s = initialState()) => recordContext(s, { facts: { purpose: 'Help a small tax firm keep clients on time.' }, by: 'priya', reason: 'Kick-off notes.' });
-function cap(template, risk, { context = null, s0 = null } = {}) {
+function cap(template, risk, { context = null, s0 = null, answers = null } = {}) {
   let s = s0 || withPurpose();
   if (context) s = recordContext(s, { facts: context, by: 'priya', reason: 'What we know about this work.' });
   s = startCapability(s, { name: 'Tax deadline reminders', summary: 'Drafts reminder emails about tax deadlines for clients.', owner: 'priya', template, lifecycle: 'planned', by: 'priya' });
   const id = s.capabilities.at(-1).id;
-  s = saveSetupRisk(s, id, { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Internal only', likelihood: 'Unknown', ...risk, by: 'priya' });
+  s = saveSetupRisk(s, id, { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Internal only', likelihood: 'Unknown', ...risk, ...(answers ? { contextAnswers: answers } : {}), by: 'priya' });
   s = setStartingAuthority(s, id, { today: 'recommends' });
   return [s, id];
 }
@@ -45,7 +45,7 @@ test('D4: financial consequences on drafting work add review questions, never a 
   const l = lines(s, id);
   assert.ok(!l.some((x) => /in value|money|\$/.test(x)), 'no money threshold for a drafting capability');
   assert.ok(l.includes('mustAsk: A qualified person reviews anything with legal, regulatory or financial consequences before it is used.'));
-  assert.ok(l.includes('escalation: A statement can\'t be traced to an approved source.'));
+  assert.ok(l.includes('escalation: A consequential statement cannot be supported by an approved source.'));
   assert.ok(!defaultsFor(s, id).requirements.some((r) => r.id === 'high-value'));
   // Saving with no money line at all is fine.
   s = finalizeContract(reviewAll(s, id), id, { by: 'priya' });
@@ -67,7 +67,7 @@ test('D4: work that acts on money is asked for a value limit, as a suggestion it
   assert.ok(current(s, id, 'contract'));
 });
 
-test('D4: from scratch, confirmed Context decides the kind of work; money in Context counts', () => {
+test('D4: from scratch, confirmed Context shapes the kind of work and the suggestions; money in Context brings the value-limit question', () => {
   const [s, id] = cap('scratch', {}, { context: { aiActions: ['Acts'], consequenceAreas: ['Money'] } });
   assert.deepEqual(workTypes(s, id), ['action']);
   const l = lines(startContractDraft(s, id, { by: 'priya' }), id);
@@ -85,22 +85,49 @@ test('D4: no refund-specific control in generic setup, for any kind of work or e
   }
 });
 
-test('D5: Low stays the person\'s label, but confirmed facts show the mismatch and keep the baseline safeguards', () => {
-  let [s, id] = cap('draft', { impact: 'Low', likelihood: 'Low', exposure: 'Customer-facing' }, { context: { regulated: 'Tax advice', dataSensitivity: 'Client financial records' } });
-  const facts = exposureFacts(s, id).map((f) => f.key);
-  assert.deepEqual(facts, ['customer', 'regulated', 'sensitive']);
+const TAX = { regulated: 'Tax advice', dataSensitivity: 'Client financial records' };
+
+test('Context informs setup: workspace Context shapes suggestions and asks questions, but alone proves nothing about this capability', () => {
+  let [s, id] = cap('draft', { impact: 'Low', likelihood: 'Low' }, { context: TAX });
+  // It asks.
+  assert.deepEqual(contextQuestions(s, id).map((q) => [q.key, q.question, q.answer]), [
+    ['sensitive', 'This workflow handles client financial records. Does this capability access or use them?', null],
+    ['regulated', 'This workflow is in a regulated or professional context (Tax advice). Is this capability\'s own work part of it?', null],
+  ]);
+  // It is not a fact about this capability: no mismatch, no baseline block.
+  assert.deepEqual(exposureFacts(s, id), []);
+  assert.equal(lowRiskMismatch(s, id), null);
+  s = startContractDraft(s, id, { by: 'priya' });
+  // It shapes the suggestions.
+  assert.ok(lines(s, id).includes('mustNever: Use or share sensitive or confidential data beyond what the task needs.'));
+  assert.ok(lines(s, id).includes('mustAsk: A qualified person reviews anything with legal, regulatory or financial consequences before it is used.'));
+  s = reviewAll(s, id, (x) => (['mustNever', 'autoRestriction'].includes(x.section) ? 'reject' : 'accept'));
+  assert.ok(!contractChecks(s, id).some((c) => c.id === 'empty-never' || c.id === 'empty-auto'), 'no baseline block from workspace Context alone');
+  // The review lists the unanswered questions as open.
+  assert.ok(review(s, id).open.some((o) => /Does this capability access or use them\? Not answered yet, so it counts only toward suggestions\./.test(o)));
+  // Answering No drops the suggestion too.
+  const [n, nid] = cap('draft', { impact: 'Low', likelihood: 'Low' }, { context: TAX, answers: { sensitive: 'no', regulated: 'no' } });
+  const nl = lines(startContractDraft(n, nid, { by: 'priya' }), nid);
+  assert.ok(!nl.some((x) => /sensitive or confidential|qualified person/.test(x)));
+});
+
+test('D5: confirming the exposure for this capability shows the Low-Risk mismatch and keeps the baseline safeguards', () => {
+  let [s, id] = cap('draft', { impact: 'Low', likelihood: 'Low', exposure: 'Customer-facing' }, { context: TAX, answers: { sensitive: 'yes', regulated: 'yes' } });
+  assert.deepEqual(exposureFacts(s, id).map((f) => f.key), ['customer', 'regulated', 'sensitive']);
   const m = lowRiskMismatch(s, id);
   assert.equal(m.title, 'You marked this Low Risk. These confirmed facts may warrant another look.');
-  assert.match(m.text, /It is customer-facing; It works in a regulated or professional context \(Tax advice\); It handles sensitive data \(Client financial records\)\. You can keep Low: it's your judgment\./);
+  assert.match(m.text, /It is customer-facing; Its work is part of a regulated or professional context \(Tax advice\); It accesses or uses sensitive data \(Client financial records\)\. You can keep Low: it's your judgment\./);
   assert.equal(current(s, id, 'risk').impact, 'Low', 'never overruled');
+  assert.deepEqual(current(s, id, 'risk').contextAnswers, { sensitive: 'yes', regulated: 'yes' }, 'the answers are part of the risk profile version');
   s = startContractDraft(s, id, { by: 'priya' });
   assert.ok(lines(s, id).includes('mustAsk: Any case that mentions legal action, safety, or a complaint about the organization.'), 'the baseline line Low used to drop');
-  assert.ok(lines(s, id).includes('mustNever: Use or share sensitive or confidential data beyond what the task needs.'));
-  // Rejecting every Never allowed and pulled-back line is blocked, with the facts as the reason.
   s = reviewAll(s, id, (x) => (['mustNever', 'autoRestriction'].includes(x.section) ? 'reject' : 'accept'));
   const blocks = contractChecks(s, id).filter((c) => c.level === 'block').map((c) => c.text);
-  assert.ok(blocks.some((t) => /Add at least one "Never allowed" rule\. It is marked Low, but it is customer-facing/.test(t)));
+  assert.ok(blocks.some((t) => /Add at least one "Never allowed" rule\. It is marked Low, but it is customer-facing; its work is part of a regulated/.test(t)));
   assert.ok(blocks.some((t) => /Automation is pulled back if/.test(t)));
+  // A single Yes is enough on its own.
+  const [y, yid] = cap('draft', { impact: 'Low', likelihood: 'Low' }, { context: TAX, answers: { sensitive: 'yes' } });
+  assert.deepEqual(lowRiskMismatch(y, yid).facts.map((f) => f.key), ['sensitive']);
 });
 
 test('D5: Low with no exposure facts keeps today\'s lighter baseline, and suggested Context never counts', () => {
@@ -124,6 +151,11 @@ test('D5 on screen: the risk step, the Boundaries builder and the review show th
   assert.match(strip(reviewView(s, id, new URLSearchParams())), msg);
   s = startContractDraft(s, id, { by: 'priya' });
   assert.match(strip(contractBuilderView(s, id, new URLSearchParams())), msg);
+  const [c, cid] = cap('draft', { impact: 'Low', likelihood: 'Low' }, { context: TAX });
+  const ask = String(riskStepView(c, cid, new URLSearchParams()));
+  assert.match(ask, /From your workflow's Context/);
+  assert.match(ask, /<select name="ctx-sensitive">/);
+  assert.doesNotMatch(strip(ask), /You marked this Low Risk/, 'Context alone shows no mismatch');
   const [h, hid] = cap('draft', { impact: 'High', likelihood: 'Low', exposure: 'Customer-facing' });
   assert.doesNotMatch(strip(riskStepView(h, hid, new URLSearchParams())), /You marked this Low Risk/);
 });

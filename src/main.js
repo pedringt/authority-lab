@@ -925,7 +925,8 @@ document.addEventListener('submit', (e) => {
       store.dispatch('recordBaseline', sid, { fields, effective: eff === '' ? { status: 'not-recorded' } : eff === 'unknown' ? { status: 'unknown', note: f.get('effective-note') } : { level: Number(eff), note: f.get('effective-note') }, by, reason: f.get('reason') });
     }
     if (kind === 'setup-risk') {
-      store.dispatch('saveSetupRisk', sid, { impact: f.get('impact'), likelihood: f.get('likelihood'), scale: f.get('scale') || undefined, reversibility: f.get('reversibility'), exposure: f.get('exposure'), failureTypes: f.getAll('failureTypes'), note: f.get('riskNote'), by });
+      const contextAnswers = Object.fromEntries(['sensitive', 'regulated', 'stakes'].map((k) => [k, f.get(`ctx-${k}`)]).filter(([, v]) => v));
+      store.dispatch('saveSetupRisk', sid, { impact: f.get('impact'), likelihood: f.get('likelihood'), scale: f.get('scale') || undefined, reversibility: f.get('reversibility'), exposure: f.get('exposure'), failureTypes: f.getAll('failureTypes'), note: f.get('riskNote'), contextAnswers, by });
       if (f.get('today')) store.dispatch('setStartingAuthority', sid, { today: f.get('today'), rationale: f.get('rationale') });
     }
     if (sid && kind !== 'setup-risk') { location.hash = `#/capabilities/${sid}/setup`; return; }

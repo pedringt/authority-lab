@@ -251,7 +251,7 @@ export function riskBoundaries(risk = {}, { families = [], facts = [], money = f
   }
   const consequential = facts.includes('consequential') || facts.includes('regulated');
   if (consequential && !acts) out.mustAsk.push('A qualified person reviews anything with legal, regulatory or financial consequences before it is used.');
-  if (consequential && families.some((f) => ADVISORY.includes(f))) out.escalation.push('A statement can\'t be traced to an approved source.');
+  if (consequential && families.some((f) => ADVISORY.includes(f))) out.escalation.push('A consequential statement cannot be supported by an approved source.');
   if (facts.includes('sensitive')) out.mustNever.push('Use or share sensitive or confidential data beyond what the task needs.');
   if (risk.exposure === 'Customer-facing') {
     out.mustNever.push('Send anything to a customer without a person approving it, until authority says otherwise.');

@@ -11,7 +11,7 @@ import { html, raw, badge, notice, selectField, person, fmtDate, lede } from '..
 import {
   getCapability, capData, current, versionList, actor, activePeople, workflowOf, RISK_OPTIONS, levelName,
   CONTEXT_FIELDS, contextNow, confirmedContext, contextDescription, LIFECYCLE, BASELINE_FIELDS, baselineNow, baselineVersions, authorityBaseline,
-  LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, lowRiskMismatch, setupState, setupReview, setupConfirmation, resultsLockWarning,
+  LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, lowRiskMismatch, contextQuestions, setupState, setupReview, setupConfirmation, resultsLockWarning,
   BASELINE_REQUIRED, boundaries, ENFORCEMENT, peopleModel, criteriaSaved, evidenceCoverage, coverageText, performanceResultsSeen, enforcementTerms,
 } from '../store/index.js';
 import { STARTING_POINTS, findStartingPoint, familiesFor } from '../data/templates.js';
@@ -155,6 +155,17 @@ export function todayStepView(state, capabilityId, query) {
 // Risk and starting authority
 // ---------------------------------------------------------------------------
 
+// Context informs setup; it does not silently determine it (#154 review).
+// What confirmed workflow Context raises is asked of this capability; only a
+// Yes makes it this capability's own fact.
+function contextAsks(state, capabilityId) {
+  const qs = contextQuestions(state, capabilityId);
+  if (!qs.length) return '';
+  return html`<div class="context-asks"><p class="fact-label">From your workflow's Context</p>
+    ${qs.map((q) => html`<label class="field field-stack"><span>${q.question}</span><select name="ctx-${q.key}"><option value="" ${q.answer ? '' : raw('selected')}>Not answered yet</option><option value="yes" ${q.answer === 'yes' ? raw('selected') : ''}>Yes</option><option value="no" ${q.answer === 'no' ? raw('selected') : ''}>No</option></select></label>`)}
+    <p class="muted small">Context shapes which Boundaries are suggested. It counts as a fact about this capability only when you say Yes here.</p></div>`;
+}
+
 // R5-B (#153): a Low label next to confirmed facts that suggest exposure is
 // shown, never overruled. The baseline safeguards stay either way.
 export function lowRiskNotice(state, capabilityId) {
@@ -185,6 +196,7 @@ export function riskStepView(state, capabilityId, query) {
         ${selectField('exposure', 'Who or what is affected?', RISK_ANSWERS.exposure, r.exposure || '', { placeholder: 'Choose' })}
       </div>
       <p class="muted small">Who is affected also decides how many people must approve later changes, and which Boundaries are suggested.</p>
+      ${contextAsks(state, capabilityId)}
       <details class="onboard-more"><summary>What could go wrong (optional)</summary>
         <div class="check-grid">${RISK_OPTIONS.failureTypes.map((f) => html`<label class="check"><input type="checkbox" name="failureTypes" value="${f}" ${(r.failureTypes || []).includes(f) ? raw('checked') : ''}><span>${f}</span></label>`)}</div>
         <label class="field field-stack"><span>Note</span><input name="riskNote" type="text" value="${r.note || ''}" maxlength="200"></label>
