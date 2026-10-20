@@ -4019,10 +4019,10 @@ test('four capability tabs: Status, Decide, Monitor, History, in a header panel 
   assert.match(hist, /All activity for Refund recommendation/);
 });
 
-test('#95: Monitoring has a Still safe? view and a Delivering value? view; the second counts what needs a look', () => {
+test('#95: Monitoring has a Still justified? view and a Delivering value? view; the second counts what needs a look', () => {
   const s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR);
   const health = String(capabilityView(s, RR, new URLSearchParams('tab=monitoring')));
-  assert.match(health, /class="chip is-active"[^>]*>Still safe\?/);
+  assert.match(health, /class="chip is-active"[^>]*>Still justified\?/);
   assert.match(health, /Safety limits/);
   // Redesign: a compact summary of what the automation tried sits under Still safe?; the full table stays with the evidence in Decide.
   assert.match(health, /What the automation tried/);

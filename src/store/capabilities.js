@@ -142,6 +142,8 @@ export function startingRecord(state, cap, { level, notDelegated, now, today, re
     authorizedBy: author,
     authorizedByAt: snapshotPerson(state, author),
     versions,
+    // #147: the material changes known when this was recorded.
+    materialChangesAtDecision: (((state.capabilityData || {})[id] || {}).materialChanges || []).map((m) => m.id),
     scope: notDelegated
       ? 'Not delegated, by design. The AI doesn\'t do this. Giving it any authority later needs a new decision.'
       : level === 1

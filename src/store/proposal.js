@@ -28,6 +28,7 @@ import { outcomesNow, incidentsFor, incidentStatus } from './lightweight.js';
 import { people, snapshotPerson } from './people.js';
 import { peopleRoleOf, STANCES } from './proposals.js';
 import { LEVEL_PLAIN } from './overview.js';
+import { restorationContext } from './lifecycle.js';
 
 const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === 'object' && !Object.isFrozen(v)) deepFreeze(v); }); return Object.freeze(o); };
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -233,6 +234,8 @@ export function freezeProposal(state, capabilityId, { level, by, replaces = null
     materialChangesAtOpen: materialChanges(state, capabilityId).map((m) => m.id),
     evidenceAtOpen: capData(state, capabilityId).evidence.length,
     externalEvidence: externalSnapshot(state, capabilityId),
+    // #147: restoring toward an earlier level, with why it came down.
+    ...(restorationContext(state, capabilityId) ? { restoration: restorationContext(state, capabilityId) } : {}),
   }));
 }
 

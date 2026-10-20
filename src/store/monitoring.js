@@ -164,6 +164,8 @@ export function applyBreach(state, capabilityId, rule, { value, errors, severeEr
     authorizedBy: 'system',
     authorizedByAt: null,
     versions: versionsInForce(state, capabilityId),
+    // #147: the material changes known when this was recorded.
+    materialChangesAtDecision: (d.materialChanges || []).map((x) => x.id),
     scope: FALLBACK_SCOPE[next.level],
     rationale: `${movedBack(next.level)}: "${rule.text}" (${reading}). The limit was agreed in advance in ${contractV}${m && m.recordId ? `, in force since decision ${m.recordId}` : ''}, so the change happened automatically, without anyone approving it at the time. Formally: automatic restriction.`,
     evidenceSnapshot: [

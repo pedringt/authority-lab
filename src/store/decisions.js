@@ -9,7 +9,7 @@ import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
 import { freezeProposal, reviewConditions, openAuthorityProposal, proposalStaleness } from './proposal.js';
 import { peopleModel } from './boundaries.js';
-import { namedOn } from './context.js';
+import { namedOn, materialChanges } from './context.js';
 import { current } from './selectors.js';
 
 export function actionNoun(cap) {
@@ -279,7 +279,12 @@ export function reviewerInputMissing(state, capabilityId) {
     .filter((key) => { const st = list.find((x) => x.person === key); return !st || !st.stance || st.stance === 'undecided'; });
 }
 
+// Retired is terminal (#147, Q6): no Decision of any kind follows it.
+export const RETIRED_REASON = 'This capability is retired: it no longer operates and gets no authority again. To use it again, set up a new capability.';
+export const isRetired = (state, capabilityId) => (getCapability(state, capabilityId) || {}).status === 'retired';
+
 export function canAuthorize(state, capabilityId, { by } = {}) {
+  if (isRetired(state, capabilityId)) return { ok: false, reason: RETIRED_REASON };
   const d = capData(state, capabilityId).decision;
   if (!setupConfirmed(state, capabilityId)) return { ok: false, reason: UNCONFIRMED_REASON };
   if (!d.option) return { ok: false, reason: 'Choose an option first.' };
@@ -373,6 +378,9 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     versions: versionsInForce(state, capabilityId),
     scope: scopeText(option, d.decision.conditions, cap, next),
     rationale: d.decision.rationale.trim(),
+    // A Pause (recorded as Suspend) may carry a planned review date (#147,
+    // Q4): a reminder to look again, never a return of authority.
+    ...(option === 'suspend' && d.decision.pauseReviewDate ? { plannedReviewDate: d.decision.pauseReviewDate } : {}),
     // Seeded demo wording recorded unedited says so (#144, Q5).
     ...(d.decision.rationalePrefilled ? { rationalePrefilled: true } : {}),
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
@@ -396,6 +404,9 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     ...(openProposal ? { proposalId: openProposal.id } : d.decision.proposed ? { proposalLegacy: true } : {}),
     ...(staleness && staleness.stale ? { proposalStale: deepFreeze(JSON.parse(JSON.stringify(staleness.reasons))) } : {}),
     reviewed: deepFreeze(JSON.parse(JSON.stringify(reviewConditions(state, capabilityId)))),
+    // #147: the material changes known when deciding, so Monitor can tell
+    // which came after.
+    materialChangesAtDecision: Object.freeze(materialChanges(state, capabilityId).map((m) => m.id)),
   };
 
   const expandingTo = option === 'expand' || option === 'expand-limits' ? next.level : null;
@@ -437,7 +448,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'If more than 5% of the last 50 cases have a severe error, the AI is moved back to Draft automatically.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
-  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null, proposalId: null, residualRisk: null, rationale: '', rationalePrefilled: false }, monitoring });
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null, proposalId: null, residualRisk: null, rationale: '', rationalePrefilled: false, pauseReviewDate: null }, monitoring });
   s = { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
   // A restrict, suspend or redesign decided while a proposal to expand was
   // open closes that proposal too, and says so.
@@ -465,6 +476,7 @@ function proposalChecks(state, capabilityId, target, by, what) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error('This capability no longer exists.');
   requireActive(state, by, what);
+  if (cap.status === 'retired') throw new Error(RETIRED_REASON);
   // Confirmation gates authority (#139).
   if (!setupConfirmed(state, capabilityId)) throw new Error(UNCONFIRMED_REASON);
   if (cap.status === 'not-delegated') throw new Error('This work is not delegated by design: it was deliberately kept with people, so the AI has no authority here.');
@@ -524,4 +536,64 @@ export function replaceProposal(state, capabilityId, { by } = {}) {
     capabilityId,
     link: `#/capabilities/${capabilityId}/decision`,
   });
+}
+
+// Pause (#147, Q4) uses the Suspend Decision: back to Observe, a reason, and
+// an optional planned review date. The date is a reminder to look again;
+// nothing happens on it, and authority comes back only through a new
+// Proposal and Decision.
+export function setPauseReviewDate(state, capabilityId, value) {
+  const v = String(value || '').trim();
+  if (v && !isDate(v)) throw new Error('A planned review date must be a date (YYYY-MM-DD).');
+  if (v && v < state.today) throw new Error('A planned review date can\'t be before today.');
+  return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, pauseReviewDate: v || null } }));
+}
+
+// Retire (#147, Q6): the Owner permanently stops using the capability, with a
+// reason. Terminal: it moves to Observe with status "retired", any open
+// Proposal closes, and no Decision or Proposal can follow. History and
+// records stay. Distinct from "Not delegated, by design", which means it was
+// never delegated.
+export function retireCapability(state, capabilityId, { by, reason } = {}) {
+  const cap = getCapability(state, capabilityId);
+  if (!cap) throw new Error('This capability no longer exists.');
+  requireActive(state, by, 'retire this capability');
+  if (cap.status === 'retired') throw new Error('It is already retired.');
+  if (by !== cap.owner) throw new Error(`Only the Owner, ${(people(state)[cap.owner] || { name: cap.owner }).name}, can retire ${cap.name}.`);
+  if (!rationaleOk(reason)) throw new Error('Say why it is being retired (a sentence or more).');
+  const d = capData(state, capabilityId);
+  const previous = { ...cap.authority };
+  const next = { level: 0, limited: false };
+  const number = state.decisionRecords.length + 1;
+  const id = `AC-${String(number).padStart(2, '0')}`;
+  const openProposal = d.decision.proposed ? openAuthorityProposal(state, capabilityId) : null;
+  const record = {
+    id,
+    number,
+    sequence: state.decisionRecords.filter((r) => r.capabilityId === cap.id).length + 1,
+    capabilityId: cap.id,
+    date: state.today,
+    previous,
+    next,
+    option: 'retire',
+    owner: cap.owner,
+    ownerAt: snapshotPerson(state, cap.owner),
+    authorizedBy: by,
+    authorizedByAt: snapshotPerson(state, by),
+    versions: versionsInForce(state, capabilityId),
+    scope: 'Retired. The AI no longer does this work, and it gets no authority again. History is kept; using it again means setting up a new capability.',
+    rationale: String(reason).trim(),
+    evidenceSnapshot: evidenceSnapshot(state, capabilityId),
+    openCondition: 'None: retired is final.',
+    conditions: null,
+    expectedOutcomes: null,
+    rolloutPlan: null,
+    ...(openProposal ? { proposalClosed: openProposal.id } : {}),
+    reviewed: deepFreeze(JSON.parse(JSON.stringify(reviewConditions(state, capabilityId)))),
+    materialChangesAtDecision: Object.freeze(materialChanges(state, capabilityId).map((m) => m.id)),
+  };
+  const capabilities = state.capabilities.map((c) => (c.id === cap.id ? { ...c, authority: next, status: 'retired', pilotLabel: undefined } : c));
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, option: null, proposed: null, proposalId: null, residualRisk: null, rationale: '', rationalePrefilled: false, pauseReviewDate: null }, monitoring: d.monitoring ? { ...d.monitoring, retiredAt: state.today } : d.monitoring });
+  s = { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], alerts: state.alerts.filter((a) => a.capabilityId !== cap.id) };
+  return logEvent(s, { kind: 'authority', surfaced: true, title: 'Capability retired', body: `${cap.name} was retired by ${people(state)[by].name}${openProposal ? `, closing ${openProposal.id}` : ''}. It no longer operates; its history stays.`, capabilityId: cap.id, link: `#/records/${id}` });
 }

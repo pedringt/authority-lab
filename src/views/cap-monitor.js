@@ -1,10 +1,12 @@
-// Monitor: was the decision good, and is it still safe? Two views, each
-// leading with one verdict (redesign, 2026-10-12): Still safe? (Within limits,
-// Autonomy reduced, Needs review, or Nothing to monitor yet) and Delivering
-// value? (rollout goals against what actually happened). What explains the
-// verdict follows; the mechanisms open on demand, one line each.
+// Monitor: is the current Authority still justified, and was the decision
+// good? Two views. Still justified? (#147) leads with the Decision in force
+// against current conditions, then the automatic safety limits (Within
+// limits, Autonomy reduced, Needs review, or Nothing to monitor yet).
+// Delivering value? compares rollout goals with what actually happened. The
+// mechanisms open on demand, one line each.
 
 import { html, raw, badge, kv, fmtDate, person, personAt, rightsNote, subNav, SWITCH_PERSON } from '../ui.js';
+import { justifiedSection } from './cap-justified.js';
 import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES, evidenceSignals } from '../store/index.js';
 
 const PILOT = 'Demo data (pilot)';
@@ -181,7 +183,11 @@ function evidenceLine(state, cap) {
 
 function stillSafe(state, cap, d) {
   const st = monitoringStatus(state, cap.id);
-  return html`${safetyVerdict(state, cap, d, st)}
+  // #147: the first question is whether the current Authority is still
+  // justified; the automatic safety limits follow as one part of it.
+  return html`${justifiedSection(state, cap)}
+    <h2 class="mon-sub-head">Automatic safety limits</h2>
+    ${safetyVerdict(state, cap, d, st)}
     ${outcomeStats(d.monitoring)}
     ${whatHappened(state, cap, d)}
     ${reviewSection(state, cap)}
@@ -300,6 +306,6 @@ export function monitoringTab(state, cap, d, show = null) {
   // The Value chip counts what needs a look: goals missed on real numbers, and
   // adoption warnings. Goals judged on pilot numbers don't count yet.
   const look = v.notMet + adoptionSignals(state, cap.id).length;
-  const views = subNav([{ href: base, label: 'Still safe?', active: !value }, { href: `${base}&show=value`, label: 'Delivering value?', active: value, count: look }], 'Monitoring views');
+  const views = subNav([{ href: base, label: 'Still justified?', active: !value }, { href: `${base}&show=value`, label: 'Delivering value?', active: value, count: look }], 'Monitoring views');
   return html`${views}<div class="mon">${value ? deliveringValue(state, cap, d, v) : stillSafe(state, cap, d)}</div>`;
 }

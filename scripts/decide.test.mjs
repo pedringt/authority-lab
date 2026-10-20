@@ -115,11 +115,11 @@ test('Decide step 4: four choices, a second question for Expand and Reduce, noth
   assert.match(page, /<strong>Expand autonomy<\/strong>/);
   assert.match(page, /<strong>Keep current limits<\/strong>/);
   assert.match(page, /<strong>Reduce autonomy<\/strong>/);
-  assert.match(page, /<strong>Pause and redesign<\/strong>/);
+  assert.match(page, /<strong>Send back for redesign<\/strong>/);
   // Expand asks within limits or broad; Reduce asks how far. Each final choice
   // names the recorded option, and dispatches the existing select-option.
   const leaves = [...page.matchAll(/<label class="decide-leaf"><input type="radio" name="decision-option" value="([^"]+)" data-action="select-option" data-capability="refund-recommendation" ><span>([^<]+)<\/span><span class="decide-maps">recorded as “([^”]+)”<\/span>/g)].map((m) => [m[2], m[1], m[3]]);
-  assert.deepEqual(leaves, [['Within limits', 'expand-limits', 'Expand with limits'], ['Broad autonomy', 'expand', 'Expand'], ['One level down, to Recommend', 'restrict', 'Restrict'], ['All the way back to Observe', 'suspend', 'Suspend']]);
+  assert.deepEqual(leaves, [['Within limits', 'expand-limits', 'Expand with limits'], ['Broad autonomy', 'expand', 'Expand'], ['One level down, to Recommend', 'restrict', 'Restrict'], ['Pause: all the way back to Observe', 'suspend', 'Suspend']]);
   assert.match(page, /value="hold" data-family="hold" data-action="select-option" data-capability="refund-recommendation"/);
   assert.match(page, /value="redesign" data-family="redesign" data-action="select-option" data-capability="refund-recommendation"/);
   assert.match(page, /recorded as “Hold”/);

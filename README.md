@@ -43,7 +43,7 @@ A first visit opens a welcome page (`#/welcome`) with two paths: **Guided demo**
 5. **Decide → Stakeholder positions** (or **People involved** on Status): not unanimous. Support Operations wants to expand; Risk wants anything over $50 kept with a person.
 6. **Decide, Your decision**: choose **Expand autonomy → Within limits**, check the limits, what should improve and the rollout plan (all prefilled for the demo), give a Residual Risk with why (yours to judge), write why you're deciding, and **Record decision** as the Owner.
 7. **Authority change #04** (`AC-04`) is written with the evidence snapshot. Current autonomy on the Overview updates to Act within limits.
-8. **Monitor → Still safe? → Simulate a safety-limit breach**: severe errors exceed 5% of the rolling 50; software moves the capability back to Draft, writes a restriction record, raises an alert and an activity event, and locks expansion until a review is recorded. The verdict reads "Autonomy reduced".
+8. **Monitor → Still justified? → Simulate a safety-limit breach**: severe errors exceed 5% of the rolling 50; software moves the capability back to Draft, writes a restriction record, raises an alert and an activity event, and locks expansion until a review is recorded. The verdict reads "Autonomy reduced".
 9. **Monitor → Needs review**: Refund recommendation is High impact, so switch **Demo as** to a Risk approver (Daniel Okafor or Sofia Alvarez), write what happened, the cause and what changes as a result, and **Save review**. The lock and alert clear; authority stays at Draft until a new proposal is authorized.
 10. **Settings → Reset demo** (the gear at the top right) restores the seeded state.
 
@@ -53,7 +53,7 @@ A dark bar across the top holds three places: **Overview** (To do, Approvals nee
 
 - **Status**: what it can do now, why it's here, what happens next, then. **Needs a decision** lists single actions waiting for a person; one-line **Boundaries** and **People involved** follow. The full rules are at `?tab=status&show=rules`; every waiting action at `?tab=status&show=approvals`.
 - **Decide**: one flow (what changes if I approve this, what do we know, who has said what, Risk, the recommendation, your decision, limits, what should improve, rollout plan, why, review and record). A move up starts from a Proposal, frozen when a person proposes it; only the Owner records an expansion or a hold, after every Reviewer's position and a Residual Risk, and a stale Proposal is replaced, never edited (#144). Full evidence views open with `show=tests`, `runs`, `all`, `targets`, `requirements` or `results`.
-- **Monitor**: **Still safe?** and **Delivering value?**, each leading with a verdict.
+- **Monitor**: **Still justified?** (is the current Authority still justified: the Decision in force against current conditions, material changes and the evidence they may affect, and Investigate, Reduce or Pause, Restore through a new Proposal, and Retire; then the automatic safety limits) and **Delivering value?**.
 - **History**: one timeline of records, reviews, test runs, proposed changes and versions.
 
 Old links (`#/tests`, `#/evidence`, `#/agent-runs`, `#/activity`, `#/decisions/…`, and old tabs such as `?tab=summary`, `?tab=rules`, `?tab=evidence`, `?tab=decision`, `?tab=monitoring`, `?tab=contract`, `?tab=criteria`, `?tab=waiting`) are rewritten to where they live now (`src/routes.js`).

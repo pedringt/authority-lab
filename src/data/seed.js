@@ -267,6 +267,7 @@ export const STATUS_LABELS = {
   restricted: 'Restricted',
   'review-required': 'Review needed',
   'not-delegated': 'Not delegated',
+  retired: 'Retired',
 };
 
 // ---------------------------------------------------------------------------
