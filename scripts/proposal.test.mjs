@@ -1,8 +1,12 @@
 // Product reset, Phase 4 (#144): the Proposal as a frozen review object, and
 // the Decision that answers it. A person creates a Proposal; it freezes what
 // they saw; later changes never rewrite it; the Decision record freezes what
-// the person deciding saw. Nothing here adds an approval rule, a Decision
-// outcome, a Residual Risk rule or a block.
+// the person deciding saw, including the evidence behind each result. Paige's
+// answers of 2026-10-19: the Owner records an expansion or a hold, anyone
+// named records a reduction (Q1); every Reviewer gives a position before an
+// expansion (Q2); a stale Proposal blocks an expansion and is replaced (Q3);
+// an expansion needs a Residual Risk with a reason (Q4); the reason starts
+// empty (Q5).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -12,6 +16,7 @@ import {
   requirementsNow, proposeAuthority, selectDecision, setRationale, setOutcome, setRolloutField, setResidualRisk, canAuthorize, authorize,
   importEvidence, assessRisk, recordMaterialChange, current,
   authorityProposals, openAuthorityProposal, proposalStatus, proposalStaleness, positionsDiffer, proposalGaps,
+  replaceProposal, proposalClosures, reviewerInputMissing, decisionEligibility, uploadEvidence, advanceToday, findWorkspace, setActingAs,
 } from '../src/store/index.js';
 import { stateWorkspace } from '../src/data/workspaces/state.js';
 import { setPeople, setToday } from '../src/ui.js';
@@ -56,8 +61,10 @@ function readyToRecord(s, id, by) {
   s = setOutcome(setOutcome(s, id, 0, 'metric', 'Time to send reminders'), id, 0, 'target', 'at least 30% faster');
   s = setOutcome(setOutcome(s, id, 1, 'metric', 'Emails corrected'), id, 1, 'target', 'at most 10%');
   for (const [k, v] of Object.entries({ owner: by, scope: 'Every deadline email this season.', startDate: s.today, feedbackChannel: 'Office inbox', reviewerNotes: 'Read every draft before it goes; nothing is sent without approval.', reviewDate: '2026-12-01' })) s = setRolloutField(s, id, k, v);
+  s = setResidualRisk(s, id, { level: 'Moderate', note: 'Every draft is read before it is sent.' });
   return setRationale(s, id, 'Every Requirement is met and a person approves every draft.');
 }
+const withStance = (s, id, stance) => saveStakeholders(s, id, { stakeholders: current(s, id, 'stakeholders').map((x) => (x.person === BEN ? { ...x, stance, position: stance === 'undecided' ? '' : x.position } : x)), by: ANA });
 
 test('a person creates the Proposal; it is frozen with what they saw, and it is not a Decision', () => {
   const [s, id] = firm();
@@ -89,87 +96,174 @@ test('a person creates the Proposal; it is frozen with what they saw, and it is 
   assert.throws(() => { prop.requirementResults[0].label = 'Not met'; }, TypeError);
   // The event says it is not a decision.
   assert.match(p.activity[0].body, /The Proposal \(AP-01\) is frozen as it was proposed\. It is not a decision/);
+  // Q5: the reason starts empty; software never writes it.
+  assert.equal(capData(p, id).decision.rationale, '');
 });
 
-test('later evidence and configuration never rewrite a Proposal; staleness comes only from versions and material changes', () => {
+
+test('Q3: a Proposal goes stale on versions, material changes, moved results and moved coverage, not on more of the same evidence', () => {
   const [s0, id] = firm();
   const s = proposeAuthority(s0, id, 2, { by: ANA });
   const frozen = JSON.stringify(openAuthorityProposal(s, id));
-  // A moved result: listed, not counted as staleness (open question Q3).
-  let t = recordJudgment(s, id, 'templates', { verdict: 'not-met', rationale: 'Template 3 still has the old date.', by: ANA });
-  assert.equal(requirementsNow(t, id).find((r) => r.id === 'templates').result.label, 'Conflicting');
-  assert.equal(JSON.stringify(openAuthorityProposal(t, id)), frozen);
-  let st = proposalStaleness(t, id);
-  assert.equal(st.stale, false);
-  assert.deepEqual(st.resultChanges.map((r) => [r.id, r.from, r.to]), [['templates', 'Met', 'Conflicting']]);
-  // A new Risk version: stale, with the reason.
-  t = assessRisk(t, id, { likelihood: 'Low', scale: 'One case', by: ANA, reason: 'Few emails a week.' });
-  st = proposalStaleness(t, id);
+  // More evidence, same results and coverage: not stale.
+  const more = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 20, total: 20, kind: 'eval', by: BEN });
+  assert.equal(proposalStaleness(more, id).stale, false);
+  // A moved result: stale.
+  const moved = recordJudgment(s, id, 'templates', { verdict: 'not-met', rationale: 'Template 3 still has the old date.', by: ANA });
+  const st = proposalStaleness(moved, id);
   assert.equal(st.stale, true);
-  assert.match(st.reasons[0].text, /^Risk changed: v1 when proposed, v2 now\.$/);
-  // A material change recorded after it opened: stale too.
-  const m = recordMaterialChange(s, id, { areas: ['model'], description: 'Moved to a newer model.', by: ANA });
-  assert.deepEqual(proposalStaleness(m, id).reasons.map((r) => r.kind), ['material-change']);
-  assert.equal(JSON.stringify(openAuthorityProposal(t, id)), frozen, 'still as proposed');
-  // Never a block: canAuthorize doesn't read it.
-  const ready = readyToRecord(t, id, ANA);
-  assert.deepEqual(canAuthorize(ready, id), { ok: true });
+  assert.ok(st.reasons.some((r) => r.kind === 'result' && /"The tax lead has approved the email templates" changed: Met when proposed, Conflicting now\./.test(r.text)));
+  assert.equal(JSON.stringify(openAuthorityProposal(moved, id)), frozen, 'never rewritten');
+  // Moved coverage: the hand-recorded results age past their freshness window.
+  const aged = advanceToday(s, '2027-03-01');
+  const cov = proposalStaleness(aged, id);
+  assert.ok(cov.reasons.some((r) => r.kind === 'coverage' && /sufficient when proposed, stale now/.test(r.text)), JSON.stringify(cov.reasons));
+  // A new Risk version, or a material change: stale.
+  const risk = assessRisk(s, id, { likelihood: 'Low', scale: 'One case', by: ANA, reason: 'Few emails a week.' });
+  assert.match(proposalStaleness(risk, id).reasons[0].text, /^Risk changed: v1 when proposed, v2 now\.$/);
+  const mc = recordMaterialChange(s, id, { areas: ['model'], description: 'Moved to a newer model.', by: ANA });
+  assert.deepEqual(proposalStaleness(mc, id).reasons.map((r) => r.kind), ['material-change']);
 });
 
-test('the Decision record names the Proposal and freezes what the person deciding saw', () => {
+test('Q3: a stale Proposal blocks an expansion, not keeping or pulling back; it is replaced, never refreshed', () => {
   const [s0, id] = firm();
-  let s = proposeAuthority(s0, id, 2, { by: ANA });
+  let s = readyToRecord(proposeAuthority(s0, id, 2, { by: ANA }), id, ANA);
+  assert.throws(() => replaceProposal(s, id, { by: ANA }), /still describes current conditions/);
   s = assessRisk(s, id, { likelihood: 'Low', scale: 'One case', by: ANA, reason: 'Few emails a week.' });
-  s = readyToRecord(s, id, ANA);
-  s = setResidualRisk(s, id, { level: 'Low', note: 'Every draft is read before sending.' });
-  s = authorize(s, id, { by: ANA });
-  const rec = s.decisionRecords.at(-1);
-  assert.equal(rec.proposalId, 'AP-01');
-  assert.equal(proposalStatus(s, id, 'AP-01'), 'decided');
-  assert.equal(capData(s, id).decision.proposalId, null);
-  assert.match(rec.proposalStale[0].text, /^Risk changed/, 'the record says the Proposal may have been stale');
-  assert.deepEqual(rec.reviewed.requirementResults.map((r) => r.label), ['Met', 'Met', 'Met']);
-  assert.equal(rec.reviewed.risk.overall, 'Low', 'initial Risk as it stood when decided');
-  assert.equal(rec.residualRisk.level, 'Low');
-  assert.equal(rec.residualRisk.by, ANA);
-  assert.equal(rec.reviewed.positions.length, 2);
-  assert.ok(rec.reviewed.boundaries);
-  assert.ok(Object.isFrozen(rec.reviewed) && Object.isFrozen(rec.reviewed.requirementResults[0]));
-  // Changes after the decision touch neither the record nor the Proposal.
-  const before = JSON.stringify(rec);
-  const after = recordJudgment(s, id, 'templates', { verdict: 'not-met', rationale: 'Template 3 still has the old date.', by: ANA });
-  assert.equal(JSON.stringify(after.decisionRecords.at(-1)), before);
-  assert.equal(authorityProposals(after, id).length, 1);
+  const blocked = canAuthorize(s, id, { by: ANA });
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.reason, /^The Proposal is stale: Risk changed: v1 when proposed, v2 now\. Replace it with a new Proposal before expanding\.$/);
+  // Keeping the limits (Owner) and pulling back (anyone named) still work.
+  assert.deepEqual(canAuthorize(setRationale(selectDecision(s, id, 'hold'), id, 'Holding while the risk is reassessed.'), id, { by: ANA }), { ok: true });
+  const back = authorize(setRationale(selectDecision(s, id, 'restrict'), id, 'Pulling back while the risk is reassessed.'), id, { by: CARA });
+  assert.equal(getCapability(back, id).authority.level, 0);
+  assert.equal(back.decisionRecords.at(-1).proposalStale[0].kind, 'version', 'the record says it was stale');
+  // Replace: a new frozen Proposal; the old one kept, marked replaced.
+  const old = openAuthorityProposal(s, id);
+  const r = replaceProposal(s, id, { by: ANA });
+  const fresh = openAuthorityProposal(r, id);
+  assert.equal(fresh.id, 'AP-02');
+  assert.equal(fresh.replaces, 'AP-01');
+  assert.equal(proposalStatus(r, id, 'AP-01'), 'replaced');
+  assert.equal(JSON.stringify(authorityProposals(r, id)[0]), JSON.stringify(old), 'the old snapshot is unchanged');
+  const closure = proposalClosures(r, id)[0];
+  assert.deepEqual([closure.proposalId, closure.reason, closure.replacedBy, closure.by], ['AP-01', 'stale', 'AP-02', ANA]);
+  assert.ok(Object.isFrozen(closure));
+  assert.match(r.activity[0].title, /^Proposal AP-01 replaced by AP-02: it was stale$/);
+  assert.equal(proposalStaleness(r, id).stale, false);
+  setPeople(people(r));
+  assert.match(String(capabilityView(r, id, new URLSearchParams('tab=history'))), /<strong>AP-01<\/strong>: Level 1 → Level 2, proposed by Ana Ruiz on .* · replaced by AP-02 because it was stale \(Ana Ruiz, /);
+  const done = authorize(r, id, { by: ANA });
+  assert.equal(done.decisionRecords.at(-1).proposalId, 'AP-02');
+  assert.equal(getCapability(done, id).authority.level, 2);
 });
 
-test('Residual Risk stays optional, and the existing rules are unchanged', () => {
+test('Q1: the Owner records an expansion or a hold; anyone named records a reduction', () => {
+  const [s0, id] = firm();
+  let s = readyToRecord(proposeAuthority(s0, id, 2, { by: BEN }), id, ANA);
+  assert.match(canAuthorize(s, id, { by: BEN }).reason, /^Only the Owner, Ana Ruiz, can record more authority for Draft deadline emails\./);
+  assert.throws(() => authorize(s, id, { by: BEN }), /Only the Owner, Ana Ruiz/);
+  assert.throws(() => authorize(setRationale(selectDecision(s, id, 'hold'), id, 'Holding until after tax season.'), id, { by: CARA }), /can record keeping the current limits/);
+  // Anyone may propose; the Owner decides.
+  assert.equal(authorize(s, id, { by: ANA }).decisionRecords.at(-1).authorizedBy, ANA);
+  // A Reviewer or a Stakeholder may pull it back; someone not named may not.
+  const dee = addPerson(s, { name: 'Dee Park', title: 'Intern', team: 'Office', by: ANA, reason: 'Helps with filing.' });
+  const restrict = setRationale(selectDecision(dee, id, 'restrict'), id, 'Pulling back after a client complaint.');
+  assert.equal(authorize(restrict, id, { by: CARA }).decisionRecords.at(-1).authorizedBy, CARA);
+  assert.throws(() => authorize(restrict, id, { by: 'dee-park' }), /isn't the Owner or named on Draft deadline emails/);
+  assert.equal(decisionEligibility(s, id, BEN, 'suspend').ok, true);
+});
+
+test('Q2: every active Reviewer gives a position before an expansion; disagreement is shown, not a veto', () => {
+  const [s0, id] = firm();
+  const undecided = withStance(s0, id, 'undecided');
+  assert.deepEqual(reviewerInputMissing(undecided, id), [BEN]);
+  let s = readyToRecord(proposeAuthority(undecided, id, 2, { by: ANA }), id, ANA);
+  assert.match(canAuthorize(s, id, { by: ANA }).reason, /^Every Reviewer gives a position before authority expands\. Still waiting for Ben Okoro\.$/);
+  // Holding or pulling back doesn't wait for Reviewers.
+  assert.deepEqual(canAuthorize(setRationale(selectDecision(s, id, 'hold'), id, 'Holding until Ben has looked.'), id, { by: ANA }), { ok: true });
+  // Ben gives a position against expanding: the Proposal's positions are now
+  // out of date (a new people version), so it is replaced; Ben's Hold is shown
+  // but the Owner may still expand.
+  s = withStance(s, id, 'hold');
+  assert.deepEqual(reviewerInputMissing(s, id), []);
+  assert.equal(canAuthorize(s, id, { by: ANA }).stale, true);
+  s = replaceProposal(s, id, { by: ANA });
+  assert.deepEqual(canAuthorize(s, id, { by: ANA }), { ok: true }, 'a Reviewer\'s Hold is not a veto');
+  // A Stakeholder with no position never blocks.
+  const cara = saveStakeholders(s0, id, { stakeholders: current(s0, id, 'stakeholders').map((x) => (x.person === CARA ? { ...x, stance: 'undecided', position: '' } : x)), by: ANA });
+  assert.deepEqual(reviewerInputMissing(cara, id), []);
+});
+
+test('Q4: an expansion needs a Residual Risk with a reason; Unknown and High are valid; holds and reductions don\'t need one', () => {
   const [s0, id] = firm();
   const s = readyToRecord(proposeAuthority(s0, id, 2, { by: ANA }), id, ANA);
-  assert.deepEqual(canAuthorize(s, id), { ok: true }, 'no Residual Risk needed');
-  // One level at a time, expected impact and rollout still required.
+  assert.match(canAuthorize(setResidualRisk(s, id, { level: null }), id, { by: ANA }).reason, /^Residual Risk: choose Low, Moderate, High or Unknown\.$/);
+  assert.match(canAuthorize(setResidualRisk(s, id, { level: 'Low', note: 'ok' }), id, { by: ANA }).reason, /^Residual Risk: say why, in a short sentence\.$/);
+  for (const level of ['Unknown', 'High']) assert.deepEqual(canAuthorize(setResidualRisk(s, id, { level, note: 'We have not seen enough real use yet.' }), id, { by: ANA }), { ok: true }, level);
+  const hold = setRationale(selectDecision(setResidualRisk(s, id, { level: null }), id, 'hold'), id, 'Holding until after tax season.');
+  assert.deepEqual(canAuthorize(hold, id, { by: ANA }), { ok: true });
+  // The existing rules stay: one level at a time, impact and rollout.
   assert.throws(() => proposeAuthority(s0, id, 3, { by: ANA }), /one level at a time/);
-  const noImpact = setOutcome(s, id, 1, 'target', '');
-  assert.match(canAuthorize(noImpact, id).reason, /^Expected impact/);
-  const noRollout = setRolloutField(s, id, 'reviewDate', '');
-  assert.match(canAuthorize(noRollout, id).reason, /^Rollout plan/);
-  assert.throws(() => setResidualRisk(s, id, { level: 'Medium' }), /Residual risk must be one of: Low, Moderate, High, Unknown/);
+  assert.match(canAuthorize(setOutcome(s, id, 1, 'target', ''), id).reason, /^Expected impact/);
+  assert.match(canAuthorize(setRolloutField(s, id, 'reviewDate', ''), id).reason, /^Rollout plan/);
+});
+
+test('Q5: no software-written reason; seeded demo wording is labelled, and says so on the record if left', () => {
+  const [s0, id] = firm();
+  const p = proposeAuthority(s0, id, 2, { by: ANA });
+  assert.equal(capData(p, id).decision.rationale, '');
+  assert.match(canAuthorize(selectDecision(p, id, 'hold'), id, { by: ANA }).reason, /Say why/);
+  // Northstar's seeded decision keeps its demo wording, labelled.
+  const demo = initialState();
+  assert.equal(capData(demo, RR).decision.rationalePrefilled, true);
+  const left = authorize(selectDecision(demo, RR, 'restrict'), RR, { by: 'maya' });
+  assert.equal(left.decisionRecords.at(-1).rationalePrefilled, true);
+  const edited = authorize(setRationale(selectDecision(demo, RR, 'restrict'), RR, 'Pulling back until high-value cases are tested.'), RR, { by: 'maya' });
+  assert.equal(edited.decisionRecords.at(-1).rationalePrefilled, undefined);
+  // After a decision the reason box is empty again.
+  assert.equal(capData(edited, RR).decision.rationale, '');
+});
+
+const CSV = 'case,outcome,date\n' + Array.from({ length: 10 }, (_, i) => `${i + 1},${i === 3 ? 'fail' : 'pass'},2026-10-06`).join('\n') + '\n';
+
+test('the Decision record freezes which evidence produced each result, with no integrations at all', () => {
+  const [s0, id] = firm();
+  // A second compatible result (combined) and an upload.
+  let s = recordResult(s0, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 10, total: 10, kind: 'eval', by: ANA });
+  s = uploadEvidence(s, id, { rowKind: 'requirement', rowId: 'accuracy', fileName: 'week1.csv', content: CSV, sourceLabel: 'Weekly review sheet', kind: 'eval', by: BEN });
+  s = readyToRecord(proposeAuthority(s, id, 2, { by: ANA }), id, ANA);
+  s = authorize(s, id, { by: ANA });
+  const rec = s.decisionRecords.at(-1);
+  assert.deepEqual(rec.evidenceSnapshot, [], 'the old summary has nothing for evidence recorded by hand');
+  const ev = rec.reviewed.evidence;
+  const acc = ev.rows.find((r) => r.id === 'accuracy');
+  assert.equal(acc.results.length, 1);
+  assert.equal(acc.results[0].itemIds.length, 3, 'every item behind the combined result');
+  const items = acc.results[0].itemIds.map((x) => ev.items.find((i) => i.id === x));
+  assert.deepEqual(items.map((i) => i.from).sort(), ['manual', 'manual', 'uploaded']);
+  assert.deepEqual(items.filter((i) => i.recordedBy).map((i) => i.recordedBy).sort(), ['Ana Ruiz', 'Ben Okoro', 'Ben Okoro']);
+  const up = items.find((i) => i.file);
+  assert.deepEqual([up.file.name, up.file.importedBy, up.file.perCase, up.file.cases], ['week1.csv', 'Ben Okoro', true, 10]);
+  const tpl = ev.rows.find((r) => r.id === 'templates');
+  assert.equal(tpl.judgments.length, 1);
+  const j = ev.judgments.find((x) => x.id === tpl.judgments[0]);
+  assert.deepEqual([j.byName, j.role, j.verdict], ['Ben Okoro', 'reviewer', 'met']);
+  assert.ok(Object.isFrozen(ev.items[0]));
+  // The frozen Proposal carries the same provenance.
+  assert.equal(authorityProposals(s, id)[0].evidence.rows.find((r) => r.id === 'accuracy').results[0].itemIds.length, 3);
 });
 
 test('a reduction closes the open Proposal; a decision opened before Proposals were frozen is shown as such', () => {
   const s = initialState();
   assert.equal(openAuthorityProposal(s, RR), null, 'the seeded pending decision has no snapshot');
   assert.equal(authorityProposals(s, RR).length, 0, 'none is invented for it');
-  let r = setRationale(selectDecision(s, RR, 'restrict'), RR, 'Moving back while the high-value cases are reviewed.');
-  r = authorize(r, RR, { by: 'maya' });
-  const rec = r.decisionRecords.at(-1);
-  assert.equal(rec.proposalLegacy, true);
-  assert.equal(rec.proposalId, undefined);
-  // A fresh Proposal, then a reduction: closed, never decided.
+  const r = authorize(setRationale(selectDecision(s, RR, 'restrict'), RR, 'Moving back while the high-value cases are reviewed.'), RR, { by: 'maya' });
+  assert.equal(r.decisionRecords.at(-1).proposalLegacy, true);
   const [f0, id] = firm();
   let f = proposeAuthority(f0, id, 2, { by: ANA });
-  f = authorize(setRationale(selectDecision(f, id, 'suspend'), id, 'Pausing for tax season; nothing changes for clients.'), id, { by: ANA });
-  const red = f.decisionRecords.at(-1);
-  assert.equal(red.proposalId, 'AP-01', 'the decision answered the Proposal');
+  f = authorize(setRationale(selectDecision(f, id, 'suspend'), id, 'Pausing for tax season; nothing changes for clients.'), id, { by: BEN });
+  assert.equal(f.decisionRecords.at(-1).proposalId, 'AP-01');
   assert.equal(proposalStatus(f, id, 'AP-01'), 'decided');
 });
 
@@ -187,54 +281,73 @@ test('positions that differ are shown as differing; gaps include Unknown Risk', 
 
 const decide = (s, id) => String(capabilityView(s, id, new URLSearchParams('tab=decide')));
 
-test('screen: the Decide tab answers "What changes if I approve this?" from the frozen Proposal', () => {
+test('screen: the Decide tab answers "What changes if I approve this?"; a stale Proposal offers a replacement', () => {
   const [s0, id] = firm();
   setPeople(people(s0));
   setToday(s0.today);
-  const before = decide(s0, id);
-  assert.match(before, /Proposing freezes what is shown below, as it is now/);
-  let s = proposeAuthority(s0, id, 2, { by: ANA });
+  assert.match(decide(s0, id), /Proposing freezes what is shown below, as it is now/);
+  let s = { ...proposeAuthority(s0, id, 2, { by: ANA }), actingAs: ANA };
   let page = decide(s, id);
   assert.match(page, /Proposal AP-01 · proposed by Ana Ruiz on .* · frozen as it was proposed\. A Proposal is not a decision\./);
   assert.match(page, /<h2>What changes if I approve this\?<\/h2>/);
   for (const h of ['Newly permitted', 'Still needs a person', 'Still prohibited']) assert.match(page, new RegExp(`<p class="fact-label">${h}</p>`));
   assert.match(page, /<strong>Positions differ<\/strong>/);
-  assert.match(page, /<p class="fact-label">Reviewers<\/p><ul class="plain-list proposal-positions"><li><strong>Ben Okoro<\/strong>/);
   assert.match(page, /name="residual-risk" value="Unknown"/);
-  assert.match(page, /Software never scores this or decides whether it's acceptable\./);
-  assert.doesNotMatch(page, /This Proposal may be stale/);
-  // A new Risk version: the banner says so, with the reason; the button is
-  // still governed only by canAuthorize.
-  s = assessRisk(s, id, { likelihood: 'Low', scale: 'One case', by: ANA, reason: 'Few emails a week.' });
-  page = decide(readyToRecord(s, id, ANA), id);
-  assert.match(page, /<strong>This Proposal may be stale<\/strong>/);
+  assert.match(page, /\(needed to expand; your judgment\)/);
+  assert.match(page, /In your own words: it goes on the record as yours\./);
+  s = assessRisk(readyToRecord(s, id, ANA), id, { likelihood: 'Low', scale: 'One case', by: ANA, reason: 'Few emails a week.' });
+  page = decide(s, id);
+  assert.match(page, /<strong>This Proposal is stale<\/strong>/);
   assert.match(page, /<li>Risk changed: v1 when proposed, v2 now\.<\/li>/);
-  assert.match(page, /data-action="authorize" data-capability="[^"]+" >Record decision/);
+  assert.match(page, /data-action="replace-proposal" data-capability="[^"]+">Replace with a new Proposal<\/button>/);
+  assert.match(page, /Proposal is current<\/strong><span class="muted small">: it is stale/);
+  assert.match(page, /data-action="authorize"[^>]*disabled/);
+  page = decide(replaceProposal(s, id, { by: ANA }), id);
+  assert.match(page, /Proposal AP-02 · .* It replaces AP-01, which was stale\./);
+  assert.doesNotMatch(page, /data-action="authorize"[^>]*disabled/);
 });
 
-test('screen: the seeded demo decision says it predates frozen Proposals', () => {
+test('screen: a Reviewer with no position is waited for; a Reviewer against is shown plainly', () => {
+  const [s0, id] = firm();
+  setPeople(people(s0));
+  let page = decide({ ...readyToRecord(proposeAuthority(withStance(s0, id, 'undecided'), id, 2, { by: ANA }), id, ANA), actingAs: ANA }, id);
+  assert.match(page, /<strong>Waiting for Ben Okoro \(Reviewer\)<\/strong>/);
+  assert.match(page, /href="#\/capabilities\/[^"]+\/stakeholders\/edit">Record a position<\/a>/);
+  page = decide({ ...readyToRecord(proposeAuthority(withStance(s0, id, 'hold'), id, 2, { by: ANA }), id, ANA), actingAs: ANA }, id);
+  assert.match(page, /<strong>Ben Okoro \(Reviewer\) says Hold<\/strong>/);
+  assert.doesNotMatch(page, /data-action="authorize"[^>]*disabled/, 'not a veto');
+});
+
+test('screen: the seeded demo decision says it predates frozen Proposals, and its reason is labelled', () => {
   const s = initialState();
   setPeople(people(s));
   const page = decide(s, RR);
   assert.match(page, /<strong>This decision was opened before Proposals were frozen<\/strong>/);
-  assert.doesNotMatch(page, /Proposal AP-/);
+  assert.match(page, /<strong>Prefilled for the demo\.<\/strong> Write your own reason/);
 });
 
-test('screen: the record shows the Proposal reviewed, Residual Risk and what was frozen', () => {
+test('screen: a hand-recorded Decision shows the evidence it rested on; the brief never calls a real workspace a demo', () => {
   const [s0, id] = firm();
   let s = readyToRecord(proposeAuthority(s0, id, 2, { by: ANA }), id, ANA);
-  s = setResidualRisk(s, id, { level: 'Moderate', note: 'Clients might act on a wrong date before we catch it.' });
   s = authorize(s, id, { by: ANA });
   setPeople(people(s));
-  const page = String(decisionRecordView(s, s.decisionRecords.at(-1).id));
+  const recId = s.decisionRecords.at(-1).id;
+  const page = String(decisionRecordView(s, recId));
+  assert.match(page, /<dt>Evidence at the time<\/dt><dd><ul class="plain-list provenance"><li><strong>Minimum 20 cases<\/strong>/);
+  assert.match(page, /Overall accuracy ≥ 90%: 95% \(19 of 20\), recorded by Ben Okoro, /);
+  assert.match(page, /Ben Okoro \(reviewer\) judged it met on [0-9-]+: All four templates approved on Oct 14\./);
+  assert.doesNotMatch(page, /No evidence was recorded/);
   assert.match(page, /<dt>Proposal reviewed<\/dt><dd>AP-01, proposed by Ana Ruiz/);
-  assert.match(page, /<dt>Residual Risk<\/dt><dd><strong>Moderate<\/strong>: Clients might act on a wrong date before we catch it\./);
-  assert.match(page, /<dt>Requirements when decided<\/dt>/);
-  assert.match(page, /<dt>Boundaries when decided<\/dt><dd><span class="muted">None written\.<\/span>/);
-  assert.match(page, /<dt>Positions when decided<\/dt>/);
-  const brief = String(decisionBriefView(s, s.decisionRecords.at(-1).id));
-  assert.match(brief, /<li><strong>Residual Risk:<\/strong> Moderate: Clients might act/);
+  assert.match(page, /<dt>Residual Risk<\/dt><dd><strong>Moderate<\/strong>: Every draft is read before it is sent\./);
+  const brief = String(decisionBriefView(s, recId));
+  assert.match(brief, /Authority Lab · Ruiz Tax\.<\/p>/);
+  assert.doesNotMatch(brief, /fictional demo data/);
+  assert.match(brief, /<li>Overall accuracy ≥ 90%: /);
   assert.match(brief, /<li><strong>Proposal reviewed:<\/strong> AP-01<\/li>/);
+  const demo = authorize(selectDecision(initialState(), RR, 'restrict'), RR, { by: 'maya' });
+  assert.match(String(decisionBriefView(demo, demo.decisionRecords.at(-1).id)), /fictional demo data/);
+  // History lists the Proposals and what became of them.
+  assert.match(String(capabilityView(s, id, new URLSearchParams('tab=history'))), /<strong>AP-01<\/strong>: Level 1 → Level 2, proposed by Ana Ruiz on .* · decided/);
 });
 
 test('State: 5 of 5 evidence supports considering Draft, but no Proposal or Decision is assumed', () => {
@@ -248,5 +361,6 @@ test('State: 5 of 5 evidence supports considering Draft, but no Proposal or Deci
   const prop = openAuthorityProposal(p, ID);
   assert.equal(prop.readiness.met, 5);
   assert.equal(prop.externalEvidence[0].runs[0].id, run.id, 'imported evidence provenance is frozen with it');
+  assert.ok(prop.evidence.rows.every((r) => r.results.every((x) => x.itemIds.length)), 'each imported result names its items');
   assert.equal(getCapability(p, ID).authority.level, 1);
 });

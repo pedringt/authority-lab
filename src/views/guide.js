@@ -7,8 +7,8 @@
 // the safety limit is really crossed and the review is really recorded. Each
 // step teaches one idea, and concepts appear only when they're needed.
 
-import { html, fmtDate } from '../ui.js';
-import { getCapability, capData, current, readiness, testSummary, levelName, reviewEligibility, reviewNeeded, people, workspaceOf, workflowOf } from '../store/index.js';
+import { html, raw, fmtDate } from '../ui.js';
+import { getCapability, capData, current, readiness, testSummary, levelName, reviewEligibility, reviewNeeded, people, workspaceOf, workflowOf, RESIDUAL_RISK_LEVELS } from '../store/index.js';
 
 export const GUIDE_STEPS = ['Define the capability', 'Current autonomy', 'Set the boundaries', 'What would justify more autonomy', 'See the results', 'Make the decision', 'What happens if things go wrong'];
 
@@ -86,8 +86,12 @@ export function guideView(g, step) {
           <p>Standard refunds up to $${c.maxValue} can now run automatically, capped at $${c.maxDailyTotal} per day. Fraud flags, chargebacks and unclear policy still require human review.</p></div>`
         : html`<div class="guide-panel"><p class="guide-rec"><strong>Recommended: expand autonomy within limits.</strong><br><span class="muted">Allow standard refunds up to $${c.maxValue} to run automatically. Keep high-value refunds under human review.</span></p>
           <ul class="guide-choices"><li class="is-on"><strong>Expand autonomy</strong> <span class="pill is-on">Within limits</span> <span class="pill">Broad autonomy</span></li><li>Keep current limits</li><li>Reduce autonomy</li><li>Pause and redesign</li></ul>
-          <p class="small muted">Limits, rollout goals, the rollout plan and the reason are prefilled for the demo.</p>
-          <p><button class="btn btn-primary" data-action="guide-decide">Record decision as ${people(s)[cap.owner].name}</button></p></div>`}`;
+          <p class="small muted">Limits, rollout goals, the rollout plan and the reason are prefilled for the demo. The Residual Risk is yours to judge.</p>
+          <fieldset class="residual-risk"><legend>Residual Risk, once the limits and human review are in place</legend>
+            <div class="residual-options">${RESIDUAL_RISK_LEVELS.map((lvl) => html`<label class="check"><input type="radio" name="guide-residual" value="${lvl}" data-action="guide-residual" ${g.residual && g.residual.level === lvl ? raw('checked') : ''}><span>${lvl}</span></label>`)}</div>
+            <label class="field field-stack"><span>Why</span><textarea rows="2" aria-label="Why this Residual Risk" data-action="guide-residual-note">${(g.residual && g.residual.note) || ''}</textarea></label>
+          </fieldset>
+          <p><button class="btn btn-primary" data-action="guide-decide" ${g.residual && g.residual.level && String(g.residual.note || '').trim().length >= 10 ? '' : raw('disabled')}>Record decision as ${people(s)[cap.owner].name}</button></p></div>`}`;
   } else {
     const restricted = reviewNeeded(s, cap.id).restriction;
     const m = d.monitoring;

@@ -7,7 +7,8 @@
 
 import * as seed from '../data/seed.js';
 import { html, fmtDate, personAt, empty } from '../ui.js';
-import { capData, versionList, VERSIONED_KINDS, KIND_LABELS, levelName, testSummary, activityEvents, decisionRequired } from '../store/index.js';
+import { capData, versionList, VERSIONED_KINDS, KIND_LABELS, levelName, testSummary, activityEvents, decisionRequired, authorityProposals } from '../store/index.js';
+import { proposalHistory } from './proposal.js';
 import { proposalsList } from './proposals.js';
 import { line } from './cap-monitor.js';
 
@@ -118,8 +119,11 @@ export function historyTab(state, cap) {
   const proposed = line('Proposed changes', all.length ? `${all.length} in total${open ? `, ${open} waiting for approval` : ''}` : 'none',
     changes.length ? html`${changes}` : html`<p class="muted small">After results exist, changes to the rules, targets or stakeholders need approval. They appear here with their approvals.</p>`);
 
+  // #144: every authority Proposal, frozen, with what became of it.
+  const aps = authorityProposals(state, cap.id);
+  const apLine = aps.length ? line('Authority Proposals', `${aps.length} in total`, proposalHistory(state, cap)) : '';
   return html`${timeline}
-    <div class="mh-lines">${versions}${proposed}</div>
+    <div class="mh-lines">${versions}${apLine}${proposed}</div>
     <p class="small hist-activity"><a href="#/records?show=activity&capability=${cap.id}">All activity for ${cap.name} →</a></p>`;
 }
 

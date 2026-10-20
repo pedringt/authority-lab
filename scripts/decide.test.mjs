@@ -3,6 +3,7 @@
 // end. These tests render the real views from the real seed and store.
 
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
@@ -131,7 +132,7 @@ test('Decide step 4: four choices, a second question for Expand and Reduce, noth
   assert.match(page, /value="expand" data-family="expand"\s+><span>/);
   assert.match(page, /value="reduce" data-family="reduce"\s+><span>/);
   // Picking Within limits checks both levels and marks the stored family.
-  const chosen = decide(selectDecision(initialState(), RR, 'expand-limits'));
+  const chosen = decide(decideWith(initialState(), RR, 'expand-limits'));
   assert.match(chosen, /value="expand" data-family="expand"\s+checked data-stored\s*>/);
   assert.match(chosen, /value="expand-limits" data-action="select-option" data-capability="refund-recommendation" checked>/);
   assert.equal(count(chosen, /data-stored/g), 1);
@@ -146,20 +147,20 @@ test('Decide: each final choice maps to the option the store records', () => {
   const values = [...page.matchAll(/value="([^"]+)"[^>]*data-action="select-option"/g)].map((m) => m[1]);
   assert.deepEqual(values.sort(), ['expand', 'expand-limits', 'hold', 'redesign', 'restrict', 'suspend']);
   for (const option of values) {
-    const s = selectDecision(initialState(), RR, option);
+    const s = decideWith(initialState(), RR, option);
     assert.equal(canAuthorize(s, RR).ok, true, option);
     assert.equal(authorize(s, RR).decisionRecords.at(-1).option, option, option);
   }
 });
 
 test('Decide: limits, goals and the rollout plan appear only when they apply', () => {
-  const at = (option) => steps(decide(selectDecision(initialState(), RR, option))).map((x) => x.replace(/^\d+ /, ''));
+  const at = (option) => steps(decide(decideWith(initialState(), RR, option))).map((x) => x.replace(/^\d+ /, ''));
   const base = ['What changes if I approve this?', 'What do we know?', 'Who has said what?', 'Risk', 'Recommendation', 'Your decision'];
   const end = ['Why are you making this decision?', 'Review and record'];
   assert.deepEqual(at('expand-limits'), [...base, 'Limits', 'What should improve?', 'Rollout plan', ...end]);
   assert.deepEqual(at('expand'), [...base, 'What should improve?', 'Rollout plan', ...end]);
   for (const option of ['hold', 'restrict', 'suspend', 'redesign']) assert.deepEqual(at(option), [...base, ...end], option);
-  const limits = decide(selectDecision(initialState(), RR, 'expand-limits'));
+  const limits = decide(decideWith(initialState(), RR, 'expand-limits'));
   assert.match(limits, /data-action="set-condition" data-capability="refund-recommendation" data-key="maxValue"/);
   assert.match(limits, /2–4 measurable goals, compared with real results after rollout\./);
   assert.match(limits, /data-action="set-outcome"/);
@@ -167,18 +168,18 @@ test('Decide: limits, goals and the rollout plan appear only when they apply', (
   assert.match(limits, /data-action="set-rationale"/);
   // What the choice would mean, from the store's own preview.
   assert.match(limits, /What this would mean:<\/strong> The AI would approve standard refunds of \$50 or less/);
-  assert.match(decide(selectDecision(initialState(), RR, 'hold')), /What this would mean:<\/strong> No change\. The AI stays at Draft while more evidence comes in\./);
+  assert.match(decide(decideWith(initialState(), RR, 'hold')), /What this would mean:<\/strong> No change\. The AI stays at Draft while more evidence comes in\./);
 });
 
 test('Decide: the review step lists what is done and names what blocks recording', () => {
-  const ready = decide(selectDecision(initialState(), RR, 'hold'));
+  const ready = decide(decideWith(initialState(), RR, 'hold'));
   assert.match(ready, /<li class="check-item is-done"><span class="check-mark" aria-hidden="true">✓<\/span> <strong>Decision: Keep current limits<\/strong><\/li>/);
   assert.match(ready, /Recorded as “Hold”, with your name \(Maya Chen, Support Product Lead\), your reason and this evidence\./);
   assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);
-  const noWhy = decide(setRationale(selectDecision(initialState(), RR, 'hold'), RR, 'short'));
+  const noWhy = decide(setRationale(decideWith(initialState(), RR, 'hold'), RR, 'short'));
   assert.match(noWhy, /is-blocked"><span class="check-mark" aria-hidden="true">✗<\/span> <strong>Your reason<\/strong><span class="muted small">: Say why/);
   assert.match(noWhy, /data-action="authorize"[^>]*disabled/);
-  assert.equal(canAuthorize(setRationale(selectDecision(initialState(), RR, 'hold'), RR, 'short'), RR).ok, false, 'the store agrees');
+  assert.equal(canAuthorize(setRationale(decideWith(initialState(), RR, 'hold'), RR, 'short'), RR).ok, false, 'the store agrees');
 });
 
 test('Decide: a choice that isn\'t open says why, right where it is', () => {
@@ -198,7 +199,7 @@ test('Decide: a choice that isn\'t open says why, right where it is', () => {
 });
 
 test('Decide after recording: what was decided, who and when, what now runs automatically, and Next to Monitor', () => {
-  const s0 = selectDecision(initialState(), RR, 'expand-limits');
+  const s0 = decideWith(initialState(), RR, 'expand-limits');
   const s = authorize(s0, RR);
   const rec = s.decisionRecords.at(-1);
   const page = decide(s);
@@ -209,7 +210,7 @@ test('Decide after recording: what was decided, who and when, what now runs auto
   assert.match(page, new RegExp(`<a href="#/records/${rec.id}">See the decision record</a>`));
   assert.doesNotMatch(page, /data-action="(authorize|select-option)"/, 'no form once recorded');
   // A hold says nothing changed.
-  const held = decide(authorize(selectDecision(initialState(), RR, 'hold'), RR));
+  const held = decide(authorize(decideWith(initialState(), RR, 'hold'), RR));
   assert.match(held, /Decision recorded: Keep current limits/);
   assert.match(held, /No change\. Nothing runs automatically\. Refunds are drafted, and a person approves every one before anything happens\./);
 });
@@ -234,7 +235,7 @@ test('Decide with no decision open: what has to happen first, the evidence, and 
 });
 
 test('Decide after an automatic restriction says once that a review comes first, and links to Monitor', () => {
-  const s = simulateBreach(authorize(selectDecision(initialState(), RR, 'expand-limits'), RR), RR);
+  const s = simulateBreach(authorize(decideWith(initialState(), RR, 'expand-limits'), RR), RR);
   const page = decide(s);
   assert.match(page, /<strong>A review comes first<\/strong>/);
   assert.equal(count(page, /after crossing a safety limit/g), 1);
@@ -243,7 +244,7 @@ test('Decide after an automatic restriction says once that a review comes first,
 });
 
 test('Decide: authorizing through the store writes the same record as before the redesign', () => {
-  const s = authorize(selectDecision(initialState(), RR, 'expand-limits'), RR, { by: 'maya' });
+  const s = authorize(decideWith(initialState(), RR, 'expand-limits'), RR, { by: 'maya' });
   const rec = s.decisionRecords.at(-1);
   assert.equal(rec.option, 'expand-limits');
   assert.deepEqual(rec.previous, { level: 2, limited: false });

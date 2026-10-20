@@ -1,11 +1,11 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished} from '../store/index.js';
+import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished} from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
-import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed } from './proposal.js';
-import { reviewConditions } from '../store/index.js';
+import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed, provenanceList } from './proposal.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -51,7 +51,20 @@ export function checklist(state, cap, dec, check) {
     { label: dec.option ? `Decision: ${plainChoice(state, cap, dec.option)}` : 'Decision', ok: Boolean(dec.option), why: 'Choose one under "Your decision".' },
     ...(hasLimitsStep(state, cap, dec.option) ? [{ label: 'Limits', ok: true, why: '' }] : []),
     ...(expanding ? [{ label: 'What should improve', ok: oc.ok, why: oc.errors[0] }, { label: 'Rollout plan', ok: rc.ok, why: rc.errors[0] }] : []),
+    // #144: a current Proposal, every Reviewer's position and a Residual Risk
+    // before authority expands; the Owner records an expansion or a hold.
+    ...(expanding ? (() => {
+      const st = proposalStaleness(state, cap.id);
+      const missing = reviewerInputMissing(state, cap.id);
+      const rr = dec.residualRisk;
+      return [
+        { label: 'Proposal is current', ok: !st.stale, why: 'it is stale; replace it with a new Proposal (see the top of the page).' },
+        { label: 'Every Reviewer has given a position', ok: !missing.length, why: `still waiting for ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')}.` },
+        { label: 'Residual Risk', ok: Boolean(rr && RESIDUAL_RISK_LEVELS.includes(rr.level) && String(rr.note || '').trim().length >= RESIDUAL_REASON_MIN), why: rr ? 'say why, in a short sentence.' : 'choose Low, Moderate, High or Unknown, and say why.' },
+      ];
+    })() : []),
     { label: 'Your reason', ok: rationaleOk(dec.rationale), why: 'Say why you\'re making this decision (a sentence or more).' },
+    ...(dec.option ? (() => { const who = decisionEligibility(state, cap.id, actor(state, cap.id), dec.option); return [{ label: OWNER_DECIDES.has(dec.option) ? 'Recorded by the Owner' : 'Recorded by someone named on it', ok: who.ok, why: who.reason }]; })() : []),
   ];
   const explained = items.some((i) => !i.ok);
   const extra = !check.ok && !explained ? html`<li class="check-item is-blocked"><span class="check-mark" aria-hidden="true">✗</span> ${check.reason}</li>` : '';
@@ -144,8 +157,10 @@ export function decisionRecordView(state, id) {
     </div>
     ${kv([
       ['Scope', x.scope],
-      ['Rationale', x.rationale],
-      ['Evidence at the time', html`<ul class="plain-list">${x.evidenceSnapshot.map((e) => html`<li>${e}</li>`)}</ul>`],
+      ['Rationale', html`${x.rationale}${x.rationalePrefilled ? html`<p class="muted small">Prefilled for the demo, recorded unedited.</p>` : ''}`],
+      // #144: the evidence behind each result, frozen, so a decision on
+      // evidence recorded by hand never shows an empty section.
+      ['Evidence at the time', html`${x.evidenceSnapshot.length ? html`<ul class="plain-list">${x.evidenceSnapshot.map((e) => html`<li>${e}</li>`)}</ul>` : ''}${x.reviewed && x.reviewed.evidence ? provenanceList(x.reviewed.evidence) : ''}${!x.evidenceSnapshot.length && !(x.reviewed && x.reviewed.evidence && provenanceList(x.reviewed.evidence)) ? html`<span class="muted">No evidence was recorded for this decision.</span>` : ''}`],
       // #119: imported evidence in force, with the configuration it describes.
       ...(x.externalEvidence && x.externalEvidence.length ? [['Imported evidence', externalRecordList(x.externalEvidence)]] : []),
       ['Still to resolve', x.openCondition],
@@ -334,7 +349,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
 
   const dec = d.decision;
   const proposed = proposedAuthority(state, capabilityId);
-  const check = canAuthorize(state, capabilityId);
+  const check = canAuthorize(state, capabilityId, { by: actor(state, capabilityId) });
   const rec = d.recommendation;
   const authorizer = person(actor(state, cap.id));
   const noun = actionNoun(cap);
@@ -416,7 +431,8 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     ${!c.noFraudFlag ? notice('fail', 'Fraud-flagged accounts would be handled without a person.', 'Your rules send fraud-flagged accounts to a person. Those cases would still be stopped, but your limits should match your rules: tick "No fraud flag on the account".') : ''}
     ${c.maxValue > 100 ? notice('watch', 'This is above the $100 limit in your rules.', readiness(state, cap.id).unmet.length ? `The check "${readiness(state, cap.id).unmet[0].text}" isn't met yet (currently ${readiness(state, cap.id).unmet[0].current}).` : '') : ''}` : '';
 
-  const reason = html`<label class="field field-stack"><span class="sr-only">Your reason</span><textarea rows="4" aria-label="Your reason" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>`;
+  const reason = html`<label class="field field-stack"><span class="sr-only">Your reason</span><textarea rows="4" aria-label="Your reason" data-action="set-rationale" data-capability="${cap.id}">${dec.rationale}</textarea></label>
+    ${dec.rationalePrefilled ? html`<p class="muted small"><strong>Prefilled for the demo.</strong> Write your own reason; if you leave this, the record says it was prefilled.</p>` : html`<p class="muted small">In your own words: it goes on the record as yours.</p>`}`;
 
   const record = html`${checklist(state, cap, dec, check)}
     <button class="btn btn-primary decide-record" data-action="authorize" data-capability="${cap.id}" ${check.ok ? '' : raw('disabled')}>Record decision as ${authorizer.name}</button>
@@ -426,7 +442,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
     <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded. Evidence never grants authority on its own.</p>${proposalBanner(state, cap, ps)}</div>
     ${step('What changes if I approve this?', change)}
     ${step('What do we know?', html`${whatWeKnow(state, cap, { runs })}${frozenResults(ps.prop, ps.staleness)}`)}
-    ${step('Who has said what?', positionsStep(live.positions, { then: ps.prop && JSON.stringify(ps.prop.positions) !== JSON.stringify(live.positions) ? 'Positions have changed since it was proposed; these are the current ones. The record keeps the ones in force when you decide.' : null }), { sub: 'Reviewers and Stakeholders, as each gave their position.' })}
+    ${step('Who has said what?', positionsStep(live.positions, { capId: cap.id, missing: reviewerInputMissing(state, cap.id), then: ps.prop && JSON.stringify(ps.prop.positions) !== JSON.stringify(live.positions) ? 'Positions have changed since it was proposed; these are the current ones. The record keeps the ones in force when you decide.' : null }), { sub: 'Reviewers and Stakeholders, as each gave their position.' })}
     ${step('Risk', riskStep(cap, dec, live.risk, live.boundaries), { sub: 'The Risk before controls, the controls, and what you judge is left.' })}
     ${rec ? step('Recommendation', recommendation) : ''}
     ${step('Your decision', html`${choices}<p class="decide-pending">Finish your choice above to continue.</p><div class="decide-after-means">${preview}</div>`, { id: 'decide-choice' })}

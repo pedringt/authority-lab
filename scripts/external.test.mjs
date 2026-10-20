@@ -2,6 +2,7 @@
 // envelope into the normal evidence list, and the committed evidence files.
 
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import {
@@ -317,7 +318,7 @@ test('under the same configuration, a newer run replaces an older result for the
 test('a decision record keeps the imported evidence and configuration in force when it was made', () => {
   let s = importEvidence(initialState(), run(1, { capabilityId: RR, observedAt: '2026-10-01' }));
   s = importEvidence(s, run(2, { capabilityId: RR, observedAt: '2026-10-05', config: { model: 'model-b' } }));
-  s = authorize(selectDecision(s, RR, 'expand-limits'), RR);
+  s = authorize(decideWith(s, RR, 'expand-limits'), RR);
   const rec = s.decisionRecords.at(-1);
   assert.deepEqual(JSON.parse(JSON.stringify(rec.externalEvidence.filter((x) => x.system === 'Acme'))), [{ system: 'Acme', capability: 'Classifier', kind: 'eval', runs: [{ id: 'acme:eval:run-2', observedAt: '2026-10-05', reference: { url: 'https://example.com/runs/0001', label: 'Run 0001' } }], config: { model: 'model-b' }, excluded: 4 }]);
   assert.ok(Object.isFrozen(rec.externalEvidence[0].config));

@@ -5,6 +5,7 @@
 // types, never numbers (C3); every Boundary suggestion is reviewed one at a
 // time; deterministic suggestions say where they came from.
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import {
   initialState, getCapability, capData, current, versionList, people, checkAction,
@@ -62,7 +63,7 @@ test('a new capability is an unconfirmed draft: no decision record, no granted a
   assert.equal(getCapability(s, id).status, 'setup');
   assert.equal(checkAction(s, id, { tool: 'lookup_order', args: { orderId: 'ORD-5001' } }).verdict, 'block');
   assert.throws(() => proposeAuthority(s, id, 1, { by: 'priya' }), new RegExp(UNCONFIRMED_REASON.slice(0, 30)));
-  assert.equal(canAuthorize(selectDecision(s, id, 'hold'), id).reason, UNCONFIRMED_REASON);
+  assert.equal(canAuthorize(decideWith(s, id, 'hold'), id).reason, UNCONFIRMED_REASON);
   assert.equal(s.activity[0].kind, 'setup');
   assert.throws(() => startCapability(s0, { name: 'X', owner: 'priya', template: 'nope', lifecycle: 'planned', by: 'priya' }), /starting point/);
   assert.throws(() => startCapability(s0, { name: 'X', owner: 'priya', template: 'draft', by: 'priya' }), /planned \(or a pilot\) or already in use/);

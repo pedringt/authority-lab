@@ -5,6 +5,7 @@
 // (3B), effective authority only as recorded (4A), "Needs decision" is
 // unresolved, neither pass nor fail (5f).
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import {
   initialState, getCapability, capData, current, currentVersion, versionList, addCapability, people,
@@ -308,7 +309,7 @@ test('a material change is recorded, append-only and surfaced, and changes nothi
 // ---------------------------------------------------------------------------
 
 function restrictTC(s, by) {
-  s = selectDecision(s, TC, 'restrict');
+  s = decideWith(s, TC, 'restrict');
   return setRationale(s, TC, 'Pulling it back while the new tag set is checked by hand for a week.');
 }
 
@@ -329,7 +330,7 @@ test('Residual Risk is optional; when given it goes on the decision record, froz
 test('a published State record keeps its Residual Risk', () => {
   let s = stateWs();
   const id = stateCap(s);
-  s = selectDecision(s, id, 'hold');
+  s = decideWith(s, id, 'hold');
   s = setRationale(s, id, 'Keeping Recommend until the next full suite run is in.');
   s = setResidualRisk(s, id, { level: 'Low', note: 'Every proposal is decided by a person.' });
   s = authorize(s, id, { by: 'paige-edrington' });

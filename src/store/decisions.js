@@ -8,6 +8,9 @@ import { setupConfirmed, UNCONFIRMED_REASON } from './setup.js';
 import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
 import { freezeProposal, reviewConditions, openAuthorityProposal, proposalStaleness } from './proposal.js';
+import { peopleModel } from './boundaries.js';
+import { namedOn } from './context.js';
+import { current } from './selectors.js';
 
 export function actionNoun(cap) {
   return (cap && cap.actionNoun) || 'actions';
@@ -124,13 +127,15 @@ export function setCondition(state, capabilityId, key, value) {
 }
 
 export function setRationale(state, capabilityId, rationale) {
-  return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rationale } }));
+  return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rationale, rationalePrefilled: false } }));
 }
 
 // Residual Risk (#137): the Risk left once the Boundaries and other controls
-// are in place, as the person deciding sees it. Optional in Phase 1: when set
-// it goes on the decision record and never changes; it is never required to
-// authorize and software never sets it (Proposal/Decision is Phase 4).
+// are in place, as the person deciding sees it. When set it goes on the
+// decision record and never changes; software never sets it. Since #144
+// (Paige, 2026-10-19, Q4) every expansion needs one, with a short reason;
+// Unknown and High are valid judgments, and nothing here decides whether the
+// risk is acceptable. Hold and reductions don't need one.
 export const RESIDUAL_RISK_LEVELS = ['Low', 'Moderate', 'High', 'Unknown'];
 export function setResidualRisk(state, capabilityId, { level, note } = {}) {
   if (level === null) return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, residualRisk: null } }));
@@ -242,7 +247,39 @@ export const RATIONALE_MIN = 20;
 export const rationaleOk = (text) => Boolean(text) && String(text).trim().length >= RATIONALE_MIN;
 const RATIONALE_HINT = 'Say why you\'re making this decision (a sentence or more).';
 
-export function canAuthorize(state, capabilityId) {
+export const RESIDUAL_REASON_MIN = 10;
+const EXPANDING_OPTIONS = new Set(['expand', 'expand-limits']);
+
+// Who may record which Decision (Paige, 2026-10-19, Q1). Expanding authority,
+// or affirmatively keeping it, is the Owner's accountable decision. Pulling
+// it back (restrict, suspend, redesign) stays easier: anyone active and named
+// on the capability. Automatic restrictions and the post-incident review keep
+// their own rules.
+export const OWNER_DECIDES = new Set(['expand', 'expand-limits', 'hold']);
+export function decisionEligibility(state, capabilityId, by, option) {
+  const cap = getCapability(state, capabilityId);
+  if (!by || !Object.hasOwn(people(state), by) || !isActivePerson(state, by)) return { ok: false, reason: 'Choose an active person to record this decision.' };
+  const name = people(state)[by].name;
+  if (OWNER_DECIDES.has(option)) {
+    if (by === cap.owner) return { ok: true };
+    const owner = (people(state)[cap.owner] || { name: cap.owner }).name;
+    return { ok: false, reason: `Only the Owner, ${owner}, can record ${option === 'hold' ? 'keeping the current limits' : 'more authority'} for ${cap.name}. Pulling authority back can be recorded by anyone named on it.` };
+  }
+  if (!option || namedOn(state, capabilityId, by)) return { ok: true };
+  return { ok: false, reason: `${name} isn't the Owner or named on ${cap.name}, so they can't record this decision.` };
+}
+
+// Reviewers who haven't given a position yet (Paige, 2026-10-19, Q2). Every
+// active named Reviewer gives one before authority expands; a Reviewer who
+// disagrees is shown, never a veto. Stakeholder input stays optional.
+export function reviewerInputMissing(state, capabilityId) {
+  const list = current(state, capabilityId, 'stakeholders');
+  return peopleModel(state, capabilityId).reviewers
+    .filter((key) => isActivePerson(state, key))
+    .filter((key) => { const st = list.find((x) => x.person === key); return !st || !st.stance || st.stance === 'undecided'; });
+}
+
+export function canAuthorize(state, capabilityId, { by } = {}) {
   const d = capData(state, capabilityId).decision;
   if (!setupConfirmed(state, capabilityId)) return { ok: false, reason: UNCONFIRMED_REASON };
   if (!d.option) return { ok: false, reason: 'Choose an option first.' };
@@ -262,6 +299,20 @@ export function canAuthorize(state, capabilityId) {
   const expanding = d.option === 'expand' || d.option === 'expand-limits';
   if (expanding && capData(state, capabilityId).reviewRequired) {
     return { ok: false, reason: 'The AI was moved back after crossing a safety limit. Record what happened (the post-incident review) before giving it more authority.' };
+  }
+  if (expanding) {
+    // #144: the frozen Proposal must still describe what is being approved.
+    const st = proposalStaleness(state, capabilityId);
+    if (st.stale) return { ok: false, reason: `The Proposal is stale: ${st.reasons[0].text} Replace it with a new Proposal before expanding.`, stale: true };
+    const missing = reviewerInputMissing(state, capabilityId);
+    if (missing.length) return { ok: false, reason: `Every Reviewer gives a position before authority expands. Still waiting for ${missing.map((k) => people(state)[k].name).join(', ')}.`, reviewers: missing };
+    const rr = d.residualRisk;
+    if (!rr || !RESIDUAL_RISK_LEVELS.includes(rr.level)) return { ok: false, reason: 'Residual Risk: choose Low, Moderate, High or Unknown.' };
+    if (String(rr.note || '').trim().length < RESIDUAL_REASON_MIN) return { ok: false, reason: 'Residual Risk: say why, in a short sentence.' };
+  }
+  if (by !== undefined) {
+    const who = decisionEligibility(state, capabilityId, by, d.option);
+    if (!who.ok) return { ok: false, reason: who.reason, who: true };
   }
   return { ok: true };
 }
@@ -293,9 +344,9 @@ export function openConditionText(option, state, capabilityId) {
 }
 
 export function authorize(state, capabilityId, { by = 'maya' } = {}) {
-  const check = canAuthorize(state, capabilityId);
-  if (!check.ok) throw new Error(check.reason);
   requireActive(state, by, 'make this decision');
+  const check = canAuthorize(state, capabilityId, { by });
+  if (!check.ok) throw new Error(check.reason);
   const cap = getCapability(state, capabilityId);
   const d = capData(state, capabilityId);
   const option = d.decision.option;
@@ -322,6 +373,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     versions: versionsInForce(state, capabilityId),
     scope: scopeText(option, d.decision.conditions, cap, next),
     rationale: d.decision.rationale.trim(),
+    // Seeded demo wording recorded unedited says so (#144, Q5).
+    ...(d.decision.rationalePrefilled ? { rationalePrefilled: true } : {}),
     evidenceSnapshot: evidenceSnapshot(state, capabilityId),
     // #119: imported evidence in force, with the configuration it describes.
     ...(externalSnapshot(state, capabilityId).length ? { externalEvidence: deepFreeze(externalSnapshot(state, capabilityId)) } : {}),
@@ -384,7 +437,7 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
   const rule = d.monitoringRule || { windowDays: 0, autonomousActions: 0, escalated: 0, reversals: 0, incidents: 0, rollingWindow: 50, severeErrorsInWindow: 0, thresholdPct: 5, rule: 'If more than 5% of the last 50 cases have a severe error, the AI is moved back to Draft automatically.' };
   const monitoring = expanding ? { ...rule, startedAt: state.today, breached: false, recordId: id, errors: [] } : null;
 
-  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null, proposalId: null, residualRisk: null }, monitoring });
+  let s = updateCap(state, capabilityId, { decision: { ...d.decision, recordId: id, proposed: null, proposalId: null, residualRisk: null, rationale: '', rationalePrefilled: false }, monitoring });
   s = { ...s, capabilities, decisionRecords: [...state.decisionRecords, record], activity };
   // A restrict, suspend or redesign decided while a proposal to expand was
   // open closes that proposal too, and says so.
@@ -406,26 +459,68 @@ export function realUseEvidence(state, capabilityId) {
 // or one recorded by hand (Paige, 2026-10-13, #126; it was the in-app tests).
 // Level 3 needs real-use evidence: a pilot, or production results from any
 // source. Used to take a new capability to Draft (its second record).
-export function proposeAuthority(state, capabilityId, level, { by } = {}) {
+// The checks a new Proposal must pass, whether it opens a decision or
+// replaces a stale Proposal. `target` is the proposed level.
+function proposalChecks(state, capabilityId, target, by, what) {
   const cap = getCapability(state, capabilityId);
   if (!cap) throw new Error('This capability no longer exists.');
-  requireActive(state, by, 'propose more authority');
+  requireActive(state, by, what);
   // Confirmation gates authority (#139).
   if (!setupConfirmed(state, capabilityId)) throw new Error(UNCONFIRMED_REASON);
-  if (decisionRequired(state, capabilityId)) throw new Error('A decision is already open for this AI. Finish it first.');
   if (cap.status === 'not-delegated') throw new Error('This work is not delegated by design: it was deliberately kept with people, so the AI has no authority here.');
-  const target = Number(level);
   if (target !== cap.authority.level + 1) throw new Error(`Authority moves one level at a time. The next level is ${cap.authority.level + 1}.`);
   if (!performanceResultsSeen(state, capabilityId)) throw new Error('There is no evidence yet. Run the tests, record a result, or have a connected source send results, then propose more authority.');
   if (target >= 3 && !realUseEvidence(state, capabilityId)) throw new Error('Level 3 needs evidence from real use: a pilot at Draft, or production results from a connected source or recorded by hand.');
+  return cap;
+}
+
+export function proposeAuthority(state, capabilityId, level, { by } = {}) {
+  if (!getCapability(state, capabilityId)) throw new Error('This capability no longer exists.');
+  requireActive(state, by, 'propose more authority');
+  if (decisionRequired(state, capabilityId)) throw new Error('A decision is already open for this AI. Finish it first.');
+  const target = Number(level);
+  const cap = proposalChecks(state, capabilityId, target, by, 'propose more authority');
   const d = capData(state, capabilityId);
   // #144: the Proposal is frozen now, with what the person proposing saw.
+  // The reason starts empty: the person who records the Decision writes it
+  // (Paige, 2026-10-19, Q5); software never writes it for them.
   const proposal = freezeProposal(state, capabilityId, { level: target, by });
-  let s = updateCap(state, capabilityId, { authorityProposals: [...(d.authorityProposals || []), proposal], decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, proposalId: proposal.id, residualRisk: null, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: d.decision.rationale || `Test results support a limited, human-approved pilot. Every case is approved by a person at ${levelName(target)}.` } });
+  let s = updateCap(state, capabilityId, { authorityProposals: [...(d.authorityProposals || []), proposal], decision: { ...d.decision, option: null, recordId: null, proposed: { level: target, limited: false }, proposalId: proposal.id, residualRisk: null, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId), rationale: '', rationalePrefilled: false } });
   return logEvent(s, {
     kind: 'decision',
     title: `More authority proposed: ${authorityLabel(cap.authority, { short: true })} → Level ${target} (${proposal.id})`,
     body: `${cap.name}: ${people(state)[by].name} proposed moving to ${authorityLabel({ level: target, limited: false })}. The Proposal (${proposal.id}) is frozen as it was proposed. It is not a decision: a person makes the decision.`,
+    capabilityId,
+    link: `#/capabilities/${capabilityId}/decision`,
+  });
+}
+
+// Replace a stale Proposal (Paige, 2026-10-19, Q3). The old one is never
+// refreshed in place: it stays frozen, and a closure entry says it was
+// replaced because it was stale, with the reasons, by whom and by which new
+// Proposal. The new one is frozen from current conditions, for the same
+// level, through the same checks as any Proposal. What the person deciding
+// has already filled in (choice, limits, impact, rollout, Residual Risk,
+// reason) stays on the open decision for them to review.
+export function replaceProposal(state, capabilityId, { by } = {}) {
+  const old = openAuthorityProposal(state, capabilityId);
+  if (!old) throw new Error('There is no frozen Proposal open to replace.');
+  const st = proposalStaleness(state, capabilityId, old);
+  if (!st.stale) throw new Error('This Proposal still describes current conditions, so there is nothing to replace.');
+  const cap = proposalChecks(state, capabilityId, old.to.level, by, 'replace the Proposal');
+  const fresh = freezeProposal(state, capabilityId, { level: old.to.level, by, replaces: old.id });
+  const closure = deepFreeze(JSON.parse(JSON.stringify({ proposalId: old.id, reason: 'stale', reasons: st.reasons, replacedBy: fresh.id, date: state.today, by, byAt: snapshotPerson(state, by) })));
+  const d = capData(state, capabilityId);
+  const s = updateCap(state, capabilityId, {
+    authorityProposals: [...(d.authorityProposals || []), fresh],
+    proposalClosures: [...(d.proposalClosures || []), closure],
+    decision: { ...d.decision, proposalId: fresh.id, openedAt: state.today, versionsAtOpen: versionsInForce(state, capabilityId) },
+  });
+  return logEvent(s, {
+    kind: 'decision',
+    surfaced: true,
+    title: `Proposal ${old.id} replaced by ${fresh.id}: it was stale`,
+    body: `${cap.name}: ${people(state)[by].name} replaced the Proposal to move to Level ${old.to.level}. ${st.reasons.map((r) => r.text).join(' ')} ${old.id} stays as it was frozen.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}/decision`,
   });

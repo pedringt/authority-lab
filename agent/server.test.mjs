@@ -4,11 +4,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { initialState, authorize, selectDecision, simulateBreach, callTool, checkAction } from '../src/store/index.js';
+import { initialState, authorize, selectDecision, setResidualRisk, simulateBreach, callTool, checkAction } from '../src/store/index.js';
 import { createAgentServer } from './gate-server.mjs';
 
 const RR = 'refund-recommendation';
-const expanded = () => authorize(selectDecision(initialState(), RR, 'expand-limits'), RR);
+const withRisk = (s) => setResidualRisk(s, RR, { level: 'Moderate', note: 'Limits and human review keep it contained.' });
+const expanded = () => authorize(withRisk(selectDecision(initialState(), RR, 'expand-limits')), RR);
 
 // The seeded ticket for an order's customer (TK-2001 to TK-2005), if any.
 const ticketOf = (state, orderId) => {
@@ -173,7 +174,7 @@ test('the model can ask, but never approve: a needs-person refund waits, and the
 
 test('through the MCP server, gate events are logged and three forbidden attempts restrict the capability', async () => {
   const { rejectAction } = await import('../src/store/index.js');
-  const start = authorize(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits'), RR);
+  const start = authorize(withRisk(selectDecision(rejectAction(initialState(), 'WA-002', { by: 'daniel', reason: 'Clearing the seeded request.' }), RR, 'expand-limits')), RR);
   const conn = await connect(start);
   for (let i = 0; i < 3; i++) {
     const r = await conn.call('issue_refund', { orderId: 'ORD-5003', amount: 10 + i, confidence: 95 });

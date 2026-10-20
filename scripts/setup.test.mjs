@@ -2,8 +2,10 @@
 // Paige in docs/DECISIONS.md: one person can start a workspace, and "What does
 // it do today?" is context, not authority.
 import { test } from 'node:test';
+import { decideWith } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import {
+  setRationale,
   initialState, startEmpty, setUpWorkspace, setupPending, people, rosterVersions, activeAdmins, isWorkspaceAdmin, isRiskApprover,
   addPerson, proposeRosterChange, approveRosterChange, rosterApprovalEligibility, openRosterProposal, deactivatePerson,
   addCapability, getCapability, capData, current, startContractDraft, reviewSuggestion, confirmSection, finalizeContract, SECTION_KEYS,
@@ -104,11 +106,11 @@ test('a one-person workspace adds a capability and takes it all the way to its f
   s = recordManualEvidence(s, id, { by: 'ana-ruiz', label: 'Unresolved critical incidents', kind: 'eval', type: 'count', value: '0' });
   assert.equal(setupSteps(s, id).find((st) => st.id === 'coverage').done, true, 'every requirement has results');
   s = proposeAuthority(s, id, 2, { by: 'ana-ruiz' });
-  s = selectDecision(s, id, 'expand');
+  s = decideWith(s, id, 'expand');
   s = setOutcome(setOutcome(s, id, 0, 'metric', 'Lookup accuracy'), id, 0, 'target', '≥ 95%');
   s = setOutcome(setOutcome(s, id, 1, 'metric', 'Time to first response'), id, 1, 'target', 'at least 25% faster');
   for (const [k, v] of Object.entries({ owner: 'ana-ruiz', scope: 'Lookups for the billing queue only.', startDate: '2026-10-08', feedbackChannel: '#lookup-feedback', reviewerNotes: 'Check each draft before sending it.', reviewDate: '2026-10-21' })) s = setRolloutField(s, id, k, v);
-  s = authorize(s, id, { by: 'ana-ruiz' });
+  s = authorize(setRationale(s, id, 'Every Requirement is met; a person approves each draft.'), id, { by: 'ana-ruiz' });
   assert.deepEqual(getCapability(s, id).authority, { level: 2, limited: false });
   assert.equal(setupSteps(s, id).filter((st) => !st.optional).every((st) => st.done), true, 'every required setup step done by one person');
 });

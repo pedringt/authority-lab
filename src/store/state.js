@@ -77,6 +77,8 @@ export function seededCapabilityData(id) {
       option: null,
       conditions: s.defaultConditions ? clone(s.defaultConditions) : base.decision.conditions,
       rationale: s.defaultRationale || '',
+      // Seeded demo wording, labelled until someone edits it (#144, Q5).
+      rationalePrefilled: Boolean(s.defaultRationale),
       // Expected impact for an expansion (B1), prefilled for the seeded decision.
       outcomes: s.defaultOutcomes ? clone(s.defaultOutcomes) : [],
       // Shown as "prefilled for the demo" until someone edits them.

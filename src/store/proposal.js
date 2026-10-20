@@ -21,7 +21,10 @@ import { requirementsNow, targetsNow, evidenceCoverage, coverageText, MEASURE_WO
 import { boundaries, peopleModel } from './boundaries.js';
 import { riskView } from './risk.js';
 import { materialChanges, baselineNow, contextVersions } from './context.js';
-import { externalSnapshot } from './external.js';
+import { externalSnapshot, measurementText } from './external.js';
+import { rowCoverage } from './measures.js';
+import { TESTS_SOURCE } from './sources.js';
+import { outcomesNow, incidentsFor, incidentStatus } from './lightweight.js';
 import { people, snapshotPerson } from './people.js';
 import { peopleRoleOf, STANCES } from './proposals.js';
 import { LEVEL_PLAIN } from './overview.js';
@@ -47,9 +50,16 @@ export function openAuthorityProposal(state, capabilityId) {
   return findAuthorityProposal(state, capabilityId, d.proposalId);
 }
 
+// A Proposal replaced because it was stale (#144, Q3): the closure is its
+// own append-only entry; the frozen Proposal itself never changes.
+export function proposalClosures(state, capabilityId) {
+  return capData(state, capabilityId).proposalClosures || [];
+}
+
 export function proposalStatus(state, capabilityId, id) {
   const d = capData(state, capabilityId).decision;
   if (d.proposed && d.proposalId === id) return 'open';
+  if (proposalClosures(state, capabilityId).some((c) => c.proposalId === id)) return 'replaced';
   const rec = state.decisionRecords.find((r) => r.proposalId === id);
   if (rec) return 'decided';
   return 'closed';
@@ -95,10 +105,17 @@ export function reviewConditions(state, capabilityId) {
   }));
   const r = readiness(state, capabilityId);
   return {
+    evidence: evidenceProvenance(state, capabilityId),
     requirementResults: reqs,
     targetResults: targets,
     readiness: { met: r.met, total: r.total },
-    coverage: { text: coverageText(cov), sufficient: cov.sufficient, total: cov.total, gaps: cov.gaps.map((g) => ({ kind: g.kind, label: g.label, status: g.status })) },
+    coverage: {
+      text: coverageText(cov),
+      sufficient: cov.sufficient,
+      total: cov.total,
+      gaps: cov.gaps.map((g) => ({ kind: g.kind, label: g.label, status: g.status })),
+      rows: [...cov.requirements, ...cov.targets].map((x) => ({ kind: x.kind, id: x.id, label: x.label, status: x.status, state: coverageState(x.status) })),
+    },
     boundaries: {
       lines: b.categories.flatMap((c) => c.lines.map((l) => ({ category: c.label || c.key, section: l.section, text: l.text, enforcement: l.enforcement }))),
       restrictions: b.restrictions.map((x) => ({ text: x.text, enforcement: x.enforcement })),
@@ -109,6 +126,66 @@ export function reviewConditions(state, capabilityId) {
     positions,
     risk: riskView(state, capabilityId),
   };
+}
+
+// Coverage in the terms that matter to a decision (Paige, 2026-10-19, Q3):
+// sufficient, insufficient, stale, conflicting, missing, plus Unknown and
+// needs a decision. A judged or incident-bearing row counts as sufficient
+// evidence, as evidenceCoverage counts it.
+const COVERAGE_STATE = { covered: 'sufficient', judged: 'sufficient', incident: 'sufficient', stale: 'stale', insufficient: 'insufficient', conflicting: 'conflicting', unknown: 'unknown', 'no-data': 'missing', 'no-source': 'missing', 'needs-decision': 'needs-decision' };
+const COVERAGE_WORDS = { sufficient: 'sufficient', stale: 'stale', insufficient: 'insufficient', conflicting: 'conflicting', unknown: 'judged Unknown', missing: 'missing', 'needs-decision': 'needs a decision' };
+export const coverageState = (status) => COVERAGE_STATE[status] || status;
+
+// Which evidence produced each result (Paige, 2026-10-19): for every
+// Requirement and Target, the results that judged it and the evidence items
+// behind them (including each item in a combined result), the judgments that
+// decided a person-judged row, the incidents that blocked one, and the Target
+// a Requirement is judged through. Items, judgments, test outcomes and
+// incidents are listed once, by id, with what's needed to say where each came
+// from. Imported evidence keeps its own snapshot (externalSnapshot) too.
+export function evidenceProvenance(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  const used = new Set();
+  const judgmentIds = new Set();
+  const incidentIds = new Set();
+  let testsUsed = false;
+  const resultsOf = (j) => (j && j.results ? j.results : j && j.evidenceId ? [j] : []).map((x) => {
+    (x.itemIds || []).forEach((id) => used.add(id));
+    return { evidenceId: x.evidenceId, label: x.label || '', date: x.date || null, kind: x.kind || null, status: x.status, text: x.text || '', sample: x.sample ?? null, stale: Boolean(x.stale), itemIds: [...(x.itemIds || [])], combined: x.combined || 1 };
+  });
+  const rowRefs = (kind, row) => {
+    const refs = { kind, id: row.id, label: kind === 'requirement' ? row.text : row.name, results: [], judgments: [], incidents: [], targets: [] };
+    if (row.measure) {
+      if (row.measure.source === TESTS_SOURCE) testsUsed = true;
+      refs.source = row.measure.source || null;
+      refs.results = resultsOf(row.judged);
+    }
+    (row.judgments || []).forEach((id) => { judgmentIds.add(id); refs.judgments.push(id); });
+    (row.incidentsOpen || []).forEach((id) => { incidentIds.add(id); refs.incidents.push(id); });
+    if (kind === 'requirement' && !row.measure) refs.targets = targetsNow(state, capabilityId).filter((t) => t.requirement === row.id && t.bar !== 'needs-decision').map((t) => t.id);
+    return refs;
+  };
+  const rows = [
+    ...requirementsNow(state, capabilityId).map((r) => rowRefs('requirement', r)),
+    ...targetsNow(state, capabilityId).map((t) => rowRefs('target', t)),
+  ];
+  const items = d.evidence.filter((e) => used.has(e.id)).map((e) => ({
+    id: e.id,
+    from: e.from || null,
+    source: e.source || null,
+    sourceId: e.sourceId || null,
+    metric: e.metric || '',
+    value: e.measure ? measurementText(e.measure) : e.value || '',
+    date: e.date || null,
+    ...(e.recordedBy ? { recordedBy: e.recordedBy.name } : {}),
+    ...(e.provenance ? { file: { name: e.provenance.fileName, label: e.provenance.sourceLabel, importedOn: e.provenance.importedOn, importedBy: (e.provenance.importedBy || {}).name || null, perCase: Boolean(e.provenance.perCase), cases: e.provenance.cases ?? null, firstDate: e.provenance.firstDate || null, lastDate: e.provenance.lastDate || null } } : {}),
+    ...(e.external ? { importId: e.external.importId, kind: e.external.kind, reference: e.external.reference || null } : {}),
+    ...(e.demo ? { demo: true } : {}),
+  }));
+  const judgments = (d.judgments || []).filter((j) => judgmentIds.has(j.id)).map((j) => ({ id: j.id, requirementId: j.requirementId, verdict: j.verdict, rationale: j.rationale, reference: j.reference || null, role: j.role, date: j.date, by: j.by, byName: (j.byAt || {}).name || j.by }));
+  const outcomes = testsUsed ? outcomesNow(state, capabilityId).filter((x) => x.outcome).map(({ outcome: o }) => ({ id: o.id, scenarioId: o.scenarioId, scenarioName: o.scenarioName, result: o.result, ...(o.severity ? { severity: o.severity } : {}), date: o.date, byName: (o.byAt || {}).name || o.by, reference: o.reference || null })) : [];
+  const incidents = incidentsFor(state, capabilityId).filter((x) => incidentIds.has(x.id)).map((x) => ({ id: x.id, severity: x.severity, status: incidentStatus(x), what: x.what, date: x.date }));
+  return { rows, items, judgments, outcomes, incidents };
 }
 
 // The words a reviewer needs for the change itself. Newly permitted is what
@@ -132,7 +209,7 @@ function changeText(state, capabilityId, from, to) {
 
 // Freeze a new Proposal. Called by proposeAuthority after all its checks;
 // never on its own, and never by software deciding to propose.
-export function freezeProposal(state, capabilityId, { level, by }) {
+export function freezeProposal(state, capabilityId, { level, by, replaces = null }) {
   const cap = getCapability(state, capabilityId);
   const from = { ...cap.authority };
   const to = { level, limited: false };
@@ -145,6 +222,7 @@ export function freezeProposal(state, capabilityId, { level, by }) {
     openedAt: state.today,
     proposedBy: by,
     proposedByAt: snapshotPerson(state, by),
+    ...(replaces ? { replaces } : {}),
     from,
     to,
     change: changeText(state, capabilityId, from, to),
@@ -160,12 +238,17 @@ export function freezeProposal(state, capabilityId, { level, by }) {
 
 const KIND_WORDS = { contract: 'Rules (Boundaries)', criteria: 'Targets', requirements: 'Requirements', risk: 'Risk', stakeholders: 'People' };
 
-// May the open Proposal be stale? Only what the recorded model already
-// determines (#144): a newer version of anything it was reviewed against
-// (Rules, Targets, Requirements, Risk, people), or a material change recorded
-// after it opened. Requirement results that have moved since are listed as
-// information, not counted as staleness (an open question for Paige, Q3).
-// It never blocks: canAuthorize does not read it.
+// Is the open Proposal stale? (Paige, 2026-10-19, Q3.) It is when, since it
+// was frozen:
+// - a versioned object it was reviewed against has a newer version (Rules,
+//   Targets, Requirements, Risk, people);
+// - a material change was recorded;
+// - a Requirement or Target result changed (Met to Not met, Unknown to Met…);
+// - a row's coverage changed state (sufficient, insufficient, stale,
+//   conflicting, missing…).
+// More evidence that leaves every result and coverage state as it was is
+// not staleness. A stale Proposal blocks an expansion (canAuthorize) and is
+// replaced, never refreshed in place (replaceProposal).
 export function proposalStaleness(state, capabilityId, proposal = openAuthorityProposal(state, capabilityId)) {
   if (!proposal) return { stale: false, reasons: [], resultChanges: [] };
   const now = versionsInForce(state, capabilityId);
@@ -178,16 +261,27 @@ export function proposalStaleness(state, capabilityId, proposal = openAuthorityP
   for (const m of materialChanges(state, capabilityId).filter((x) => !seen.has(x.id))) {
     reasons.push({ kind: 'material-change', id: m.id, text: `Material change recorded ${m.recordedOn}: ${m.description}` });
   }
-  const nowReqs = new Map(requirementsNow(state, capabilityId).map((r) => [r.id, r]));
+  const live = reviewConditions(state, capabilityId);
   const resultChanges = [];
-  for (const r of proposal.requirementResults) {
-    const n = nowReqs.get(r.id);
-    if (!n) { resultChanges.push({ id: r.id, text: r.text, from: r.label, to: 'Removed' }); continue; }
-    const to = n.result ? n.result.label : r.label;
-    if (to !== r.label) resultChanges.push({ id: r.id, text: r.text, from: r.label, to });
+  const compare = (kind, thenRows, nowRows, name) => {
+    const nowById = new Map(nowRows.map((r) => [r.id, r]));
+    for (const r of thenRows) {
+      const n = nowById.get(r.id);
+      if (n && n.status !== r.status) resultChanges.push({ kind, id: r.id, text: name(r), from: r.label, to: n.label });
+    }
+  };
+  compare('requirement', proposal.requirementResults, live.requirementResults, (r) => r.text);
+  compare('target', proposal.targetResults || [], live.targetResults, (r) => r.name);
+  for (const c of resultChanges) reasons.push({ kind: 'result', id: c.id, text: `${c.kind === 'target' ? 'Target' : 'Requirement'} "${c.text}" changed: ${c.from} when proposed, ${c.to} now.` });
+  const thenCov = (proposal.coverage && proposal.coverage.rows) || [];
+  const nowCov = new Map(live.coverage.rows.map((r) => [`${r.kind}:${r.id}`, r]));
+  const coverageChanges = [];
+  for (const r of thenCov) {
+    const n = nowCov.get(`${r.kind}:${r.id}`);
+    if (n && n.state !== r.state) coverageChanges.push({ kind: r.kind, id: r.id, text: r.label, from: r.state, to: n.state });
   }
-  for (const [id, n] of nowReqs) if (!proposal.requirementResults.some((r) => r.id === id)) resultChanges.push({ id, text: n.text, from: 'Not there', to: n.result ? n.result.label : '' });
-  return { stale: reasons.length > 0, reasons, resultChanges };
+  for (const c of coverageChanges) reasons.push({ kind: 'coverage', id: c.id, text: `Coverage of "${c.text}" changed: ${COVERAGE_WORDS[c.from] || c.from} when proposed, ${COVERAGE_WORDS[c.to] || c.to} now.` });
+  return { stale: reasons.length > 0, reasons, resultChanges, coverageChanges };
 }
 
 // Positions differ when two people have taken different stances. Shown, never

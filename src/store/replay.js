@@ -6,7 +6,7 @@
 // give the same result, and no model is involved.
 
 import { initialState } from './state.js';
-import { selectDecision, authorize } from './decisions.js';
+import { selectDecision, setResidualRisk, authorize } from './decisions.js';
 import { callTool, fileTicket } from './tools.js';
 import { ticketDefinition } from './agentruns.js';
 import { verdictLabel, ruleKindLabel, claimsText } from './gate.js';
@@ -15,10 +15,18 @@ import { verdictLabel, ruleKindLabel, claimsText } from './gate.js';
 const labelsOf = (g) => (g ? { verdict: verdictLabel(g.verdict), rule: g.rule ? ruleKindLabel(g.rule.kind) : '' } : null);
 
 // The starting state a recording names: the seed, optionally after the
-// capability's pending decision is authorized with the given option.
+// capability's pending decision is authorized with the given option. Since
+// #144 an expansion needs a Residual Risk. No person judged one for these
+// fictional recordings, so the replay records Unknown and says why; a
+// recording may name its own (`start.residualRisk`).
+export const REPLAY_RESIDUAL_RISK = { level: 'Unknown', note: 'Replay of a recorded agent run in the fictional demo: no person judged Residual Risk for it.' };
 export function runStartState(start) {
   let s = initialState();
-  if (start.authorize) s = authorize(selectDecision(s, start.capabilityId, start.authorize), start.capabilityId);
+  if (start.authorize) {
+    s = selectDecision(s, start.capabilityId, start.authorize);
+    if (start.authorize === 'expand' || start.authorize === 'expand-limits') s = setResidualRisk(s, start.capabilityId, start.residualRisk || REPLAY_RESIDUAL_RISK);
+    s = authorize(s, start.capabilityId);
+  }
   return s;
 }
 

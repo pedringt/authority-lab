@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS } from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, setResidualRisk, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS } from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -152,16 +152,24 @@ const workspaceBanner = () => (!isClient() ? '' : editing
 // Where an old address that named no capability should go.
 const focusId = () => { const f = focusCapability(store.get()); return f ? f.id : null; };
 
+const GUIDE_SKIPPED_RISK = { level: 'Unknown', note: 'Guided demo skipped past this step: no one judged Residual Risk.' };
 // The guided demo (redesign) runs on its own copy of the demo state, in
 // memory only, so it never touches the workspace. Its "Demo as" is its own.
 let guide = null;
 function newGuide() {
   const state = initialState();
-  return { state, capabilityId: focusCapability(state).id, role: focusCapability(state).owner, tested: false, decided: null, breached: false };
+  return { state, capabilityId: focusCapability(state).id, role: focusCapability(state).owner, tested: false, decided: null, breached: false, residual: { level: null, note: '' } };
 }
 const guideDo = {
   runTests() { let s = startTestRun(guide.state, guide.capabilityId); for (let i = 0; i < 200 && capData(s, guide.capabilityId).testRun.status === 'running'; i++) s = advanceTestRun(s, guide.capabilityId); guide = { ...guide, state: s, tested: true }; },
-  decide() { const owner = getCapability(guide.state, guide.capabilityId).owner; const s = authorize(selectDecision(guide.state, guide.capabilityId, 'expand-limits'), guide.capabilityId, { by: owner }); guide = { ...guide, state: s, decided: s.decisionRecords.at(-1).id }; },
+  // The Residual Risk is the viewer's own choice in step 6 (#144). Skipping
+  // ahead past it records Unknown and says that no one judged it.
+  decide() {
+    const owner = getCapability(guide.state, guide.capabilityId).owner;
+    const r = guide.residual && guide.residual.level ? guide.residual : GUIDE_SKIPPED_RISK;
+    const s = authorize(setResidualRisk(selectDecision(guide.state, guide.capabilityId, 'expand-limits'), guide.capabilityId, r), guide.capabilityId, { by: owner });
+    guide = { ...guide, state: s, decided: s.decisionRecords.at(-1).id };
+  },
   breach() { guide = { ...guide, state: simulateBreach(guide.state, guide.capabilityId), breached: true }; },
 };
 // Opening a later step directly does the earlier steps' actions first.
@@ -454,6 +462,7 @@ document.addEventListener('click', (e) => {
     dispatchOr(route, () => { store.dispatch('confirmSetup', capId, { by: actor(store.get(), capId) }); location.hash = route; render(); });
   }
   if (action === 'clear-residual-risk') store.dispatch('setResidualRisk', capId, { level: null });
+  if (action === 'replace-proposal') dispatchOr(here(), () => { store.dispatch('replaceProposal', capId, { by: actor(store.get(), capId) }); });
   if (action === 'authorize') {
     dispatchOr(here(), () => {
       store.dispatch('authorize', capId, { by: actor(store.get(), capId) });
@@ -542,6 +551,7 @@ document.addEventListener('change', (e) => {
     return;
   }
   if (el.dataset.action === 'choose-owner') { store.dispatch('setActingAs', el.value || null); return; }
+  if (el.dataset.action === 'guide-residual' && guide) { guide = { ...guide, residual: { ...guide.residual, level: el.value } }; render(); return; }
   if (el.dataset.action === 'select-option') store.dispatch('selectDecision', capId, el.value);
   // Residual Risk (#144): optional, a person's judgment, kept with its note.
   if (el.dataset.action === 'set-residual-risk') {
@@ -885,6 +895,14 @@ document.addEventListener('input', (e) => {
     const value = ro.value;
     clearTimeout(outcomeTimers[`rollout-${field}`]);
     outcomeTimers[`rollout-${field}`] = setTimeout(() => store.dispatch('setRolloutField', capability, field, value), ro.tagName === 'SELECT' || ro.type === 'date' ? 0 : 300);
+    return;
+  }
+  const gn = e.target.closest('[data-action="guide-residual-note"]');
+  if (gn && guide) {
+    // Kept without a re-render while typing; the button checks on click.
+    guide = { ...guide, residual: { ...guide.residual, note: gn.value } };
+    const btn = app.querySelector('[data-action="guide-decide"]');
+    if (btn) btn.disabled = !(guide.residual.level && gn.value.trim().length >= 10);
     return;
   }
   const rn = e.target.closest('[data-action="set-residual-note"]');
