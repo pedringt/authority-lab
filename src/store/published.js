@@ -15,6 +15,7 @@
 import { getCapability, capData } from './state.js';
 import { proposeAuthority, selectDecision, setCondition, setRationale, setResidualRisk, setOutcome, setRolloutField, authorize, ROLLOUT_FIELDS, isExpansion } from './decisions.js';
 import { people } from './people.js';
+import { restoreAccepted } from './suggestions.js';
 
 export const RECORD_SCHEMA = 'authority-lab-record/1';
 const EXPANDING = new Set(['expand', 'expand-limits']);
@@ -43,6 +44,7 @@ export function publishableRecord(state, recordId) {
     ...(rec.expectedOutcomes && rec.expectedOutcomes.length ? { expectedOutcomes: rec.expectedOutcomes.map((o) => ({ metric: o.metric, target: o.target })) } : {}),
     ...(plan ? { rolloutPlan: plan } : {}),
     ...(rec.residualRisk ? { residualRisk: { level: rec.residualRisk.level, note: rec.residualRisk.note } } : {}),
+    ...(rec.suggestionsAccepted && rec.suggestionsAccepted.length ? { suggestionsAccepted: rec.suggestionsAccepted.map((x) => ({ key: x.key, value: x.value })) } : {}),
   };
 }
 
@@ -65,6 +67,7 @@ export function replayPublished(state, entry) {
   if (isExpansion(s, id, entry.option)) {
     (entry.expectedOutcomes || []).forEach((o, i) => { s = setOutcome(setOutcome(s, id, i, 'metric', o.metric), id, i, 'target', o.target); });
     for (const [k, v] of Object.entries(entry.rolloutPlan || {})) s = setRolloutField(s, id, k, v);
+    if (entry.suggestionsAccepted) s = restoreAccepted(s, id, entry.suggestionsAccepted);
   }
   s = authorize(s, id, { by: entry.by });
   const rec = s.decisionRecords.at(-1);

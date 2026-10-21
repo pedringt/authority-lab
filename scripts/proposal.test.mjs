@@ -334,8 +334,13 @@ test('screen: the Decide tab answers "What changes if I approve this?"; a stale 
   assert.match(page, /<h2>What changes if I approve this\?<\/h2>/);
   for (const h of ['Newly permitted', 'Still needs a person', 'Still prohibited']) assert.match(page, new RegExp(`<p class="fact-label">${h}</p>`));
   assert.match(page, /<strong>Positions differ<\/strong>/);
-  assert.match(page, /name="residual-risk" value="Unknown"/);
-  assert.match(page, /\(needed to expand; your judgment\)/);
+  // Phase 6A: Residual Risk is asked once Expand is chosen, or with every field shown.
+  assert.doesNotMatch(page, /name="residual-risk"/);
+  assert.match(page, /If you choose to expand, you'll be asked for the Residual Risk/);
+  const every = String(capabilityView(s, id, new URLSearchParams('tab=decide&fields=all')));
+  assert.match(every, /name="residual-risk" value="Unknown"/);
+  assert.match(every, /\(needed to expand; your judgment\)/);
+  assert.match(decide(selectDecision(s, id, 'expand'), id), /name="residual-risk" value="Unknown"/);
   assert.match(page, /In your own words: it goes on the record as yours\./);
   s = assessRisk(readyToRecord(s, id, ANA), id, { likelihood: 'Low', scale: 'One case', by: ANA, reason: 'Few emails a week.' });
   page = decide(s, id);

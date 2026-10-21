@@ -407,3 +407,13 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .material-areas { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .mon-material-form form { display: grid; gap: 12px; margin-top: 8px; }
 .mon-actions dd .btn { margin-left: 4px; }
+
+/* Phase 6A: where the open decision stands, and suggested values. */
+.decide-status { margin: 12px 0 4px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.decide-status .checklist { margin: 6px 0; }
+.check-item.is-warn .check-mark { color: var(--watch); }
+.check-item.is-info .check-mark { color: var(--muted); }
+.decide-fields { margin: 4px 0 0; }
+.decide-suggest { margin: 4px 0 0; }
+.decide-suggest .btn { margin-left: 6px; }
+.decide-suggest-list { margin-top: 10px; }

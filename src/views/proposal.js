@@ -102,16 +102,23 @@ export function positionsStep(positions, { then = null, capId = null, missing = 
 
 // Risk at decision time: the initial Risk, the controls that bear on it, and
 // the Residual Risk a person gives, with their reason. No score. Optional.
-export function riskStep(cap, dec, risk, b) {
+// Phase 6A: the Residual Risk question can be asked apart, once the person
+// has chosen to expand ({ residual: false } leaves it out here).
+export function riskStep(cap, dec, risk, b, { residual = true } = {}) {
   const enforced = b.lines.filter((l) => l.enforcement === 'enforced').length + b.restrictions.filter((r) => r.enforcement === 'enforced').length;
   const total = b.lines.length + b.restrictions.length;
-  const rr = dec.residualRisk;
-  const radio = (lvl) => html`<label class="check"><input type="radio" name="residual-risk" value="${lvl}" data-action="set-residual-risk" data-capability="${cap.id}" ${rr && rr.level === lvl ? raw('checked') : ''}><span>${lvl}</span></label>`;
   return html`<dl class="kv">
       <div><dt>Initial Risk</dt><dd><strong>${risk.overall}</strong> <span class="muted small">${risk.why}</span></dd></div>
       <div><dt>Controls</dt><dd>${total ? `${total} Boundar${total === 1 ? 'y' : 'ies'}, ${enforced} enforced by software; the rest are written and followed by people.` : 'No Boundaries written yet.'}</dd></div>
     </dl>
-    <fieldset class="residual-risk"><legend>Residual Risk, once these controls are in place <span class="muted small">(needed to expand; your judgment)</span></legend>
+    ${residual ? residualRiskField(cap, dec) : html`<p class="muted small">If you choose to expand, you'll be asked for the Residual Risk: what you judge is left once these controls are in place.</p>`}`;
+}
+
+// The Residual Risk a person gives, with their reason. Never suggested.
+export function residualRiskField(cap, dec) {
+  const rr = dec.residualRisk;
+  const radio = (lvl) => html`<label class="check"><input type="radio" name="residual-risk" value="${lvl}" data-action="set-residual-risk" data-capability="${cap.id}" ${rr && rr.level === lvl ? raw('checked') : ''}><span>${lvl}</span></label>`;
+  return html`<fieldset class="residual-risk"><legend>Residual Risk, once these controls are in place <span class="muted small">(needed to expand; your judgment)</span></legend>
       <div class="residual-options">${RESIDUAL_RISK_LEVELS.map(radio)}</div>
       ${rr ? html`<label class="field field-stack"><span>Why</span><textarea rows="2" aria-label="Why this Residual Risk" data-action="set-residual-note" data-capability="${cap.id}">${rr.note || ''}</textarea></label>
         <p><button class="btn btn-sm" data-action="clear-residual-risk" data-capability="${cap.id}">Clear Residual Risk</button></p>` : ''}

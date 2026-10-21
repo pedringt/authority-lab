@@ -470,6 +470,8 @@ document.addEventListener('click', (e) => {
     dispatchOr(route, () => { store.dispatch('confirmSetup', capId, { by: actor(store.get(), capId) }); location.hash = route; render(); });
   }
   if (action === 'clear-residual-risk') store.dispatch('setResidualRisk', capId, { level: null });
+  // Phase 6A: a suggested value goes in only when the person chooses it.
+  if (action === 'accept-suggestion') dispatchOr(here(), () => store.dispatch('acceptDecisionSuggestion', capId, btn.dataset.key));
   if (action === 'replace-proposal') dispatchOr(here(), () => { store.dispatch('replaceProposal', capId, { by: actor(store.get(), capId) }); });
   if (action === 'authorize') {
     dispatchOr(here(), () => {

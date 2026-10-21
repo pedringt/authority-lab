@@ -5,8 +5,8 @@ import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
-import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY } from '../store/index.js';
+import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, residualRiskField, recordReviewed, provenanceList } from './proposal.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -72,11 +72,25 @@ export function checklist(state, cap, dec, check) {
   return html`<ul class="checklist decide-review" role="status" aria-label="Before you record">${items.map((i) => html`<li class="check-item ${i.ok ? 'is-done' : 'is-blocked'}"><span class="check-mark" aria-hidden="true">${i.ok ? '✓' : '✗'}</span> <strong>${i.label}</strong>${i.ok ? '' : html`<span class="muted small">: ${i.why}</span>`}</li>`)}${extra}</ul>`;
 }
 
+// A suggested value under a field (Phase 6A, Paige, 2026-10-21, decision 2):
+// offered, never applied. "Use this" is the person's explicit accept; once
+// in place it says it was a suggestion, and the record notes it if it stays
+// unchanged.
+function suggestionLine(state, cap, dec, key, sug, shown) {
+  if (!sug) return '';
+  const accepted = Object.hasOwn(dec.accepted || {}, key);
+  if (suggestionInPlace(state, cap.id, key)) return accepted ? html`<p class="decide-suggest muted small">${DECISION_SUGGESTION_LABEL}, accepted: ${sug.basis}. Edit it if it isn't right; the record notes it if you leave it.</p>` : '';
+  return html`<p class="decide-suggest small"><span class="muted">${DECISION_SUGGESTION_LABEL}:</span> <strong>${shown}</strong> <span class="muted">(${sug.basis})</span> <button class="btn btn-sm" data-action="accept-suggestion" data-capability="${cap.id}" data-key="${key}">Use this</button></p>`;
+}
+
 // The rollout plan for an expansion (C1): every field required.
 function rolloutCard(state, cap, dec) {
   const p = dec.rollout || {};
   const rc = rolloutChecks(state, p);
-  const field = (key, label, input) => html`<label class="field field-stack"><span>${label}</span>${input}</label>`;
+  const sug = decisionSuggestions(state, cap.id).rollout;
+  const shown = { owner: sug.owner && (people(state)[sug.owner.value] || { name: sug.owner.value }).name, startDate: sug.startDate && fmtDate(sug.startDate.value), reviewDate: sug.reviewDate && fmtDate(sug.reviewDate.value), scope: sug.scope && sug.scope.value };
+  // The suggestion sits outside the label, so it isn't read as the field's name.
+  const field = (key, label, input) => html`<div class="field-wrap"><label class="field field-stack"><span>${label}</span>${input}</label>${suggestionLine(state, cap, dec, `rollout.${key}`, sug[key], shown[key])}</div>`;
   const attrs = (key) => raw(`data-action="set-rollout" data-capability="${cap.id}" data-field="${key}"`);
   return html`<div class="card rollout">
     <div class="rollout-grid">
@@ -104,9 +118,12 @@ export function rolloutList(plan) {
   </ul>`;
 }
 
-function impactCard(cap, dec) {
+function impactCard(state, cap, dec) {
   const rows = Array.from({ length: OUTCOMES_MAX }, (_, i) => (dec.outcomes || [])[i] || { metric: '', target: '' });
   const oc = outcomeChecks(rows);
+  const suggested = decisionSuggestions(state, cap.id).outcomes;
+  const offered = suggested.filter((o) => !suggestionInPlace(state, cap.id, o.key));
+  const accepted = suggested.filter((o) => Object.hasOwn(dec.accepted || {}, o.key) && suggestionInPlace(state, cap.id, o.key));
   return html`<div class="card impact">
     <div class="impact-rows">
       <span class="fact-label">What should improve</span><span class="fact-label">Target (with a number)</span>
@@ -114,6 +131,8 @@ function impactCard(cap, dec) {
     </div>
     ${dec.outcomesPrefilled ? html`<p class="muted small"><strong>Prefilled for the demo,</strong> a little above the pilot results. Edit them before you decide.</p>` : ''}
     ${oc.ok ? html`<p class="muted small">${oc.outcomes.length} target${oc.outcomes.length === 1 ? '' : 's'} set. Monitoring will compare them with the actual results.</p>` : html`<ul class="form-error plain-list">${oc.errors.map((e) => html`<li>${e}</li>`)}</ul>`}
+    ${accepted.length ? html`<p class="decide-suggest muted small">${DECISION_SUGGESTION_LABEL}${accepted.length === 1 ? '' : 's'}, accepted: ${accepted.map((o) => o.metric).join(', ')}. Edit ${accepted.length === 1 ? 'it' : 'them'} if not right; the record notes any you leave as suggested.</p>` : ''}
+    ${offered.length ? html`<div class="decide-suggest-list"><p class="small"><strong>${DECISION_SUGGESTION_LABEL}s</strong> <span class="muted">from your measured Targets. Nothing is added until you choose it.</span></p><ul class="plain-list">${offered.map((o) => html`<li class="decide-suggest small"><strong>${o.metric}:</strong> ${o.target} <span class="muted">(${o.basis})</span> <button class="btn btn-sm" data-action="accept-suggestion" data-capability="${cap.id}" data-key="${o.key}">Use this</button></li>`)}</ul></div>` : ''}
   </div>`;
 }
 
@@ -181,6 +200,8 @@ export function decisionRecordView(state, id) {
         : x.previous && x.next && x.next.level > x.previous.level && x.authorizedBy !== 'system'
           ? [['Rollout plan', html`<span class="muted">Not recorded: this decision was made before rollout plans were required.</span>`]]
           : []),
+      // Phase 6A: suggested values accepted and left unchanged.
+      ...(x.suggestionsAccepted && x.suggestionsAccepted.length ? [['Accepted suggestions', html`<p class="small">${DECISION_SUGGESTION_LABEL}s that ${who.name} accepted and left unchanged. Anything not listed here or marked "Prefilled for the demo" was entered by a person.</p><ul class="plain-list">${x.suggestionsAccepted.map((a) => html`<li><strong>${a.label}:</strong> ${a.key === 'rollout.owner' ? (people(state)[a.text] || { name: a.text }).name : /Date$/.test(a.key) ? fmtDate(a.text) : a.text}</li>`)}</ul>`]] : []),
       ...(x.conditions ? [['Limits: the AI could act on its own when', html`<ul class="plain-list">
         <li>the amount is $${x.conditions.maxValue} or less</li>
         ${x.conditions.noFraudFlag ? html`<li>no fraud flag</li>` : ''}
@@ -338,6 +359,40 @@ function gapNotice(state, cap) {
   return notice('fail', 'Operating above approved Authority', `Observed behavior: Level ${g.observed.level}, ${g.observed.name}. Approved Authority: Level ${g.approved.level}, ${g.approved.name}. Further expansion beyond Level ${g.observed.level} is blocked until this is resolved: bring its behavior back within approved Authority, or govern the observed behavior through Proposals, one level at a time. Reducing, pausing or retiring is never blocked.`, { link: `#/capabilities/${cap.id}?tab=monitor`, linkText: 'See it in Monitor' });
 }
 
+// Where the open decision stands (Phase 6A): one list near the top that
+// answers "what stands between this and an expansion?", each line linking to
+// where it is resolved. A summary only: the full notices still show below,
+// and canAuthorize stays the only judge.
+export function statusBand(state, cap, proposed, live) {
+  const d = capData(state, cap.id);
+  const g = authorityGap(state, cap.id);
+  const r = readiness(state, cap.id);
+  const missing = reviewerInputMissing(state, cap.id);
+  const against = live.positions.filter((p) => p.role === 'Reviewer' && (p.stance === 'hold' || p.stance === 'restrict'));
+  const st = proposalStaleness(state, cap.id);
+  const MARK = { ok: '✓', block: '✗', warn: '!', info: '·' };
+  const item = (kind, text, link = null, linkText = '') => html`<li class="check-item is-${kind}"><span class="check-mark" aria-hidden="true">${MARK[kind]}</span> ${text}${link ? html` <a class="small" href="${link}">${linkText}</a>` : ''}</li>`;
+  const reqs = `#/capabilities/${cap.id}?tab=decide&show=requirements`;
+  const items = [
+    item('info', html`<strong>Approved:</strong> Level ${cap.authority.level}, ${levelName(cap.authority.level)}. <strong>Proposed:</strong> Level ${proposed.level}, ${levelName(proposed.level)}.`),
+    g.above ? item('block', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. Expanding beyond it is blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor') : '',
+    d.reviewRequired ? item('block', 'A post-incident review is needed before authority expands.', `#/capabilities/${cap.id}?tab=monitor`, 'Record the review') : '',
+    r.hardUnmet.length
+      ? item('block', `Hard Requirements not Met: ${r.hardUnmet.map((x) => `${x.text} (${x.result ? x.result.label : 'Not met'})`).join('; ')}.`, reqs, 'See the Requirements')
+      : r.hardTotal ? item('ok', `Every hard Requirement is Met (${r.hardTotal}).`) : '',
+    r.considerationsOpen.length ? item('info', `Considerations not met, which don't block: ${r.considerationsOpen.map((x) => x.text).join('; ')}.`) : '',
+    noHardQuality(state, cap.id) ? item('warn', NO_HARD_QUALITY.title, reqs, 'See the Requirements') : '',
+    missing.length
+      ? item('block', `Waiting for a position from ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')} (Reviewer${missing.length === 1 ? '' : 's'}).`, `#/capabilities/${cap.id}/stakeholders/edit`, 'Record a position')
+      : item('ok', 'Every Reviewer has given a position.'),
+    ...against.map((p) => item('warn', `${p.name} (Reviewer) says ${p.stanceLabel}. Shown, never a veto.`)),
+    positionsDiffer(live.positions) ? item('warn', 'Positions differ. Nothing averages them or picks one.') : '',
+    st.stale ? item('block', `The Proposal is stale: ${st.reasons[0].text}`) : '',
+  ];
+  return html`<section class="decide-status" aria-label="Where this decision stands"><p class="fact-label">Where this stands</p><ul class="checklist">${items}</ul>
+    <p class="muted small">For an expansion. Keeping the current limits, reducing, pausing and redesign are never blocked by these. Residual Risk and your reason are always yours to give.</p></section>`;
+}
+
 const proposeButton = (cap, { restoreTo = null, governs = false } = {}) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">${governs ? `Propose Level ${cap.authority.level + 1}: govern the observed behavior` : restoreTo === null ? `Propose a move to Level ${cap.authority.level + 1}` : restoreTo === cap.authority.level + 1 ? `Propose: restore toward Level ${restoreTo}` : `Propose Level ${cap.authority.level + 1}: restoring toward Level ${restoreTo}`}</button>`;
 
 // Why the next level can't be proposed yet, in the order it is checked.
@@ -424,6 +479,11 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   const expanding = isExpansion(state, cap.id, dec.option);
   const limits = hasLimitsStep(state, cap, dec.option);
   const c = dec.conditions;
+  // Phase 6A: by default only what the chosen decision needs is asked;
+  // "Show every field" (fields=all) asks everything up front, as before.
+  const every = query.get('fields') === 'all';
+  const askExpansion = expanding || (every && oneUp);
+  const residualApart = !every && (expanding || Boolean(dec.residualRisk));
 
   let n = 0;
   const step = (title, body, { id, sub } = {}) => html`<section class="decide-step"${id ? html` id="${id}"` : ''}><p class="decide-step-n">Step ${++n}</p><h2>${title}</h2>${sub ? html`<p class="muted small decide-step-sub">${sub}</p>` : ''}${body}</section>`;
@@ -509,19 +569,22 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
   return html`<div class="decide-flow">
     ${gapNotice(state, cap)}
     <div class="decide-head"><h2>Should we expand autonomy for this capability?</h2><p class="muted">A named person makes the call, and the decision is recorded. Evidence never grants authority on its own.</p>${proposalBanner(state, cap, ps)}</div>
+    ${statusBand(state, cap, proposed, live)}
+    <p class="small decide-fields">${every ? html`Showing every field. <a href="#/capabilities/${cap.id}?tab=decide">Ask only what my choice needs</a>` : html`Only what your choice needs is asked. <a href="#/capabilities/${cap.id}?tab=decide&fields=all">Show every field</a>`}</p>
     ${hardRequirementsNotice(state, cap)}
     ${noHardQualityNotice(state, cap)}
     ${restorationBlock(ps.prop ? ps.prop.restoration : restorationContext(state, cap.id), cap)}
     ${step('What changes if I approve this?', change)}
     ${step('What do we know?', html`${whatWeKnow(state, cap, { runs })}${frozenResults(ps.prop, ps.staleness)}`)}
     ${step('Who has said what?', positionsStep(live.positions, { capId: cap.id, missing: reviewerInputMissing(state, cap.id), then: ps.prop && JSON.stringify(ps.prop.positions) !== JSON.stringify(live.positions) ? 'Positions have changed since it was proposed; these are the current ones. The record keeps the ones in force when you decide.' : null }), { sub: 'Reviewers and Stakeholders, as each gave their position.' })}
-    ${step('Risk', riskStep(cap, dec, live.risk, live.boundaries), { sub: 'The Risk before controls, the controls, and what you judge is left.' })}
+    ${step('Risk', riskStep(cap, dec, live.risk, live.boundaries, { residual: every }), { sub: every ? 'The Risk before controls, the controls, and what you judge is left.' : 'The Risk before controls, and the controls.' })}
     ${rec ? step('Recommendation', recommendation) : ''}
     ${step('Your decision', html`${choices}<p class="decide-pending">Finish your choice above to continue.</p><div class="decide-after-means">${preview}</div>`, { id: 'decide-choice' })}
     <div class="decide-after">
+      ${residualApart ? step('Residual Risk', residualRiskField(cap, dec), { sub: 'What you judge is left once the controls are in place. Your judgment: nothing suggests it.' }) : ''}
       ${limits ? step('Limits', conditions, { sub: `${upper(noun)} run automatically only when all of these are true. Anything else goes to human review.` }) : ''}
-      ${expanding ? step('What should improve?', impactCard(cap, dec), { sub: `${OUTCOMES_MIN}–${OUTCOMES_MAX} measurable goals, compared with real results after rollout. They can't be changed after you decide.` }) : ''}
-      ${expanding ? step('Rollout plan', rolloutCard(state, cap, dec), { sub: 'Who runs the rollout, where it starts, and when it is reviewed. Saved with the decision; it can\'t be changed afterwards.' }) : ''}
+      ${askExpansion ? step('What should improve?', impactCard(state, cap, dec), { sub: `${OUTCOMES_MIN}–${OUTCOMES_MAX} measurable goals, compared with real results after rollout. They can't be changed after you decide.` }) : ''}
+      ${askExpansion ? step('Rollout plan', rolloutCard(state, cap, dec), { sub: 'Who runs the rollout, where it starts, and when it is reviewed. Saved with the decision; it can\'t be changed afterwards.' }) : ''}
       ${step('Why are you making this decision?', reason)}
       ${step('Review and record', record)}
     </div>
