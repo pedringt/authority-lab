@@ -15,6 +15,7 @@
 import { clone, getCapability, capData, updateCap, logEvent } from './state.js';
 import { current, levelName } from './selectors.js';
 import { people, requireActive, snapshotPerson, isActivePerson, isWorkspaceAdmin } from './people.js';
+import { readDescription, CERTAINTY } from './describe.js';
 
 // ---------------------------------------------------------------------------
 // Who may record these (Paige, 2026-10-14, #137 item 5b): the capability's
@@ -111,7 +112,7 @@ export function contextDescription(state) {
   return (v && v.description) || '';
 }
 
-function writeContext(state, facts, { by, reason, title, description }) {
+function writeContext(state, facts, { by, reason, title, description, questions }) {
   requireActive(state, by, 'record the context');
   if (!canRecordContext(state, by)) throw new Error(`${people(state)[by].name} isn't a workspace admin or named on a capability, so they can't record the context.`);
   const why = (reason || '').trim();
@@ -119,7 +120,9 @@ function writeContext(state, facts, { by, reason, title, description }) {
   const list = contextVersions(state);
   const prev = list.at(-1);
   const desc = description !== undefined ? String(description).trim() : (prev && prev.description) || '';
-  const next = { version: list.length + 1, date: state.today, author: by, authorAt: snapshotPerson(state, by), reason: why, before: prev ? clone(prev.value) : null, value: clone(facts), ...(desc ? { description: desc } : {}) };
+  // Questions from the description (6A.2) travel with each version until answered.
+  const qs = questions !== undefined ? questions : (prev && prev.questions) || [];
+  const next = { version: list.length + 1, date: state.today, author: by, authorAt: snapshotPerson(state, by), reason: why, before: prev ? clone(prev.value) : null, value: clone(facts), ...(desc ? { description: desc } : {}), ...(qs.length ? { questions: clone(qs) } : {}) };
   const s = { ...state, contextVersions: [...list, next] };
   return logEvent(s, { kind: 'context', title, body: `${people(state)[by].name}: ${why}`, link: '#/settings' });
 }
@@ -134,15 +137,23 @@ export function recordContext(state, { facts = {}, by, reason } = {}) {
 }
 
 // Suggestions from a template (or, later, AI) arrive unconfirmed. A confirmed
-// fact is never overwritten by a suggestion.
-export function suggestContext(state, { facts = {}, source, by, reason, description } = {}) {
+// fact is never overwritten by a suggestion. A suggestion read from the
+// description (6A.2) also says how decisive its rule was (Clear or Likely),
+// the words it relied on, and why.
+const cleanMeta = (m) => (m ? {
+  ...(CERTAINTY.includes(m.certainty) ? { certainty: m.certainty } : {}),
+  ...(m.quote ? { quote: String(m.quote).slice(0, 240) } : {}),
+  ...(m.basis ? { basis: String(m.basis).slice(0, 200) } : {}),
+  ...(Array.isArray(m.parts) ? { parts: m.parts.map((p) => ({ value: p.value, certainty: p.certainty, quote: String(p.quote || '').slice(0, 240), ...(p.basis ? { basis: p.basis } : {}) })) } : {}),
+} : {});
+export function suggestContext(state, { facts = {}, source, by, reason, description, meta = {}, questions } = {}) {
   if (!['template', 'description', 'ai'].includes(source)) throw new Error('Suggestions come from a template, the description or AI.');
   const next = { ...contextNow(state) };
   for (const k of Object.keys(facts)) {
     if (next[k] && next[k].status === 'confirmed') continue;
-    next[k] = { value: cleanFact(k, facts[k]), status: 'suggested', source, by: null, date: state.today };
+    next[k] = { value: cleanFact(k, facts[k]), status: 'suggested', source, by: null, date: state.today, ...cleanMeta(meta[k]) };
   }
-  return writeContext(state, next, { by, reason: reason || `Suggested from the ${source}.`, title: 'Context suggestions added', description });
+  return writeContext(state, next, { by, reason: reason || `Suggested from the ${source}.`, title: 'Context suggestions added', description, questions });
 }
 
 // One suggested fact at a time: reviewed, confirmed (optionally corrected) or
@@ -293,52 +304,65 @@ export function recordMaterialChange(state, capabilityId, { areas = [], descript
 }
 
 // ---------------------------------------------------------------------------
-// Context intake (#139): a free-form description, matched by keyword into
-// suggested facts. Deterministic placeholder assistance, labelled "Based on
-// your answers", never AI. Every suggestion is confirmed one at a time.
+// Context intake (#139, 6A.2): a free-form description, read by rules into
+// suggested facts (src/store/describe.js). Deterministic assistance, labelled
+// "Based on your answers", never AI. Every suggestion is confirmed one at a
+// time; what the rules can't settle is asked.
 // ---------------------------------------------------------------------------
 
-const ACTION_WORDS = [
-  ['Retrieves', /\b(search|look ?up|lookup|find|retriev|research|summari[sz])/i],
-  ['Drafts', /\b(draft|write|writes|compose|reply|replies|respond)/i],
-  ['Classifies', /\b(classif|categori[sz]|tag|tags|triage|rout(e|ing)|extract)/i],
-  ['Recommends', /\b(recommend|suggest|prioriti[sz]|propos)/i],
-  ['Acts', /\b(issues|sends|updates|closes|deletes|execut|pays|takes action)/i],
-  ['Uses tools', /\b(tool|api|integration|system of record)/i],
-];
-const AREA_WORDS = [
-  ['People', /\b(customer|patient|employee|applicant|user|people|person)/i],
-  ['Money', /\b(refund|payment|money|credit|invoice|price|\$\d)/i],
-  ['Rights', /\b(rights|eligib|benefit|appeal)/i],
-  ['Accounts', /\b(accounts?|login|log-in)\b/i],
-  ['Compliance', /\b(complian|regulat|legal|law|audit|policy)/i],
-  ['Safety', /\b(safety|harm|medical|health|injur)/i],
-];
-
+// The facts a description suggests, as plain values (6A.2 reads them with
+// src/store/describe.js; this keeps the earlier shape for callers).
 export function interpretDescription(text) {
-  const t = String(text || '');
-  const facts = {};
-  const actions = ACTION_WORDS.filter(([, re]) => re.test(t)).map(([a]) => a);
-  if (actions.length) facts.aiActions = actions;
-  const areas = AREA_WORDS.filter(([, re]) => re.test(t)).map(([a]) => a);
-  if (areas.length) facts.consequenceAreas = areas;
-  const external = /\b(customer|client|public|external|patient|user)s?\b/i.test(t);
-  const internal = /\b(internal|our team|staff|employee|in-house)\b/i.test(t);
-  if (external || internal) facts.environment = external && internal ? 'Both' : external ? 'External' : 'Internal';
-  const pilot = /\bpilot/i.test(t);
-  const live = /\bproduction\b|\blive\b|\bin use\b/i.test(t);
-  if (pilot || live) facts.stage = pilot && live ? 'Both' : pilot ? 'Pilot' : 'Production';
-  // The purpose: the sentence that says what the AI is for, else the first.
-  const sentences = t.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
-  const sentence = sentences.find((x) => /\bAI\b/.test(x)) || sentences[0];
-  if (sentence) facts.purpose = sentence;
-  return facts;
+  return Object.fromEntries(readDescription(text).proposals.map((p) => [p.key, p.value]));
 }
 
 // Suggest facts from a description. Confirmed facts are never overwritten.
+// What the rules can't settle is kept as questions for a person (6A.2).
 export function suggestFromDescription(state, { description, by } = {}) {
   const t = String(description || '').trim();
   if (t.length < 20) throw new Error('Describe the product or workflow in a sentence or two first.');
-  const facts = interpretDescription(t);
-  return suggestContext(state, { facts, source: 'description', by, reason: Object.keys(facts).length ? 'Suggested from the description.' : 'Description saved; nothing matched to suggest.', description: t });
+  const { proposals, questions } = readDescription(t);
+  const facts = Object.fromEntries(proposals.map((p) => [p.key, p.value]));
+  const meta = Object.fromEntries(proposals.map((p) => [p.key, p]));
+  return suggestContext(state, { facts, meta, questions, source: 'description', by, reason: proposals.length ? 'Suggested from the description.' : 'Description saved; nothing matched to suggest.', description: t });
+}
+
+// Questions from the description still waiting for an answer.
+export function descriptionQuestions(state) {
+  const v = contextVersions(state).at(-1);
+  return ((v && v.questions) || []).filter((q) => !q.answer);
+}
+
+// A person answers one question. The answer is theirs, but what it implies
+// still arrives as a suggestion to confirm, like every other fact: "the AI
+// sends" adds Acts to what the AI does; "a person sends" goes to where
+// people enter; a Yes to a fact question suggests that fact. "Not sure yet"
+// suggests nothing. A confirmed fact is never changed by an answer.
+export function answerDescriptionQuestion(state, id, { answer, by } = {}) {
+  const v = contextVersions(state).at(-1);
+  const list = (v && v.questions) || [];
+  const q = list.find((x) => x.id === id);
+  if (!q) throw new Error('That question is no longer open.');
+  if (q.answer) throw new Error('That question has already been answered.');
+  if (!q.options.some(([value]) => value === answer)) throw new Error(`Answer with one of: ${q.options.map(([, label]) => label).join(', ')}.`);
+  const now = { ...contextNow(state) };
+  const open = (key) => !(now[key] && now[key].status === 'confirmed');
+  const said = { certainty: 'Clear', quote: q.quote, basis: 'You answered this.' };
+  if (q.kind === 'actor' && answer === 'ai' && open('aiActions')) {
+    const f = now.aiActions || { value: [], parts: [] };
+    const value = cleanFact('aiActions', [...new Set([...(f.value || []), q.value])]);
+    const parts = [...(f.parts || []).filter((p) => p.value !== q.value), { value: q.value, ...said }];
+    now.aiActions = { ...f, value, status: 'suggested', source: 'description', by: null, date: state.today, certainty: parts.every((p) => p.certainty === 'Clear') ? 'Clear' : 'Likely', quote: f.quote || q.quote, parts };
+  }
+  if (q.kind === 'actor' && answer === 'person' && open('humanInvolvement')) {
+    const prev = now.humanInvolvement && now.humanInvolvement.value;
+    const line = `A person ${q.verb === 'take action' ? 'takes action' : `${q.verb}${/(sh|ch|s|x)$/.test(q.verb) ? 'es' : 's'}`}: "${q.quote}".`;
+    now.humanInvolvement = { value: cleanFact('humanInvolvement', prev ? `${prev} ${line}` : line), status: 'suggested', source: 'description', by: null, date: state.today, ...said };
+  }
+  if (q.kind === 'fact' && answer === 'yes' && open(q.field)) {
+    now[q.field] = { value: cleanFact(q.field, q.value), status: 'suggested', source: 'description', by: null, date: state.today, ...said, quote: q.value };
+  }
+  const questions = list.map((x) => (x.id === id ? { ...x, answer, by, date: state.today } : x));
+  const label = q.options.find(([value]) => value === answer)[1];
+  return writeContext(state, now, { by, reason: `${q.question} ${label}.`, title: 'Question about the description answered', questions });
 }

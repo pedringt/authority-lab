@@ -20,7 +20,7 @@ import { mapEvidence } from './configure.js';
 import { recordContext, suggestContext, reviewContextFact, recordBaseline, recordMaterialChange } from './context.js';
 import { assessRisk } from './risk.js';
 import { startCapability, editSetupCapability, saveSetupRisk, setStartingAuthority, confirmSetup } from './setup.js';
-import { suggestFromDescription } from './context.js';
+import { suggestFromDescription, answerDescriptionQuestion } from './context.js';
 import { recordOutcome, recordJudgment, recordIncident, setIncidentStatus, recordFeedback, recordImpactActual, recordResult, uploadEvidence } from './lightweight.js';
 import { setResidualRisk } from './decisions.js';
 import { acceptDecisionSuggestion } from './suggestions.js';
@@ -119,6 +119,7 @@ export const ACTIONS = {
   setStartingAuthority,
   confirmSetup,
   suggestFromDescription,
+  answerDescriptionQuestion,
   recordOutcome,
   recordJudgment,
   recordIncident,

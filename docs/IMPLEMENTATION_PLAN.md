@@ -421,7 +421,7 @@ Only after deterministic behavior is stable.
 Build a presentation layer that prioritizes what matters now, always exposes consequential states and always offers the full record.
 
 Scoped 2026-10-21 (decisions in `docs/DECISIONS.md`, "Phase 6 scope, and 6A.1"):
-- **6A — deterministic, in the static app.** 6A.1 the Decision workspace (#161): ask only what the choice needs, "Where this stands", suggested values accepted one at a time, "Show every field", an invariants contract test. 6A.2 Context intake and description understanding: setup-changing questions first, an optional description box, rules that quote what they matched, ambiguity asked rather than guessed, Clear / Likely / Unsure, a golden set of descriptions as tests.
+- **6A — deterministic, in the static app.** 6A.1 the Decision workspace (#161): ask only what the choice needs, "Where this stands", suggested values accepted one at a time, "Show every field", an invariants contract test. 6A.2 Context intake and description understanding (#167): setup-changing questions first, an optional description box, rules that quote what they matched, ambiguity asked rather than guessed, Clear / Likely / Unsure, a golden set of descriptions as tests.
 - **6B — model-assisted, progressive enhancement.** Only after Paige decides where it runs, the provider, the privacy boundary, cost and fallback. Evaluated against the 6A golden set first; ships per surface only where it beats 6A without new bypasses. It never decides Authority, Requirement results, Coverage, enforcement, approvers or whether expansion is permitted.
 
 ### Phase 7 — visual redesign

@@ -42,7 +42,8 @@ export { BOUNDARY_CATEGORIES, ENFORCEMENT, actsThroughGate, boundaries, peopleMo
 export { RISK_SEVERITIES, SEVERITY_LABELS, LIKELIHOODS, SCALES, OVERALL_RISKS, OVERALL_RISK_TABLE, overallRisk, riskView, assessRisk } from './risk.js';
 // Product reset, Phase 2: the setup flow (#139).
 export { SETUP_STATES, BASELINE_REQUIRED, setupState, setupConfirmed, UNCONFIRMED_REASON, startCapability, editSetupCapability, saveSetupRisk, setStartingAuthority, setupReview, confirmSetup, setupConfirmation, resultsLockWarning } from './setup.js';
-export { contextDescription, interpretDescription, suggestFromDescription } from './context.js';
+export { contextDescription, interpretDescription, suggestFromDescription, descriptionQuestions, answerDescriptionQuestion } from './context.js';
+export { readDescription, CERTAINTY } from './describe.js';
 export { SUGGESTION_LABELS, isSuggestion, suggestionOrigin } from './contract.js';
 export { CHECK_SOURCES, suggestedChecks } from './evidence.js';
 // Product reset, Phase 3: the lightweight evidence path (#142).
