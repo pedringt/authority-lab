@@ -339,6 +339,9 @@ let lastRoute = null;
 let setupDraft = null;
 
 // Forms are uncontrolled; keep what the person typed across a re-render.
+// A form repeated per item (one "Correct and confirm" per fact) is kept per
+// item, by its data-key, so one row's text never lands in another's (#167).
+const formId = (form) => `${form.dataset.form}${form.dataset.key ? `:${form.dataset.key}` : ''}`;
 function captureForms() {
   const out = {};
   for (const form of app.querySelectorAll('[data-form]')) {
@@ -349,13 +352,13 @@ function captureForms() {
       if (el.type === 'checkbox' || el.type === 'radio') values[`${el.name}=${el.value}`] = el.checked;
       else values[el.name] = el.value;
     }
-    out[form.dataset.form] = values;
+    out[formId(form)] = values;
   }
   return out;
 }
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
-    const values = saved[form.dataset.form];
+    const values = saved[formId(form)];
     // Ticked suggestions (#139) survive a refused save; the rows re-render from state.
     if (values && form.dataset.form === 'save-criteria') for (const el of form.querySelectorAll('[name="use-suggestion"]')) { if (`use-suggestion=${el.value}` in values) el.checked = values[`use-suggestion=${el.value}`]; }
     if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change' || form.dataset.form === 'retire-capability' || form.dataset.form === 'record-observed') continue;
@@ -464,6 +467,11 @@ document.addEventListener('click', (e) => {
   if (action === 'fact-confirm' || action === 'fact-reject') {
     const route = here();
     dispatchOr(route, () => { store.dispatch('reviewContextFact', btn.dataset.key, { decision: action === 'fact-confirm' ? 'confirm' : 'reject', by: actor(store.get()) }); clearErrorOn(route, 'error'); render(); });
+  }
+  // 6A.2: a question about the description, answered by a person.
+  if (action === 'describe-answer') {
+    const route = here();
+    dispatchOr(route, () => { store.dispatch('answerDescriptionQuestion', btn.dataset.id, { answer: btn.dataset.answer, by: actor(store.get()) }); clearErrorOn(route, 'error'); render(); });
   }
   if (action === 'confirm-setup') {
     const route = `#/capabilities/${capId}/setup/review`;

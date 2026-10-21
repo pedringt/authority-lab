@@ -417,3 +417,9 @@ form.is-highlight { outline: 2px solid var(--decide); outline-offset: 6px; borde
 .decide-suggest { margin: 4px 0 0; }
 .decide-suggest .btn { margin-left: 6px; }
 .decide-suggest-list { margin-top: 10px; }
+
+/* 6A.2: what a suggested fact was read from. */
+.fact-quote { font-style: italic; }
+.fact-parts { margin: 4px 0 6px; }
+.context-manual > summary { cursor: pointer; }
+.context-manual h3 { margin: 14px 0 4px; font-size: 15px; }

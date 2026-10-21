@@ -305,7 +305,9 @@ test('a description is matched into suggested facts; none drives setup until con
   const text = 'Our support team uses AI to recommend refunds for customer orders. A person approves each one. We are piloting it.';
   let s = suggestFromDescription(s0, { description: text, by: 'priya' });
   assert.equal(contextDescription(s), text);
-  assert.deepEqual(Object.fromEntries(Object.entries(contextNow(s)).map(([k, f]) => [k, f.status])), { aiActions: 'suggested', consequenceAreas: 'suggested', environment: 'suggested', stage: 'suggested', purpose: 'suggested' });
+  assert.deepEqual(Object.fromEntries(Object.entries(contextNow(s)).map(([k, f]) => [k, f.status])), { aiActions: 'suggested', humanInvolvement: 'suggested', consequenceAreas: 'suggested', environment: 'suggested', stage: 'suggested', purpose: 'suggested' });
+  // 6A.2: who does each action is read, so "A person approves each one" is where people enter.
+  assert.equal(contextNow(s).humanInvolvement.value, 'A person approves each one.');
   assert.equal(contextNow(s).purpose.source, 'description');
   assert.deepEqual(confirmedContext(s), {});
   s = reviewContextFact(s, 'purpose', { decision: 'confirm', by: 'priya' });
@@ -374,7 +376,7 @@ test('Context screen: each suggested fact has its own Confirm and Reject, no con
   assert.equal((page.match(/data-action="fact-reject"/g) || []).length, Object.keys(contextNow(s)).length);
   assert.doesNotMatch(strip(page), /confirm all|accept all/i);
   assert.match(strip(page), /Based on your answers/);
-  assert.match(strip(page), /simple keyword matching, not AI/);
+  assert.match(strip(page), /with simple rules, not AI/);
   assert.doesNotMatch(strip(page), /Suggested by AI/);
 });
 

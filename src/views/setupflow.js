@@ -10,7 +10,7 @@
 import { html, raw, badge, notice, selectField, person, fmtDate, lede } from '../ui.js';
 import {
   getCapability, capData, current, versionList, actor, activePeople, workflowOf, RISK_OPTIONS, levelName,
-  CONTEXT_FIELDS, contextNow, confirmedContext, contextDescription, LIFECYCLE, BASELINE_FIELDS, baselineNow, baselineVersions, authorityBaseline,
+  CONTEXT_FIELDS, contextNow, confirmedContext, contextDescription, descriptionQuestions, LIFECYCLE, BASELINE_FIELDS, baselineNow, baselineVersions, authorityBaseline,
   LIKELIHOODS, SCALES, SEVERITY_LABELS, riskView, lowRiskMismatch, contextQuestions, noHardQuality, NO_HARD_QUALITY, setupState, setupReview, setupConfirmation, resultsLockWarning,
   BASELINE_REQUIRED, boundaries, ENFORCEMENT, peopleModel, criteriaSaved, evidenceCoverage, coverageText, performanceResultsSeen, enforcementTerms,
 } from '../store/index.js';
@@ -36,11 +36,31 @@ const draftNotice = (state, cap) => (setupState(state, cap.id) === 'draft'
 // Context (the workflow's, shared by its capabilities)
 // ---------------------------------------------------------------------------
 
+// The facts that change what setup suggests come first, everywhere on this
+// screen (6A.2); the rest are optional detail.
+const SHAPES_SETUP = ['aiActions', 'dataSensitivity', 'regulated', 'consequenceAreas', 'reversibility'];
+const byShape = (a, b) => (SHAPES_SETUP.includes(b) ? 1 : 0) - (SHAPES_SETUP.includes(a) ? 1 : 0) || (SHAPES_SETUP.indexOf(a) - SHAPES_SETUP.indexOf(b));
+const CERTAINTY_TONE = { Clear: 'neutral', Likely: 'neutral', Unsure: 'watch' };
+const certaintyBadge = (c) => (c ? badge(CERTAINTY_TONE[c] || 'neutral', c) : '');
+const quoted = (q) => (q ? html`<span class="fact-quote">“${q}”</span>` : '');
+
+function suggestionCard(k, f) {
+  const parts = Array.isArray(f.parts) && f.parts.length > 1 ? f.parts : null;
+  return html`<li class="fact-row">
+    <span class="fact-label">${FIELD[k].label}</span> <strong>${factText(f.value)}</strong> ${certaintyBadge(f.certainty)} ${badge('insufficient', SOURCE_WORDS[f.source] || f.source)}${SHAPES_SETUP.includes(k) ? html` ${badge('decision', 'Shapes setup')}` : ''}
+    ${parts ? html`<ul class="plain-list fact-parts">${parts.map((p) => html`<li><strong>${p.value}</strong> ${certaintyBadge(p.certainty)} ${quoted(p.quote)}</li>`)}</ul>`
+      : f.quote ? html`<p class="muted small">From your description: ${quoted(f.quote)}${f.basis ? html` · ${f.basis}` : ''}</p>` : ''}
+    <div class="row-actions"><button class="btn btn-sm btn-primary" data-action="fact-confirm" data-key="${k}">Confirm</button><button class="btn btn-sm btn-ghost" data-action="fact-reject" data-key="${k}">Reject</button>
+    ${FIELD[k].multi || FIELD[k].options ? '' : html`<form class="line-add" data-form="fact-correct" data-key="${k}"><input type="text" name="value" value="${f.value}" aria-label="Correct ${FIELD[k].label}"><button class="btn btn-sm" type="submit">Correct and confirm</button></form>`}</div>
+  </li>`;
+}
+
 export function contextView(state, query) {
   const error = query.get('error');
   const facts = contextNow(state);
-  const suggested = Object.entries(facts).filter(([, f]) => f.status !== 'confirmed');
+  const suggested = Object.entries(facts).filter(([, f]) => f.status !== 'confirmed').sort(([a], [b]) => byShape(a, b));
   const confirmed = Object.entries(facts).filter(([, f]) => f.status === 'confirmed');
+  const questions = descriptionQuestions(state);
   const back = query.get('next');
   const input = (f) => {
     const now = facts[f.key] && facts[f.key].status === 'confirmed' ? facts[f.key].value : null;
@@ -48,28 +68,32 @@ export function contextView(state, query) {
     if (f.options) return selectField(`ctx-${f.key}`, f.label, f.options, now || '', { placeholder: 'Not answered' });
     return html`<label class="field field-stack"><span>${f.label}</span><input type="text" name="ctx-${f.key}" value="${now || ''}" maxlength="240"></label>`;
   };
-  return html`${stepHead(null, 'Context', `Tell us about the product or workflow ${workflowOf(state).name} belongs to.`, 'Start in your own words. Authority Lab picks out facts it can match by keyword and asks you to confirm each one; only confirmed facts shape the rest of setup. This is simple keyword matching, not AI.')}
+  const shapes = CONTEXT_FIELDS.filter((f) => SHAPES_SETUP.includes(f.key)).sort((a, b) => byShape(a.key, b.key));
+  const detail = CONTEXT_FIELDS.filter((f) => !SHAPES_SETUP.includes(f.key));
+  return html`${stepHead(null, 'Context', `Tell us about the product or workflow ${workflowOf(state).name} belongs to.`, 'Start in your own words. Authority Lab reads the description with simple rules, not AI. Each suggested fact shows the words it relied on and how clear the reading was (Clear or Likely); where the rules can\'t tell, you\'re asked. Only facts you confirm shape the rest of setup.')}
   ${error ? notice('fail', 'Couldn\'t save that', error) : ''}
   <form class="setup-form onboard-form card" data-form="context-describe">
     <div class="onboard-group">
       <h2 class="onboard-q">Describe it</h2>
-      <label class="field field-stack"><span>What it is, who uses it, who is affected, and where people are involved</span><textarea name="description" rows="4" maxlength="2000" placeholder="e.g. Our support team uses AI to recommend refunds for customer orders. A person approves each one. We are piloting it.">${contextDescription(state)}</textarea></label>
+      <label class="field field-stack"><span>What it is, what the AI does and what people do, who is affected, and anything sensitive, regulated or hard to undo</span><textarea name="description" rows="4" maxlength="2000" placeholder="e.g. Our support team uses AI to recommend refunds for customer orders. A person approves each one. We are piloting it.">${contextDescription(state)}</textarea></label>
     </div>
-    <button class="btn btn-primary" type="submit">Suggest facts from this</button>
+    <button class="btn btn-primary" type="submit">Read my description</button>
   </form>
-  ${suggested.length ? html`<section class="card"><h2>To confirm</h2><p class="muted small">Confirm, correct or reject each one. There's no confirm-all.</p>
-    <ul class="plain-list">${suggested.map(([k, f]) => html`<li class="fact-row">
-      <span class="fact-label">${FIELD[k].label}</span> <strong>${factText(f.value)}</strong> ${badge('insufficient', SOURCE_WORDS[f.source] || f.source)}
-      <div class="row-actions"><button class="btn btn-sm btn-primary" data-action="fact-confirm" data-key="${k}">Confirm</button><button class="btn btn-sm btn-ghost" data-action="fact-reject" data-key="${k}">Reject</button>
-      ${FIELD[k].multi || FIELD[k].options ? '' : html`<form class="line-add" data-form="fact-correct" data-key="${k}"><input type="text" name="value" value="${f.value}" aria-label="Correct ${FIELD[k].label}"><button class="btn btn-sm" type="submit">Correct and confirm</button></form>`}</div>
-    </li>`)}</ul></section>` : ''}
-  <form class="setup-form onboard-form card" data-form="context-facts">
-    <h2>Confirmed facts</h2>
-    <p class="muted small">${confirmed.length ? `${confirmed.length} confirmed.` : 'None yet.'} Anything you fill in or change here is confirmed by you. Leave a field empty if it doesn't apply or isn't known.</p>
-    ${CONTEXT_FIELDS.map(input)}
+  ${questions.length ? html`<section class="card"><h2>Questions about your description</h2><p class="muted small">The rules couldn\'t tell, so nothing was assumed. Your answer only suggests a fact; you still confirm it below.</p>
+    <ul class="plain-list">${questions.map((q) => html`<li class="fact-row"><strong>${q.question}</strong> ${certaintyBadge('Unsure')}<p class="muted small">From your description: ${quoted(q.quote)}</p>
+      <div class="row-actions">${q.options.map(([value, label], i) => html`<button class="btn btn-sm${i === 0 ? '' : ' btn-ghost'}" data-action="describe-answer" data-id="${q.id}" data-answer="${value}">${label}</button>`)}</div></li>`)}</ul></section>` : ''}
+  ${suggested.length ? html`<section class="card"><h2>To confirm</h2><p class="muted small">Confirm, correct or reject each one. There\'s no confirm-all. Facts that shape setup come first. Clear or Likely says how clearly the rules matched, not whether the fact is true.</p>
+    <ul class="plain-list">${suggested.map(([k, f]) => suggestionCard(k, f))}</ul></section>` : ''}
+  <details class="card context-manual"${confirmed.length && !suggested.length && !questions.length ? raw(' open') : ''}><summary><strong>Fill in the facts yourself</strong> <span class="muted small">${confirmed.length ? `${confirmed.length} confirmed` : 'none confirmed yet'}</span></summary>
+  <form class="setup-form onboard-form" data-form="context-facts">
+    <p class="muted small">Anything you fill in or change here is confirmed by you. Leave a field empty if it doesn't apply or isn't known.</p>
+    <h3>What shapes setup</h3>
+    ${shapes.map(input)}
+    <h3>More detail <span class="muted small">(optional)</span></h3>
+    ${detail.map(input)}
     <label class="field field-stack"><span>Why are you recording this?</span><input type="text" name="reason" value="Recorded during setup." maxlength="200"></label>
     <button class="btn btn-primary" type="submit">Save confirmed facts</button>
-  </form>
+  </form></details>
   <p>${back ? html`<a class="btn" href="${back}">Back to setup</a>` : html`<a class="btn" href="#/capabilities/new">Next: choose a starting point</a>`}</p>`;
 }
 
