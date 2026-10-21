@@ -263,3 +263,34 @@ for (const [name, [build, expected]] of Object.entries(CASES)) {
     }
   });
 }
+
+// ---------------------------------------------------------------------------
+// Display fixes from the production re-walk (#163)
+// ---------------------------------------------------------------------------
+
+test('#163: a Proposal that governs the observed behavior shows the gap as a warning, not a block', () => {
+  const [s, id] = stateGap();
+  const page = view(s, id);
+  assert.match(page, /<li class="check-item is-warn"><span class="check-mark" aria-hidden="true">!<\/span> Operating above approved Authority: observed at Level 2, Draft\. This Proposal governs it; expanding beyond Level 2 stays blocked\./);
+  assert.doesNotMatch(page, /is-block"><span class="check-mark" aria-hidden="true">✗<\/span> Operating above approved Authority/);
+  // The full notice still says it.
+  assert.match(page, /Further expansion beyond Level 2 is blocked until this is resolved/);
+});
+
+test('#163: an accepted outcome is listed once on the record, by name then target', () => {
+  let s = decideWith(initialState(), RR, 'expand-limits');
+  s = acceptDecisionSuggestion(s, RR, 'outcome.quality');
+  const done = authorize(s, RR, { by: 'maya' });
+  const rec = done.decisionRecords.at(-1);
+  setPeople(people(done)); setToday(done.today);
+  const page = strip(decisionRecordView(done, rec.id));
+  assert.match(page, /Expected outcome: Quality: ≥ 92% correct decisions/);
+  assert.doesNotMatch(page, /Quality: Quality/);
+});
+
+test('#163: an unknown suggestion key is refused in general words; an unknown outcome names outcomes', () => {
+  const [s0, id] = firm();
+  const s = selectDecision(s0, id, 'expand');
+  for (const k of ['residualRisk', 'rationale', '__proto__']) assert.throws(() => acceptDecisionSuggestion(s, id, k), { message: 'There is no suggestion for that.' }, k);
+  assert.throws(() => acceptDecisionSuggestion(s, id, 'outcome.nope'), { message: 'There is no suggestion for that outcome.' });
+});
