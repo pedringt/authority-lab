@@ -4065,7 +4065,7 @@ test('#96: the decision flow numbers its steps and the checklist says exactly wh
   const notOwner = String(decisionWorkspaceView(setActingAs(pendingRR(), 'daniel'), RR));
   assert.match(notOwner, /Recorded by the Owner<\/strong><span class="muted small">: Only the Owner, Maya Chen, can record more authority/);
   assert.match(notOwner, /data-action="authorize"[^>]*disabled/);
-  assert.deepEqual(steps(ready), ['1 What changes if I approve this?', '2 What do we know?', '3 Who has said what?', '4 Risk', '5 Recommendation', '6 Your decision', '7 Limits', '8 What should improve?', '9 Rollout plan', '10 Why are you making this decision?', '11 Review and record']);
+  assert.deepEqual(steps(ready), ['1 What changes if I approve this?', '2 What do we know?', '3 Who has said what?', '4 Risk', '5 Recommendation', '6 Your decision', '7 Residual Risk', '8 Limits', '9 What should improve?', '10 Rollout plan', '11 Why are you making this decision?', '12 Review and record']);
   // The evidence is on the page, not behind a closed panel: its headline shows.
   assert.match(ready, /<p class="decide-big">Ready: all 5 hard Requirements met · 1 consideration not met<\/p>/);
   assert.doesNotMatch(ready, /data-action="authorize"[^>]*disabled/);

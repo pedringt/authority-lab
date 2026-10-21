@@ -23,6 +23,7 @@ import { startCapability, editSetupCapability, saveSetupRisk, setStartingAuthori
 import { suggestFromDescription } from './context.js';
 import { recordOutcome, recordJudgment, recordIncident, setIncidentStatus, recordFeedback, recordImpactActual, recordResult, uploadEvidence } from './lightweight.js';
 import { setResidualRisk } from './decisions.js';
+import { acceptDecisionSuggestion } from './suggestions.js';
 
 export const STORAGE_KEY = 'authority-lab-state-v14';
 
@@ -54,6 +55,7 @@ export function createStore({ storage = null, key = STORAGE_KEY, build = initial
 
 export const ACTIONS = {
   amend,
+  acceptDecisionSuggestion,
   addPerson,
   editPerson,
   deactivatePerson,

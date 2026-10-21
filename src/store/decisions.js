@@ -246,6 +246,23 @@ export function setRolloutField(state, capabilityId, field, value) {
   return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rollout: { ...(d.decision.rollout || {}), [field]: String(value ?? '') }, rolloutPrefilled: false } }));
 }
 
+// Suggested values a person accepted and left as they were (Phase 6A,
+// Paige, 2026-10-21, decision 2), in the words the record uses. A value
+// edited after accepting is the person's own and isn't listed.
+const ROLLOUT_LABELS = Object.fromEntries(ROLLOUT_FIELDS.map((f) => [f.key, f.label]));
+export function acceptedUnchanged(decision) {
+  const out = [];
+  for (const [key, value] of Object.entries((decision && decision.accepted) || {})) {
+    if (key.startsWith('rollout.')) {
+      const field = key.slice('rollout.'.length);
+      if ((decision.rollout || {})[field] === value) out.push({ key, label: ROLLOUT_LABELS[field] || field, value, text: value });
+    } else if (value && (decision.outcomes || []).some((row) => row && String(row.metric || '').trim() === value.metric && String(row.target || '').trim() === value.target)) {
+      out.push({ key, label: `Expected outcome: ${value.metric}`, value: { metric: value.metric, target: value.target }, text: `${value.metric}: ${value.target}` });
+    }
+  }
+  return out;
+}
+
 const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === 'object') deepFreeze(v); }); return Object.freeze(o); };
 
 // The rationale rule, in one place: canAuthorize uses it, and the decision
@@ -419,6 +436,8 @@ export function authorize(state, capabilityId, { by = 'maya' } = {}) {
     // C1: how the expansion goes into service, fixed from here on.
     rolloutPlan: next.level > previous.level ? deepFreeze({ ...rolloutChecks(state, d.decision.rollout).plan, ownerAt: snapshotPerson(state, d.decision.rollout.owner) }) : null,
     ...(next.level > previous.level && d.decision.rolloutPrefilled ? { rolloutPrefilled: true } : {}),
+    // Phase 6A: Authority Lab suggestions accepted and left unchanged.
+    ...(next.level > previous.level && acceptedUnchanged(d.decision).length ? { suggestionsAccepted: deepFreeze(acceptedUnchanged(d.decision)) } : {}),
     // #137: recorded only when the person deciding gave one.
     ...(d.decision.residualRisk ? { residualRisk: deepFreeze({ ...d.decision.residualRisk, by, byAt: snapshotPerson(state, by) }) } : {}),
     // #144: the Proposal this decision answered, and what the person saw when

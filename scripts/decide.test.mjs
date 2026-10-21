@@ -153,12 +153,13 @@ test('Decide: each final choice maps to the option the store records', () => {
   }
 });
 
-test('Decide: limits, goals and the rollout plan appear only when they apply', () => {
+test('Decide: Residual Risk, limits, goals and the rollout plan appear only when they apply', () => {
   const at = (option) => steps(decide(decideWith(initialState(), RR, option))).map((x) => x.replace(/^\d+ /, ''));
   const base = ['What changes if I approve this?', 'What do we know?', 'Who has said what?', 'Risk', 'Recommendation', 'Your decision'];
   const end = ['Why are you making this decision?', 'Review and record'];
-  assert.deepEqual(at('expand-limits'), [...base, 'Limits', 'What should improve?', 'Rollout plan', ...end]);
-  assert.deepEqual(at('expand'), [...base, 'What should improve?', 'Rollout plan', ...end]);
+  // Phase 6A: Residual Risk is asked once the person chooses to expand.
+  assert.deepEqual(at('expand-limits'), [...base, 'Residual Risk', 'Limits', 'What should improve?', 'Rollout plan', ...end]);
+  assert.deepEqual(at('expand'), [...base, 'Residual Risk', 'What should improve?', 'Rollout plan', ...end]);
   for (const option of ['hold', 'restrict', 'suspend', 'redesign']) assert.deepEqual(at(option), [...base, ...end], option);
   const limits = decide(decideWith(initialState(), RR, 'expand-limits'));
   assert.match(limits, /data-action="set-condition" data-capability="refund-recommendation" data-key="maxValue"/);

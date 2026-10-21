@@ -58,3 +58,5 @@ export { classifyChange, recordedChange, provisionalLink } from './proposals.js'
 export { formalRiskApprovals, setFormalRiskApprovals } from './policy.js';
 export { reviewersAndOwner } from './proposals.js';
 export { noHardQuality, NO_HARD_QUALITY } from './measures.js';
+export { DECISION_SUGGESTION_LABEL, SUGGESTED_REVIEW_DAYS, decisionSuggestions, suggestionInPlace, acceptDecisionSuggestion } from './suggestions.js';
+export { acceptedUnchanged } from './decisions.js';
