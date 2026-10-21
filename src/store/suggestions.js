@@ -75,6 +75,7 @@ export function acceptDecisionSuggestion(state, capabilityId, key) {
     if (!sug) throw new Error('There is no suggestion for that field.');
     return updateCap(state, capabilityId, (d) => ({ ...d, decision: { ...d.decision, rollout: { ...(d.decision.rollout || {}), [field]: sug.value }, rolloutPrefilled: false, accepted: { ...(d.decision.accepted || {}), [key]: sug.value } } }));
   }
+  if (typeof key !== 'string' || !key.startsWith('outcome.')) throw new Error('There is no suggestion for that.');
   const o = s.outcomes.find((x) => x.key === key);
   if (!o) throw new Error('There is no suggestion for that outcome.');
   const rows = Array.from({ length: OUTCOMES_MAX }, (_, k) => ({ metric: '', target: '', ...((capData(state, capabilityId).decision.outcomes || [])[k] || {}) }));

@@ -375,7 +375,11 @@ export function statusBand(state, cap, proposed, live) {
   const reqs = `#/capabilities/${cap.id}?tab=decide&show=requirements`;
   const items = [
     item('info', html`<strong>Approved:</strong> Level ${cap.authority.level}, ${levelName(cap.authority.level)}. <strong>Proposed:</strong> Level ${proposed.level}, ${levelName(proposed.level)}.`),
-    g.above ? item('block', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. Expanding beyond it is blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor') : '',
+    // Blocking only past the observed level (#163): a Proposal that governs
+    // the observed behavior is a warning.
+    g.above ? (gapBlocks(state, cap.id, proposed.level)
+      ? item('block', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. Expanding beyond it is blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')
+      : item('warn', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. This Proposal governs it; expanding beyond Level ${g.observed.level} stays blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')) : '',
     d.reviewRequired ? item('block', 'A post-incident review is needed before authority expands.', `#/capabilities/${cap.id}?tab=monitor`, 'Record the review') : '',
     r.hardUnmet.length
       ? item('block', `Hard Requirements not Met: ${r.hardUnmet.map((x) => `${x.text} (${x.result ? x.result.label : 'Not met'})`).join('; ')}.`, reqs, 'See the Requirements')

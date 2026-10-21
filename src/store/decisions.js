@@ -257,7 +257,7 @@ export function acceptedUnchanged(decision) {
       const field = key.slice('rollout.'.length);
       if ((decision.rollout || {})[field] === value) out.push({ key, label: ROLLOUT_LABELS[field] || field, value, text: value });
     } else if (value && (decision.outcomes || []).some((row) => row && String(row.metric || '').trim() === value.metric && String(row.target || '').trim() === value.target)) {
-      out.push({ key, label: `Expected outcome: ${value.metric}`, value: { metric: value.metric, target: value.target }, text: `${value.metric}: ${value.target}` });
+      out.push({ key, label: `Expected outcome: ${value.metric}`, value: { metric: value.metric, target: value.target }, text: value.target });
     }
   }
   return out;
