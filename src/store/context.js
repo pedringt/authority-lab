@@ -348,10 +348,13 @@ export function answerDescriptionQuestion(state, id, { answer, by } = {}) {
   const now = { ...contextNow(state) };
   const open = (key) => !(now[key] && now[key].status === 'confirmed');
   const said = { certainty: 'Clear', quote: q.quote, basis: 'You answered this.' };
-  if (q.kind === 'actor' && answer === 'ai' && open('aiActions')) {
+  // A vague verb (#169) answered with what the AI does.
+  const WORK = { acts: 'Acts', drafts: 'Drafts', recommends: 'Recommends' };
+  const adds = q.kind === 'actor' && answer === 'ai' ? q.value : q.kind === 'work' ? WORK[answer] : null;
+  if (adds && open('aiActions')) {
     const f = now.aiActions || { value: [], parts: [] };
-    const value = cleanFact('aiActions', [...new Set([...(f.value || []), q.value])]);
-    const parts = [...(f.parts || []).filter((p) => p.value !== q.value), { value: q.value, ...said }];
+    const value = cleanFact('aiActions', [...new Set([...(f.value || []), adds])]);
+    const parts = [...(f.parts || []).filter((p) => p.value !== adds), { value: adds, ...said }];
     now.aiActions = { ...f, value, status: 'suggested', source: 'description', by: null, date: state.today, certainty: parts.every((p) => p.certainty === 'Clear') ? 'Clear' : 'Likely', quote: f.quote || q.quote, parts };
   }
   if (q.kind === 'actor' && answer === 'person' && open('humanInvolvement')) {

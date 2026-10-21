@@ -15,12 +15,31 @@ export const CERTAINTY = ['Clear', 'Likely', 'Unsure'];
 // Verbs by what the AI would be doing. "Acts" verbs are the consequential ones:
 // they're only proposed when the AI is clearly the one acting.
 const VERBS = [
-  ['Acts', /\b(send|sends|sent|sending|issue|issues|issued|issuing|pay|pays|paid|paying|update|updates|updated|updating|close|closes|closed|closing|delete|deletes|deleted|deleting|execute|executes|executed|executing|submit|submits|submitted|submitting|publish|publishes|published|publishing|post|posts|posted|posting|cancel|cancels|cancelled|canceled|cancelling|approve|approves|approved|approving|takes action|take action)\b/gi],
+  ['Acts', /\b(send|sends|sent|sending|issue|issues|issued|issuing|pay|pays|paid|paying|update|updates|updated|updating|close|closes|closed|closing|delete|deletes|deleted|deleting|execute|executes|executed|executing|submit|submits|submitted|submitting|publish|publishes|published|publishing|post|posts|posted|posting|cancel|cancels|cancelled|canceled|cancelling|approve|approves|approved|approving|takes action|take action|go out|goes out|went out|going out)\b/gi],
   ['Drafts', /\b(draft|drafts|drafted|drafting|write|writes|wrote|writing|compose|composes|composed|composing|prepare|prepares|prepared|preparing|reply|replies|replied|replying|respond|responds|responded|responding)\b/gi],
   ['Recommends', /\b(recommend\w*|suggest\w*|propos\w*|prioriti[sz]\w*)\b/gi],
-  ['Classifies', /\b(classif\w*|categori[sz]\w*|tag|tags|tagged|tagging|triage\w*|route|routes|routed|routing|extract\w*)\b/gi],
+  ['Classifies', /\b(classif\w*|categori[sz]\w*|tag|tags|tagged|tagging|triage\w*|route|routes|routed|routing|extract\w*|interpret\w*)\b/gi],
   ['Retrieves', /\b(search\w*|look(?:s|ed|ing)? ?up|lookup|find|finds|found|finding|retriev\w*|research\w*|summari[sz]\w*)\b/gi],
 ];
+// Verbs that don't say what the AI does (#169): with the AI or no one as the
+// subject they're asked about, never read as an action; with a person as the
+// subject, they say where people enter.
+const VAGUE = /\b(handle|handles|handled|handling|process|processes|processed|processing|manage|manages|managed|managing|takes care of|take care of|deals with|deal with|decide|decides|decided|deciding|automate|automates|automated|automating)\b/gi;
+const VAGUE_PRESENT = { handle: 'handles', process: 'processes', manage: 'manages', 'take care of': 'takes care of', 'deal with': 'deals with', decide: 'decides', automate: 'automates' };
+const vagueBase = (w) => { const x = w.toLowerCase(); return Object.keys(VAGUE_PRESENT).find((b) => x === b || x === VAGUE_PRESENT[b] || x.startsWith(b.replace(/e$/, ''))) || x; };
+
+// A verb-looking word used as a noun (#169): "propose updates", "the draft",
+// "every proposal". The word before it is an article, a possessive or a
+// quantifier, or another verb.
+const DETERMINERS = new Set(['the', 'a', 'an', 'any', 'its', 'their', 'our', 'your', 'his', 'her', 'my', 'each', 'every', 'some', 'these', 'those', 'this', 'that', 'all', 'no', 'of', 'for', 'with']);
+const ANY_VERB = [...VERBS.map(([, re]) => new RegExp(re.source, 'i')), new RegExp(VAGUE.source, 'i')];
+function nounUse(sentence, m) {
+  const prev = (sentence.slice(0, m.index).match(/([\w'-]+)\W*$/) || [])[1];
+  if (!prev) return false;
+  if (DETERMINERS.has(prev.toLowerCase())) return true;
+  return ANY_VERB.some((re) => new RegExp(`^(?:${re.source})$`, 'i').test(prev));
+}
+
 const TOOL_WORDS = /\b(tools?|APIs?|integrations?|system of record)\b/i;
 
 // Who does it. AI first, so "AI agent" is the AI, not a person.
@@ -37,6 +56,8 @@ const sentencesOf = (text) => String(text || '').split(/(?<=[.!?;])\s+|\n+/).map
 const words = (s, n) => s.trim().split(/\s+/).slice(0, n).join(' ');
 const tidy = (s) => s.replace(/\s+/g, ' ').replace(/^[,;:\s]+|[,;:\s]+$/g, '').trim();
 
+const PREPOSITION_BEFORE = /\b(?:for|to|from|with|about|of|on|at|into|by|toward|towards)\s+$/i;
+
 // The nearest actor before position `at` in the sentence.
 function actorBefore(sentence, at) {
   const before = sentence.slice(0, at);
@@ -47,6 +68,10 @@ function actorBefore(sentence, at) {
   for (const m of [...before.matchAll(PERSON_ACTOR), ...before.matchAll(NAME_ACTOR)]) {
     const end = m.index + m[0].length;
     if (ai.some(([a, b]) => m.index < b && end > a)) continue;
+    // After a preposition a person is who it's for, not who does it ("refunds
+    // for customers"), unless the verb follows as "to <verb>" ("for a person
+    // to send") (#169).
+    if (PREPOSITION_BEFORE.test(before.slice(0, m.index)) && !/^\s+to\s+$/i.test(before.slice(end))) continue;
     found.push({ kind: 'person', certainty: 'Clear', start: m.index, end });
   }
   if (!found.length) return null;
@@ -54,7 +79,7 @@ function actorBefore(sentence, at) {
 }
 
 // The plain form of an acting verb, for asking about it ("sent" -> "sends").
-const IRREGULAR = { sent: 'send', paid: 'pay', 'takes action': 'take action', 'take action': 'take action' };
+const IRREGULAR = { sent: 'send', paid: 'pay', 'takes action': 'take action', 'take action': 'take action', 'go out': 'send', 'goes out': 'send', 'went out': 'send', 'going out': 'send' };
 const ACT_BASES = ['send', 'issue', 'pay', 'update', 'close', 'delete', 'execute', 'submit', 'publish', 'post', 'cancel', 'approve'];
 function baseOf(word) {
   const w = word.toLowerCase();
@@ -70,8 +95,13 @@ function readVerb(sentence, m) {
   const actor = actorBefore(sentence, m.index);
   const span = actor ? sentence.slice(actor.start, m.index) : before.split(/\s+/).slice(-4).join(' ');
   const negated = NEGATION.test(span.split(/\s+/).slice(-4).join(' '));
-  const passive = PASSIVE.test(before);
-  const quoteStart = actor ? actor.start : Math.max(0, before.lastIndexOf(' ', Math.max(0, m.index - 2)) + 1);
+  // "Refunds go out" says what goes, not who sends it: read like a passive.
+  const passive = PASSIVE.test(before) || /^go(?:es|ing)? out$|^went out$/i.test(m[0]);
+  // Quotes stay short (#169): the actor and verb when they're close, else the
+  // last few words before the verb.
+  const gap = actor ? sentence.slice(actor.end ?? actor.start, m.index).trim().split(/\s+/).filter(Boolean).length : 0;
+  const near = (n) => { const ws = [...before.matchAll(/\S+/g)].slice(-n); return ws.length ? ws[0].index : m.index; };
+  const quoteStart = actor && gap <= 4 ? actor.start : actor ? near(3) : Math.max(0, before.lastIndexOf(' ', Math.max(0, m.index - 2)) + 1);
   const after = sentence.slice(m.index + m[0].length);
   const quote = tidy(`${sentence.slice(quoteStart, m.index)}${m[0]} ${words(after.replace(/[.!?;].*$/, ''), 4)}`);
   let object = passive
@@ -117,6 +147,7 @@ export function readDescription(text) {
   for (const sentence of sentencesOf(t)) {
     for (const [action, re] of VERBS) {
       for (const m of sentence.matchAll(re)) {
+        if (nounUse(sentence, m)) continue;
         const v = readVerb(sentence, m);
         if (v.negated) continue;
         const who = v.passive ? null : v.actor;
@@ -140,6 +171,18 @@ export function readDescription(text) {
         }
         if (!actions.has(action)) actions.set(action, { value: action, certainty: 'Likely', quote: v.quote });
       }
+    }
+  }
+  // Vague verbs (#169): asked once per sentence, never read as an action.
+  for (const sentence of sentencesOf(t)) {
+    for (const m of sentence.matchAll(VAGUE)) {
+      if (nounUse(sentence, m)) continue;
+      const v = readVerb(sentence, m);
+      if (v.negated) continue;
+      if (v.actor && v.actor.kind === 'person' && !v.passive) { if (!people.includes(sentence)) people.push(sentence); continue; }
+      if (questions.some((q) => q.kind === 'work' && q.sentence === sentence)) continue;
+      const base = vagueBase(m[0]);
+      questions.push({ id: `work:${base}:${v.object.toLowerCase()}`, kind: 'work', field: 'aiActions', sentence, quote: v.quote, question: `What does the AI do when it ${VAGUE_PRESENT[base] || m[0].toLowerCase()}${v.object ? ` ${v.object.toLowerCase()}` : ''}?`, options: [['acts', 'Acts on its own'], ['drafts', 'Drafts for a person to send'], ['recommends', 'Recommends; a person decides'], ['unsure', 'Not sure yet']] });
     }
   }
   // An action someone answered or a clear AI action makes the question moot.
