@@ -368,7 +368,11 @@ export function statusBand(state, cap, proposed, live) {
   const g = authorityGap(state, cap.id);
   const r = readiness(state, cap.id);
   const missing = reviewerInputMissing(state, cap.id);
-  const against = live.positions.filter((p) => p.role === 'Reviewer' && (p.stance === 'hold' || p.stance === 'restrict'));
+  // Every opposing position, Reviewer or Stakeholder, named with its role
+  // (Paige, 2026-10-21, #165). A Stakeholder's is advisory, never hidden.
+  const against = live.positions.filter((p) => p.stance === 'hold' || p.stance === 'restrict');
+  const count = (role) => { const n = against.filter((p) => p.role === role).length; return n ? (n === 1 ? `a ${role}` : `${n} ${role}s`) : null; };
+  const opposers = [count('Reviewer'), count('Stakeholder')].filter(Boolean);
   const st = proposalStaleness(state, cap.id);
   const MARK = { ok: '✓', block: '✗', warn: '!', info: '·' };
   const item = (kind, text, link = null, linkText = '') => html`<li class="check-item is-${kind}"><span class="check-mark" aria-hidden="true">${MARK[kind]}</span> ${text}${link ? html` <a class="small" href="${link}">${linkText}</a>` : ''}</li>`;
@@ -389,8 +393,9 @@ export function statusBand(state, cap, proposed, live) {
     missing.length
       ? item('block', `Waiting for a position from ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')} (Reviewer${missing.length === 1 ? '' : 's'}).`, `#/capabilities/${cap.id}/stakeholders/edit`, 'Record a position')
       : item('ok', 'Every Reviewer has given a position.'),
-    ...against.map((p) => item('warn', `${p.name} (Reviewer) says ${p.stanceLabel}. Shown, never a veto.`)),
-    positionsDiffer(live.positions) ? item('warn', 'Positions differ. Nothing averages them or picks one.') : '',
+    ...against.map((p) => item('warn', `${p.role}: ${p.name} — ${p.stanceLabel}`)),
+    against.length ? item('warn', `Positions differ. ${upper(opposers.join(' and '))} ${against.length === 1 ? 'opposes' : 'oppose'} expansion.`)
+      : positionsDiffer(live.positions) ? item('warn', 'Positions differ. Nothing averages them or picks one.') : '',
     st.stale ? item('block', `The Proposal is stale: ${st.reasons[0].text}`) : '',
   ];
   return html`<section class="decide-status" aria-label="Where this decision stands"><p class="fact-label">Where this stands</p><ul class="checklist">${items}</ul>

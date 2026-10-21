@@ -34,6 +34,7 @@ const view = (s, id, q = '') => { setPeople(people(s)); setToday(s.today); retur
 function firm({ accuracy = [19, 20], templates = 'met', stance = 'expand', accuracyConsideration = false } = {}) {
   let s = setUpWorkspace(startEmpty(), { workspace: { name: 'Ruiz Tax' }, workflow: { name: 'Client email' }, founder: { name: 'Ana Ruiz', title: 'Partner' } });
   s = addPerson(s, { name: 'Ben Okoro', title: 'Tax lead', team: 'Tax', by: ANA, reason: 'Reviews the drafts.' });
+  s = addPerson(s, { name: 'Cara Lim', title: 'Office manager', team: 'Office', by: ANA, reason: 'Hears from clients.' });
   s = addCapability(s, { name: 'Draft deadline emails', summary: 'Drafts emails reminding clients of tax deadlines.', owner: ANA, risk: { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Customer-facing' }, today: 'recommends', by: ANA });
   const id = s.capabilities.at(-1).id;
   s = saveStakeholders(s, id, { stakeholders: [{ person: BEN, team: 'Tax', role: 'reviewer', stance, position: stance === 'undecided' ? '' : 'My view.' }], by: ANA });
@@ -217,7 +218,8 @@ test('6A: the status band says what stands between the decision and an expansion
   [s, id] = firm({ stance: 'hold' });
   band = strip(view(s, id)).split('Where this stands')[1].split('Step 1')[0];
   assert.match(band, /✓ Every hard Requirement is Met \(3\)\./);
-  assert.match(band, /! Ben Okoro \(Reviewer\) says Hold\. Shown, never a veto\./);
+  assert.match(band, /! Reviewer: Ben Okoro — Hold/);
+  assert.match(band, /! Positions differ\. A Reviewer opposes expansion\./);
 });
 
 // ---------------------------------------------------------------------------
@@ -293,4 +295,19 @@ test('#163: an unknown suggestion key is refused in general words; an unknown ou
   const s = selectDecision(s0, id, 'expand');
   for (const k of ['residualRisk', 'rationale', '__proto__']) assert.throws(() => acceptDecisionSuggestion(s, id, k), { message: 'There is no suggestion for that.' }, k);
   assert.throws(() => acceptDecisionSuggestion(s, id, 'outcome.nope'), { message: 'There is no suggestion for that outcome.' });
+});
+
+test('#165: every opposing position is named with its role; Stakeholders are never hidden behind "Positions differ"', () => {
+  let [s, id] = firm({ stance: 'hold' });
+  s = saveStakeholders(s, id, { stakeholders: [{ person: BEN, team: 'Tax', role: 'reviewer', stance: 'hold', position: 'Not yet.' }, { person: 'cara-lim', team: 'Office', role: 'stakeholder', stance: 'hold', position: 'Clients have asked who writes these.' }], by: ANA });
+  const band = () => strip(view(s, id)).split('Where this stands')[1].split('Step 1')[0];
+  assert.match(band(), /! Reviewer: Ben Okoro — Hold/);
+  assert.match(band(), /! Stakeholder: Cara Lim — Hold/);
+  assert.match(band(), /! Positions differ\. A Reviewer and a Stakeholder oppose expansion\./);
+  assert.doesNotMatch(band(), /Nothing averages them/);
+  // Only the Stakeholder opposes: still named, and said as advisory by role.
+  s = saveStakeholders(s, id, { stakeholders: [{ person: BEN, team: 'Tax', role: 'reviewer', stance: 'expand', position: 'Ready.' }, { person: 'cara-lim', team: 'Office', role: 'stakeholder', stance: 'restrict', position: 'Pull it back.' }], by: ANA, reason: 'Positions updated after the review meeting.' });
+  assert.match(band(), /! Stakeholder: Cara Lim — Restrict/);
+  assert.match(band(), /! Positions differ\. A Stakeholder opposes expansion\./);
+  assert.doesNotMatch(band(), /Reviewer: Ben Okoro/);
 });
