@@ -35,7 +35,14 @@ const DETERMINERS = new Set(['the', 'a', 'an', 'any', 'its', 'their', 'our', 'yo
 const ANY_VERB = [...VERBS.map(([, re]) => new RegExp(re.source, 'i')), new RegExp(VAGUE.source, 'i')];
 function nounUse(sentence, m) {
   const prev = (sentence.slice(0, m.index).match(/([\w'-]+)\W*$/) || [])[1];
-  if (!prev) return false;
+  // At the start of a sentence, followed by a preposition and an article,
+  // and with "is/are/was/were" later, it's the subject noun: "Updates to the
+  // price list are drafted…" (#173). Without that ("Posts to the channel
+  // daily.") it stays a verb, and who does it is asked.
+  if (!prev) {
+    const after = sentence.slice(m.index + m[0].length);
+    return /^\s+(?:to|of|for|on|from|in)\s+(?:the|a|an|our|their|its|this|that|each|every)\b/i.test(after) && /\b(?:is|are|was|were)\b/i.test(after);
+  }
   if (DETERMINERS.has(prev.toLowerCase())) return true;
   return ANY_VERB.some((re) => new RegExp(`^(?:${re.source})$`, 'i').test(prev));
 }
@@ -89,14 +96,39 @@ function baseOf(word) {
 const thirdPerson = (base) => (base === 'take action' ? 'takes action' : /(sh|ch|s|x)$/.test(base) ? `${base}es` : `${base}s`);
 const STOP_TAIL = /\s+(?:to|for|from|with|by|of|on|in|at|after|before|and|or|the|a|an)$/i;
 
-// One verb occurrence: who does it, and whether it's negated or passive.
+// A future wish isn't what it does today (#173): "it could eventually issue
+// refunds", "one day it would send them". A modal right before the verb in a
+// sentence that looks ahead, or a look-ahead word right before it.
+const MODAL = /\b(?:could|would|might)\b/i;
+const LOOKS_AHEAD = /\b(?:eventually|someday|some day|one day|in (?:the )?future|later on|down the line|would be great|would love|hoping|we hope)\b/i;
+const hypothetical = (sentence, before) => {
+  const ws = before.trim().split(/\s+/);
+  return (MODAL.test(ws.slice(-4).join(' ')) && LOOKS_AHEAD.test(sentence)) || LOOKS_AHEAD.test(ws.slice(-6).join(' '));
+};
+
+// "published by our merchandising lead" (#173): a person or the AI named
+// after "by" is the one who does it, whoever was named earlier.
+const BY_ROLE = /\b(?:leads?|directors?|officers?|supervisors?|editors?|coordinators?|specialists?|representatives?|reps?)\b/i;
+function agentAfter(after) {
+  const m = after.match(/^\s+by\s+([^,.;!?]{1,60})/i);
+  if (!m) return null;
+  const seg = m[1].split(/\s+(?:and|or|before|after|when|if|once|then)\s+/i)[0];
+  if (new RegExp(AI_ACTOR.source, 'i').test(seg)) return { kind: 'ai', certainty: 'Clear' };
+  if (new RegExp(PERSON_ACTOR.source, 'i').test(seg) || BY_ROLE.test(seg) || /^(?:[A-Z][a-z]+)\b/.test(seg.replace(/^(?:the|our|a|an|their|its)\s+/i, ''))) return { kind: 'person', certainty: 'Clear' };
+  return null;
+}
+
+// One verb occurrence: who does it, and whether it's negated, passive or
+// only wished for.
 function readVerb(sentence, m) {
   const before = sentence.slice(0, m.index);
-  const actor = actorBefore(sentence, m.index);
-  const span = actor ? sentence.slice(actor.start, m.index) : before.split(/\s+/).slice(-4).join(' ');
-  const negated = NEGATION.test(span.split(/\s+/).slice(-4).join(' '));
+  const by = agentAfter(sentence.slice(m.index + m[0].length));
+  const actor = by ? { ...by, start: m.index, end: m.index } : actorBefore(sentence, m.index);
+  const span = actor && !by ? sentence.slice(actor.start, m.index) : before.split(/\s+/).slice(-4).join(' ');
+  const negated = NEGATION.test(span.split(/\s+/).slice(-4).join(' ')) || hypothetical(sentence, before);
   // "Refunds go out" says what goes, not who sends it: read like a passive.
-  const passive = PASSIVE.test(before) || /^go(?:es|ing)? out$|^went out$/i.test(m[0]);
+  // A passive with its agent named ("drafted by the AI") is read as that agent.
+  const passive = !by && (PASSIVE.test(before) || /^go(?:es|ing)? out$|^went out$/i.test(m[0]));
   // Quotes stay short (#169): the actor and verb when they're close, else the
   // last few words before the verb.
   const gap = actor ? sentence.slice(actor.end ?? actor.start, m.index).trim().split(/\s+/).filter(Boolean).length : 0;
