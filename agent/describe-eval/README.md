@@ -55,15 +55,11 @@ Other facts (purpose, environment and the like) only need to be no worse than 6A
 ## 6A baseline on the draft set
 
 The rules get every known case right; their only extras are acceptable questions. On the new cases they:
-- miss 29 facts;
+- miss 28 facts;
 - miss 4 questions;
-- give 3 wrong `acts` facts.
+- give one over-confident `acts` fact: `n24`, a contradiction, read at Likely instead of asked.
 
-Two of those wrong facts are marked **Clear**:
-- `n15`: a future wish ("could issue refunds itself, but for now it only recommends them") read as current.
-- `n39`: "published by our merchandising lead": the person after "by" isn't read as the actor.
-
-These are limits of the 6A rules today, recorded in the tests so a change is noticed. A model must not add wrong consequential facts of its own (gate check 7).
+They give no wrong fact marked Clear. Two did (`n15`, a future wish read as current; `n39`, "published by our merchandising lead") until #173 fixed the rules. The remaining limits are recorded in the tests so a change is noticed. A model must not add wrong consequential facts of its own (gate check 7).
 
 ## Not built yet
 

@@ -72,5 +72,7 @@ test('6A baseline: every known-failure case is right on the consequential fields
 
 test('6A baseline: the limits the new cases show, recorded so a change is noticed', () => {
   const wrong = baseline.flatMap((s) => Object.entries(s.fields).filter(([, r]) => r.result === 'false-fact' || r.result === 'over-confident').map(([f, r]) => `${s.id}:${f}:${r.result}:${r.label}`));
-  assert.deepEqual(wrong, ['n15:acts:false-fact:Clear', 'n24:acts:over-confident:Likely', 'n39:acts:false-fact:Clear']);
+  // n15 and n39 were wrong at Clear until #173 fixed the rules; n24 (a
+  // contradiction) is still read at Likely instead of asked.
+  assert.deepEqual(wrong, ['n24:acts:over-confident:Likely']);
 });
