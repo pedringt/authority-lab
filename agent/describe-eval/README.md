@@ -4,7 +4,7 @@ The gate for the first model use in 6B (Paige, 2026-10-22, decision 10 in `docs/
 
 ## What's here
 
-- `cases.json`: the gold set. Each case is a description and, per field, what a careful reader does. Every case starts as `"label": "draft"`. **A case counts only once Paige has reviewed its label** (`"label": "reviewed"`). Labels are product judgment.
+- `cases.json`: the gold set. Each case is a description and, per field, what a careful reader does. **A case counts only once Paige has reviewed its label** (`"label": "reviewed"`); labels are product judgment. All 60 were reviewed on 2026-10-22, with four changes (n01 and n19 `acts: ask`; n10 and n12 `people: yes`).
 - `score.mjs`: one scorer for every reader, the 6A rules and any model. It needs no model and no network.
 - `../describe-eval.test.mjs`: tests for the set's shape, the scorer and the gate, plus the 6A rules scored as the baseline. These run in `npm test --prefix agent`.
 
@@ -21,6 +21,8 @@ Per case, any of:
 | `includes` | Work types that must appear in what the AI does | list |
 
 `yes`: propose the fact. `no`: don't propose it (a question is acceptable, counted as unneeded). `ask`: ask a question; proposing the fact is over-confident. A field left out isn't scored for that case.
+
+**Automated isn't AI (Paige, 2026-10-22).** A sentence that says something automated acts ("the system emails…", "approved automatically") but doesn't name the AI as the actor is labelled `ask` for `acts`, never `yes`. The gold set must not teach a model that "automatic" implies the AI, because that is exactly the kind of authority inference Authority Lab avoids. A person who authorizes a step, or receives the AI's output (clicking submit, a team's queue), counts as where people enter.
 
 `acts`, `sensitive` and `regulated` are the consequential fields.
 
@@ -47,16 +49,16 @@ A model passes only if, on the reviewed cases, in every one of three runs:
 
 Other facts (purpose, environment and the like) only need to be no worse than 6A. Cost and latency per reading are reported alongside, to set the operating limits (decision 8).
 
-## The set (draft, 60 cases)
+## The set (60 cases, reviewed)
 
 - **20 known cases** (`k01`–`k20`): every failure 6A struggled with, including the three production walk sentences, nouns read as verbs, negations, unclear actors, "confidential client tax records" and "tax advice".
 - **40 new cases** (`n01`–`n40`): paraphrases the rules miss, vague verbs, conditionals, contradictions, injected instructions, long multi-capability descriptions, and sensitive or regulated work described in other words.
 
-## 6A baseline on the draft set
+## 6A baseline on the reviewed set
 
 The rules get every known case right; their only extras are acceptable questions. On the new cases they:
 - miss 28 facts;
-- miss 4 questions;
+- miss 5 questions (n01 is one: "the system emails… on its own" isn't asked about);
 - give one over-confident `acts` fact: `n24`, a contradiction, read at Likely instead of asked.
 
 They give no wrong fact marked Clear. Two did (`n15`, a future wish read as current; `n39`, "published by our merchandising lead") until #173 fixed the rules. The remaining limits are recorded in the tests so a change is noticed. A model must not add wrong consequential facts of its own (gate check 7).

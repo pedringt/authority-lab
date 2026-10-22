@@ -25,6 +25,15 @@ test('the gold set: unique ids, valid labels, and nothing counts until Paige rev
   for (const tag of ['known', 'walk', 'negation', 'actor-unclear', 'injection', 'sensitive', 'regulated', 'vague', 'noun', 'paraphrase', 'contradiction']) assert.ok(cases.some((c) => c.tags.includes(tag)), tag);
 });
 
+test('every label is reviewed, and automated actions not attributed to the AI are asked (Paige, 2026-10-22)', () => {
+  assert.ok(cases.every((c) => c.label === 'reviewed'));
+  const by = Object.fromEntries(cases.map((c) => [c.id, c]));
+  assert.equal(by.n01.expect.acts, 'ask', '"the system emails" doesn\'t name the AI');
+  assert.equal(by.n19.expect.acts, 'ask', '"approved automatically" doesn\'t name the AI');
+  assert.equal(by.n10.expect.people, 'yes');
+  assert.equal(by.n12.expect.people, 'yes');
+});
+
 test('judging: a fact where the label says ask is over-confident; a question where it says no is only unneeded', () => {
   assert.equal(judge('yes', { said: 'fact' }), 'correct');
   assert.equal(judge('yes', { said: 'nothing' }), 'missed');
