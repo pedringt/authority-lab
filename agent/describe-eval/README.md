@@ -63,9 +63,23 @@ The rules get every known case right; their only extras are acceptable questions
 
 They give no wrong fact marked Clear. Two did (`n15`, a future wish read as current; `n39`, "published by our merchandising lead") until #173 fixed the rules. The remaining limits are recorded in the tests so a change is noticed. A model must not add wrong consequential facts of its own (gate check 7).
 
-## Not built yet
+## The runner
 
-The model runner waits for the labels to be reviewed. Planned:
-- **Where:** in this folder, run through `run.mjs` conventions and the `model-run` workflow, with Paige's approval for each run and a row in `runs/ledger.md`.
-- **Requests:** structured outputs with the 6A schema (decision 3), the prompt versioned, three runs per model, and Haiku 5.5, Sonnet 5.5 and Opus 5.5 compared.
-- **Cost:** one pass of 60 cases on all three models is roughly $1–5 per run, so $3–15 for three runs. That's an estimate: dry-run and cap first. It counts against the $25 a month for `agent/` runs.
+- `prompt.mjs`: the versioned prompt (`describe-v1`, effort medium, max_tokens 4000), the strict output schema (every object closed, every property required), and the reply checks. Items with an unknown field, a value outside the allowed list, or a quote that isn't word for word in the description are dropped and counted; an Unsure proposal becomes a question (decisions 3 and 6). One proposal per action from the model becomes one "what the AI does" fact with parts, the 6A shape.
+- `runner.mjs`: reads each reviewed case, checks and scores it, applies the gate, three runs per model. A reply that stops early or isn't JSON counts as saying nothing, never as right.
+- `run.mjs`:
+  - `--estimate`: call count and cost.
+  - `--dry-run`: the whole pipeline through a mock model (the 6A rules in the model's output shape). It reproduces the 6A baseline exactly and costs nothing.
+  - `--live`: the paid run. The key comes from the shell only; it needs a hard cap, refuses a cap the month can't cover, keeps a ledger row current, and saves each finished run in `results/`.
+- **Paid runs** go through the `model-run` workflow. Commit `agent/runs/request.json` as `{"eval": "describe", "models": [...], "repeat": 3, "budget": N}`; Paige adds the `run-models` label and approves the run in the `model-runs` environment, as for agent runs.
+
+## Cost (estimate, prompt describe-v1, 60 cases × 3 runs)
+
+| Model | Calls | Expected | Worst case |
+|---|---|---|---|
+| Haiku 5.5 | 180 | about $0.10 | $0.41 |
+| Sonnet 5.5 | 180 | about $2.08 | $8.13 |
+| Opus 5.5 | 180 | about $4.17 | $16.25 |
+| All three | 540 | about $6.35 | $24.78 |
+
+"Expected" assumes about 900 tokens out per reading (some thinking at medium effort, then the JSON). If thinking runs longer, the real cost is higher; the hard cap stops the run before it passes the cap. Worst case assumes every call writes the full 4,000 tokens.
