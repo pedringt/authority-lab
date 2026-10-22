@@ -254,3 +254,29 @@ test('#169: answering a vague-verb question suggests that action; it is still co
   const u = answerDescriptionQuestion(suggestFromDescription(initialState(), { description: CLIENT_WALK, by: 'priya' }), q.id, { answer: 'unsure', by: 'priya' });
   assert.equal(contextNow(u).aiActions, undefined);
 });
+
+// ---------------------------------------------------------------------------
+// Two Clear errors the 6B eval baseline found (#173)
+// ---------------------------------------------------------------------------
+
+test('#173: a future wish is not what the AI does today', () => {
+  const t = 'It would be great if, eventually, the bot could issue refunds itself, but for now it only recommends them.';
+  assert.deepEqual(actions(t), ['Recommends']);
+  assert.deepEqual(asks(t), []);
+  assert.ok(!actions('One day we might let the AI send reminders itself.').includes('Acts'));
+  // A present ability is still read: "can" isn't a wish.
+  assert.deepEqual(actions('Our AI agent can cancel subscriptions, but only after the customer confirms in chat.'), ['Acts']);
+  assert.deepEqual(actions('We want AI to draft deadline reminder emails and send them to clients.'), ['Drafts', 'Acts']);
+});
+
+test('#173: the one named after "by" does it, whoever was named earlier', () => {
+  const t = 'Updates to the price list are drafted by the AI and published by our merchandising lead.';
+  assert.deepEqual(actions(t), ['Drafts']);
+  assert.equal(fact(t, 'aiActions').certainty, 'Clear', '"drafted by the AI" names the AI');
+  assert.equal(fact(t, 'humanInvolvement').value, t);
+  assert.deepEqual(asks(t), [], '"Updates to the price list are…" is a noun, not a question');
+  assert.equal(fact('Expense claims under $200 are approved by Dana.', 'humanInvolvement').value, 'Expense claims under $200 are approved by Dana.');
+  assert.deepEqual(actions('Refunds are issued by the AI within an hour.'), ['Acts']);
+  // A sentence-initial verb with no subject is still asked about.
+  assert.deepEqual(asks('Posts to the team channel every morning.'), ['Who posts to the team: the AI, or a person?']);
+});
