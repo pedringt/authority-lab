@@ -15,11 +15,14 @@ export const CERTAINTY = ['Clear', 'Likely', 'Unsure'];
 // Verbs by what the AI would be doing. "Acts" verbs are the consequential ones:
 // they're only proposed when the AI is clearly the one acting.
 const VERBS = [
-  ['Acts', /\b(send|sends|sent|sending|issue|issues|issued|issuing|pay|pays|paid|paying|update|updates|updated|updating|close|closes|closed|closing|delete|deletes|deleted|deleting|execute|executes|executed|executing|submit|submits|submitted|submitting|publish|publishes|published|publishing|post|posts|posted|posting|cancel|cancels|cancelled|canceled|cancelling|approve|approves|approved|approving|takes action|take action|go out|goes out|went out|going out)\b/gi],
-  ['Drafts', /\b(draft|drafts|drafted|drafting|write|writes|wrote|writing|compose|composes|composed|composing|prepare|prepares|prepared|preparing|reply|replies|replied|replying|respond|responds|responded|responding)\b/gi],
+  ['Acts', /\b(send|sends|sent|sending|issue|issues|issued|issuing|pay|pays|paid|paying|update|updates|updated|updating|close|closes|closed|closing|delete|deletes|deleted|deleting|execute|executes|executed|executing|submit|submits|submitted|submitting|publish|publishes|published|publishing|post|posts|posted|posting|cancel|cancels|cancelled|canceled|cancelling|approve|approves|approved|approving|pause|pauses|paused|pausing|reset|resets|resetting|book|books|booked|booking|notify|notifies|notified|notifying|takes action|take action|go out|goes out|went out|going out)\b/gi],
+  // "emails", "texts", "messages" are verbs only right after who does them:
+  // "the system emails the reminder", not "reminder emails" (#175).
+  ['Acts', /(?<=\b(?:AI|assistant|model|bot|chatbot|system|platform|tool|software|app|it)\s+(?:automatically\s+|also\s+|then\s+)?)(emails|emailed|texts|texted|messages|messaged)\b/gi],
+  ['Drafts', /\b(draft|drafts|drafted|drafting|write|writes|wrote|writing|compose|composes|composed|composing|prepare|prepares|prepared|preparing|reply|replies|replied|replying|respond|responds|responded|responding|generate|generates|generated|generating)\b/gi],
   ['Recommends', /\b(recommend\w*|suggest\w*|propos\w*|prioriti[sz]\w*)\b/gi],
-  ['Classifies', /\b(classif\w*|categori[sz]\w*|tag|tags|tagged|tagging|triage\w*|route|routes|routed|routing|extract\w*|interpret\w*)\b/gi],
-  ['Retrieves', /\b(search\w*|look(?:s|ed|ing)? ?up|lookup|find|finds|found|finding|retriev\w*|research\w*|summari[sz]\w*)\b/gi],
+  ['Classifies', /\b(classif\w*|categori[sz]\w*|tag|tags|tagged|tagging|triage\w*|route|routes|routed|routing|extract\w*|interpret\w*|flag|flags|flagged|flagging|score|scores|scored|scoring|rank|ranks|ranked|ranking|sort|sorts|sorted|sorting)\b/gi],
+  ['Retrieves', /\b(search\w*|look(?:s|ed|ing)? ?up|lookup|find|finds|found|finding|retriev\w*|research\w*|summari[sz]\w*|pull|pulls|pulled|pulling|read|reads|reading)\b/gi],
 ];
 // Verbs that don't say what the AI does (#169): with the AI or no one as the
 // subject they're asked about, never read as an action; with a person as the
@@ -39,8 +42,13 @@ function nounUse(sentence, m) {
   // and with "is/are/was/were" later, it's the subject noun: "Updates to the
   // price list are drafted…" (#173). Without that ("Posts to the channel
   // daily.") it stays a verb, and who does it is asked.
+  const next = sentence.slice(m.index + m[0].length);
+  // "pull requests" is a thing, not pulling (#175).
+  if (/^pull$/i.test(m[0]) && /^\s+requests?\b/i.test(next)) return true;
+  // "Approved invoices are sent…": a participle at the start describes the noun after it.
+  if (!prev && /(?:ed|^sent|^paid)$/i.test(m[0]) && /^\s+[\w-]+\s+(?:is|are|was|were)\b/i.test(next)) return true;
   if (!prev) {
-    const after = sentence.slice(m.index + m[0].length);
+    const after = next;
     return /^\s+(?:to|of|for|on|from|in)\s+(?:the|a|an|our|their|its|this|that|each|every)\b/i.test(after) && /\b(?:is|are|was|were)\b/i.test(after);
   }
   if (DETERMINERS.has(prev.toLowerCase())) return true;
@@ -50,10 +58,15 @@ function nounUse(sentence, m) {
 const TOOL_WORDS = /\b(tools?|APIs?|integrations?|system of record)\b/i;
 
 // Who does it. AI first, so "AI agent" is the AI, not a person.
-const AI_ACTOR = /\b(?:AI(?:\s+agents?|\s+assistants?)?|A\.I\.|the assistant|an assistant|the model|the bot|chatbot|LLM|copilot)\b/gi;
-const PERSON_ACTOR = /\b(?:a person|a human|humans?|someone|people|staff|our team|the team|team members?|we|I|they|partners?|accountants?|lawyers?|attorneys?|reviewers?|managers?|clerks?|employees?|agents?|nurses?|doctors?|clinicians?|analysts?|operators?|the owner|tax lead|admins?|clients?|customers?|users?)\b/gi;
+const AI_ACTOR = /\b(?:AI(?:\s+agents?|\s+assistants?)?|A\.I\.|(?:the|an|our|this) assistant|(?:the|our|this) model|(?:the|our|this) bot|chatbot|LLM|copilot)\b/gi;
+const PERSON_ACTOR = /\b(?:a person|a human|humans?|someone|people|staff|our team|the team|team members?|we|I|they|partners?|accountants?|bookkeepers?|lawyers?|attorneys?|reviewers?|investigators?|managers?|clerks?|employees?|agents?|reps|representatives?|editors?|nurses?|doctors?|clinicians?|analysts?|operators?|the owner|tax lead|admins?|clients?|customers?|users?)\b/gi;
+// Something automated is not the AI (Paige, 2026-10-22): "the system emails",
+// "the tool books". For acting on the world, who does it is asked (#175).
+const SYSTEM_ACTOR = /\b(?:the|our|this|a)\s+(?:[\w-]+\s+)?(?:system|platform|tool|software|app|automation)\b/gi;
+// A person word used as a modifier isn't who acts: "client emails", "customer orders".
+const MODIFIES = /^\s+(?:emails?|records?|data|orders?|messages?|questions?|files?|accounts?|portal|requests?|tickets?|reminders?|appointments?|information|details|calls?|feedback|support|service|success|facing|names?|addresses?|ids?|history|payments?|refunds?|subscriptions?|passwords?)\b/i;
 // A named person right before what they do ("Ben reviews and sends them").
-const NAME_ACTOR = /\b[A-Z][a-z]+(?= (?:reviews|checks|approves|sends|signs|reads)\b)/g;
+const NAME_ACTOR = /\b[A-Z][a-z]+(?= (?:reviews|checks|approves|sends|signs|reads|edits|decides|confirms|forwards|gives)\b)/g;
 // "it" counts as the AI only right before its verb ("it only drafts").
 const IT_SUBJECT = /\bit\s+(?:(?:only|also|then|just|will|would|can|could|should|may|might|automatically|always|usually|sometimes)\s+){0,3}$/i;
 const NEGATION = /\b(?:never|not|no longer|without|cannot|can't|won't|doesn't|don't|isn't|aren't|nor|no)\b|n't\b/i;
@@ -63,18 +76,26 @@ const sentencesOf = (text) => String(text || '').split(/(?<=[.!?;])\s+|\n+/).map
 const words = (s, n) => s.trim().split(/\s+/).slice(0, n).join(' ');
 const tidy = (s) => s.replace(/\s+/g, ' ').replace(/^[,;:\s]+|[,;:\s]+$/g, '').trim();
 
-const PREPOSITION_BEFORE = /\b(?:for|to|from|with|about|of|on|at|into|by|toward|towards)\s+$/i;
+const PREPOSITION_BEFORE = /\b(?:for|to|from|with|about|of|on|at|into|by|toward|towards)\s+(?:(?:the|a|an|our|their|its|each|every)\s+)?$/i;
+// "We use it to triage…", "uses AI to flag…": the AI, whoever uses it.
+const USES_AI = /\b(?:use|uses|using|used)\s+(it|AI|the AI|the model|the assistant|the bot)\s+to\s+$/i;
 
 // The nearest actor before position `at` in the sentence.
 function actorBefore(sentence, at) {
   const before = sentence.slice(0, at);
   if (IT_SUBJECT.test(before)) return { kind: 'ai', certainty: 'Likely', start: before.search(/\bit\s+[^]*$/i) };
+  const uses = before.match(USES_AI);
+  if (uses) return { kind: 'ai', certainty: /^it$/i.test(uses[1]) ? 'Likely' : 'Clear', start: uses.index };
   const found = [];
   const ai = [];
   for (const m of before.matchAll(AI_ACTOR)) { ai.push([m.index, m.index + m[0].length]); found.push({ kind: 'ai', certainty: 'Clear', start: m.index, end: m.index + m[0].length }); }
+  for (const m of before.matchAll(SYSTEM_ACTOR)) found.push({ kind: 'system', certainty: 'Likely', start: m.index, end: m.index + m[0].length });
   for (const m of [...before.matchAll(PERSON_ACTOR), ...before.matchAll(NAME_ACTOR)]) {
     const end = m.index + m[0].length;
     if (ai.some(([a, b]) => m.index < b && end > a)) continue;
+    if (MODIFIES.test(before.slice(end))) continue;
+    // "the agent" alone could be the AI or a support agent (#175).
+    if (/^agent$/i.test(m[0]) && /\b(?:the|an|our|this)\s+$/i.test(before.slice(0, m.index))) { found.push({ kind: 'unclear', certainty: 'Likely', start: m.index, end }); continue; }
     // After a preposition a person is who it's for, not who does it ("refunds
     // for customers"), unless the verb follows as "to <verb>" ("for a person
     // to send") (#169).
@@ -87,7 +108,7 @@ function actorBefore(sentence, at) {
 
 // The plain form of an acting verb, for asking about it ("sent" -> "sends").
 const IRREGULAR = { sent: 'send', paid: 'pay', 'takes action': 'take action', 'take action': 'take action', 'go out': 'send', 'goes out': 'send', 'went out': 'send', 'going out': 'send' };
-const ACT_BASES = ['send', 'issue', 'pay', 'update', 'close', 'delete', 'execute', 'submit', 'publish', 'post', 'cancel', 'approve'];
+const ACT_BASES = ['send', 'issue', 'pay', 'update', 'close', 'delete', 'execute', 'submit', 'publish', 'post', 'cancel', 'approve', 'pause', 'reset', 'book', 'notify', 'email', 'text', 'message'];
 function baseOf(word) {
   const w = word.toLowerCase();
   if (IRREGULAR[w]) return IRREGULAR[w];
@@ -144,14 +165,43 @@ function readVerb(sentence, m) {
   return { actor, negated, passive, quote: quote.replace(/^(?:and|or|then)\s+/i, ''), object };
 }
 
+// Where people enter (#175): a person who reviews, decides, edits or receives
+// the AI's work. A person as the subject of one of these verbs, or a handoff
+// to a person.
+const HUMAN_VERBS = /\b(review|reviews|reviewed|check|checks|checked|double-check\w*|sign off|signs off|signed off|edit|edits|edited|override|overrides|overrode|make every call|makes every call|make the call|forward|forwards|forwarded|look at|confirm|confirms|confirmed)\b/gi;
+const HANDOFFS = [
+  // A name only after "goes", "passed" or "escalated": "sent to Stripe" isn't a person.
+  /\b(?:goes|go|passed|escalated)\s+(?:straight\s+)?to\s+[A-Z][a-z]+\b/,
+  /\b(?:goes|go|is sent|are sent|passed|escalated|route|routes|routed)\s+(?:[\w-]+\s+){0,3}?to\s+(?:the\s+|our\s+|a\s+)?(?:on-call\s+)?(?:nurse|doctor|person|human|manager|team|reviewer)s?\b/i,
+  /\b(?:into|to)\s+the\s+[\w-]+\s+team'?s\s+queue\b/i,
+  /\bfor\s+(?:the\s+|our\s+|a\s+)?(?:[A-Z][a-z]+|nurse|doctor|team|person|reviewer|bookkeeper|manager)s?\s+to\s+(?:look at|edit|review|check|approve|send)\b/,
+  /\b(?:summari[sz]es|drafts|prepares|flags)\s+(?:\w+\s+){0,3}?for\s+the\s+(?:nurse|doctor|team|reviewer|manager)\b/i,
+  /\b[A-Z][a-z]+'s\s+say-so\b/,
+  /\b[A-Z][a-z]+\s+gives\s+it\s+a\s+thumbs\s+up\b/,
+  // "Supports hiring managers…" as a verb: at the start, or right after the AI ("our support team" isn't one).
+  /(?:^\s*|\b(?:AI|it|assistant|model|bot|tool|system)\s+)(?:supports?|helps?|assists?)\s+(?:our\s+|the\s+)?(?:[\w-]+\s+)?(?:managers?|team|staff|agents|nurses?|doctors?|lawyers?|reviewers?|bookkeepers?|accountants?)\b/i,
+];
+
 // Data sensitivity: a strong word is Clear; a domain record is Likely.
-const STRONG_DATA = /\b(confidential|sensitive|private|personal(?:ly identifiable)?|PII|PHI|social security(?: numbers?)?|SSNs?|passwords?|credit cards?|bank (?:accounts?|details)|account numbers?)\b/gi;
-const DOMAIN_DATA = /\b(tax|financial|medical|health|patient|payroll|salary|HR|personnel|student|legal)\s+(?:\w+\s+)?(records?|data|information|returns?|files|history|documents|details)\b/gi;
+const STRONG_DATA = /\b(confidential|sensitive|private|personal(?:ly identifiable)?|PII|PHI|social security(?: numbers?)?|SSNs?|passwords?|credit cards?|bank (?:accounts?|details)|account numbers?|dates? of birth|birth ?dates?|medication lists?|(?:uploaded|photo|government|state)\s+IDs?|ID documents|identity documents|passports?|driver'?s licen[cs]es?|proof of (?:address|identity|income))\b/gi;
+const DOMAIN_DATA = /\b(tax|financial|medical|health|patient|payroll|salary|HR|personnel|student|legal)\s+(?:\w+\s+)?(records?|data|information|returns?|files|history|documents|details|messages|notes|charts|forms)\b/gi;
 const HEAD_NOUN = /^((?:\s+[\w-]+){0,3}?)\s+(records?|data|information|returns?|files|history|documents|details|numbers?)\b/i;
 
 // Regulated or professional work.
 const REGIMES = /\b(HIPAA|GDPR|FINRA|SOX|PCI(?:-DSS)?|FCA|SEC|FDA|regulated|regulation|regulatory|licensed|compliance)\b/g;
 const PROFESSIONAL = /\b(tax|legal|medical|financial|investment|clinical|insurance|accounting|audit)\s+(advice|guidance|opinions?|decisions?|filings?|returns?|claims?|diagnos\w*)\b/gi;
+// Fields that are regulated or professional by their nature (#175): a fact,
+// Likely, named for the field.
+const FIELDS = [
+  ['Healthcare', /\b(patients?'?|clinical|clinicians?|nurses?|on-call doctors?|medications?)\b/i],
+  ['Legal', /\b(lawyers?|attorneys?|legal team)\b/i],
+  ['Lending', /\b(loan|lending|credit)\s+(applications?|decisions?|approvals?)\b/i],
+];
+// Work that may be regulated, but the text alone doesn't settle it: asked (#175).
+const MAYBE_REGULATED = [
+  ['benefits eligibility', /\beligibility for (?:a |an |the )?benefits?\b|\bbenefits? eligibility\b/i],
+  ['hiring', /\b(hiring|job applicants?|applicants for (?:each|a|the) role|candidates for)\b/i],
+];
 
 const negatedBefore = (sentence, at) => NEGATION.test(sentence.slice(Math.max(0, at - 40), at).split(/\s+/).slice(-4).join(' '));
 
@@ -175,19 +225,30 @@ export function readDescription(text) {
   const questions = [];
   const actions = new Map();
   const people = [];
+  // Acting verbs said and denied (#175): "never sends anything… it sends the team a summary".
+  const deniedActs = new Set();
+  const saidActs = new Map();
 
   for (const sentence of sentencesOf(t)) {
     for (const [action, re] of VERBS) {
       for (const m of sentence.matchAll(re)) {
         if (nounUse(sentence, m)) continue;
         const v = readVerb(sentence, m);
-        if (v.negated) continue;
+        if (v.negated) {
+          if (action === 'Acts' && !(v.actor && v.actor.kind === 'person')) deniedActs.add(baseOf(m[0]));
+          continue;
+        }
         const who = v.passive ? null : v.actor;
         if (who && who.kind === 'person') {
           if (action === 'Acts' && !people.includes(sentence)) people.push(sentence);
           continue;
         }
+        if (who && (who.kind === 'system' || who.kind === 'unclear') && action !== 'Acts') {
+          if (!actions.has(action)) actions.set(action, { value: action, certainty: 'Likely', quote: v.quote });
+          continue;
+        }
         if (who && who.kind === 'ai') {
+          if (action === 'Acts') saidActs.set(baseOf(m[0]), { quote: v.quote, object: v.object });
           const prev = actions.get(action);
           if (!prev || (prev.certainty !== 'Clear' && who.certainty === 'Clear')) actions.set(action, { value: action, certainty: who.certainty, quote: v.quote });
           continue;
@@ -216,6 +277,31 @@ export function readDescription(text) {
       const base = vagueBase(m[0]);
       questions.push({ id: `work:${base}:${v.object.toLowerCase()}`, kind: 'work', field: 'aiActions', sentence, quote: v.quote, question: `What does the AI do when it ${VAGUE_PRESENT[base] || m[0].toLowerCase()}${v.object ? ` ${v.object.toLowerCase()}` : ''}?`, options: [['acts', 'Acts on its own'], ['drafts', 'Drafts for a person to send'], ['recommends', 'Recommends; a person decides'], ['unsure', 'Not sure yet']] });
     }
+  }
+  // Where people enter, beyond who does an acting verb (#175).
+  for (const sentence of sentencesOf(t)) {
+    if (people.includes(sentence)) continue;
+    let found = HANDOFFS.some((re) => re.test(sentence));
+    if (!found) {
+      for (const m of sentence.matchAll(HUMAN_VERBS)) {
+        const v = readVerb(sentence, m);
+        if (!v.negated && v.actor && v.actor.kind === 'person') { found = true; break; }
+      }
+    }
+    if (found) people.push(sentence);
+  }
+  // Said and denied: ask, and propose neither (#175).
+  for (const [base, said] of saidActs) {
+    if (!deniedActs.has(base)) continue;
+    actions.delete('Acts');
+    questions.push({ id: `contradiction:${base}`, kind: 'actor', field: 'aiActions', value: 'Acts', verb: base, quote: said.quote, question: `The description says both that the AI ${thirdPerson(base)} and that it doesn't. Does the AI ${base}${said.object ? ` ${said.object.toLowerCase()}` : ''}?`, options: [['ai', 'Yes, the AI does'], ['person', 'No, a person does'], ['unsure', 'Not sure yet']] });
+  }
+  // A decision about someone's eligibility is consequential: what the AI
+  // does there is asked, never assumed (#175).
+  for (const sentence of sentencesOf(t)) {
+    const m = sentence.match(/\b(?:check|checks|checking|determine|determines|determining|assess|assesses|assessing|decide|decides|deciding)\s+(?:\w+\s+){0,2}?eligibility\b/i);
+    if (!m || negatedBefore(sentence, m.index) || questions.some((q) => q.kind === 'work' && q.sentence === sentence)) continue;
+    questions.push({ id: `work:eligibility:${sentence.slice(0, 30).toLowerCase()}`, kind: 'work', field: 'aiActions', sentence, quote: tidy(m[0]), question: `What does the AI do when it ${m[0].replace(/^(?:check|checking)\b/i, 'checks').replace(/^(?:determine|determining)\b/i, 'determines').replace(/^(?:assess|assessing)\b/i, 'assesses').replace(/^(?:decide|deciding)\b/i, 'decides').toLowerCase()}?`, options: [['acts', 'Decides on its own'], ['recommends', 'Recommends; a person decides'], ['unsure', 'Not sure yet']] });
   }
   // An action someone answered or a clear AI action makes the question moot.
   const asked = questions.filter((q) => !(q.value === 'Acts' && actions.has('Acts')));
@@ -250,11 +336,21 @@ export function readDescription(text) {
   // Regulated or professional context.
   const reg = [];
   for (const sentence of sentencesOf(t)) {
-    for (const m of sentence.matchAll(PROFESSIONAL)) reg.push({ phrase: tidy(m[0]), certainty: 'Likely', negated: negatedBefore(sentence, m.index), sentence });
-    for (const m of sentence.matchAll(REGIMES)) reg.push({ phrase: m[0], certainty: 'Clear', negated: negatedBefore(sentence, m.index), sentence });
+    for (const m of sentence.matchAll(PROFESSIONAL)) reg.push({ phrase: tidy(m[0]), quote: tidy(m[0]), certainty: 'Likely', negated: negatedBefore(sentence, m.index), sentence });
+    for (const m of sentence.matchAll(REGIMES)) reg.push({ phrase: m[0], quote: m[0], certainty: 'Clear', negated: negatedBefore(sentence, m.index), sentence });
+    for (const [name, re] of FIELDS) { const m = sentence.match(re); if (m) reg.push({ phrase: name, quote: m[0], certainty: 'Likely', negated: negatedBefore(sentence, m.index), sentence }); }
   }
   const regYes = reg.filter((r) => !r.negated);
-  if (regYes.length) proposals.push({ key: 'regulated', value: [...new Set(regYes.map((r) => r.phrase))].map((p) => `${p.charAt(0).toUpperCase()}${p.slice(1)}`).join('; '), certainty: regYes.some((r) => r.certainty === 'Clear') ? 'Clear' : 'Likely', quote: regYes[0].phrase, basis: 'Words that name regulated or professional work.' });
+  if (regYes.length) proposals.push({ key: 'regulated', value: [...new Set(regYes.map((r) => r.phrase))].map((p) => `${p.charAt(0).toUpperCase()}${p.slice(1)}`).join('; '), certainty: regYes.some((r) => r.certainty === 'Clear') ? 'Clear' : 'Likely', quote: regYes[0].quote, basis: 'Words that name regulated or professional work.' });
+  if (!regYes.length) {
+    for (const sentence of sentencesOf(t)) {
+      for (const [name, re] of MAYBE_REGULATED) {
+        const m = sentence.match(re);
+        if (!m || questions.some((q) => q.id === `regulated:${name}`)) continue;
+        questions.push({ id: `regulated:${name}`, kind: 'fact', field: 'regulated', value: `${name.charAt(0).toUpperCase()}${name.slice(1)}`, quote: tidy(m[0]), question: `Is its work part of ${name}, which may be regulated?`, options: [['yes', 'Yes'], ['no', 'No'], ['unsure', 'Not sure yet']] });
+      }
+    }
+  }
   for (const r of reg.filter((x) => x.negated)) questions.push({ id: `regulated:${r.phrase.toLowerCase()}`, kind: 'fact', field: 'regulated', value: r.phrase, quote: tidy(r.sentence), question: `Is its work part of ${r.phrase}?`, options: [['yes', 'Yes'], ['no', 'No'], ['unsure', 'Not sure yet']] });
 
   // The keyword facts from #139, each with what it matched.
