@@ -56,12 +56,14 @@ Other facts (purpose, environment and the like) only need to be no worse than 6A
 
 ## 6A baseline on the reviewed set
 
-The rules get every known case right; their only extras are acceptable questions. On the new cases they:
-- miss 28 facts;
-- miss 5 questions (n01 is one: "the system emails… on its own" isn't asked about);
-- give one over-confident `acts` fact: `n24`, a contradiction, read at Likely instead of asked.
+The rules (after #173 and #175):
+- get 105 of the scored fields right;
+- miss 2: `n05` and `n10`, paraphrases with no acting verb to match;
+- make no wrong fact and no over-confident one, and skip no question the labels call for.
 
-They give no wrong fact marked Clear. Two did (`n15`, a future wish read as current; `n39`, "published by our merchandising lead") until #173 fixed the rules. The remaining limits are recorded in the tests so a change is noticed. A model must not add wrong consequential facts of its own (gate check 7).
+The rest are acceptable: unneeded questions on negated mentions, and two questions where the label says yes.
+
+These cases were used to find the rules' gaps (#175), so the set is no longer unseen for 6A and its score here flatters the rules a little. That doesn't affect judging a model against it. Fresh held-out descriptions would check that the rules generalise.
 
 ## The runner
 
