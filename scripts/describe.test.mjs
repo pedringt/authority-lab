@@ -280,3 +280,58 @@ test('#173: the one named after "by" does it, whoever was named earlier', () => 
   // A sentence-initial verb with no subject is still asked about.
   assert.deepEqual(asks('Posts to the team channel every morning.'), ['Who posts to the team: the AI, or a person?']);
 });
+
+// ---------------------------------------------------------------------------
+// The 6A floor raised to the reviewed eval labels (#175). Written in other
+// words than the eval cases, so the rules are tested, not the set.
+// ---------------------------------------------------------------------------
+
+test('#175: said and denied is a contradiction: asked, neither proposed', () => {
+  const t = 'The bot never posts anything publicly. Each morning it posts a status update to the channel.';
+  assert.ok(!actions(t).includes('Acts'));
+  assert.match(asks(t).join(' '), /says both that the AI posts and that it doesn't/);
+});
+
+test('#175: something automated is not the AI; "the agent" alone is unclear; both are asked for acting', () => {
+  assert.deepEqual(asks('After approval, the platform texts the customer a confirmation.'), ['Who texts the customer: the AI, or a person?']);
+  assert.ok(!actions('After approval, the platform texts the customer a confirmation.').includes('Acts'));
+  assert.ok(!actions('The agent refunds nothing but the agent cancels stale orders weekly.').includes('Acts'));
+  assert.ok(asks('The agent cancels stale orders every week.').some((q) => /^Who cancels/.test(q)));
+  // For work that isn't acting, an automated subject still counts (Likely).
+  assert.deepEqual(actions('The software pulls bank statements and flags anything odd.'), ['Retrieves', 'Classifies']);
+  // "AI agent" and "our assistant" are the AI.
+  assert.deepEqual(actions('Our assistant books follow-up calls.'), ['Acts']);
+});
+
+test('#175: a person word used as a modifier, or after "to the", isn\'t who acts', () => {
+  assert.deepEqual(actions('The AI reads incoming customer messages, sorts them and drafts answers.'), ['Retrieves', 'Drafts', 'Classifies']);
+  assert.deepEqual(actions('The AI writes to the tenant and, if rent is late, pauses their access card.'), ['Drafts', 'Acts']);
+});
+
+test('#175: eligibility decisions are asked; hiring and benefits are asked as maybe regulated; healthcare, legal and lending are read', () => {
+  assert.ok(asks('The tool checks eligibility for a housing grant.').some((q) => /^What does the AI do when it checks eligibility/.test(q)));
+  assert.deepEqual(asks('It screens candidates for each opening.'), ['Is its work part of hiring, which may be regulated?']);
+  assert.ok(asks('Shortlists job applicants for the recruiter.').includes('Is its work part of hiring, which may be regulated?'));
+  assert.equal(fact('The AI summarises clinical notes for the care team.', 'regulated').value, 'Healthcare');
+  assert.equal(fact('Our attorneys use it to flag unusual clauses.', 'regulated').value, 'Legal');
+  assert.equal(fact('The model scores loan applications overnight.', 'regulated').value, 'Lending');
+  assert.equal(fact('It reads passports and proof of identity.', 'dataSensitivity').certainty, 'Clear');
+});
+
+test('#175: where people enter, from review, handoff and sign-off language', () => {
+  for (const t of [
+    'The AI drafts replies; our editors check every one.',
+    'Anything over $500 goes to Marta.',
+    'The AI prepares the summary for our team to review.',
+    'The AI drafts the invoice and Omar gives it a thumbs up.',
+    'Nothing is filed without Grace\'s say-so.',
+    'Flagged cases are routed with a note to the on-call nurse.',
+  ]) assert.ok(fact(t, 'humanInvolvement'), t);
+  // Not a person: "our support team" as a name, "sent to Stripe", "pull requests".
+  assert.equal(fact('Our support team uses AI to suggest replies.', 'humanInvolvement'), undefined);
+  assert.equal(fact('Approved invoices are sent to Stripe for payment.', 'humanInvolvement'), undefined);
+  // Retrieves comes from "reads"; "pull" in "pull requests" isn't read as pulling.
+  assert.deepEqual(actions('The AI reads GitHub pull requests and suggests labels.'), ['Retrieves', 'Recommends']);
+  assert.match(fact('The AI reads GitHub pull requests and suggests labels.', 'aiActions').parts.find((p) => p.value === 'Retrieves').quote, /^AI reads\b/);
+  assert.deepEqual(asks('Approved invoices are sent to Stripe for payment.'), ['Who sends approved invoices: the AI, or a person?']);
+});
