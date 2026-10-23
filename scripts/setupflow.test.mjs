@@ -233,6 +233,11 @@ test('only the owner confirms; confirming writes the starting decision record an
   assert.equal(c.activity[0].surfaced, true);
   assert.throws(() => confirmSetup(c, id, { by: 'priya' }), /already confirmed/);
   assert.throws(() => saveSetupRisk(c, id, { ...RISK, by: 'priya' }), /already confirmed/);
+  // #177: the record links back to the confirmed setup; earlier records (no snapshot) don't.
+  const recordPage = render(c, () => decisionRecordView(c, rec.id));
+  assert.match(recordPage, new RegExp(`This record was written when the setup was confirmed \\(SC-${id}\\)`));
+  assert.match(recordPage, new RegExp(`<a href="#/capabilities/${id}/setup/review">See the confirmed setup</a>`));
+  assert.doesNotMatch(render(c, () => decisionRecordView(c, c.decisionRecords[0].id)), /See the confirmed setup/);
   // Authority can now be proposed once there's evidence.
   assert.throws(() => proposeAuthority(c, id, 2, { by: 'priya' }), /no evidence yet/);
 });
@@ -360,6 +365,7 @@ import { criteriaEditorView } from '../src/views/criteria.js';
 import { contractBuilderView } from '../src/views/contract.js';
 import { summaryTab } from '../src/views/cap-status.js';
 import { overviewTodos, authorityRows } from '../src/store/index.js';
+import { decisionRecordView } from '../src/views/decisions.js';
 
 const q = (str = '') => new URLSearchParams(str);
 const strip = (h) => String(h).replace(/<[^>]+>/g, ' ').replace(/&#39;/g, '\'').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ');

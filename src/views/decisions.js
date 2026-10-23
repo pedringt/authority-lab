@@ -184,6 +184,8 @@ export function decisionRecordView(state, id) {
       // #119: imported evidence in force, with the configuration it describes.
       ...(x.externalEvidence && x.externalEvidence.length ? [['Imported evidence', externalRecordList(x.externalEvidence)]] : []),
       ['Still to resolve', x.openCondition],
+      // #177: the record written when the setup was confirmed links to what was confirmed.
+      ...(x.setupConfirmation ? [['Setup confirmed', html`This record was written when the setup was confirmed (${x.setupConfirmation}). What was reviewed is kept unchanged in that snapshot. <a href="#/capabilities/${cap.id}/setup/review">See the confirmed setup</a>`]] : []),
       // #147: a Pause's planned review date, a reminder only.
       ...(x.plannedReviewDate ? [['Planned review', `${fmtDate(x.plannedReviewDate)}: a reminder to look again. Nothing changes on that date; authority comes back only through a new Proposal.`]] : []),
       // #144: the Proposal reviewed and what was frozen when it was decided.
