@@ -24,7 +24,24 @@ export const KNOWN_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-hai
 export const KNOWN_SETS = ['standard', 'stress'];
 export const REQUEST_CEILING = 25;
 
+// "eval": "describe" asks for the 6B description-reading eval
+// (agent/describe-eval) instead of the agent ticket runs. It has no ticket
+// sets and no shared session, and at most 10 runs per model.
+export const KNOWN_EVALS = ['describe'];
+
 export function checkRequest(r) {
+  if (r && r.eval != null) {
+    const errors = [];
+    const models = Array.isArray(r.models) ? r.models : [];
+    const repeat = r.repeat == null ? 3 : Number(r.repeat);
+    const budget = Number(r.budget);
+    if (!KNOWN_EVALS.includes(r.eval)) errors.push(`eval must be one of: ${KNOWN_EVALS.join(', ')}.`);
+    if (!models.length || models.some((m) => !KNOWN_MODELS.includes(m))) errors.push(`models must be from: ${KNOWN_MODELS.join(', ')}.`);
+    if (!(Number.isInteger(repeat) && repeat >= 1 && repeat <= 10)) errors.push('repeat must be a whole number from 1 to 10.');
+    if (!(budget > 0 && budget <= REQUEST_CEILING)) errors.push(`budget must be more than $0 and at most $${REQUEST_CEILING}.`);
+    if (r.tickets != null || r.shared != null) errors.push('an eval request takes no tickets or shared session.');
+    return { errors, request: { eval: r.eval, models, tickets: ['describe-eval'], repeat, budget, shared: false } };
+  }
   const errors = [];
   const models = Array.isArray(r.models) ? r.models : [];
   const tickets = Array.isArray(r.tickets) && r.tickets.length ? r.tickets : ['standard'];
@@ -43,8 +60,9 @@ export function planText({ request, sha, changed, room }) {
     '## Paid model run: the plan to approve',
     '',
     `- **Commit:** \`${sha || 'unknown'}\` (the run job checks out exactly this commit)`,
+    ...(request.eval ? [`- **Eval:** ${request.eval === 'describe' ? '6B description reading (agent/describe-eval, reviewed cases only)' : request.eval}`] : []),
     `- **Models:** ${request.models.join(', ')}`,
-    `- **Tickets:** ${request.tickets.join(', ')}`,
+    ...(request.eval ? [] : [`- **Tickets:** ${request.tickets.join(', ')}`]),
     `- **Repeats:** ${request.repeat}`,
     `- **Cap:** $${request.budget.toFixed(2)}`,
     `- **Shared session:** ${request.shared ? 'yes' : 'no'}`,
@@ -78,6 +96,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       `repeat=${request.repeat}`,
       `budget=${request.budget}`,
       `shared=${request.shared}`,
+      `eval=${request.eval || ''}`,
     ].join('\n') + '\n');
   }
   if (!room.ok) { console.error(`Refused: ${room.text}`); process.exit(1); }

@@ -47,6 +47,7 @@ jobs:
       repeat: ${{ steps.req.outputs.repeat }}
       budget: ${{ steps.req.outputs.budget }}
       shared: ${{ steps.req.outputs.shared }}
+      eval: ${{ steps.req.outputs.eval }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,6 +96,7 @@ jobs:
       REPEAT: ${{ needs.plan.outputs.repeat }}
       BUDGET: ${{ needs.plan.outputs.budget }}
       SHARED: ${{ needs.plan.outputs.shared }}
+      EVAL: ${{ needs.plan.outputs.eval }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       BRANCH: ${{ github.event.pull_request.head.ref }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -130,10 +132,16 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set +e
-          shared_flag=()
-          if [ "$SHARED" = "true" ]; then shared_flag=(--shared); fi
-          node agent/run.mjs --live --models "$MODELS" --tickets "$TICKETS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" "${shared_flag[@]}" | tee run-summary.md
-          code="${PIPESTATUS[0]}"
+          if [ "$EVAL" = "describe" ]; then
+            # The 6B description-reading eval (agent/describe-eval).
+            node agent/describe-eval/run.mjs --live --models "$MODELS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" | tee run-summary.md
+            code="${PIPESTATUS[0]}"
+          else
+            shared_flag=()
+            if [ "$SHARED" = "true" ]; then shared_flag=(--shared); fi
+            node agent/run.mjs --live --models "$MODELS" --tickets "$TICKETS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" "${shared_flag[@]}" | tee run-summary.md
+            code="${PIPESTATUS[0]}"
+          fi
           cat run-summary.md >> "$GITHUB_STEP_SUMMARY"
           echo "code=$code" >> "$GITHUB_OUTPUT"
       # Always, even after a failure, a timeout or a cancel: the ledger row is
@@ -145,7 +153,7 @@ jobs:
           CODE: ${{ steps.run.outputs.code }}
         run: |
           git rm -q --ignore-unmatch agent/runs/request.json
-          git add src/data/agent-runs agent/runs
+          git add -A -- src/data/agent-runs agent/runs agent/describe-eval
           if git diff --cached --quiet; then echo "Nothing to commit."; exit 0; fi
           if [ "$CODE" = "0" ]; then outcome="finished"; else outcome="did not finish"; fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Model run ($outcome): $MODELS, $TICKETS x$REPEAT (budget \$$BUDGET), shared: $SHARED"
@@ -160,6 +168,7 @@ jobs:
           path: |
             src/data/agent-runs/
             agent/runs/
+            agent/describe-eval/results/
           retention-days: 90
           if-no-files-found: ignore
       - name: Remove the label
