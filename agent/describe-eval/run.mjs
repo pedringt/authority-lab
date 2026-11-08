@@ -30,13 +30,19 @@ const option = (name, fallback) => { const i = argv.indexOf(`--${name}`); return
 const list = (name, fallback) => String(option(name, fallback)).split(',').map((x) => x.trim()).filter(Boolean);
 const repeat = Number(option('repeat', DEFAULT_REPEAT));
 if (!(Number.isInteger(repeat) && repeat >= 1 && repeat <= 10)) { console.error('--repeat must be a whole number from 1 to 10.'); process.exit(1); }
-const cases = loadCases();
+// Which set: the 60 tuned cases, or the held-out ones the rules and the
+// prompt were never changed on (heldout.json, 2026-11-08).
+const SETS = { tuned: new URL('./cases.json', import.meta.url), heldout: new URL('./heldout.json', import.meta.url) };
+const set = option('set', 'tuned');
+if (!SETS[set]) { console.error(`--set must be one of: ${Object.keys(SETS).join(', ')}.`); process.exit(1); }
+const cases = loadCases(SETS[set]);
 if (!cases.length) { console.error('No reviewed cases: nothing counts until Paige reviews the labels.'); process.exit(1); }
 
 function fileFor(date, model) {
   mkdirSync(RESULTS, { recursive: true });
-  let name = `${date}-${model}.json`;
-  for (let i = 2; existsSync(join(RESULTS, name)); i++) name = `${date}-${model}-${i}.json`;
+  const stem = `${date}${set === 'tuned' ? '' : `-${set}`}-${model}`;
+  let name = `${stem}.json`;
+  for (let i = 2; existsSync(join(RESULTS, name)); i++) name = `${stem}-${i}.json`;
   return join(RESULTS, name);
 }
 const save = (file, result) => writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
@@ -88,7 +94,7 @@ if (flag('live')) {
   console.error(estimateText(estimateEval({ cases, models, repeat })));
   console.error(`Hard cap for this invocation: $${cap.toFixed(2)}. ${room.text}`);
   const marker = `running (${process.pid}-${Date.now()})`;
-  const base = { date, pr: pr ? `#${pr}` : '—', models: models.join(', '), tickets: `describe-eval (${cases.length} cases)`, repeats: repeat, cap };
+  const base = { date, pr: pr ? `#${pr}` : '—', models: models.join(', '), tickets: `describe-eval ${set} (${cases.length} cases)`, repeats: repeat, cap };
   appendLedger({ ...base, cost: 0, status: marker });
   const budget = createBudget(cap, { onSpend: (spent) => updateLedger(marker, { ...base, cost: spent, status: marker }) });
   const results = [];
@@ -114,7 +120,7 @@ if (flag('live')) {
   }
   if (results.length) {
     const text = resultsText(results, { cap });
-    writeFileSync(join(RESULTS, `summary-${date}.md`), `${text}\n`);
+    writeFileSync(join(RESULTS, `summary-${date}${set === 'tuned' ? '' : `-${set}`}.md`), `${text}\n`);
     console.log(text);
   }
   process.exit(status === 'finished' ? 0 : status.startsWith('stopped') ? 2 : 1);

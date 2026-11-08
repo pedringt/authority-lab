@@ -134,7 +134,7 @@ jobs:
           set +e
           if [ "$EVAL" = "describe" ]; then
             # The 6B description-reading eval (agent/describe-eval).
-            node agent/describe-eval/run.mjs --live --models "$MODELS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" | tee run-summary.md
+            node agent/describe-eval/run.mjs --live --set "$TICKETS" --models "$MODELS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" | tee run-summary.md
             code="${PIPESTATUS[0]}"
           else
             shared_flag=()

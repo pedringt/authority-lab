@@ -40,7 +40,10 @@ export function checkRequest(r) {
     if (!(Number.isInteger(repeat) && repeat >= 1 && repeat <= 10)) errors.push('repeat must be a whole number from 1 to 10.');
     if (!(budget > 0 && budget <= REQUEST_CEILING)) errors.push(`budget must be more than $0 and at most $${REQUEST_CEILING}.`);
     if (r.tickets != null || r.shared != null) errors.push('an eval request takes no tickets or shared session.');
-    return { errors, request: { eval: r.eval, models, tickets: ['describe-eval'], repeat, budget, shared: false } };
+    // The case set travels as the "tickets" value, so the workflow needs no new output.
+    const set = r.set == null ? 'tuned' : r.set;
+    if (!['tuned', 'heldout'].includes(set)) errors.push('set must be tuned or heldout.');
+    return { errors, request: { eval: r.eval, models, tickets: [set], repeat, budget, shared: false } };
   }
   const errors = [];
   const models = Array.isArray(r.models) ? r.models : [];
@@ -60,7 +63,7 @@ export function planText({ request, sha, changed, room }) {
     '## Paid model run: the plan to approve',
     '',
     `- **Commit:** \`${sha || 'unknown'}\` (the run job checks out exactly this commit)`,
-    ...(request.eval ? [`- **Eval:** ${request.eval === 'describe' ? '6B description reading (agent/describe-eval, reviewed cases only)' : request.eval}`] : []),
+    ...(request.eval ? [`- **Eval:** ${request.eval === 'describe' ? `6B description reading (agent/describe-eval, ${request.tickets[0] === 'heldout' ? 'the held-out set' : 'the tuned set'}, reviewed cases only)` : request.eval}`] : []),
     `- **Models:** ${request.models.join(', ')}`,
     ...(request.eval ? [] : [`- **Tickets:** ${request.tickets.join(', ')}`]),
     `- **Repeats:** ${request.repeat}`,

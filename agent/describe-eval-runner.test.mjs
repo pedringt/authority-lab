@@ -110,13 +110,30 @@ test('the model-run workflow takes an eval request through the same gate', async
   const { checkRequest, planText } = await import('./plan-request.mjs');
   const ok = checkRequest({ eval: 'describe', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], repeat: 3, budget: 12 });
   assert.deepEqual(ok.errors, []);
-  assert.deepEqual(ok.request, { eval: 'describe', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], tickets: ['describe-eval'], repeat: 3, budget: 12, shared: false });
+  assert.deepEqual(ok.request, { eval: 'describe', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], tickets: ['tuned'], repeat: 3, budget: 12, shared: false });
+  assert.deepEqual(checkRequest({ eval: 'describe', set: 'heldout', models: ['claude-opus-5-5'], repeat: 3, budget: 2 }).request.tickets, ['heldout']);
+  assert.ok(checkRequest({ eval: 'describe', set: 'other', models: ['claude-opus-5-5'], budget: 2 }).errors.length);
   for (const bad of [{ eval: 'other', models: ['claude-haiku-5-5'], budget: 1 }, { eval: 'describe', models: ['claude-haiku-5-5'], budget: 26 }, { eval: 'describe', models: ['claude-haiku-5-5'], budget: 1, repeat: 11 }, { eval: 'describe', models: ['claude-haiku-5-5'], budget: 1, tickets: ['standard'] }]) assert.ok(checkRequest(bad).errors.length, JSON.stringify(bad));
   const text = planText({ request: ok.request, sha: 'abc1234', changed: [], room: { text: 'room' } });
   assert.match(text, /\*\*Eval:\*\* 6B description reading/);
   assert.doesNotMatch(text, /\*\*Tickets:\*\*/);
   const { readFileSync } = await import('node:fs');
   const wf = readFileSync(new URL('../.github/workflows/model-run.yml', import.meta.url), 'utf8');
-  assert.match(wf, /if \[ "\$EVAL" = "describe" \]; then\n\s+# The 6B description-reading eval \(agent\/describe-eval\)\.\n\s+node agent\/describe-eval\/run\.mjs --live --models "\$MODELS" --repeat "\$REPEAT" --budget "\$BUDGET" --pr "\$PR_NUMBER" --ledger-also/);
+  assert.match(wf, /if \[ "\$EVAL" = "describe" \]; then\n\s+# The 6B description-reading eval \(agent\/describe-eval\)\.\n\s+node agent\/describe-eval\/run\.mjs --live --set "\$TICKETS" --models "\$MODELS" --repeat "\$REPEAT" --budget "\$BUDGET" --pr "\$PR_NUMBER" --ledger-also/);
   assert.match(wf, /git add -A -- src\/data\/agent-runs agent\/runs agent\/describe-eval/);
+});
+
+test('the held-out set: separate file, its own ids and text, every case tagged heldout', async () => {
+  const { readFileSync } = await import('node:fs');
+  const held = JSON.parse(readFileSync(new URL('./describe-eval/heldout.json', import.meta.url), 'utf8'));
+  const tuned = JSON.parse(readFileSync(new URL('./describe-eval/cases.json', import.meta.url), 'utf8')).cases;
+  assert.equal(held.set, 'heldout');
+  assert.ok(held.cases.length >= 15);
+  for (const c of held.cases) {
+    assert.ok(c.tags.includes('heldout'), c.id);
+    assert.ok(['draft', 'reviewed'].includes(c.label), c.id);
+    assert.ok(!tuned.some((t) => t.id === c.id || t.text === c.text), c.id);
+  }
+  const { loadCases } = await import('./describe-eval/runner.mjs');
+  assert.deepEqual(loadCases(new URL('./describe-eval/heldout.json', import.meta.url)).map((c) => c.id), held.cases.filter((c) => c.label === 'reviewed').map((c) => c.id));
 });

@@ -1,0 +1,260 @@
+{
+  "schema": "authority-lab-describe-eval/1",
+  "set": "heldout",
+  "note": "Held-out descriptions, written 2026-11-08 after the 6A rules were tuned on cases.json. Neither the rules nor the prompt may be changed on the strength of these cases. A case counts only when its label is 'reviewed' by Paige.",
+  "cases": [
+    {
+      "id": "h01",
+      "text": "Our HR assistant answers new hires' questions about benefits and sends each of them a welcome pack on their first day.",
+      "tags": [
+        "heldout",
+        "actor-unclear",
+        "paraphrase"
+      ],
+      "expect": {
+        "acts": "ask"
+      },
+      "label": "draft",
+      "note": "\"HR assistant\" could be the AI or a person's job title."
+    },
+    {
+      "id": "h02",
+      "text": "The AI reads incoming insurance claims, pulls the policy details, and recommends approve, deny or investigate; adjusters make the final call.",
+      "tags": [
+        "heldout",
+        "regulated",
+        "actor"
+      ],
+      "expect": {
+        "acts": "no",
+        "includes": [
+          "Retrieves",
+          "Recommends"
+        ],
+        "regulated": "yes",
+        "people": "yes"
+      },
+      "label": "draft"
+    },
+    {
+      "id": "h03",
+      "text": "Tenants text the bot about repairs. It logs each request and books a contractor visit for anything marked urgent.",
+      "tags": [
+        "heldout",
+        "actor",
+        "paraphrase"
+      ],
+      "expect": {
+        "acts": "yes"
+      },
+      "label": "draft",
+      "note": "The bot books visits itself."
+    },
+    {
+      "id": "h04",
+      "text": "Teachers paste in student essays and the model suggests feedback comments; nothing is shown to students until the teacher edits and releases it.",
+      "tags": [
+        "heldout",
+        "regulated",
+        "actor"
+      ],
+      "expect": {
+        "acts": "no",
+        "includes": [
+          "Recommends"
+        ],
+        "regulated": "ask",
+        "people": "yes"
+      },
+      "label": "draft",
+      "note": "Student work may be regulated (education records); asked rather than assumed."
+    },
+    {
+      "id": "h05",
+      "text": "When a delivery is late, customers automatically get an apology email and a $5 credit.",
+      "tags": [
+        "heldout",
+        "passive",
+        "paraphrase"
+      ],
+      "expect": {
+        "acts": "ask"
+      },
+      "label": "draft",
+      "note": "Something automated sends and credits; the AI isn't named."
+    },
+    {
+      "id": "h06",
+      "text": "The assistant can look up a caller's last five orders, but it cannot change or cancel anything; refunds are always handled by the billing team.",
+      "tags": [
+        "heldout",
+        "negation",
+        "actor"
+      ],
+      "expect": {
+        "acts": "no",
+        "includes": [
+          "Retrieves"
+        ],
+        "people": "yes"
+      },
+      "label": "draft"
+    },
+    {
+      "id": "h07",
+      "text": "Eventually we'd like the model to reorder stock on its own. For now it just flags items that are running low.",
+      "tags": [
+        "heldout",
+        "conditional"
+      ],
+      "expect": {
+        "acts": "no",
+        "includes": [
+          "Classifies"
+        ]
+      },
+      "label": "draft",
+      "note": "A future wish isn't current behaviour."
+    },
+    {
+      "id": "h08",
+      "text": "The pharmacy chatbot answers questions about opening hours and checks whether a prescription is ready.",
+      "tags": [
+        "heldout",
+        "regulated",
+        "sensitive",
+        "paraphrase"
+      ],
+      "expect": {
+        "acts": "no",
+        "includes": [
+          "Retrieves"
+        ],
+        "sensitive": "yes",
+        "regulated": "yes"
+      },
+      "label": "draft",
+      "note": "Prescription status is health information in a regulated setting."
+    },
+    {
+      "id": "h09",
+      "text": "Our fraud model scores every card transaction in real time and blocks the ones above 0.9; analysts review the blocks each morning.",
+      "tags": [
+        "heldout",
+        "actor",
+        "sensitive"
+      ],
+      "expect": {
+        "acts": "yes",
+        "includes": [
+          "Classifies"
+        ],
+        "sensitive": "yes",
+        "regulated": "ask",
+        "people": "yes"
+      },
+      "label": "draft",
+      "note": "Blocking a transaction is acting. Fraud screening may be regulated."
+    },
+    {
+      "id": "h10",
+      "text": "It drafts grant applications from our past proposals. It never submits anything, but it does send the finished draft to our director by email.",
+      "tags": [
+        "heldout",
+        "negation",
+        "contradiction"
+      ],
+      "expect": {
+        "acts": "yes",
+        "includes": [
+          "Drafts"
+        ],
+        "people": "yes"
+      },
+      "label": "draft",
+      "note": "Not submitting, but it does send an email itself: that is acting, and it doesn't contradict \"never submits\"."
+    },
+    {
+      "id": "h11",
+      "text": "Site managers upload photos of the scaffolding and the tool lists possible safety hazards for them to check.",
+      "tags": [
+        "heldout",
+        "paraphrase",
+        "actor"
+      ],
+      "expect": {
+        "acts": "no",
+        "people": "yes"
+      },
+      "label": "draft"
+    },
+    {
+      "id": "h12",
+      "text": "Guests book tables through the website; the AI only answers questions about the menu and allergens.",
+      "tags": [
+        "heldout",
+        "actor",
+        "negation"
+      ],
+      "expect": {
+        "acts": "no"
+      },
+      "label": "draft",
+      "note": "Guests book, through the website; the AI only answers."
+    },
+    {
+      "id": "h13",
+      "text": "Applicants upload their passport and two payslips; the system checks the documents and decides whether the rental application goes forward.",
+      "tags": [
+        "heldout",
+        "vague",
+        "sensitive",
+        "regulated"
+      ],
+      "expect": {
+        "acts": "ask",
+        "sensitive": "yes",
+        "regulated": "ask"
+      },
+      "label": "draft",
+      "note": "\"The system decides\": automated, AI not named; tenant screening may be regulated."
+    },
+    {
+      "id": "h14",
+      "text": "Support tickets are summarised overnight and the summaries are posted to the team's Slack channel each morning.",
+      "tags": [
+        "heldout",
+        "passive"
+      ],
+      "expect": {
+        "acts": "ask",
+        "includes": [
+          "Retrieves"
+        ],
+        "people": "yes"
+      },
+      "label": "draft",
+      "note": "Posted by something not named; the team receives the summaries."
+    },
+    {
+      "id": "h15",
+      "text": "Nothing about patients goes into the tool: it only drafts the clinic's social media posts, which our office manager approves and publishes.",
+      "tags": [
+        "heldout",
+        "negation",
+        "sensitive"
+      ],
+      "expect": {
+        "acts": "no",
+        "includes": [
+          "Drafts"
+        ],
+        "sensitive": "no",
+        "regulated": "no",
+        "people": "yes"
+      },
+      "label": "draft",
+      "note": "Clinic setting, but no patient work; a question is acceptable."
+    }
+  ]
+}
