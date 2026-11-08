@@ -1,7 +1,7 @@
 {
   "schema": "authority-lab-describe-eval/1",
   "set": "heldout",
-  "note": "Held-out descriptions, written 2026-11-08 after the 6A rules were tuned on cases.json. Neither the rules nor the prompt may be changed on the strength of these cases. A case counts only when its label is 'reviewed' by Paige.",
+  "note": "Held-out descriptions, written 2026-11-08 after the 6A rules were tuned on cases.json and after the first model run. Labels reviewed by Paige on 2026-11-08 and frozen with the rules and prompt: neither may be changed on the strength of these cases.",
   "cases": [
     {
       "id": "h01",
@@ -14,7 +14,7 @@
       "expect": {
         "acts": "ask"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "\"HR assistant\" could be the AI or a person's job title."
     },
     {
@@ -34,7 +34,7 @@
         "regulated": "yes",
         "people": "yes"
       },
-      "label": "draft"
+      "label": "reviewed"
     },
     {
       "id": "h03",
@@ -47,7 +47,7 @@
       "expect": {
         "acts": "yes"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "The bot books visits itself."
     },
     {
@@ -66,7 +66,7 @@
         "regulated": "ask",
         "people": "yes"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "Student work may be regulated (education records); asked rather than assumed."
     },
     {
@@ -80,7 +80,7 @@
       "expect": {
         "acts": "ask"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "Something automated sends and credits; the AI isn't named. Follows the frozen labelling rule \"automated isn't AI\" (DECISIONS.md, Phase 6B boundaries, 2026-10-22; prompt describe-v1 rule 6)."
     },
     {
@@ -98,7 +98,7 @@
         ],
         "people": "yes"
       },
-      "label": "draft"
+      "label": "reviewed"
     },
     {
       "id": "h07",
@@ -113,7 +113,7 @@
           "Classifies"
         ]
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "A future wish isn't current behaviour."
     },
     {
@@ -133,7 +133,7 @@
         "sensitive": "yes",
         "regulated": "yes"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "Prescription status is health information in a regulated setting."
     },
     {
@@ -153,7 +153,7 @@
         "regulated": "ask",
         "people": "yes"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "Blocking a transaction is acting. Fraud screening may be regulated."
     },
     {
@@ -171,7 +171,7 @@
         ],
         "people": "yes"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "\"Never submits anything\" and sending an internal email are compatible: the negation is scoped to submitting (negation-scope, not a contradiction). Sending the email itself is acting (acts: yes)."
     },
     {
@@ -186,7 +186,7 @@
         "acts": "no",
         "people": "yes"
       },
-      "label": "draft"
+      "label": "reviewed"
     },
     {
       "id": "h12",
@@ -199,7 +199,7 @@
       "expect": {
         "acts": "no"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "Guests book, through the website; the AI only answers."
     },
     {
@@ -216,7 +216,7 @@
         "sensitive": "yes",
         "regulated": "ask"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "\"The system decides\": automated, AI not named; tenant screening may be regulated. Follows the frozen labelling rule \"automated isn't AI\" (DECISIONS.md, Phase 6B boundaries, 2026-10-22; prompt describe-v1 rule 6)."
     },
     {
@@ -230,7 +230,7 @@
         "acts": "ask",
         "people": "yes"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "Posted by something not named (acts: ask); the team receiving the summaries counts as people: yes. Summarising doesn't establish a work type in the list, so \"does\" isn't scored (Paige, 2026-11-08). Follows the frozen labelling rule \"automated isn't AI\" (DECISIONS.md, Phase 6B boundaries, 2026-10-22; prompt describe-v1 rule 6)."
     },
     {
@@ -250,8 +250,16 @@
         "regulated": "no",
         "people": "yes"
       },
-      "label": "draft",
+      "label": "reviewed",
       "note": "Clinic setting, but no patient work is described. sensitive: no and regulated: no mean \"don't propose these facts from this description\"; they are not proof that sensitive data or regulatory obligations are absent. A question is acceptable."
     }
-  ]
+  ],
+  "frozen": {
+    "date": "2026-11-08",
+    "reviewedBy": "Paige",
+    "labelsSha256": "9c69791d77af4dc56f0d72d0a50cc10d8e3f728ae6311488b97e767e971712ce",
+    "rulesSha256": "0cadc2c1fded43183ee3c013160068bf8388f7d513d41482d215b8e5f7a3b414",
+    "promptSha256": "e4427b0df9704f9f74914dcf47b5eaaca848404044fcf5c2784e72afb3f85943",
+    "promptVersion": "describe-v1"
+  }
 }
