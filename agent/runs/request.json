@@ -1,0 +1,7 @@
+{
+  "eval": "describe",
+  "set": "heldout",
+  "models": ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
+  "repeat": 3,
+  "budget": 5
+}
