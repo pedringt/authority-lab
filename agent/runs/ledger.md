@@ -9,3 +9,5 @@ Every paid run, newest last. The standing budget is **$25 per calendar month** (
 | 2026-10-10 | #87 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | standard, stress | 5 | $15.00 | $4.1275 | cancelled at the 30-minute job limit during Opus on the stress tickets. Recordings lost: the job was cancelled before its commit step. Cost from the Console (checked 2026-10-11): the `authority-lab-github` key's $10.84 total, less the three other runs on that key ($0.0109, $4.7225, $1.9791). It was logged as $4.7099 ($3.5899 exact for the five finished parts plus a $1.12 estimate), so the partial Opus stress part cost about $0.54. |
 | 2026-10-10 | #87 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | standard, stress | 5 | $15.00 | $4.7225 | finished |
 | 2026-10-10 | #88 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | stress | 5 | $5.00 | $1.9791 | finished |
+| 2026-11-08 | #172 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | describe-eval (60 cases) | 3 | $12.00 | $5.9225 | finished |
+| 2026-11-08 | #172 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | describe-eval heldout (15 cases) | 3 | $5.00 | $1.7269 | finished |
