@@ -190,3 +190,26 @@ test('the first held-out set is development data now; heldout-2 is new, draft, a
   const { loadCases } = await import('./describe-eval/runner.mjs');
   assert.deepEqual(loadCases(new URL('./describe-eval/heldout-2.json', import.meta.url)), []);
 });
+
+test('score-v2: a work-type question no longer counts as asking about Acts; score-v1 is unchanged and the default', async () => {
+  const { scoreCase, observe, DEFAULT_SCORER } = await import('./describe-eval/score.mjs');
+  assert.equal(DEFAULT_SCORER, 'score-v1');
+  const reading = { proposals: [], questions: [{ field: 'aiActions', kind: 'work', value: 'Classifies', quote: 'x', question: 'Classifies or Recommends?' }] };
+  assert.equal(observe(reading, 'acts').said, 'question');
+  assert.equal(observe(reading, 'acts', { scorer: 'score-v2' }).said, 'nothing');
+  // An open vague-verb question (no work type named) and an Acts question still count under score-v2.
+  assert.equal(observe({ questions: [{ field: 'aiActions', kind: 'work', quote: 'x' }] }, 'acts', { scorer: 'score-v2' }).said, 'question');
+  assert.equal(observe({ questions: [{ field: 'aiActions', kind: 'actor', value: 'Acts', quote: 'x' }] }, 'acts', { scorer: 'score-v2' }).said, 'question');
+  const c = { id: 't', tags: [], expect: { acts: 'no' }, text: 'x' };
+  assert.equal(scoreCase(c, reading).fields.acts.result, 'unneeded-question');
+  const v2 = scoreCase(c, reading, { scorer: 'score-v2' });
+  assert.equal(v2.fields.acts.result, 'correct');
+  assert.equal(v2.workTypeQuestions, 1);
+  assert.throws(() => observe(reading, 'acts', { scorer: 'score-v9' }), /Unknown scorer/);
+});
+
+test('heldout-2 has paraphrase cases, so the gate\'s comparison with 6A is not 0 against 0', async () => {
+  const { readFileSync } = await import('node:fs');
+  const next = JSON.parse(readFileSync(new URL('./describe-eval/heldout-2.json', import.meta.url), 'utf8'));
+  assert.ok(next.cases.filter((c) => c.tags.includes('paraphrase')).length >= 5);
+});

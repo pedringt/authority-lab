@@ -118,49 +118,70 @@ Full tables are in `results/summary-2026-11-08.md` (tuned set) and `results/summ
 
 "Expected" assumes about 900 tokens out per reading (some thinking at medium effort, then the JSON). If thinking runs longer, the real cost is higher; the hard cap stops the run before it passes the cap. Worst case assumes every call writes the full 4,000 tokens.
 
-## Prompt describe-v2 (draft, 2026-11-08)
+## Prompt describe-v2 (draft, revised after Paige's review)
 
-`prompt-v2.mjs` is a draft for Paige's review. It has not been run and isn't wired into the runner. `prompt.mjs` (describe-v1) and its results are unchanged, and the first held-out freeze still matches. Only the system prompt changes; the schema, settings (effort medium, max_tokens 4000) and reply checks are v1's.
+`prompt-v2.mjs` is a draft. It has not been run and isn't wired into the runner. `prompt.mjs` (describe-v1) and its results are unchanged, and the first held-out freeze still matches. Only the system prompt changes; the schema, settings (effort medium, max_tokens 4000) and reply checks are v1's.
 
-The changes, and the describe-v1 failures each addresses (tuned-set counts are summed over three runs of all three models; `h` cases are from the first held-out set):
+The changes, and the describe-v1 failures each addresses. Tuned-set counts are summed over three runs of all three models unless a model is named; `h` cases are from the first held-out set, which is development data now.
 
 | v2 rule | Change | Failure it addresses |
 |---|---|---|
-| 12 | When the AI only drafts, suggests, flags, looks up or answers, or a person acts, don't ask whether it also acts | The largest group: unneeded Acts questions where the label is `no` (Opus 55 on the tuned set, Haiku 57, Sonnet 34), for example k09, k20, n06, n20, n36, h07, h12 |
-| 16 | Don't ask which work type fits, or how the AI does a task | Questions about work types or tools, which the scorer counts as Acts questions: 21 of Opus's tuned-set Acts misses; h08, h11, h12 |
+| 12 | When the AI only drafts, suggests, flags, looks up or answers, or a person acts, don't ask whether it also acts | Unneeded Acts questions where the label is `no`. On the tuned set: Opus 55 under score-v1, 36 under score-v2; Haiku 57 and 40; Sonnet 34 and 17. Examples: k09, k20, n06, n20, n36, h07, h12 |
+| 16 | Keep who-acts questions apart from work-type questions: `about` is "Acts" for the first, the work type for the second. Work-type questions are still allowed | Measurement: score-v2 can only separate the two by `about` (see "Scorer versions") |
 | 8 | A role title ("HR assistant", "pricing agent") may be a person: ask, don't propose Acts | h01 Acts at Likely (Sonnet 3/3 runs, Haiku 2/3, Opus 1/3, and the failure in Opus's run 2); n40 Acts at Clear (Sonnet 3/3, Haiku 1/3) |
 | 10 | Acting under a condition is still acting | Acts asked when the label is `yes`: n07, n10, n13, n30 |
 | 13 | What the AI is set up to do ("We want AI to…") is what it does; a negation covers only what it names | k01 asked in 9 of 9 runs; h10 |
 | 9 | When the AI's own judgment triggers the action, propose Acts at Likely. "Automated isn't AI" is unchanged | n05 asked in 9 of 9 runs |
 | 14 | A vague verb followed by the action ("takes care of booking", "decides which to approve") names that action. "Decides" is removed from the vague-verb list | n02 (8 of 9 runs) and n34 (9 of 9) asked when the label is `yes`. v1 rule 8 listed "decides" as vague, which conflicts with n34's label |
-| 6, 7 | More acting verbs (blocks, locks, closes, files, submits, pauses, records); "the tool" and "the chatbot" name the AI | n31 asked in 9 of 9 runs; h09 asked |
+| 6, 7 | More acting verbs (blocks, locks, closes, files, submits, pauses, records). "The tool" usually names the AI and "the system" usually doesn't, but the rest of the description decides | n31 asked in 9 of 9 runs; h09 asked |
 | 17 | Name the kinds of data that are sensitive | Sensitive data missed or asked when stated: n08, n25, n10, n17, h08, h09, h13 |
-| 18 | Name the plainly regulated fields | Regulated asked or missed when stated: n08, n16, n17, n29, n34, h02, h08 |
-| 19 | Ask, and don't propose, when the decisions about people fall in an area that may be regulated (education, employment, housing, credit or payments) | Missed regulated asks: h04 and h09 (Sonnet 3/3 runs each), h13 (Opus run 2, Haiku and Sonnet 2/3) |
-| 20 | When the text denies sensitive or regulated work, or says nothing either way, propose nothing **and don't ask** (v1 rule 9 allowed a question) | Unneeded sensitive and regulated questions: k01, k10, k12, k16, n31, h15 |
-| 21 | Receiving the output counts as where people enter; don't ask whether someone reviews when the text doesn't say | People asked when the label is `yes`: n12, n33 (9 of 9 runs), h10, h14. Unneeded people questions: k01, k02, k16 |
+| 18 | Name the plainly regulated fields. Rule 18 comes first | Regulated asked or missed when stated: n08, n16, n17, n29, n34, h02, h08 |
+| 19 | Otherwise, ask (don't propose) when decisions about people fall in an area that may be regulated: education, employment, housing, access to payments or accounts | Missed regulated asks: h04 and h09 (Sonnet 3/3 runs each), h13 (Opus run 2, Haiku and Sonnet 2/3) |
+| 20 | If the text says nothing, propose nothing and don't ask. A denial is the writer's claim: propose nothing and don't ask, unless the description itself conflicts with it | Unneeded sensitive and regulated questions: k01, k10, k12, k16, n31, h15 |
+| 21 | **Unresolved:** receiving the output counts as where people enter | People asked when the label is `yes`: n12, n33 (9 of 9 runs), h10, h14. Unneeded people questions: k01, k02, k16 |
 
-**Product choices in this draft, for Paige to confirm or reject:**
+**Paige's review (2026-11-08):**
 
-- **Rules 20 and 21 make the model ask less.** It stops asking about sensitive data, regulated work and human review when the text says nothing about them or denies them. That matches the labels (`no` means a question is counted as unneeded). But it also means a denial such as k16's "No personal data is involved" in the aggressive-client walk goes unquestioned. Keeping v1 rule 9 ("you may ask") is the alternative; it costs unneeded questions but doesn't fail the gate.
-- **Rule 8 follows your labels on h01 and n40.** A role title is treated as possibly a person.
-- **Rule 7 follows your label on n31.** "The tool" names the AI, while "the system" stays automated.
-- **Rule 19's list of areas that may be regulated** (education, employment, housing, credit or payments) generalises from h04, h09 and h13, and n33's label (hiring). Whether that list is right is a product call.
-
-**A fact about the scorer, not changed:** `observe()` in `score.mjs` counts any question on `aiActions` (a work-type question too) as a question about Acts. Part of the "over-asking" on Acts is therefore questions about the kind of work, as the table shows. v2 reduces those questions; whether the scorer should separate them is a separate question, and it isn't changed here.
+- **Silence and denials (rule 20): accepted for this extraction step.** When a field isn't mentioned, the model doesn't ask about it. The field stays visibly missing; silence must not read as a completed safety review. A denial is accepted as the writer's claim unless the description itself contradicts it.
+- **Role titles (rule 8): accepted.** This follows the settled rule on ambiguous actors.
+- **"Tool" vs "system" (rule 7): kept provisionally.** It is the labelling convention, and context governs.
+- **Regulated areas (rules 18–19): precedence is now stated.** Rule 18's fields, lending included, are proposed as facts. Rule 19's "access to credit" became "access to payments or accounts", so a lending decision is never both a fact and a question.
+- **Work-type questions are not suppressed.** v1's rule 16 draft ("don't ask which work type fits") is withdrawn. Instead the model labels each question as being about who acts or about a work type.
+- **Rule 21 vs k01: open.** k01 ("draft deadline reminder emails and send them to clients") is labelled `people: no`, while rule 21 counts any recipient. Which definition the field uses is Paige's decision. The existing reviewed labels are consistent with "a person inside the workflow who reviews, authorizes or receives a handoff" (n12 the sales team's queue, h10 the director, h14 the team's channel), and not with external recipients (k01's clients).
 
 **Before any v2 run:**
 
-1. Paige reviews v2 and the `heldout-2.json` labels.
-2. Wire a `--prompt` choice into `runner.mjs` and `run.mjs` (mechanical).
-3. Freeze `heldout-2` with v2's hash.
+1. Paige settles rule 21's definition, and labels are checked against it.
+2. Paige reviews the `heldout-2.json` labels and paraphrase tags.
+3. Paige chooses the scorer for the gate (score-v1, score-v2, or another separation).
+4. Wire a `--prompt` choice into `runner.mjs` and `run.mjs` (mechanical).
+5. Freeze `heldout-2` with v2's hash.
 
 A v2 result on the tuned set or the first held-out set is development evidence only. The comparison that counts is on `heldout-2`.
+
+## Scorer versions
+
+**score-v1** is the scorer every published result used. It is unchanged and still the default. It counts any question on `aiActions` (one about a work type too) as a question about Acts.
+
+**score-v2** (`score.mjs`, `{ scorer: 'score-v2' }`) counts a question that names a work type (`about` is a work type other than Acts) as a work-type question. That question is reported on its own and doesn't count toward Acts. A question about Acts, or an open question with no work type named (6A's vague-verb questions), still counts.
+
+`rescore.mjs` judges the saved readings again: 6A and every model, with no model calls. It first checks that score-v1 reproduces each saved report. The results are in `results/rescore-2026-11-08-score-v2.md` (tuned) and `results/rescore-2026-11-08-heldout-score-v2.md`. In summary:
+
+- **6A is unchanged.** It never names a work type in a question.
+- **Fields that become correct.** Unneeded Acts questions become correct: 17–19 per model on the tuned set, 5–10 on the first held-out set. Consequential fields right per run rise (Opus tuned 54/52/54 → 60/59/60; held-out 16/16/19 → 19/19/19).
+- **No gate outcome changes.** No model passes on the tuned set under either scorer; Opus fails "better than 6A on paraphrase cases" (21–23 vs 28). On the held-out set Opus passes runs 1 and 3 under both.
+- **The limit: score-v2 trusts the model's own `about`.** Some questions labelled with a work type do ask whether the AI acts. Sonnet asked on n09, labelled Classifies: "…or also judge whether the person is eligible?" Haiku asked on n35, labelled Drafts: "…send it itself?" Under score-v2 these become missed asks: n09 for Sonnet in 3 of 3 runs and Haiku in 1, n35 for Haiku in 2. So score-v2 undercounts some real Acts questions. That is why v2's rule 16 asks the model to label questions consistently. Separating the saved questions by hand, or by their text, are the other options.
 
 ## The second held-out set (`heldout-2.json`, draft)
 
 Fifteen new descriptions, g01–g15, with **draft** labels. Nothing in it counts until Paige reviews the labels, and it is frozen before the first run, as the first set was.
 
-The same rubric applies, including "automated isn't AI". Four cases are labelled `ask` for `regulated` (g01, g07, g09, g14); those calls need review most.
+The same rubric applies, including "automated isn't AI". Four cases are labelled `ask` for `regulated` (g01, g07, g09, g14); those calls need review most. g02's note is narrowed: "without anyone checking" means no review at that step, not that no person enters anywhere.
 
-**Caveat:** Claude wrote these after drafting v2, so the cases may lean toward situations v2's rules name: role titles (g03, g08, g13), conditions (g09), regulated areas, and an injection (g12). Paige may want to replace or add some she writes herself.
+**Paraphrase tags (proposed, for review).** The gate's last check compares the model with 6A only on cases tagged `paraphrase`, so the tags define that subset. Without them the check compares 0 with 0 and always fails. The proposed criterion follows how the earlier sets used the tag: a consequential fact (who acts, sensitive data, regulated work) is stated in everyday or indirect wording rather than outright. Examples are a passive with no actor, a role title, an action phrased as an outcome, or a field named by its domain instead of by name. The tags were chosen from the wording alone, before any reader (6A or a model) was run on these cases:
+
+- **Proposed `paraphrase` (9):** g01 (credit report, tenant screening implied), g04 (passive "approved automatically", like n19), g05 (health data via "doctor's notes"), g08 (role title, like h01), g09 (acting on confirmation, like n10), g10 (passive, like n12), g13 (role title), g14 (acting as "records… lets the teacher know", education), g15 (acting stated as "nothing goes out unless…", like n04).
+- **Not proposed (4):** g02, g03, g06, g12. These state the action and the actor directly, are a future wish, or are an injection case.
+- **Borderline, for Paige (2):** g07 (direct "sends a rejection", but hiring as an unnamed regulated area, like n33) and g11 ("locks the account", like n13's "pauses").
+
+**Caveat:** Claude wrote these after drafting v2, so the cases may lean toward situations v2's rules name: role titles (g03, g08, g13), conditions (g09), regulated areas, and an injection (g12). They are unseen by every reader, but having the same author as v2 limits how independent the test is. Paige may want to replace some or add her own.

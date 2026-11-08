@@ -8,6 +8,9 @@
 // in README.md, "Prompt describe-v2 (draft)". The first held-out set was used
 // to draft this, so it is development data now: a v2 result on it is not
 // independent validation. That needs the fresh set, heldout-2.json.
+// Revised after Paige's review of #180 (2026-11-08): rule 16 no longer
+// suppresses work-type questions; rules 7, 18-19 and 20 clarified. Rule 21
+// (who counts as where people enter) waits for her definition.
 
 import { CONTEXT_FIELDS } from '../../src/store/index.js';
 import { OUTPUT_SCHEMA, MAX_TOKENS, EFFORT, checkReply } from './prompt.mjs';
@@ -33,7 +36,7 @@ General
 
 Who acts (the Acts action)
 6. Acts means the AI itself acts on the world: it sends, issues, pays, books, publishes, cancels, approves, blocks, locks, closes, resets, files, submits, pauses, records, changes or deletes something.
-7. The AI is named when the text says the AI, the model, the bot, the chatbot, our AI agent, our assistant, or "the tool" or "it" plainly referring to the AI being described.
+7. The AI is named when the text says the AI, the model, the bot, the chatbot, our AI agent, our assistant, or "it" plainly referring to the AI being described. "The tool" usually means the AI being described, and "the system" usually means other automation (rule 9), but the rest of the description decides: if it shows otherwise, follow it.
 8. A job title may be a person. A role or department word in front of "assistant", "agent", "coordinator" and the like ("our HR assistant", "the support agent", "the pricing agent"), or a bare "agent" where staff could be meant, doesn't show that the AI acts. Unless the text otherwise shows it is the AI, ask who does the action and don't propose Acts.
 9. Something automated is not the AI. "The system emails", "approved automatically", or a passive with no named actor ("are posted", "get an email") doesn't say the AI does it: ask who does it. But when the text names the AI's own judgment as what triggers the action, with no one else named ("when the model is confident, the refund goes out"), propose Acts at Likely.
 10. Acting under a condition is still acting. "Can cancel once the customer confirms", "resets it after checking identity", "files it when they click submit", "pauses the account if there's no reply": propose Acts. The person who confirms or clicks is where people enter.
@@ -44,19 +47,19 @@ Who acts (the Acts action)
 15. When sentences contradict each other about what the AI does, ask.
 
 Kinds of work
-16. For a task the text describes plainly, propose the work type you can quote. Don't ask which of two work types fits, or how the AI does the task (which systems it queries, what it reads). Ask about kinds of work only for a vague verb (rule 14).
+16. Keep questions about who acts apart from questions about the kind of work. A question about whether the AI itself acts gets about "Acts". A question about which kind of work a task is gets about set to that work type. You may ask either when the text leaves it open.
 
 Sensitive data and regulated work
 17. Propose dataSensitivity when the text names personal, health, financial, identity or confidential data: for example patients' details, medication or prescriptions, card transactions, credit reports, passports, payslips, tax returns, or a client's records.
-18. Propose regulated when the work is plainly in a regulated or professional field: for example healthcare and pharmacy, insurance claims, lending decisions, tax filing or tax advice, legal work, or anti-money-laundering checks.
-19. Ask about regulated, and don't propose it, when the work makes or shapes decisions about people in an area that may be regulated but the text doesn't settle it: for example their education, employment, housing, or access to credit or payments.
-20. Never propose that something is absent, not sensitive or not regulated. If the text denies it, or says nothing that points either way, propose nothing for that field and don't ask about it.
+18. Propose regulated when the work is plainly in a regulated or professional field: for example healthcare and pharmacy, insurance claims, lending decisions, tax filing or tax advice, legal work, or anti-money-laundering checks. Rule 18 comes first: if the text names work it lists, propose regulated even when rule 19 could also apply.
+19. Otherwise, ask about regulated, and don't propose it, when the work makes or shapes decisions about people in an area that may be regulated but the text doesn't settle it: for example their education, employment, housing, or access to payments or accounts (such as blocking a transaction).
+20. Never propose that something is absent, not sensitive or not regulated. If the text says nothing that points either way, propose nothing for that field and don't ask about it. If the text denies it, take the denial as the writer's claim: propose nothing and don't ask, unless the description itself gives conflicting evidence, in which case ask (rule 15).
 
 Where people enter
 21. Propose humanInvolvement when the text says a person approves, confirms, edits, reviews, decides, sends, or receives the AI's output (a team's queue or channel, someone's inbox, a nurse or a manager). Don't ask whether someone reviews when the text doesn't say.
 
 Questions
-A question is for something consequential the rules above tell you to ask: who does an action (rules 8, 9, 15), what a vague verb means (rule 14), or whether regulated work is involved (rule 19). Give the field it would settle, about (the action it concerns for aiActions, such as "Acts", otherwise empty), the question in plain words, and the exact words from the description it is about.`;
+A question is for something the rules above tell you to ask: who does an action (rules 8, 9, 15), what a vague verb means (rule 14), which kind of work a task is (rule 16), whether regulated work is involved (rule 19), or a denial the description itself contradicts (rule 20). Give the field it would settle, about (the action it concerns for aiActions, such as "Acts", otherwise empty), the question in plain words, and the exact words from the description it is about.`;
 
 // The request for one description: v1's, with this system prompt.
 export function buildRequest(text) {

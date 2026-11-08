@@ -10,7 +10,8 @@
         "heldout-2",
         "actor",
         "sensitive",
-        "regulated"
+        "regulated",
+        "paraphrase"
       ],
       "expect": {
         "acts": "no",
@@ -35,7 +36,7 @@
         "acts": "yes",
         "people": "no"
       },
-      "note": "The model issues the order itself; \"without anyone checking\" means no person enters (people: no, so a question would count as unneeded).",
+      "note": "The model issues the order itself. \"Without anyone checking\" says no one reviews at that step; it doesn't establish that no person enters anywhere. people: no means \"don't propose human involvement from this description\" (so a question would count as unneeded).",
       "label": "draft"
     },
     {
@@ -62,7 +63,8 @@
       "tags": [
         "heldout-2",
         "actor",
-        "automated"
+        "automated",
+        "paraphrase"
       ],
       "expect": {
         "acts": "ask",
@@ -77,7 +79,8 @@
       "tags": [
         "heldout-2",
         "sensitive",
-        "regulated"
+        "regulated",
+        "paraphrase"
       ],
       "expect": {
         "acts": "no",
@@ -134,7 +137,8 @@
       "tags": [
         "heldout-2",
         "actor",
-        "role-title"
+        "role-title",
+        "paraphrase"
       ],
       "expect": {
         "acts": "ask",
@@ -151,7 +155,8 @@
         "actor",
         "conditional",
         "sensitive",
-        "regulated"
+        "regulated",
+        "paraphrase"
       ],
       "expect": {
         "acts": "yes",
@@ -168,7 +173,8 @@
       "tags": [
         "heldout-2",
         "actor",
-        "passive"
+        "passive",
+        "paraphrase"
       ],
       "expect": {
         "acts": "ask",
@@ -220,7 +226,8 @@
       "tags": [
         "heldout-2",
         "actor",
-        "role-title"
+        "role-title",
+        "paraphrase"
       ],
       "expect": {
         "acts": "ask"
@@ -235,7 +242,8 @@
         "heldout-2",
         "actor",
         "sensitive",
-        "regulated"
+        "regulated",
+        "paraphrase"
       ],
       "expect": {
         "acts": "yes",
@@ -251,7 +259,8 @@
       "text": "The model drafts replies to customer reviews. Nothing goes out unless someone on the marketing team posts it.",
       "tags": [
         "heldout-2",
-        "actor"
+        "actor",
+        "paraphrase"
       ],
       "expect": {
         "acts": "no",

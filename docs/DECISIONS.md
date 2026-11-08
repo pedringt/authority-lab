@@ -76,6 +76,21 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 9. **Provider.** Anthropic-only implementation in v1, behind a provider-neutral internal contract: the app sends one request shape and accepts only the schema in 3, so another provider is a server-side change plus an eval re-run. The model is chosen from the eval, not in advance.
 10. **Eval gate.** 6B doesn't ship for a surface because its outputs look better. It must pass a fixed test set covering the exact failures 6A struggled with, adversarial instructions, and ambiguous actor or action language. The bar for consequential facts (what the AI does, sensitive data, regulated work, what it can affect, reversibility): zero Acts where only a person acts or the action is negated; no fact without a verbatim quote; Unsure on every case labelled ambiguous; injected instructions change nothing; better than 6A on paraphrase cases with no new false consequential facts. Other facts need only be no worse than 6A. Each model is run three times for run-to-run variation. **False confidence is tracked separately from ordinary extraction errors:** a wrong fact labelled Clear is materially worse than the same wrong fact labelled Unsure, so calibration is part of quality. No model passing is a valid outcome: 6B then doesn't ship. Claude drafts the gold labels; Paige reviews and corrects every one before it counts. Labelling rule (Paige, 2026-10-22, on review): **automated isn't AI**. A sentence saying something automated acts ("the system emails…", "approved automatically") without naming the AI as the actor is labelled ask, never yes, so the gold set never teaches that "automatic" implies the AI's authority. A person who authorizes a step or receives the output counts as where people enter.
 
+### Phase 6B description reading: prompt v2 review (Paige, 2026-11-08, #180)
+
+No model passed the describe-v1 gate, so a v2 prompt was drafted (#180). Paige reviewed it, and the following are settled for this description-extraction step:
+
+- **The first held-out set is development data.** Its v1 misses were used to draft v2, so a result on it is not independent validation. A fresh set (`heldout-2.json`) is needed, and it is frozen before it is used.
+- **Silence.** When the description doesn't mention sensitive data, regulated work or review, the reader proposes nothing and doesn't ask. The field stays visibly missing. Silence never reads as a completed safety review.
+- **Denials.** A denial ("no personal data") is accepted as the writer's claim, without a routine challenge, unless the description itself contradicts it.
+- **Role titles** ("HR assistant", "pricing agent") may name a person: ask who acts. This follows the ambiguous-actor rule.
+- **"Tool" and "system".** "The tool" usually names the AI and "the system" names other automation. This is kept provisionally, as the labelling convention; the rest of the description governs.
+- **Regulated work.** A plainly regulated field (lending included) is proposed as a fact. A decision about people in an area that may be regulated is asked about. The first takes precedence.
+- **Work-type questions** are not suppressed to improve a metric. Any correction to how they are scored is versioned (score-v2), keeps score-v1 and its results, and scores 6A and the models the same way.
+- **Paraphrase tags** define the subset the gate compares with 6A. A held-out set needs them before it is frozen. They are chosen from the wording, not to make passing easier.
+
+**Open:** what "where people enter" (`humanInvolvement`) captures. Does any recipient of the AI's output count, or only review, authorization or a handoff within the workflow? Prompt v2's rule 21 counts any recipient; k01's reviewed label (`people: no` for emails sent to clients) does not.
+
 ### Phase 6A.2: Context intake and description understanding (Paige, 2026-10-21, #167)
 
 Bounded to the deterministic path chosen in the Phase 6 scope: freeform-first Context, rule-based reading as suggestions only, Clear / Likely / Unsure, the quoted phrase always visible, confirmation for anything ambiguous or consequential, no network or model calls, the full manual form kept, and no change to governance rules. 6B (model-assisted reading) stays out.
