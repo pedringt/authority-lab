@@ -106,8 +106,14 @@ Paid runs have a standing budget of $25 per calendar month, tracked in `runs/led
    { "models": ["claude-haiku-5-5"], "tickets": ["standard", "stress"], "repeat": 5, "budget": 3, "shared": false }
    ```
 
-3. Paige adds the label `run-models` herself.
-4. Paige approves the waiting `model-runs` deployment on GitHub. Only then can the job read the API key.
+3. The label `run-models` is added to the PR: by Paige, or by Claude after Paige approved that exact plan in her conversation with Claude (Paige, 2026-11-07).
+4. The waiting `model-runs` deployment is approved on GitHub, by Paige or by Claude under the same rule, once the plan job's summary matches the approved plan. Only then can the job read the API key. Claude's approval comment says "Approved by Paige in conversation with Claude on <date>; label and approval by Claude".
+
+   ```bash
+   gh pr edit <pr> --add-label run-models
+   gh api repos/pedringt/authority-lab/actions/runs/<run-id>/pending_deployments -q '.[].environment.id'
+   gh api -X POST repos/pedringt/authority-lab/actions/runs/<run-id>/pending_deployments -F 'environment_ids[]=<id>' -f state=approved -f comment='Approved by Paige in conversation with Claude on <date>; label and approval by Claude'
+   ```
 5. The job runs the tests, then the models (refused if the cap won't fit the month's remaining budget), and commits the recordings, `runs/summary-<date>.md` and a ledger row to the PR branch. It also deletes the request.
 
 `node run.mjs --estimate --models a,b --tickets standard,stress --repeat 5` prints the call count, the estimate (also at the rate earlier runs actually cost) and the worst case.
