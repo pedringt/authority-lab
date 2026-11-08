@@ -10,7 +10,8 @@
 // independent validation. That needs the fresh set, heldout-2.json.
 // Revised after Paige's review of #180 (2026-11-08): rule 16 no longer
 // suppresses work-type questions; rules 7, 18-19 and 20 clarified. Rule 21
-// (who counts as where people enter) waits for her definition.
+// follows her definition of where people enter (review, authorization,
+// decisions, or a handoff within the workflow; not merely receiving).
 
 import { CONTEXT_FIELDS } from '../../src/store/index.js';
 import { OUTPUT_SCHEMA, MAX_TOKENS, EFFORT, checkReply } from './prompt.mjs';
@@ -56,7 +57,7 @@ Sensitive data and regulated work
 20. Never propose that something is absent, not sensitive or not regulated. If the text says nothing that points either way, propose nothing for that field and don't ask about it. If the text denies it, take the denial as the writer's claim: propose nothing and don't ask, unless the description itself gives conflicting evidence, in which case ask (rule 15).
 
 Where people enter
-21. Propose humanInvolvement when the text says a person approves, confirms, edits, reviews, decides, sends, or receives the AI's output (a team's queue or channel, someone's inbox, a nurse or a manager). Don't ask whether someone reviews when the text doesn't say.
+21. Propose humanInvolvement when the text says a person taking part in the workflow reviews, approves, authorizes, decides, edits, sends, or takes over the AI's output as a handoff (a team's queue or channel, a colleague's inbox, a nurse). A customer or applicant who checks and confirms a submission counts. Someone who only receives the finished service or message (a client getting a reminder, a customer getting a reply) does not. Don't ask whether someone reviews when the text doesn't say.
 
 Questions
 A question is for something the rules above tell you to ask: who does an action (rules 8, 9, 15), what a vague verb means (rule 14), which kind of work a task is (rule 16), whether regulated work is involved (rule 19), or a denial the description itself contradicts (rule 20). Give the field it would settle, about (the action it concerns for aiActions, such as "Acts", otherwise empty), the question in plain words, and the exact words from the description it is about.`;

@@ -142,14 +142,14 @@ test('the held-out freeze: labels, rules and prompt are hashed; any change after
   const { readFileSync } = await import('node:fs');
   const { fingerprint, freezeProblems } = await import('./describe-eval/freeze.mjs');
   const held = JSON.parse(readFileSync(new URL('./describe-eval/heldout.json', import.meta.url), 'utf8'));
-  const f = fingerprint();
+  const f = await fingerprint();
   assert.match(f.rulesSha256, /^[0-9a-f]{64}$/);
   if (held.frozen) {
     // Once frozen, nothing it covers may change: this fails if the rules, the prompt or a label is edited.
-    assert.deepEqual(freezeProblems(), []);
+    assert.deepEqual(await freezeProblems(), []);
     assert.equal(held.frozen.promptVersion, f.promptVersion);
   } else {
-    assert.deepEqual(freezeProblems(), ['the held-out set is not frozen yet']);
+    assert.deepEqual(await freezeProblems(), ['the held-out set is not frozen yet']);
     assert.ok(held.cases.every((c) => c.label === 'draft'), 'labels are marked reviewed only together with the freeze');
   }
   // A live run on an unfrozen set is refused before anything else.
@@ -212,4 +212,39 @@ test('heldout-2 has paraphrase cases, so the gate\'s comparison with 6A is not 0
   const { readFileSync } = await import('node:fs');
   const next = JSON.parse(readFileSync(new URL('./describe-eval/heldout-2.json', import.meta.url), 'utf8'));
   assert.ok(next.cases.filter((c) => c.tags.includes('paraphrase')).length >= 5);
+});
+
+test('the question audit: a blind sheet (wording and quote only), and score-v2 classifies by the audit when given one', async () => {
+  const { auditSheet, AUDIT_POLICY } = await import('./describe-eval/audit.mjs');
+  const { scoreCase, questionKey } = await import('./describe-eval/score.mjs');
+  assert.equal(AUDIT_POLICY, 'audit-v1');
+  const q = { field: 'aiActions', kind: 'work', value: 'Drafts', quote: 'handles the first reply', question: 'Does it write the reply, or send it itself?' };
+  const results = [{ model: 'm', runs: [{ readings: [{ id: 't', reading: { proposals: [], questions: [q, { ...q }] } }] }] }];
+  const sheet = auditSheet({ cases: [], results });
+  assert.deepEqual(sheet, [{ key: questionKey(q), question: q.question, quote: q.quote, class: null }]);
+  const c = { id: 't', tags: [], expect: { acts: 'ask' }, text: 'The model handles the first reply.' };
+  const reading = { proposals: [], questions: [q] };
+  // The reader tagged it Drafts: without an audit, score-v2 takes the tag and calls the ask missed.
+  assert.equal(scoreCase(c, reading, { scorer: 'score-v2' }).fields.acts.result, 'missed-ask');
+  // The audit reads the wording as asking whether it acts.
+  assert.equal(scoreCase(c, reading, { scorer: 'score-v2', audit: { [questionKey(q)]: 'acts' } }).fields.acts.result, 'correct');
+  assert.throws(() => scoreCase(c, reading, { scorer: 'score-v2', audit: {} }), /not in the audit/);
+  assert.throws(() => scoreCase(c, reading, { scorer: 'score-v1', audit: {} }), /score-v2 only/);
+});
+
+test('heldout-2 freeze readiness: 12 paraphrase cases, each with a reason; the freeze will also cover tags, scorer and audit policy', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fingerprint, freezeReadiness, freezeProblems } = await import('./describe-eval/freeze.mjs');
+  const next = JSON.parse(readFileSync(new URL('./describe-eval/heldout-2.json', import.meta.url), 'utf8'));
+  const para = next.cases.filter((c) => c.tags.includes('paraphrase'));
+  assert.equal(para.length, 12);
+  assert.ok(para.every((c) => c.paraphraseReason));
+  const f = await fingerprint('heldout-2');
+  assert.equal(f.promptVersion, 'describe-v2');
+  assert.equal(f.scorer, 'score-v2');
+  assert.equal(f.auditPolicy, 'audit-v1');
+  for (const k of ['tagsSha256', 'scorerSha256', 'auditPolicySha256']) assert.match(f[k], /^[0-9a-f]{64}$/);
+  if (!next.frozen) {
+    assert.deepEqual(freezeReadiness('heldout-2'), next.cases.every((c) => c.label === 'reviewed') ? [] : [`${next.cases.filter((c) => c.label !== 'reviewed').length} label(s) not reviewed`]);
+  } else assert.deepEqual(await freezeProblems('heldout-2'), []);
 });

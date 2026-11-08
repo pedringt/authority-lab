@@ -14,6 +14,8 @@
 // fact where the label says to ask, is counted by the label it carried. A
 // wrong fact marked Clear is the worst outcome.
 
+import { createHash } from 'node:crypto';
+
 export const CONSEQUENTIAL = ['acts', 'sensitive', 'regulated'];
 const FIELD_OF = { sensitive: 'dataSensitivity', regulated: 'regulated', people: 'humanInvolvement' };
 
@@ -23,14 +25,35 @@ const FIELD_OF = { sensitive: 'dataSensitivity', regulated: 'regulated', people:
 // Recommends?", "Uses tools") as a question about Acts; it is counted apart,
 // as a work-type question. A question about Acts, or an open question about
 // what the AI does (a vague verb, no work type named), still counts for Acts.
+//
+// For the gate, score-v2 is used with a manual audit (Paige, 2026-11-08):
+// each question on aiActions is classified from its wording alone, blind to
+// the label, the reader and the gate (AUDIT.md, policy audit-v1). With an
+// audit, its class decides; the reader's own `about` is only used without one.
 export const SCORERS = ['score-v1', 'score-v2'];
 export const DEFAULT_SCORER = 'score-v1';
+export const AUDIT_CLASSES = ['acts', 'work', 'other'];
 const isWorkTypeQuestion = (q) => q.field === 'aiActions' && q.value !== 'Acts' && q.kind !== 'actor' && typeof q.value === 'string' && q.value.trim() !== '';
-export const workTypeQuestions = (reading) => ((reading && reading.questions) || []).filter(isWorkTypeQuestion);
+
+// A question's key in an audit: its wording and the words it quotes, nothing else.
+export function questionKey(q) {
+  return createHash('sha256').update(`${String(q.question || '').trim()}\n${String(q.quote || '').trim()}`).digest('hex').slice(0, 16);
+}
+
+// Is this question a work-type question? From the audit when there is one.
+function workType(q, audit) {
+  if (q.field !== 'aiActions') return false;
+  if (!audit) return isWorkTypeQuestion(q);
+  const cls = audit[questionKey(q)];
+  if (!cls) throw new Error(`Question not in the audit: ${questionKey(q)} "${q.question}"`);
+  return cls !== 'acts';
+}
+export const workTypeQuestions = (reading, audit = null) => ((reading && reading.questions) || []).filter((q) => q.field === 'aiActions' && workType(q, audit));
 
 // What a reading said about one field: a fact (with its label), a question, or nothing.
-export function observe(reading, field, { scorer = DEFAULT_SCORER } = {}) {
+export function observe(reading, field, { scorer = DEFAULT_SCORER, audit = null } = {}) {
   if (!SCORERS.includes(scorer)) throw new Error(`Unknown scorer: ${scorer}`);
+  if (audit && scorer !== 'score-v2') throw new Error('An audit applies to score-v2 only.');
   const proposals = (reading && reading.proposals) || [];
   const questions = (reading && reading.questions) || [];
   if (field === 'acts') {
@@ -39,7 +62,9 @@ export function observe(reading, field, { scorer = DEFAULT_SCORER } = {}) {
       const part = (p.parts || []).find((x) => x.value === 'Acts');
       return { said: 'fact', label: (part && part.certainty) || p.certainty || null };
     }
-    const asksActs = (q) => q.field === 'aiActions' && (q.value === 'Acts' || q.kind === 'work') && (scorer === 'score-v1' || !isWorkTypeQuestion(q));
+    const asksActs = scorer === 'score-v1'
+      ? (q) => q.field === 'aiActions' && (q.value === 'Acts' || q.kind === 'work')
+      : (q) => q.field === 'aiActions' && (audit || q.value === 'Acts' || q.kind === 'work' || q.kind === 'actor') && !workType(q, audit);
     if (questions.some(asksActs)) return { said: 'question' };
     return { said: 'nothing' };
   }
@@ -66,11 +91,11 @@ export function quotesValid(text, reading) {
 }
 
 // Score one case.
-export function scoreCase(c, reading, { allowedFields, scorer = DEFAULT_SCORER } = {}) {
+export function scoreCase(c, reading, { allowedFields, scorer = DEFAULT_SCORER, audit = null } = {}) {
   const fields = {};
   for (const f of ['acts', 'sensitive', 'regulated', 'people']) {
     if (!(f in c.expect)) continue;
-    const seen = observe(reading, f, { scorer });
+    const seen = observe(reading, f, { scorer, audit });
     fields[f] = { gold: c.expect[f], said: seen.said, label: seen.label || null, result: judge(c.expect[f], seen) };
   }
   const actions = (((reading && reading.proposals) || []).find((p) => p.key === 'aiActions') || { value: [] }).value;
@@ -78,7 +103,7 @@ export function scoreCase(c, reading, { allowedFields, scorer = DEFAULT_SCORER }
   const outside = allowedFields ? ((reading && reading.proposals) || []).map((p) => p.key).filter((k) => !allowedFields.includes(k)) : [];
   const scored = { id: c.id, tags: c.tags, label: c.label, fields, missingIncludes, quotesValid: quotesValid(c.text, reading), outsideSchema: outside };
   // score-v2 reports work-type questions on their own, unjudged.
-  if (scorer === 'score-v2') scored.workTypeQuestions = workTypeQuestions(reading).length;
+  if (scorer === 'score-v2') scored.workTypeQuestions = workTypeQuestions(reading, audit).length;
   return scored;
 }
 

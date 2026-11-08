@@ -1,6 +1,6 @@
 ## Re-scored with score-v2 (tuned set, readings of 2026-11-08)
 
-No model calls: the saved readings, judged again. score-v1 is the scorer the published results used.
+No model calls: the saved readings, judged again. score-v1 is the scorer the published results used. Without an audit, score-v2 relies on each reader's own `about` tag: provisional.
 
 | Reader | Scorer | acts | sensitive | regulated | people | Consequential right per run | Gate per run | Work-type questions per run |
 |---|---|---|---|---|---|---|---|---|

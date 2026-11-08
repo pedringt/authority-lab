@@ -138,7 +138,7 @@ The changes, and the describe-v1 failures each addresses. Tuned-set counts are s
 | 18 | Name the plainly regulated fields. Rule 18 comes first | Regulated asked or missed when stated: n08, n16, n17, n29, n34, h02, h08 |
 | 19 | Otherwise, ask (don't propose) when decisions about people fall in an area that may be regulated: education, employment, housing, access to payments or accounts | Missed regulated asks: h04 and h09 (Sonnet 3/3 runs each), h13 (Opus run 2, Haiku and Sonnet 2/3) |
 | 20 | If the text says nothing, propose nothing and don't ask. A denial is the writer's claim: propose nothing and don't ask, unless the description itself conflicts with it | Unneeded sensitive and regulated questions: k01, k10, k12, k16, n31, h15 |
-| 21 | **Unresolved:** receiving the output counts as where people enter | People asked when the label is `yes`: n12, n33 (9 of 9 runs), h10, h14. Unneeded people questions: k01, k02, k16 |
+| 21 | Where people enter: review, authorization, decisions, or a handoff to someone taking part in the workflow. A customer confirming a submission counts; merely receiving the finished service or message doesn't | People asked when the label is `yes`: n12, n33 (9 of 9 runs), h10, h14. Unneeded people questions: k01, k02, k16 |
 
 **Paige's review (2026-11-08):**
 
@@ -147,19 +147,28 @@ The changes, and the describe-v1 failures each addresses. Tuned-set counts are s
 - **"Tool" vs "system" (rule 7): kept provisionally.** It is the labelling convention, and context governs.
 - **Regulated areas (rules 18–19): precedence is now stated.** Rule 18's fields, lending included, are proposed as facts. Rule 19's "access to credit" became "access to payments or accounts", so a lending decision is never both a fact and a question.
 - **Work-type questions are not suppressed.** v1's rule 16 draft ("don't ask which work type fits") is withdrawn. Instead the model labels each question as being about who acts or about a work type.
-- **Rule 21 vs k01: open.** k01 ("draft deadline reminder emails and send them to clients") is labelled `people: no`, while rule 21 counts any recipient. Which definition the field uses is Paige's decision. The existing reviewed labels are consistent with "a person inside the workflow who reviews, authorizes or receives a handoff" (n12 the sales team's queue, h10 the director, h14 the team's channel), and not with external recipients (k01's clients).
+- **Where people enter (rule 21): decided in the second review.** It means review, authorization, decisions, or a handoff to someone taking part in the workflow. Merely receiving the final service or message doesn't count: a customer confirming a submission counts, a client receiving a reminder doesn't. Every existing `people` label was checked against this, and none conflicts. Four `yes` labels rest on staff receiving the output as a handoff: h14 (the team's channel), g10 (the account owner), g14 (the class teacher) and g08 (the hiring manager's calendar).
+
+**Second review (2026-11-08):**
+
+- **Where people enter:** as in rule 21 above.
+- **Gate scorer:** score-v2 with a manual audit of question classification (`AUDIT.md`). score-v1 stays as the historical comparison.
+- **heldout-2 labels:** no scored-field changes.
+- **Paraphrase tags:** 12 cases, each with a recorded reason.
+- **The freeze covers more:** the scorer version and the audit policy are recorded alongside the labels, tags, rules and prompt.
 
 **Before any v2 run:**
 
-1. Paige settles rule 21's definition, and labels are checked against it.
-2. Paige reviews the `heldout-2.json` labels and paraphrase tags.
-3. Paige chooses the scorer for the gate (score-v1, score-v2, or another separation).
-4. Wire a `--prompt` choice into `runner.mjs` and `run.mjs` (mechanical).
-5. Freeze `heldout-2` with v2's hash.
+1. **Paige approves the freeze.** `node agent/describe-eval/freeze.mjs --set heldout-2 --show` prints what it would record. Freezing marks the 15 labels reviewed and writes the hashes.
+2. **Paige approves the audit policy** (`AUDIT.md`, audit-v1). It is a draft, and its hash is part of the freeze.
+3. **Wire `--prompt` and `--set heldout-2` into `run.mjs`, the runner and the model-run request (mechanical).** A heldout-2 run then refuses any prompt or scorer other than the frozen ones.
+4. **After the run, the questions are audited blind** (`audit.mjs sheet`), then re-scored with the audit (`rescore.mjs --audit`). The gate result is the audited one.
 
 A v2 result on the tuned set or the first held-out set is development evidence only. The comparison that counts is on `heldout-2`.
 
 ## Scorer versions
+
+**For the gate: score-v2 with the question audit** (Paige, 2026-11-08). Each `aiActions` question is classified from its wording alone (`AUDIT.md`), blind to the label, the reader and the gate, the same way for 6A and every model. `audit.mjs sheet` writes the blind sheet; `rescore.mjs --audit <file>` applies it. The original readings are never edited, and classes are kept in their own file. Without an audit, score-v2 falls back to each reader's own `about` and is provisional. For scale: the saved 2026-11-08 readings hold 494 distinct questions on the tuned set and 156 on the first held-out set.
 
 **score-v1** is the scorer every published result used. It is unchanged and still the default. It counts any question on `aiActions` (one about a work type too) as a question about Acts.
 
@@ -178,10 +187,10 @@ Fifteen new descriptions, g01–g15, with **draft** labels. Nothing in it counts
 
 The same rubric applies, including "automated isn't AI". Four cases are labelled `ask` for `regulated` (g01, g07, g09, g14); those calls need review most. g02's note is narrowed: "without anyone checking" means no review at that step, not that no person enters anywhere.
 
-**Paraphrase tags (proposed, for review).** The gate's last check compares the model with 6A only on cases tagged `paraphrase`, so the tags define that subset. Without them the check compares 0 with 0 and always fails. The proposed criterion follows how the earlier sets used the tag: a consequential fact (who acts, sensitive data, regulated work) is stated in everyday or indirect wording rather than outright. Examples are a passive with no actor, a role title, an action phrased as an outcome, or a field named by its domain instead of by name. The tags were chosen from the wording alone, before any reader (6A or a model) was run on these cases:
+**Paraphrase tags (12, decided 2026-11-08; each case's reason is in `paraphraseReason`).** The gate's last check compares the model with 6A only on cases tagged `paraphrase`, so the tags define that subset. Without them the check compares 0 with 0 and always fails. The proposed criterion follows how the earlier sets used the tag: a consequential fact (who acts, sensitive data, regulated work) is stated in everyday or indirect wording rather than outright. Examples are a passive with no actor, a role title, an action phrased as an outcome, or a field named by its domain instead of by name. The tags were chosen from the wording alone, before any reader (6A or a model) was run on these cases:
 
-- **Proposed `paraphrase` (9):** g01 (credit report, tenant screening implied), g04 (passive "approved automatically", like n19), g05 (health data via "doctor's notes"), g08 (role title, like h01), g09 (acting on confirmation, like n10), g10 (passive, like n12), g13 (role title), g14 (acting as "records… lets the teacher know", education), g15 (acting stated as "nothing goes out unless…", like n04).
-- **Not proposed (4):** g02, g03, g06, g12. These state the action and the actor directly, are a future wish, or are an injection case.
-- **Borderline, for Paige (2):** g07 (direct "sends a rejection", but hiring as an unnamed regulated area, like n33) and g11 ("locks the account", like n13's "pauses").
+- **Tagged (12):** g01, g03, g04, g05, g07, g08, g09, g10, g12, g13, g14, g15. g03 resolves "the agent" back to people. g07 and g12 establish sensitive or professional context indirectly; g12's injection tag doesn't exclude the paraphrase tag.
+- **Not tagged (3):** g02 and g06 state the action and actor directly or are a future wish. g11's "locks the account" states the action outright; its difficulty is the scope of the negation.
+- The five-case minimum in the freeze check only catches missing coverage. It doesn't show that the subset is well chosen.
 
 **Caveat:** Claude wrote these after drafting v2, so the cases may lean toward situations v2's rules name: role titles (g03, g08, g13), conditions (g09), regulated areas, and an injection (g12). They are unseen by every reader, but having the same author as v2 limits how independent the test is. Paige may want to replace some or add her own.

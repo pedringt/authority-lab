@@ -89,7 +89,12 @@ No model passed the describe-v1 gate, so a v2 prompt was drafted (#180). Paige r
 - **Work-type questions** are not suppressed to improve a metric. Any correction to how they are scored is versioned (score-v2), keeps score-v1 and its results, and scores 6A and the models the same way.
 - **Paraphrase tags** define the subset the gate compares with 6A. A held-out set needs them before it is frozen. They are chosen from the wording, not to make passing easier.
 
-**Open:** what "where people enter" (`humanInvolvement`) captures. Does any recipient of the AI's output count, or only review, authorization or a handoff within the workflow? Prompt v2's rule 21 counts any recipient; k01's reviewed label (`people: no` for emails sent to clients) does not.
+**Second review (Paige, 2026-11-08):**
+
+- **Where people enter** (`humanInvolvement`) means review, authorization, decisions, or a handoff to someone taking part in the workflow. Merely receiving the final service or message doesn't count: a customer confirming a submission counts, a client receiving a reminder doesn't. Prompt v2's rule 21 follows this. No existing reviewed label conflicts with it, including k01's `people: no`.
+- **The gate's scorer** is score-v2 with a manual audit of question classification. Questions are classified from their wording only, blind to the expected label, the reader and the gate outcome. The same method applies to 6A and every model. The original outputs are preserved and the classes are recorded separately. A reader's own `about` tag is metadata, not enough to decide the gate. score-v1 stays as the historical comparison.
+- **heldout-2's labels** need no scored-field changes. There are **12 paraphrase cases**, each with a recorded reason: g01, g03, g04, g05, g07, g08, g09, g10, g12, g13, g14, g15.
+- **The freeze** records the scorer version and the audit policy, alongside the labels, tags, rules and prompt.
 
 ### Phase 6A.2: Context intake and description understanding (Paige, 2026-10-21, #167)
 

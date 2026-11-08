@@ -38,7 +38,7 @@ if (!SETS[set]) { console.error(`--set must be one of: ${Object.keys(SETS).join(
 // The held-out set is used only frozen and unchanged since (freeze.mjs).
 if (set === 'heldout') {
   const { freezeProblems } = await import('./freeze.mjs');
-  const problems = freezeProblems();
+  const problems = await freezeProblems();
   if (problems.length) { console.error(`The held-out set can't be used: ${problems.join('; ')}.`); process.exit(1); }
 }
 const cases = loadCases(SETS[set]);

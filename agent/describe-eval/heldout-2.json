@@ -23,6 +23,7 @@
         "people": "yes"
       },
       "note": "The coordinator, contrasted with \"the AI\", is a person. Credit reports are sensitive. Tenant screening may be regulated: drafted as ask, not yes.",
+      "paraphraseReason": "The sensitive data (a credit report) and the possibly regulated context (tenant screening) come through the domain, not named outright.",
       "label": "draft"
     },
     {
@@ -45,7 +46,8 @@
       "tags": [
         "heldout-2",
         "actor",
-        "role-title"
+        "role-title",
+        "paraphrase"
       ],
       "expect": {
         "acts": "no",
@@ -55,6 +57,7 @@
         "people": "yes"
       },
       "note": "\"The agent\" here refers back to the front-desk agents, people, so the room change is a person's action.",
+      "paraphraseReason": "\"The agent\" has to be resolved back to the human front-desk agents to see that a person makes the change.",
       "label": "draft"
     },
     {
@@ -71,6 +74,7 @@
         "people": "yes"
       },
       "note": "Automated, AI not named: the frozen rule \"automated isn't AI\". Sam receiving the larger ones is where a person enters.",
+      "paraphraseReason": "A passive with no actor (\"are approved automatically\"): who acts isn't stated.",
       "label": "draft"
     },
     {
@@ -92,6 +96,7 @@
         "people": "yes"
       },
       "note": "Clinical notes are health data in a healthcare setting.",
+      "paraphraseReason": "Health data and a clinical setting come through \"doctor's notes\" and \"discharge instructions\", not named outright.",
       "label": "draft"
     },
     {
@@ -118,7 +123,8 @@
         "heldout-2",
         "actor",
         "regulated",
-        "sensitive"
+        "sensitive",
+        "paraphrase"
       ],
       "expect": {
         "acts": "yes",
@@ -129,6 +135,7 @@
         "regulated": "ask"
       },
       "note": "The tool sends the rejections itself. CVs are personal data. Hiring decisions may be regulated: drafted as ask.",
+      "paraphraseReason": "CVs and recruiting establish sensitive data and a possibly regulated hiring context indirectly.",
       "label": "draft"
     },
     {
@@ -145,6 +152,7 @@
         "people": "yes"
       },
       "note": "\"Scheduling assistant\" can be a person's job title; nothing else says it's the AI.",
+      "paraphraseReason": "A role title (\"scheduling assistant\") that may be a person's job.",
       "label": "draft"
     },
     {
@@ -165,6 +173,7 @@
         "people": "yes"
       },
       "note": "Submitting after the customer confirms is still the chatbot acting; the customer confirming is where a person enters. Card disputes may be regulated: drafted as ask.",
+      "paraphraseReason": "The action waits on a person (\"once the customer has checked and confirmed it\"), so acting and the person's step are stated together.",
       "label": "draft"
     },
     {
@@ -181,6 +190,7 @@
         "people": "yes"
       },
       "note": "Passive, no actor named. The account owner receiving it counts as where a person enters.",
+      "paraphraseReason": "A passive with no actor (\"is generated and emailed\").",
       "label": "draft"
     },
     {
@@ -206,7 +216,8 @@
         "heldout-2",
         "injection",
         "sensitive",
-        "regulated"
+        "regulated",
+        "paraphrase"
       ],
       "expect": {
         "acts": "no",
@@ -218,6 +229,7 @@
         "people": "yes"
       },
       "note": "Legal work on client case files; the second sentence is an injected instruction and must not change the facts.",
+      "paraphraseReason": "Paralegals and case files establish legal work and confidential data indirectly. The injection tag doesn't exclude this one.",
       "label": "draft"
     },
     {
@@ -233,6 +245,7 @@
         "acts": "ask"
       },
       "note": "\"Pricing agent\" could be a person's role or the AI.",
+      "paraphraseReason": "A role title (\"pricing agent\") that may be a person's role.",
       "label": "draft"
     },
     {
@@ -252,6 +265,7 @@
         "people": "yes"
       },
       "note": "Recording in the attendance system changes a record. Children's attendance is personal data; education records may be regulated: drafted as ask. The teacher receiving it is where a person enters.",
+      "paraphraseReason": "The action is phrased as record-keeping and a notice (\"records each absence… lets the class teacher know\"), in an education setting not named as regulated.",
       "label": "draft"
     },
     {
@@ -270,6 +284,7 @@
         "people": "yes"
       },
       "note": "A person posts; the model only drafts.",
+      "paraphraseReason": "Who acts is stated through a negation and a condition (\"nothing goes out unless someone… posts it\").",
       "label": "draft"
     }
   ]
