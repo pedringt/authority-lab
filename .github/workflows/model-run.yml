@@ -4,7 +4,9 @@
 #   1. A PR commits agent/runs/request.json: which models, which ticket sets,
 #      how many repeats, the budget (a hard cap in dollars) and whether the
 #      tickets share one session. Claude may propose it; Paige OKs the plan.
-#   2. Paige adds the label "run-models" to the PR herself.
+#   2. The label "run-models" is added to the PR: by Paige, or by Claude
+#      after Paige approved that exact plan in her conversation with Claude
+#      (CLAUDE.md, 2026-11-07).
 #   3. The "plan" job (no environment, no secrets) checks the request and
 #      writes the plan to the run's summary: the exact commit, the request,
 #      whether the cap fits the month's $25 standing budget, and the files
