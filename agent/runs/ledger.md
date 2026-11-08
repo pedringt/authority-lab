@@ -11,3 +11,4 @@ Every paid run, newest last. The standing budget is **$25 per calendar month** (
 | 2026-10-10 | #88 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | stress | 5 | $5.00 | $1.9791 | finished |
 | 2026-11-08 | #172 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | describe-eval (60 cases) | 3 | $12.00 | $5.9225 | finished |
 | 2026-11-08 | #172 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | describe-eval heldout (15 cases) | 3 | $5.00 | $1.7269 | finished |
+| 2026-11-08 | #180 | claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 | describe-eval heldout-2 (15 cases), describe-v2 | 3 | $7.00 | $1.9091 | finished |
