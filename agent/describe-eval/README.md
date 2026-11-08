@@ -160,7 +160,7 @@ The changes, and the describe-v1 failures each addresses. Tuned-set counts are s
 **Before any v2 run:**
 
 1. ~~**Paige approves the freeze and the audit policy.**~~ Done 2026-11-08. `freeze.mjs --set heldout-2 --write` marked the 15 labels reviewed and recorded the freeze in the same write. It covers the labels, the tags and paraphrase reasons, the 6A rules, `prompt-v2.mjs`, the `prompt.mjs` it imports (schema, settings and reply checks), the prompt and schema as sent, `score.mjs` (score-v2) and `AUDIT.md` (audit-v1). Every one of those fields is required: a heldout-2 freeze missing any of them, or with any changed, is refused. The first set is still checked against its own shorter list.
-2. **Wire `--prompt` and `--set heldout-2` into `run.mjs`, the runner and the model-run request (mechanical).** A heldout-2 run then refuses any prompt or scorer other than the frozen ones.
+2. ~~**Wire `--prompt` and `--set heldout-2`.**~~ Done. `run.mjs`, the runner, `plan-request.mjs` and the `model-run` workflow carry the prompt version. A heldout-2 run takes its prompt and scorer from the freeze and refuses any other, as does the request planner. A run summary scored with score-v2 is marked provisional. Request: `{"eval": "describe", "set": "heldout-2", "models": [...], "repeat": 3, "budget": N}` (the prompt defaults to the frozen one).
 3. **After the run, the questions are audited blind** (`audit.mjs sheet`), then re-scored with the audit (`rescore.mjs --audit`). The gate result is the audited one.
 
 A v2 result on the tuned set or the first held-out set is development evidence only. The comparison that counts is on `heldout-2`.

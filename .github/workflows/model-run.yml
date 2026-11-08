@@ -50,6 +50,7 @@ jobs:
       budget: ${{ steps.req.outputs.budget }}
       shared: ${{ steps.req.outputs.shared }}
       eval: ${{ steps.req.outputs.eval }}
+      prompt: ${{ steps.req.outputs.prompt }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -99,6 +100,7 @@ jobs:
       BUDGET: ${{ needs.plan.outputs.budget }}
       SHARED: ${{ needs.plan.outputs.shared }}
       EVAL: ${{ needs.plan.outputs.eval }}
+      PROMPT: ${{ needs.plan.outputs.prompt }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       BRANCH: ${{ github.event.pull_request.head.ref }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -136,7 +138,7 @@ jobs:
           set +e
           if [ "$EVAL" = "describe" ]; then
             # The 6B description-reading eval (agent/describe-eval).
-            node agent/describe-eval/run.mjs --live --set "$TICKETS" --models "$MODELS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" | tee run-summary.md
+            node agent/describe-eval/run.mjs --live --set "$TICKETS" --prompt "$PROMPT" --models "$MODELS" --repeat "$REPEAT" --budget "$BUDGET" --pr "$PR_NUMBER" --ledger-also "$RUNNER_TEMP/main-ledger.md" | tee run-summary.md
             code="${PIPESTATUS[0]}"
           else
             shared_flag=()

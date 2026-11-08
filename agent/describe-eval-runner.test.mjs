@@ -110,7 +110,7 @@ test('the model-run workflow takes an eval request through the same gate', async
   const { checkRequest, planText } = await import('./plan-request.mjs');
   const ok = checkRequest({ eval: 'describe', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], repeat: 3, budget: 12 });
   assert.deepEqual(ok.errors, []);
-  assert.deepEqual(ok.request, { eval: 'describe', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], tickets: ['tuned'], repeat: 3, budget: 12, shared: false });
+  assert.deepEqual(ok.request, { eval: 'describe', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], tickets: ['tuned'], prompt: 'describe-v1', repeat: 3, budget: 12, shared: false });
   assert.deepEqual(checkRequest({ eval: 'describe', set: 'heldout', models: ['claude-opus-5-5'], repeat: 3, budget: 2 }).request.tickets, ['heldout']);
   assert.ok(checkRequest({ eval: 'describe', set: 'other', models: ['claude-opus-5-5'], budget: 2 }).errors.length);
   for (const bad of [{ eval: 'other', models: ['claude-haiku-5-5'], budget: 1 }, { eval: 'describe', models: ['claude-haiku-5-5'], budget: 26 }, { eval: 'describe', models: ['claude-haiku-5-5'], budget: 1, repeat: 11 }, { eval: 'describe', models: ['claude-haiku-5-5'], budget: 1, tickets: ['standard'] }]) assert.ok(checkRequest(bad).errors.length, JSON.stringify(bad));
@@ -119,7 +119,7 @@ test('the model-run workflow takes an eval request through the same gate', async
   assert.doesNotMatch(text, /\*\*Tickets:\*\*/);
   const { readFileSync } = await import('node:fs');
   const wf = readFileSync(new URL('../.github/workflows/model-run.yml', import.meta.url), 'utf8');
-  assert.match(wf, /if \[ "\$EVAL" = "describe" \]; then\n\s+# The 6B description-reading eval \(agent\/describe-eval\)\.\n\s+node agent\/describe-eval\/run\.mjs --live --set "\$TICKETS" --models "\$MODELS" --repeat "\$REPEAT" --budget "\$BUDGET" --pr "\$PR_NUMBER" --ledger-also/);
+  assert.match(wf, /if \[ "\$EVAL" = "describe" \]; then\n\s+# The 6B description-reading eval \(agent\/describe-eval\)\.\n\s+node agent\/describe-eval\/run\.mjs --live --set "\$TICKETS" --prompt "\$PROMPT" --models "\$MODELS" --repeat "\$REPEAT" --budget "\$BUDGET" --pr "\$PR_NUMBER" --ledger-also/);
   assert.match(wf, /git add -A -- src\/data\/agent-runs agent\/runs agent\/describe-eval/);
 });
 
@@ -295,3 +295,34 @@ test('a heldout-2 freeze missing a required field, or with a changed dependency,
   const firstCut = structuredClone(first); delete firstCut.frozen.promptSha256;
   assert.match((await freezeProblems('heldout', firstCut)).join(), /the freeze is missing the prompt/);
 });
+
+test('heldout-2 runs: the request, the planner and run.mjs accept only the frozen prompt and scorer', async () => {
+  const { checkRequest, KNOWN_DESCRIBE_SETS, KNOWN_PROMPTS } = await import('./plan-request.mjs');
+  const { PROMPTS } = await import('./describe-eval/prompts.mjs');
+  const { SET_FILES } = await import('./describe-eval/audit.mjs');
+  assert.deepEqual(KNOWN_PROMPTS, Object.keys(PROMPTS));
+  assert.deepEqual(KNOWN_DESCRIBE_SETS, Object.keys(SET_FILES));
+  const models = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'];
+  const held = checkRequest({ eval: 'describe', set: 'heldout-2', models, repeat: 3, budget: 5 });
+  assert.deepEqual(held.errors, []);
+  assert.equal(held.request.prompt, 'describe-v2', 'the frozen prompt by default');
+  assert.match(checkRequest({ eval: 'describe', set: 'heldout-2', prompt: 'describe-v1', models, budget: 5 }).errors.join(), /frozen with prompt describe-v2/);
+  assert.match(checkRequest({ eval: 'describe', prompt: 'describe-v9', models, budget: 5 }).errors.join(), /prompt must be one of/);
+  assert.equal(checkRequest({ eval: 'describe', set: 'tuned', prompt: 'describe-v2', models, budget: 5 }).request.prompt, 'describe-v2');
+  const { spawnSync } = await import('node:child_process');
+  const run = (...a) => spawnSync(process.execPath, ['describe-eval/run.mjs', ...a], { cwd: new URL('.', import.meta.url), encoding: 'utf8' });
+  const est = run('--estimate', '--set', 'heldout-2', '--models', 'claude-haiku-5-5');
+  assert.equal(est.status, 0, est.stderr);
+  assert.match(est.stdout, /Set heldout-2, prompt describe-v2, scorer score-v2\./);
+  for (const [flag, value, msg] of [['--prompt', 'describe-v1', /refusing --prompt describe-v1/], ['--scorer', 'score-v1', /refusing --scorer score-v1/]]) {
+    const r = run('--estimate', '--set', 'heldout-2', flag, value);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, msg);
+  }
+  // The dry run goes through the whole pipeline with the frozen prompt and scorer, marked provisional.
+  const dry = run('--dry-run', '--set', 'heldout-2', '--repeat', '1');
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.match(dry.stdout, /Prompt describe-v2, .*set heldout-2\. Scorer score-v2\./);
+  assert.match(dry.stdout, /\*\*Provisional:\*\*/);
+});
+

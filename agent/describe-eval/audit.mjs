@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The blind question audit (AUDIT.md, policy audit-v1). No model calls.
 //
-//   node agent/describe-eval/audit.mjs sheet --date 2026-11-08 --set tuned|heldout [--out file]
+//   node agent/describe-eval/audit.mjs sheet --date 2026-11-08 --set tuned|heldout|heldout-2 [--prompt describe-v2] [--out file]
 //   node agent/describe-eval/audit.mjs check --audit results/audit-2026-11-08.json
 //
 // sheet: every aiActions question from the 6A rules and the saved model
@@ -20,10 +20,14 @@ export const AUDIT_POLICY = 'audit-v1';
 const here = dirname(fileURLToPath(import.meta.url));
 export const SET_FILES = { tuned: 'cases.json', heldout: 'heldout.json', 'heldout-2': 'heldout-2.json' };
 
-// Saved result files for a date and set.
-export function resultFiles(date, set) {
-  const prefix = `${date}${set === 'tuned' ? '' : `-${set}`}-`;
-  return readdirSync(join(here, 'results')).filter((f) => f.startsWith(prefix) && f.endsWith('.json') && (set !== 'tuned' || !/^heldout/.test(f.slice(prefix.length))));
+// Saved result files for a date, set and prompt. Older results don't record
+// their set, which is then read from the file name.
+export function resultFiles(date, set, promptVersion = 'describe-v1') {
+  const setOf = (f, r) => r.set || (f.startsWith(`${date}-heldout-2-`) ? 'heldout-2' : f.startsWith(`${date}-heldout-`) ? 'heldout' : 'tuned');
+  return readdirSync(join(here, 'results')).filter((f) => f.startsWith(`${date}-`) && f.endsWith('.json')).filter((f) => {
+    const r = JSON.parse(readFileSync(join(here, 'results', f), 'utf8'));
+    return r.format && setOf(f, r) === set && r.promptVersion === promptVersion;
+  });
 }
 
 // The blind sheet: wording and quote only.
@@ -53,10 +57,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     const date = option('date', null); const set = option('set', 'tuned');
     if (!date || !SET_FILES[set]) { console.error(`Use: sheet --date <date> --set ${Object.keys(SET_FILES).join('|')}`); process.exit(1); }
     const cases = loadCases(new URL(`./${SET_FILES[set]}`, import.meta.url));
-    const results = resultFiles(date, set).map((f) => JSON.parse(readFileSync(join(here, 'results', f), 'utf8')));
+    const promptVersion = option('prompt', 'describe-v1');
+    const results = resultFiles(date, set, promptVersion).map((f) => JSON.parse(readFileSync(join(here, 'results', f), 'utf8')));
     const questions = auditSheet({ cases, results });
-    const out = option('out', join(here, 'results', `audit-${date}${set === 'tuned' ? '' : `-${set}`}.json`));
-    writeFileSync(out, `${JSON.stringify({ policy: AUDIT_POLICY, source: { date, set }, auditor: null, auditedOn: null, questions }, null, 2)}\n`);
+    const out = option('out', join(here, 'results', `audit-${date}${set === 'tuned' ? '' : `-${set}`}${promptVersion === 'describe-v1' ? '' : `-${promptVersion}`}.json`));
+    writeFileSync(out, `${JSON.stringify({ policy: AUDIT_POLICY, source: { date, set, promptVersion }, auditor: null, auditedOn: null, questions }, null, 2)}\n`);
     console.log(`${questions.length} questions to classify, written to ${out}.`);
   } else if (cmd === 'check') {
     const audit = loadAudit(option('audit', ''));

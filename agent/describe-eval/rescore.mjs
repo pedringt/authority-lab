@@ -2,7 +2,7 @@
 // Re-score saved readings with another scorer version: no model calls, no cost.
 // The saved result files are only read, never changed.
 //
-//   node agent/describe-eval/rescore.mjs --date 2026-11-08 --set tuned|heldout [--scorer score-v2] [--audit file] [--write]
+//   node agent/describe-eval/rescore.mjs --date 2026-11-08 --set tuned|heldout|heldout-2 [--prompt describe-v2] [--scorer score-v2] [--audit file] [--write]
 //
 // Prints, for the 6A rules and each saved model, per-field counts, the
 // consequential fields right per run and the gate per run, under score-v1 and
@@ -78,7 +78,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const SETS = SET_FILES;
   if (!SETS[set]) { console.error(`--set must be one of: ${Object.keys(SETS).join(', ')}.`); process.exit(1); }
   const cases = loadCases(new URL(`./${SETS[set]}`, import.meta.url));
-  const files = resultFiles(date, set);
+  const promptVersion = option('prompt', 'describe-v1');
+  const files = resultFiles(date, set, promptVersion);
   const auditFile = option('audit', null);
   const audit = auditFile ? loadAudit(auditFile) : null;
   if (audit && scorer !== 'score-v2') { console.error('--audit applies to score-v2 only.'); process.exit(1); }
@@ -90,5 +91,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   }
   const text = rescoreText(rescore({ cases, results, scorer, audit }), { scorer, set, date, audited: !!audit });
   console.log(text);
-  if (argv.includes('--write')) writeFileSync(join(here, 'results', `rescore-${date}${set === 'tuned' ? '' : `-${set}`}-${scorer}${audit ? '-audited' : ''}.md`), `${text}\n`);
+  if (argv.includes('--write')) writeFileSync(join(here, 'results', `rescore-${date}${set === 'tuned' ? '' : `-${set}`}${promptVersion === 'describe-v1' ? '' : `-${promptVersion}`}-${scorer}${audit ? '-audited' : ''}.md`), `${text}\n`);
 }

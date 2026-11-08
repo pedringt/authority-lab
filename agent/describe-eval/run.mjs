@@ -4,6 +4,9 @@
 //   node agent/describe-eval/run.mjs --estimate [--models a,b,c] [--repeat 3]
 //   node agent/describe-eval/run.mjs --dry-run [--repeat 3]
 //   node agent/describe-eval/run.mjs --live --models claude-haiku-5-5,claude-sonnet-5-5,claude-opus-5-5 --repeat 3 --budget 10 [--pr 172]
+//   ... [--set tuned|heldout|heldout-2] [--prompt describe-v1|describe-v2] [--scorer score-v1|score-v2]
+//
+// heldout-2 is frozen with its prompt and scorer and is run with exactly those.
 //
 // --estimate prints the call count and the expected and worst-case cost.
 // --dry-run runs the whole pipeline on the reviewed cases with the mock model
@@ -21,6 +24,9 @@ import { fileURLToPath } from 'node:url';
 import { PRICES, createBudget } from '../runs.mjs';
 import { readLedger, checkCap, appendLedger, updateLedger } from '../ledger.mjs';
 import { loadCases, estimateEval, evalModel, mockModel, resultsText, DEFAULT_REPEAT } from './runner.mjs';
+import { PROMPTS, DEFAULT_PROMPT } from './prompts.mjs';
+import { SCORERS, DEFAULT_SCORER } from './score.mjs';
+import { SET_FILES } from './audit.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RESULTS = join(here, 'results');
@@ -30,27 +36,42 @@ const option = (name, fallback) => { const i = argv.indexOf(`--${name}`); return
 const list = (name, fallback) => String(option(name, fallback)).split(',').map((x) => x.trim()).filter(Boolean);
 const repeat = Number(option('repeat', DEFAULT_REPEAT));
 if (!(Number.isInteger(repeat) && repeat >= 1 && repeat <= 10)) { console.error('--repeat must be a whole number from 1 to 10.'); process.exit(1); }
-// Which set: the 60 tuned cases, or the held-out ones the rules and the
-// prompt were never changed on (heldout.json, 2026-11-08).
-const SETS = { tuned: new URL('./cases.json', import.meta.url), heldout: new URL('./heldout.json', import.meta.url) };
+// Which set: the 60 tuned cases; the first held-out set (heldout.json,
+// development data since describe-v2 was drafted from it); or heldout-2, the
+// fresh set frozen with describe-v2, score-v2 and audit-v1 (2026-11-08).
 const set = option('set', 'tuned');
-if (!SETS[set]) { console.error(`--set must be one of: ${Object.keys(SETS).join(', ')}.`); process.exit(1); }
-// The held-out set is used only frozen and unchanged since (freeze.mjs).
-if (set === 'heldout') {
-  const { freezeProblems } = await import('./freeze.mjs');
-  const problems = await freezeProblems();
+if (!SET_FILES[set]) { console.error(`--set must be one of: ${Object.keys(SET_FILES).join(', ')}.`); process.exit(1); }
+let promptVersion = option('prompt', null);
+let scorer = option('scorer', null);
+// A held-out set is used only frozen and unchanged since (freeze.mjs); a
+// frozen set that names its prompt and scorer is run with exactly those.
+if (set !== 'tuned') {
+  const { freezeProblems, readSet } = await import('./freeze.mjs');
+  const problems = await freezeProblems(set);
   if (problems.length) { console.error(`The held-out set can't be used: ${problems.join('; ')}.`); process.exit(1); }
+  const frozen = readSet(set).frozen;
+  if (frozen.scorer) {
+    if (promptVersion && promptVersion !== frozen.promptVersion) { console.error(`${set} is frozen with prompt ${frozen.promptVersion}; refusing --prompt ${promptVersion}.`); process.exit(1); }
+    if (scorer && scorer !== frozen.scorer) { console.error(`${set} is frozen with ${frozen.scorer}; refusing --scorer ${scorer}.`); process.exit(1); }
+    promptVersion = frozen.promptVersion; scorer = frozen.scorer;
+  }
 }
-const cases = loadCases(SETS[set]);
+promptVersion = promptVersion || DEFAULT_PROMPT;
+scorer = scorer || DEFAULT_SCORER;
+if (!PROMPTS[promptVersion]) { console.error(`--prompt must be one of: ${Object.keys(PROMPTS).join(', ')}.`); process.exit(1); }
+if (!SCORERS.includes(scorer)) { console.error(`--scorer must be one of: ${SCORERS.join(', ')}.`); process.exit(1); }
+const cases = loadCases(new URL(`./${SET_FILES[set]}`, import.meta.url));
 if (!cases.length) { console.error('No reviewed cases: nothing counts until Paige reviews the labels.'); process.exit(1); }
 
 function fileFor(date, model) {
   mkdirSync(RESULTS, { recursive: true });
-  const stem = `${date}${set === 'tuned' ? '' : `-${set}`}-${model}`;
+  const stem = `${date}${tag}-${model}`;
   let name = `${stem}.json`;
   for (let i = 2; existsSync(join(RESULTS, name)); i++) name = `${stem}-${i}.json`;
   return join(RESULTS, name);
 }
+// File names: the set, and the prompt when it isn't v1, so runs never collide.
+const tag = `${set === 'tuned' ? '' : `-${set}`}${promptVersion === 'describe-v1' ? '' : `-${promptVersion}`}`;
 const save = (file, result) => writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
 
 export function estimateText(e) {
@@ -62,13 +83,14 @@ export function estimateText(e) {
 }
 
 if (flag('estimate')) {
-  console.log(estimateText(estimateEval({ cases, models: list('models', Object.keys(PRICES).join(',')), repeat })));
+  console.log(estimateText(estimateEval({ cases, models: list('models', Object.keys(PRICES).join(',')), repeat, promptVersion })));
+  console.log(`Set ${set}, prompt ${promptVersion}, scorer ${scorer}.`);
   process.exit(0);
 }
 
 if (flag('dry-run')) {
   const date = option('date', new Date().toISOString().slice(0, 10));
-  const result = await evalModel({ cases, model: mockModel(), modelId: 'mock-6a-rules', repeat, date });
+  const result = await evalModel({ cases, model: mockModel(), modelId: 'mock-6a-rules', repeat, date, promptVersion, scorer, set });
   console.log(resultsText([result]));
   console.error(`Dry run: ${cases.length} cases × ${repeat} runs through the mock model (the 6A rules). No network, no cost, nothing saved.`);
   process.exit(0);
@@ -97,10 +119,11 @@ if (flag('live')) {
       return { text, stop_reason: reply.stop_reason, usage: reply.usage };
     },
   });
-  console.error(estimateText(estimateEval({ cases, models, repeat })));
+  console.error(estimateText(estimateEval({ cases, models, repeat, promptVersion })));
+  console.error(`Set ${set}, prompt ${promptVersion}, scorer ${scorer}.`);
   console.error(`Hard cap for this invocation: $${cap.toFixed(2)}. ${room.text}`);
   const marker = `running (${process.pid}-${Date.now()})`;
-  const base = { date, pr: pr ? `#${pr}` : '—', models: models.join(', '), tickets: `describe-eval ${set} (${cases.length} cases)`, repeats: repeat, cap };
+  const base = { date, pr: pr ? `#${pr}` : '—', models: models.join(', '), tickets: `describe-eval ${set} (${cases.length} cases)${promptVersion === 'describe-v1' ? '' : `, ${promptVersion}`}`, repeats: repeat, cap };
   appendLedger({ ...base, cost: 0, status: marker });
   const budget = createBudget(cap, { onSpend: (spent) => updateLedger(marker, { ...base, cost: spent, status: marker }) });
   const results = [];
@@ -112,7 +135,7 @@ if (flag('live')) {
     for (const m of models) {
       console.error(`Running ${m}: ${cases.length} cases × ${repeat}…`);
       const file = fileFor(date, m);
-      const result = await evalModel({ cases, model: live(m), modelId: m, repeat, budget, date, onRun: (partial) => save(file, partial) });
+      const result = await evalModel({ cases, model: live(m), modelId: m, repeat, budget, date, promptVersion, scorer, set, onRun: (partial) => save(file, partial) });
       save(file, result);
       results.push(result);
       console.error(`${m}: $${result.cost.toFixed(4)}; ${result.passed ? 'passes' : 'does not pass'}. Spent so far $${budget.spent.toFixed(4)}.`);
@@ -126,7 +149,7 @@ if (flag('live')) {
   }
   if (results.length) {
     const text = resultsText(results, { cap });
-    writeFileSync(join(RESULTS, `summary-${date}${set === 'tuned' ? '' : `-${set}`}.md`), `${text}\n`);
+    writeFileSync(join(RESULTS, `summary-${date}${tag}.md`), `${text}\n`);
     console.log(text);
   }
   process.exit(status === 'finished' ? 0 : status.startsWith('stopped') ? 2 : 1);

@@ -8,8 +8,13 @@
 import { readFileSync } from 'node:fs';
 import { readDescription, CONTEXT_FIELDS } from '../../src/store/index.js';
 import { PRICES, costOf } from '../runs.mjs';
-import { PROMPT_VERSION, SYSTEM, OUTPUT_SCHEMA, MAX_TOKENS, EFFORT, buildRequest, checkReply } from './prompt.mjs';
-import { scoreCase, summarise, gate, CONSEQUENTIAL } from './score.mjs';
+import { PROMPTS, DEFAULT_PROMPT } from './prompts.mjs';
+import { scoreCase, summarise, gate, CONSEQUENTIAL, DEFAULT_SCORER } from './score.mjs';
+
+// A run uses one prompt version (prompts.mjs) and one scorer (score.mjs).
+// With score-v2, a run's gate is provisional until the questions are audited
+// (AUDIT.md) and the readings re-scored with the audit (rescore.mjs).
+const promptOf = (version = DEFAULT_PROMPT) => { const p = PROMPTS[version]; if (!p) throw new Error(`Unknown prompt: ${version}`); return p; };
 
 export const RESULT_FORMAT = 'authority-lab-describe-eval/1';
 export const DEFAULT_REPEAT = 3;
@@ -21,32 +26,33 @@ export function loadCases(file = new URL('./cases.json', import.meta.url)) {
 }
 
 // The 6A rules on the same cases: the baseline every gate compares against.
-export const baselineScores = (cases) => cases.map((c) => scoreCase(c, readDescription(c.text), { allowedFields: ALLOWED }));
+export const baselineScores = (cases, scorer = DEFAULT_SCORER) => cases.map((c) => scoreCase(c, readDescription(c.text), { allowedFields: ALLOWED, scorer }));
 
 // Tokens for one request. Expected: about four characters a token, and a
 // typical reply (some thinking at medium effort, then the JSON). Worst: two
 // characters a token (as the budget guard assumes) and max_tokens out.
 export const TYPICAL_OUTPUT = 900;
-function requestChars(text) { return SYSTEM.length + JSON.stringify(OUTPUT_SCHEMA).length + text.length + 40; }
+function requestChars(prompt, text) { return prompt.SYSTEM.length + JSON.stringify(prompt.OUTPUT_SCHEMA).length + text.length + 40; }
 
-export function estimateEval({ cases, models, repeat = DEFAULT_REPEAT }) {
+export function estimateEval({ cases, models, repeat = DEFAULT_REPEAT, promptVersion = DEFAULT_PROMPT }) {
+  const prompt = promptOf(promptVersion);
   const rows = models.map((model) => {
     const p = PRICES[model];
     if (!p) throw new Error(`No price for "${model}".`);
     let inExp = 0; let inWorst = 0;
-    for (const c of cases) { inExp += Math.ceil(requestChars(c.text) / 4); inWorst += Math.ceil(requestChars(c.text) / 2); }
+    for (const c of cases) { inExp += Math.ceil(requestChars(prompt, c.text) / 4); inWorst += Math.ceil(requestChars(prompt, c.text) / 2); }
     const calls = cases.length * repeat;
-    const tokens = { expected: { input: inExp * repeat, output: TYPICAL_OUTPUT * calls }, worst: { input: inWorst * repeat, output: MAX_TOKENS * calls } };
+    const tokens = { expected: { input: inExp * repeat, output: TYPICAL_OUTPUT * calls }, worst: { input: inWorst * repeat, output: prompt.MAX_TOKENS * calls } };
     const dollars = (t) => (t.input * p.input + t.output * p.output) / 1e6;
     return { model, calls, tokens, dollars: { expected: dollars(tokens.expected), worst: dollars(tokens.worst) } };
   });
   const sum = (k) => rows.reduce((n, r) => n + r.dollars[k], 0);
-  return { cases: cases.length, repeat, promptVersion: PROMPT_VERSION, effort: EFFORT, maxTokens: MAX_TOKENS, rows, calls: rows.reduce((n, r) => n + r.calls, 0), dollars: { expected: sum('expected'), worst: sum('worst') } };
+  return { cases: cases.length, repeat, promptVersion: prompt.PROMPT_VERSION, effort: prompt.EFFORT, maxTokens: prompt.MAX_TOKENS, rows, calls: rows.reduce((n, r) => n + r.calls, 0), dollars: { expected: sum('expected'), worst: sum('worst') } };
 }
 
 // One reading: call, parse, check, score.
-async function readOne({ c, model, modelId, budget }) {
-  const request = buildRequest(c.text);
+async function readOne({ c, model, modelId, budget, prompt, scorer }) {
+  const request = prompt.buildRequest(c.text);
   if (budget) budget.before(modelId, { system: request.system, tools: [], messages: request.messages, maxTokens: request.maxTokens });
   const t0 = Date.now();
   const reply = await model.respond(request);
@@ -56,8 +62,8 @@ async function readOne({ c, model, modelId, budget }) {
   else { try { raw = JSON.parse(reply.text); } catch (err) { parseError = `not JSON: ${err.message}`; } }
   // A reply that can't be used is scored as saying nothing: the 6A fallback
   // covers it in the product, and here it counts as missed, never as right.
-  const { reading, dropped } = raw ? checkReply(c.text, raw) : { reading: { proposals: [], questions: [] }, dropped: [] };
-  return { id: c.id, stop_reason: reply.stop_reason, usage: reply.usage || {}, cost: costOf(modelId, reply.usage || {}), latencyMs, parseError, raw, reading, dropped, score: scoreCase(c, reading, { allowedFields: ALLOWED }) };
+  const { reading, dropped } = raw ? prompt.checkReply(c.text, raw) : { reading: { proposals: [], questions: [] }, dropped: [] };
+  return { id: c.id, stop_reason: reply.stop_reason, usage: reply.usage || {}, cost: costOf(modelId, reply.usage || {}), latencyMs, parseError, raw, reading, dropped, score: scoreCase(c, reading, { allowedFields: ALLOWED, scorer }) };
 }
 
 const pct = (xs, q) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
@@ -84,14 +90,15 @@ export function runReport(readings, baseline) {
 
 // Every run of one model. Each finished run is handed to onRun at once, so a
 // stop partway keeps what was done.
-export async function evalModel({ cases, model, modelId, repeat = DEFAULT_REPEAT, budget = null, date, onRun = null, onCase = null }) {
-  const baseline = baselineScores(cases);
-  const result = { format: RESULT_FORMAT, promptVersion: PROMPT_VERSION, effort: EFFORT, maxTokens: MAX_TOKENS, model: modelId, date, repeat, cases: cases.length, runs: [], stoppedEarly: null };
+export async function evalModel({ cases, model, modelId, repeat = DEFAULT_REPEAT, budget = null, date, onRun = null, onCase = null, promptVersion = DEFAULT_PROMPT, scorer = DEFAULT_SCORER, set = null }) {
+  const prompt = promptOf(promptVersion);
+  const baseline = baselineScores(cases, scorer);
+  const result = { format: RESULT_FORMAT, promptVersion: prompt.PROMPT_VERSION, effort: prompt.EFFORT, maxTokens: prompt.MAX_TOKENS, scorer, audited: false, ...(set ? { set } : {}), model: modelId, date, repeat, cases: cases.length, runs: [], stoppedEarly: null };
   for (let k = 1; k <= repeat; k++) {
     const readings = [];
     try {
       for (const c of cases) {
-        const r = await readOne({ c, model, modelId, budget });
+        const r = await readOne({ c, model, modelId, budget, prompt, scorer });
         readings.push(r);
         if (onCase) onCase(k, readings.length);
         // After the reading is kept, so a call that reaches the cap is still recorded.
@@ -134,7 +141,10 @@ export function mockModel() {
 
 // The results as Markdown, for the run summary and the PR.
 export function resultsText(results, { cap = null } = {}) {
-  const lines = ['## 6B description-reading eval', '', `Prompt ${results[0] ? results[0].promptVersion : ''}, effort ${EFFORT}, max_tokens ${MAX_TOKENS}. Reviewed cases: ${results[0] ? results[0].cases : 0}.${cap != null ? ` Cap: $${cap.toFixed(2)}.` : ''}`, ''];
+  const first = results[0] || {};
+  const scorer = first.scorer || DEFAULT_SCORER;
+  const lines = ['## 6B description-reading eval', '', `Prompt ${first.promptVersion || ''}, effort ${first.effort || ''}, max_tokens ${first.maxTokens || ''}${first.set ? `, set ${first.set}` : ''}. Scorer ${scorer}. Reviewed cases: ${first.cases || 0}.${cap != null ? ` Cap: $${cap.toFixed(2)}.` : ''}`, ''];
+  if (scorer === 'score-v2' && !first.audited) lines.push('**Provisional:** score-v2 here uses each reader\'s own `about` tag. The gate result counts only after the blind question audit (AUDIT.md) and `rescore.mjs --audit`.', '');
   lines.push('| Model | Run | Gate | Wrong at Clear | Wrong at Likely | Consequential right | Missed asks | Dropped (quotes) | Unusable | Cost | Per reading | p50 / p95 |');
   lines.push('|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const res of results) {
