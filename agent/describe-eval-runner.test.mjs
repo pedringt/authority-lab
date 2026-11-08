@@ -160,3 +160,33 @@ test('the held-out freeze: labels, rules and prompt are hashed; any change after
     assert.match(r.stderr, /held-out set can't be used: the held-out set is not frozen yet/);
   }
 });
+
+test('prompt describe-v2 (draft): a new version beside v1, same schema and checks, v1 untouched', async () => {
+  const v1 = await import('./describe-eval/prompt.mjs');
+  const v2 = await import('./describe-eval/prompt-v2.mjs');
+  assert.equal(v1.PROMPT_VERSION, 'describe-v1');
+  assert.equal(v2.PROMPT_VERSION, 'describe-v2');
+  assert.notEqual(v2.SYSTEM, v1.SYSTEM);
+  assert.equal(v2.OUTPUT_SCHEMA, v1.OUTPUT_SCHEMA);
+  assert.equal(v2.checkReply, v1.checkReply);
+  const r = v2.buildRequest('The AI drafts replies.');
+  assert.equal(r.system, v2.SYSTEM);
+  assert.deepEqual({ ...r, system: null }, { ...v1.buildRequest('The AI drafts replies.'), system: null });
+});
+
+test('the first held-out set is development data now; heldout-2 is new, draft, and counts for nothing yet', async () => {
+  const { readFileSync } = await import('node:fs');
+  const read = (f) => JSON.parse(readFileSync(new URL(`./describe-eval/${f}`, import.meta.url), 'utf8'));
+  assert.match(read('heldout.json').development.reason, /development data/);
+  const next = read('heldout-2.json');
+  const earlier = [...read('cases.json').cases, ...read('heldout.json').cases];
+  assert.equal(next.set, 'heldout-2');
+  assert.equal(next.cases.length, 15);
+  for (const c of next.cases) {
+    assert.ok(c.tags.includes('heldout-2'), c.id);
+    assert.equal(c.label, 'draft', c.id);
+    assert.ok(!earlier.some((e) => e.id === c.id || e.text === c.text), c.id);
+  }
+  const { loadCases } = await import('./describe-eval/runner.mjs');
+  assert.deepEqual(loadCases(new URL('./describe-eval/heldout-2.json', import.meta.url)), []);
+});
