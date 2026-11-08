@@ -137,3 +137,26 @@ test('the held-out set: separate file, its own ids and text, every case tagged h
   const { loadCases } = await import('./describe-eval/runner.mjs');
   assert.deepEqual(loadCases(new URL('./describe-eval/heldout.json', import.meta.url)).map((c) => c.id), held.cases.filter((c) => c.label === 'reviewed').map((c) => c.id));
 });
+
+test('the held-out freeze: labels, rules and prompt are hashed; any change after the freeze blocks the set', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fingerprint, freezeProblems } = await import('./describe-eval/freeze.mjs');
+  const held = JSON.parse(readFileSync(new URL('./describe-eval/heldout.json', import.meta.url), 'utf8'));
+  const f = fingerprint();
+  assert.match(f.rulesSha256, /^[0-9a-f]{64}$/);
+  if (held.frozen) {
+    // Once frozen, nothing it covers may change: this fails if the rules, the prompt or a label is edited.
+    assert.deepEqual(freezeProblems(), []);
+    assert.equal(held.frozen.promptVersion, f.promptVersion);
+  } else {
+    assert.deepEqual(freezeProblems(), ['the held-out set is not frozen yet']);
+    assert.ok(held.cases.every((c) => c.label === 'draft'), 'labels are marked reviewed only together with the freeze');
+  }
+  // A live run on an unfrozen set is refused before anything else.
+  const { spawnSync } = await import('node:child_process');
+  if (!held.frozen) {
+    const r = spawnSync(process.execPath, ['describe-eval/run.mjs', '--estimate', '--set', 'heldout'], { cwd: new URL('.', import.meta.url), encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /held-out set can't be used: the held-out set is not frozen yet/);
+  }
+});

@@ -35,6 +35,12 @@ if (!(Number.isInteger(repeat) && repeat >= 1 && repeat <= 10)) { console.error(
 const SETS = { tuned: new URL('./cases.json', import.meta.url), heldout: new URL('./heldout.json', import.meta.url) };
 const set = option('set', 'tuned');
 if (!SETS[set]) { console.error(`--set must be one of: ${Object.keys(SETS).join(', ')}.`); process.exit(1); }
+// The held-out set is used only frozen and unchanged since (freeze.mjs).
+if (set === 'heldout') {
+  const { freezeProblems } = await import('./freeze.mjs');
+  const problems = freezeProblems();
+  if (problems.length) { console.error(`The held-out set can't be used: ${problems.join('; ')}.`); process.exit(1); }
+}
 const cases = loadCases(SETS[set]);
 if (!cases.length) { console.error('No reviewed cases: nothing counts until Paige reviews the labels.'); process.exit(1); }
 

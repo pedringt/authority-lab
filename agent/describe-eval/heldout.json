@@ -81,7 +81,7 @@
         "acts": "ask"
       },
       "label": "draft",
-      "note": "Something automated sends and credits; the AI isn't named."
+      "note": "Something automated sends and credits; the AI isn't named. Follows the frozen labelling rule \"automated isn't AI\" (DECISIONS.md, Phase 6B boundaries, 2026-10-22; prompt describe-v1 rule 6)."
     },
     {
       "id": "h06",
@@ -162,7 +162,7 @@
       "tags": [
         "heldout",
         "negation",
-        "contradiction"
+        "negation-scope"
       ],
       "expect": {
         "acts": "yes",
@@ -172,7 +172,7 @@
         "people": "yes"
       },
       "label": "draft",
-      "note": "Not submitting, but it does send an email itself: that is acting, and it doesn't contradict \"never submits\"."
+      "note": "\"Never submits anything\" and sending an internal email are compatible: the negation is scoped to submitting (negation-scope, not a contradiction). Sending the email itself is acting (acts: yes)."
     },
     {
       "id": "h11",
@@ -217,7 +217,7 @@
         "regulated": "ask"
       },
       "label": "draft",
-      "note": "\"The system decides\": automated, AI not named; tenant screening may be regulated."
+      "note": "\"The system decides\": automated, AI not named; tenant screening may be regulated. Follows the frozen labelling rule \"automated isn't AI\" (DECISIONS.md, Phase 6B boundaries, 2026-10-22; prompt describe-v1 rule 6)."
     },
     {
       "id": "h14",
@@ -228,13 +228,10 @@
       ],
       "expect": {
         "acts": "ask",
-        "includes": [
-          "Retrieves"
-        ],
         "people": "yes"
       },
       "label": "draft",
-      "note": "Posted by something not named; the team receives the summaries."
+      "note": "Posted by something not named (acts: ask); the team receiving the summaries counts as people: yes. Summarising doesn't establish a work type in the list, so \"does\" isn't scored (Paige, 2026-11-08). Follows the frozen labelling rule \"automated isn't AI\" (DECISIONS.md, Phase 6B boundaries, 2026-10-22; prompt describe-v1 rule 6)."
     },
     {
       "id": "h15",
@@ -254,7 +251,7 @@
         "people": "yes"
       },
       "label": "draft",
-      "note": "Clinic setting, but no patient work; a question is acceptable."
+      "note": "Clinic setting, but no patient work is described. sensitive: no and regulated: no mean \"don't propose these facts from this description\"; they are not proof that sensitive data or regulatory obligations are absent. A question is acceptable."
     }
   ]
 }

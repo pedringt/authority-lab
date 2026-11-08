@@ -65,6 +65,16 @@ The rest are acceptable: unneeded questions on negated mentions, and two questio
 
 These cases were used to find the rules' gaps (#175), so the set is no longer unseen for 6A and its score here flatters the rules a little. That doesn't affect judging a model against it. Fresh held-out descriptions would check that the rules generalise.
 
+## The held-out set (`heldout.json`)
+
+Fifteen descriptions written on 2026-11-08, after the 6A rules were tuned on `cases.json` (#175) and after the first model run. They give a fair comparison on text neither the rules nor the prompt were shaped on.
+
+- **Same rubric as the tuned set.** That includes the frozen labelling rule "automated isn't AI" (`docs/DECISIONS.md`, Phase 6B boundaries, 2026-10-22; rule 6 of prompt `describe-v1`). Something automated acting ("customers automatically get…", "the system decides…", "summaries are posted…") is labelled `ask` for `acts`. h05, h13 and h14 apply it.
+- **`no` means "don't propose this fact from this description".** It isn't a claim that sensitive data or a regulatory obligation is absent (h15).
+- **A field with no fitting category isn't scored**, rather than forced. For h14 ("summarised"), no work type in the list fits, so `does` isn't scored.
+- **Frozen before the first run.** `node agent/describe-eval/freeze.mjs --write` records hashes of the reviewed labels, `src/store/describe.js` and `prompt.mjs`. A held-out run and the agent tests refuse the set if any of them changes afterwards. Changing the rules or the prompt for product reasons later means a deliberate re-freeze, recorded with a reason, and the held-out results before it no longer compare.
+- **Reported as a small comparison.** Fifteen descriptions, with fields scored selectively: results are given as per-field counts and the individual misses, not as a claim of reliability.
+
 ## The runner
 
 - `prompt.mjs`: the versioned prompt (`describe-v1`, effort medium, max_tokens 4000), the strict output schema (every object closed, every property required), and the reply checks. Items with an unknown field, a value outside the allowed list, or a quote that isn't word for word in the description are dropped and counted; an Unsure proposal becomes a question (decisions 3 and 6). One proposal per action from the model becomes one "what the AI does" fact with parts, the 6A shape.
