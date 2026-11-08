@@ -174,7 +174,7 @@ test('prompt describe-v2 (draft): a new version beside v1, same schema and check
   assert.deepEqual({ ...r, system: null }, { ...v1.buildRequest('The AI drafts replies.'), system: null });
 });
 
-test('the first held-out set is development data now; heldout-2 is new, draft, and counts for nothing yet', async () => {
+test('the first held-out set is development data now; heldout-2 is new, and counts only once frozen with reviewed labels', async () => {
   const { readFileSync } = await import('node:fs');
   const read = (f) => JSON.parse(readFileSync(new URL(`./describe-eval/${f}`, import.meta.url), 'utf8'));
   assert.match(read('heldout.json').development.reason, /development data/);
@@ -184,11 +184,12 @@ test('the first held-out set is development data now; heldout-2 is new, draft, a
   assert.equal(next.cases.length, 15);
   for (const c of next.cases) {
     assert.ok(c.tags.includes('heldout-2'), c.id);
-    assert.equal(c.label, 'draft', c.id);
+    // Labels are draft until the freeze, and reviewed only together with it.
+    assert.equal(c.label, next.frozen ? 'reviewed' : 'draft', c.id);
     assert.ok(!earlier.some((e) => e.id === c.id || e.text === c.text), c.id);
   }
   const { loadCases } = await import('./describe-eval/runner.mjs');
-  assert.deepEqual(loadCases(new URL('./describe-eval/heldout-2.json', import.meta.url)), []);
+  assert.equal(loadCases(new URL('./describe-eval/heldout-2.json', import.meta.url)).length, next.frozen ? 15 : 0);
 });
 
 test('score-v2: a work-type question no longer counts as asking about Acts; score-v1 is unchanged and the default', async () => {
@@ -232,9 +233,9 @@ test('the question audit: a blind sheet (wording and quote only), and score-v2 c
   assert.throws(() => scoreCase(c, reading, { scorer: 'score-v1', audit: {} }), /score-v2 only/);
 });
 
-test('heldout-2 freeze readiness: 12 paraphrase cases, each with a reason; the freeze will also cover tags, scorer and audit policy', async () => {
+test('heldout-2 freeze: 12 paraphrase cases with reasons; frozen with every required field and unchanged since', async () => {
   const { readFileSync } = await import('node:fs');
-  const { fingerprint, freezeReadiness, freezeProblems } = await import('./describe-eval/freeze.mjs');
+  const { fingerprint, freezeProblems, FREEZE_CONFIG } = await import('./describe-eval/freeze.mjs');
   const next = JSON.parse(readFileSync(new URL('./describe-eval/heldout-2.json', import.meta.url), 'utf8'));
   const para = next.cases.filter((c) => c.tags.includes('paraphrase'));
   assert.equal(para.length, 12);
@@ -243,8 +244,54 @@ test('heldout-2 freeze readiness: 12 paraphrase cases, each with a reason; the f
   assert.equal(f.promptVersion, 'describe-v2');
   assert.equal(f.scorer, 'score-v2');
   assert.equal(f.auditPolicy, 'audit-v1');
-  for (const k of ['tagsSha256', 'scorerSha256', 'auditPolicySha256']) assert.match(f[k], /^[0-9a-f]{64}$/);
-  if (!next.frozen) {
-    assert.deepEqual(freezeReadiness('heldout-2'), next.cases.every((c) => c.label === 'reviewed') ? [] : [`${next.cases.filter((c) => c.label !== 'reviewed').length} label(s) not reviewed`]);
-  } else assert.deepEqual(await freezeProblems('heldout-2'), []);
+  assert.deepEqual(Object.keys(f).sort(), [...FREEZE_CONFIG['heldout-2'].required].sort());
+  for (const k of ['tagsSha256', 'promptDepsSha256', 'promptRenderedSha256', 'scorerSha256', 'auditPolicySha256']) assert.match(f[k], /^[0-9a-f]{64}$/);
+  // Once frozen, nothing it covers may change: this fails if a label, tag, the rules, either prompt module, the scorer or the audit policy is edited.
+  if (next.frozen) assert.deepEqual(await freezeProblems('heldout-2'), []);
+});
+
+test('the freeze write: draft labels are marked reviewed in memory, validated and fingerprinted together', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { prepareFreeze, freezeProblems, fingerprint } = await import('./describe-eval/freeze.mjs');
+  const draft = JSON.parse(readFileSync(new URL('./describe-eval/heldout-2.json', import.meta.url), 'utf8'));
+  delete draft.frozen;
+  for (const c of draft.cases) c.label = 'draft';
+  const { set, problems } = await prepareFreeze('heldout-2', draft, { date: '2026-11-08' });
+  assert.deepEqual(problems, []);
+  assert.ok(set.cases.every((c) => c.label === 'reviewed'));
+  assert.ok(draft.cases.every((c) => c.label === 'draft'), 'the input is not changed');
+  // The labels hash is of the reviewed labels, not the drafts.
+  assert.equal(set.frozen.labelsSha256, (await fingerprint('heldout-2', set)).labelsSha256);
+  assert.notEqual(set.frozen.labelsSha256, (await fingerprint('heldout-2', draft)).labelsSha256);
+  assert.deepEqual(await freezeProblems('heldout-2', set), []);
+  // A set that isn't ready is refused, and nothing is produced.
+  const noReason = structuredClone(draft);
+  delete noReason.cases.find((c) => c.tags.includes('paraphrase')).paraphraseReason;
+  const refused = await prepareFreeze('heldout-2', noReason);
+  assert.equal(refused.set, undefined);
+  assert.match(refused.problems.join(), /without a reason/);
+  assert.match((await prepareFreeze('heldout-2', set)).problems.join(), /already frozen/);
+});
+
+test('a heldout-2 freeze missing a required field, or with a changed dependency, fails; the first set keeps its legacy list', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { prepareFreeze, freezeProblems, readSet } = await import('./describe-eval/freeze.mjs');
+  const draft = JSON.parse(readFileSync(new URL('./describe-eval/heldout-2.json', import.meta.url), 'utf8'));
+  delete draft.frozen;
+  const { set } = await prepareFreeze('heldout-2', draft, { date: '2026-11-08' });
+  for (const k of ['scorerSha256', 'auditPolicySha256', 'promptDepsSha256', 'scorer', 'auditPolicy']) {
+    const cut = structuredClone(set); delete cut.frozen[k];
+    assert.match((await freezeProblems('heldout-2', cut)).join(), /the freeze is missing/, k);
+  }
+  // prompt.mjs (v1's schema, settings and checks, imported by v2) changing breaks the freeze.
+  const moved = structuredClone(set); moved.frozen.promptDepsSha256 = '0'.repeat(64);
+  assert.match((await freezeProblems('heldout-2', moved)).join(), /prompt modules it imports \(prompt\.mjs\) changed/);
+  const tag = structuredClone(set); tag.cases[0].tags.push('extra');
+  assert.match((await freezeProblems('heldout-2', tag)).join(), /tags or paraphrase reasons changed/);
+  // The first set was frozen before these fields existed and is checked against its own list only.
+  const first = readSet('heldout');
+  assert.deepEqual(Object.keys(first.frozen).filter((k) => !['date', 'reviewedBy'].includes(k)).sort(), ['labelsSha256', 'promptSha256', 'promptVersion', 'rulesSha256']);
+  assert.deepEqual(await freezeProblems('heldout'), []);
+  const firstCut = structuredClone(first); delete firstCut.frozen.promptSha256;
+  assert.match((await freezeProblems('heldout', firstCut)).join(), /the freeze is missing the prompt/);
 });
