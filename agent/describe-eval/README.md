@@ -75,6 +75,27 @@ Fifteen descriptions written on 2026-11-08, after the 6A rules were tuned on `ca
 - **Frozen before the first run.** `node agent/describe-eval/freeze.mjs --write` records hashes of the reviewed labels, `src/store/describe.js` and `prompt.mjs`. A held-out run and the agent tests refuse the set if any of them changes afterwards. Changing the rules or the prompt for product reasons later means a deliberate re-freeze, recorded with a reason, and the held-out results before it no longer compare.
 - **Reported as a small comparison.** Fifteen descriptions, with fields scored selectively: results are given as per-field counts and the individual misses, not as a claim of reliability.
 
+## Results (prompt describe-v1, 2026-11-08)
+
+Full tables are in `results/summary-2026-11-08.md` (tuned set) and `results/summary-2026-11-08-heldout.md` (held-out set). **No model passes.**
+
+**Tuned set** (60 cases × 3 runs, $5.92). Opus made no wrong fact and missed no ask, but failed "better than 6A" because it over-asks (55 unneeded `acts` questions). Sonnet called n40's `acts` wrong at Clear in all three runs. Haiku did so once and missed sensitive data. 6A was tuned on this set.
+
+**Held-out set** (15 cases × 3 runs, $1.73). Fields right, summed over three runs, with 6A's single reading for comparison:
+
+| Reader | acts | sensitive | regulated | people | Consequential right per run |
+|---|---|---|---|---|---|
+| 6A rules | 8/15 | 2/4 | 1/6 | 2/8 | 11 of 25 |
+| Haiku 5.5 | 29/45 | 2/12 | 6/18 | 21/24 | 14, 12, 11 |
+| Sonnet 5.5 | 30/45 | 3/12 | 2/18 | 21/24 | 11, 11, 13 |
+| Opus 5.5 | 32/45 | 8/12 | 11/18 | 19/24 | 16, 16, 19 |
+
+- No reader made a wrong fact marked Clear.
+- Opus passed the gate in runs 1 and 3. Run 2 failed: `acts` at Likely on h01 ("Our HR assistant … sends each of them a welcome pack", where the label asks because "HR assistant" may be a person) and no question on h13's `regulated`.
+- h01 `acts` at Likely is also Sonnet's miss in all three runs and Haiku's in two. Sonnet missed the `regulated` ask on h04 and h09 in every run.
+- 6A's one wrong fact (h15 `regulated` at Likely, "clinic" read as healthcare) was made by no model.
+- Every model still asks unneeded `acts` questions where the label is `no` (h07, h08, h11, h12).
+
 ## The runner
 
 - `prompt.mjs`: the versioned prompt (`describe-v1`, effort medium, max_tokens 4000), the strict output schema (every object closed, every property required), and the reply checks. Items with an unknown field, a value outside the allowed list, or a quote that isn't word for word in the description are dropped and counted; an Unsure proposal becomes a question (decisions 3 and 6). One proposal per action from the model becomes one "what the AI does" fact with parts, the 6A shape.
