@@ -1,0 +1,306 @@
+{
+  "policy": "audit-v1",
+  "source": {
+    "date": "2026-11-08",
+    "set": "heldout-2",
+    "promptVersion": "describe-v2"
+  },
+  "auditor": null,
+  "auditedOn": null,
+  "questions": [
+    {
+      "key": "00574c65992fa64f",
+      "question": "The bot is named as the payer, but the text describes paying as a future plan rather than current behaviour.",
+      "quote": "We'd like the bot to start paying supplier invoices next year.",
+      "class": null
+    },
+    {
+      "key": "071631e3b4223503",
+      "question": "Who sends a rejection email: the AI, or a person?",
+      "quote": "The recruiting tool screens CVs and sends a rejection email to",
+      "class": null
+    },
+    {
+      "key": "0b6404344dbed305",
+      "question": "Who emails the summary to the account owner: does the AI send it itself, or does a person or other automation send it?",
+      "quote": "emailed to the account owner",
+      "class": null
+    },
+    {
+      "key": "0c2b739e360dc0eb",
+      "question": "Who emails the summary to the account owner: does the AI send it itself, or does a person or another automated step send it?",
+      "quote": "emailed to the account owner",
+      "class": null
+    },
+    {
+      "key": "197f7e57589de596",
+      "question": "Who sends the summary email to the account owner: the AI itself, other automation, or a person?",
+      "quote": "emailed to the account owner",
+      "class": null
+    },
+    {
+      "key": "21016109760de130",
+      "question": "Who or what approves refund requests under $50 overnight: the AI itself, or other automation such as a rule?",
+      "quote": "Refund requests under $50 are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "242366d3ad0c5c94",
+      "question": "Is the pricing agent an AI or a staff member, and if it is an AI, does it change the website prices itself or does a person apply them?",
+      "quote": "The pricing agent updates the prices on our website every morning",
+      "class": null
+    },
+    {
+      "key": "2577617bcccc12e0",
+      "question": "Who prints the discharge instructions for the patient: the nurse or other staff, or does the AI send them to print itself?",
+      "quote": "before it's printed for the patient",
+      "class": null
+    },
+    {
+      "key": "28924f0b88d41fad",
+      "question": "Who approves refunds under $50: the AI itself, or other automation such as a rule in the refund system?",
+      "quote": "are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "2b18bf8bf2057b7b",
+      "question": "The description says the email is sent but does not say who sends it. Does the AI itself send the summary email to the account owner, or does a person or other automation send it?",
+      "quote": "emailed to the account owner",
+      "class": null
+    },
+    {
+      "key": "3401a67841968fa5",
+      "question": "Who emails the summary to the account owner: the AI itself, or other automation or a person?",
+      "quote": "emailed to the account owner",
+      "class": null
+    },
+    {
+      "key": "343ff62950686f1d",
+      "question": "Is the scheduling assistant an AI that itself offers the slots and puts the chosen slot in the calendar, or is it a staff member doing this?",
+      "quote": "The scheduling assistant offers interview slots to shortlisted candidates and puts the chosen slot in the hiring manager's calendar.",
+      "class": null
+    },
+    {
+      "key": "37207fa2628f00c7",
+      "question": "Is the scheduling assistant an AI that itself offers the slots and puts the chosen slot in the calendar, or is it a staff member (e.g. a scheduling coordinator) who does this?",
+      "quote": "The scheduling assistant offers interview slots to shortlisted candidates and puts the chosen slot in the hiring manager's calendar.",
+      "class": null
+    },
+    {
+      "key": "3c36eb6d4cb9316f",
+      "question": "Is \"the pricing agent\" the AI itself, and does it change the website prices directly, or does a staff member make the updates?",
+      "quote": "The pricing agent updates the prices on our website",
+      "class": null
+    },
+    {
+      "key": "42a125dfba3a2a3e",
+      "question": "Who sends nothing: the AI, or a person?",
+      "quote": "Nothing goes out unless someone on the",
+      "class": null
+    },
+    {
+      "key": "4d3a9902150a2b68",
+      "question": "Who or what approves the refunds under $50: the AI itself, or other automation such as a rule in the refund system?",
+      "quote": "approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "53cb773e2e09757c",
+      "question": "Does the AI itself notify the class teacher, or does the system or someone else do it?",
+      "quote": "lets the class teacher know",
+      "class": null
+    },
+    {
+      "key": "53fc67f9c5d3deaf",
+      "question": "Does the pricing agent itself change the prices on the website, or is a person the one who makes the update?",
+      "quote": "The pricing agent updates the prices on our website every morning",
+      "class": null
+    },
+    {
+      "key": "5f5f86ffd848db12",
+      "question": "Does the AI write the call summary, or does something else produce it? The text doesn't name who or what generates it.",
+      "quote": "A summary of every sales call is generated",
+      "class": null
+    },
+    {
+      "key": "611e60a3511ab444",
+      "question": "Who prints the discharge instructions after the nurse checks them: the nurse or staff, other automation, or the AI itself?",
+      "quote": "before it's printed for the patient",
+      "class": null
+    },
+    {
+      "key": "6582b1ef636ca69f",
+      "question": "What does the AI do in this workflow: for example, does it assess or classify the refund requests, recommend approval, or something else?",
+      "quote": "Refund requests under $50 are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "65c3755e4ac0b3c3",
+      "question": "Does the AI itself notify the class teacher, or does some other automated step or person do that?",
+      "quote": "lets the class teacher know",
+      "class": null
+    },
+    {
+      "key": "80c8722b517608ec",
+      "question": "Does the scheduling assistant itself put the chosen slot into the hiring manager's calendar, or does a person do that?",
+      "quote": "puts the chosen slot in the hiring manager's calendar",
+      "class": null
+    },
+    {
+      "key": "8edcd2bf6a120546",
+      "question": "Who or what approves the refunds under $50: the AI itself, or other automation such as a rule in the refund system?",
+      "quote": "are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "917008bb26e35967",
+      "question": "Who approves the refund requests under $50 overnight: the AI itself, or other automation such as a rule in the system?",
+      "quote": "Refund requests under $50 are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "91de6218b7cbc6b5",
+      "question": "Who changes the room: the front-desk agent (a person) or the assistant itself?",
+      "quote": "the agent then changes the room if the guest asks",
+      "class": null
+    },
+    {
+      "key": "a004a552b3208cd0",
+      "question": "Is \"the pricing agent\" the AI itself changing prices on the website directly, or a staff member who updates them, perhaps using the AI's suggestions?",
+      "quote": "The pricing agent updates the prices on our website",
+      "class": null
+    },
+    {
+      "key": "a0dc5267bbff2556",
+      "question": "Is the \"pricing agent\" the AI itself changing the website prices, or a staff member who updates them, perhaps using the AI's suggestions?",
+      "quote": "The pricing agent updates the prices on our website",
+      "class": null
+    },
+    {
+      "key": "a1861dc1e7703d74",
+      "question": "Is the \"scheduling assistant\" the AI itself, and does it send the slot offers and add the booking to the hiring manager's calendar on its own, or does a person do that?",
+      "quote": "The scheduling assistant offers interview slots to shortlisted candidates and puts the chosen slot in the hiring manager's calendar.",
+      "class": null
+    },
+    {
+      "key": "a3b3355124a0e68f",
+      "question": "Who emails the summary to the account owner: the AI itself, other automation, or a person?",
+      "quote": "emailed to the account owner",
+      "class": null
+    },
+    {
+      "key": "a3c294d70aaa843a",
+      "question": "Is the pricing agent the AI itself changing the prices on the website, or is it a person or other automated process doing that?",
+      "quote": "The pricing agent updates the prices on our website",
+      "class": null
+    },
+    {
+      "key": "aa0c60c9e86d5b2e",
+      "question": "Who or what approves refunds under $50 overnight: the AI itself, or separate automation such as a rule?",
+      "quote": "approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "b544b047432f4dd4",
+      "question": "The text says refund requests under $50 are approved automatically but does not name who or what does the approving. Does the AI itself approve these refunds?",
+      "quote": "are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "bfd6feb2c0369374",
+      "question": "Who approves under $50: the AI, or a person?",
+      "quote": "are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "c26b0b3eaf02aa2f",
+      "question": "Who changes the room: the front-desk staff member, or the assistant itself?",
+      "quote": "the agent then changes the room if the guest asks",
+      "class": null
+    },
+    {
+      "key": "c3e9d7ada1a69854",
+      "question": "Does the scheduling assistant itself offer slots and put the chosen slot in the calendar, or do staff do those steps?",
+      "quote": "The scheduling assistant offers interview slots to shortlisted candidates and puts the chosen slot in the hiring manager's calendar.",
+      "class": null
+    },
+    {
+      "key": "c6e62c2e944fead7",
+      "question": "Does the AI itself print the instructions, or does someone else print them after the nurse's check?",
+      "quote": "before it's printed for the patient",
+      "class": null
+    },
+    {
+      "key": "c72445dc1be124f4",
+      "question": "Is the \"scheduling assistant\" the AI itself, or a staff member? Does the AI send the slot offers to candidates and add the booking to the hiring manager's calendar on its own?",
+      "quote": "The scheduling assistant offers interview slots to shortlisted candidates and puts the chosen slot in the hiring manager's calendar.",
+      "class": null
+    },
+    {
+      "key": "c7e632b516289af0",
+      "question": "Is the pricing agent an AI or a person or team? Who actually changes the prices on the website each morning?",
+      "quote": "The pricing agent updates the prices on our website every morning",
+      "class": null
+    },
+    {
+      "key": "d58f0604ae225beb",
+      "question": "Is the pricing agent the AI itself, changing the website prices directly, or is a person or other automated system making the price changes?",
+      "quote": "The pricing agent updates the prices on our website every morning",
+      "class": null
+    },
+    {
+      "key": "dae10b7e03083412",
+      "question": "Does the scheduling assistant itself send the interview slot offers and write the chosen slot into the hiring manager's calendar, or does a person do these steps?",
+      "quote": "The scheduling assistant offers interview slots to shortlisted candidates and puts the chosen slot in the hiring manager's calendar.",
+      "class": null
+    },
+    {
+      "key": "dba030b56d3eedd9",
+      "question": "Is the scheduling assistant the AI itself, so that it sends the interview offers and records the chosen slot in the hiring manager's calendar, or does another party do these actions?",
+      "quote": "The scheduling assistant offers interview slots",
+      "class": null
+    },
+    {
+      "key": "e141f4ad3f41ba2e",
+      "question": "Does the AI itself email the summary to the account owner, or does a person send it? The text doesn't name who does the emailing.",
+      "quote": "is generated and emailed to the account owner",
+      "class": null
+    },
+    {
+      "key": "ee3e7db1b2535814",
+      "question": "Is the \"scheduling assistant\" the AI itself, and does it send the slot offers to candidates and add the booking to the hiring manager's calendar without a person doing it?",
+      "quote": "The scheduling assistant offers interview slots to shortlisted candidates and puts the chosen slot in the hiring manager's calendar.",
+      "class": null
+    },
+    {
+      "key": "eed2cbf81221ecff",
+      "question": "Is the pricing agent an AI or a staff member, and if it's an AI, does it change the live website prices itself or does someone else apply them?",
+      "quote": "The pricing agent updates the prices on our website every morning",
+      "class": null
+    },
+    {
+      "key": "eeec7dcbcec0abea",
+      "question": "Who approves refund requests under $50 overnight: the AI, another automated system, or a person?",
+      "quote": "are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "ef78a59ec18117bf",
+      "question": "Who or what approves the refund requests under $50: does the AI itself approve them, or another person or system?",
+      "quote": "are approved automatically overnight",
+      "class": null
+    },
+    {
+      "key": "f05ffd626b516f9a",
+      "question": "Does the AI itself issue the order, or does an automated system outside the AI place it once the AI judges the damage covered?",
+      "quote": "issues a replacement order without anyone checking",
+      "class": null
+    },
+    {
+      "key": "f1e43258744216c7",
+      "question": "Does the scheduling assistant itself send the interview slot offers to candidates, or does a person send them after the assistant prepares them?",
+      "quote": "offers interview slots to shortlisted candidates",
+      "class": null
+    }
+  ]
+}
