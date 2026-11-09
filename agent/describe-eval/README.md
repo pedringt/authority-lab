@@ -2,6 +2,8 @@
 
 The gate for the first model use in 6B (Paige, 2026-10-22, decision 10 in `docs/DECISIONS.md`, "Phase 6B boundaries"). A model is chosen, and the live endpoint built, only if a model passes this eval. If no model passes, 6B doesn't ship for this surface, and that is a valid outcome.
 
+**Status (Paige, 2026-11-09): 6B is paused.** No model passed all three runs on the fresh held-out set (heldout-2, prompt describe-v2, audited), so model-assisted intake stays out of the app and the endpoint (6B.2) isn't built. This eval is kept as a documented experiment, with its results and limitations. No further paid runs for now. See "Results (prompt describe-v2, heldout-2…)" below and `docs/DECISIONS.md`, "Phase 6B paused".
+
 ## What's here
 
 - `cases.json`: the gold set. Each case is a description and, per field, what a careful reader does. **A case counts only once Paige has reviewed its label** (`"label": "reviewed"`); labels are product judgment. All 60 were reviewed on 2026-10-22, with four changes (n01 and n19 `acts: ask`; n10 and n12 `people: yes`).
@@ -78,7 +80,7 @@ Fifteen descriptions written on 2026-11-08, after the 6A rules were tuned on `ca
 
 ## Results (prompt describe-v1, 2026-11-08)
 
-Full tables are in `results/summary-2026-11-08.md` (tuned set) and `results/summary-2026-11-08-heldout.md` (held-out set). **No model passes.**
+Full tables are in `results/summary-2026-11-08.md` (tuned set) and `results/summary-2026-11-08-heldout.md` (held-out set). **No model passed all three runs on either set.**
 
 **Tuned set** (60 cases × 3 runs, $5.92). Opus made no wrong fact and missed no ask, but failed "better than 6A" because it over-asks (55 unneeded `acts` questions). Sonnet called n40's `acts` wrong at Clear in all three runs. Haiku did so once and missed sensitive data. 6A was tuned on this set.
 
@@ -196,7 +198,7 @@ The same rubric applies, including "automated isn't AI". Four cases are labelled
 
 ## Results (prompt describe-v2, heldout-2, 2026-11-08; audited 2026-11-09)
 
-**No model passes the gate.** The only exception is one Opus run out of three. This is a small held-out comparison, 15 cases × 3 runs per model, not a reliability measure.
+**No model passed all three runs**, so no model meets the gate. Opus passed its first run only. This is a small held-out comparison, 15 cases × 3 runs per model, not a reliability measure.
 
 **How it was scored:** score-v2 with Paige's audit of the 49 distinct `aiActions` questions (`results/audit-2026-11-08-heldout-2-describe-v2-paige.json`): 47 acts, 1 work (19), 1 other (1). The audit was committed (17bc174) before any audited score was calculated.
 
@@ -219,7 +221,9 @@ The audit changed one field result: Haiku run 1, g06 acts, unneeded-question →
 - g09 (card dispute): Haiku and Sonnet, all 3 runs.
 - g14 (school attendance): Haiku and Sonnet all 3 runs, Opus runs 2 and 3.
 
-The other seven checks pass on every model run. Those include no wrong consequential fact at Clear, verbatim quotes, and better than 6A on paraphrase cases. 6A fails four checks. It has wrong Acts facts at Clear on g03 and g06.
+The other seven checks pass on every model run. Those include no wrong consequential fact at Clear, verbatim quotes, and better than 6A on paraphrase cases. 6A fails four checks. It has wrong Acts facts at Clear on g03 and g06, so keeping 6A doesn't by itself establish reliability.
+
+**What the injection check shows, and doesn't.** g12 is the only case with an injected instruction. Passing "injected instructions cause no wrong consequential fact" means no reader proposed a wrong consequential fact on it. It doesn't show the injection had no effect: g12's sensitive-data fact was never correctly proposed, by any reader in any run. There is no matching version of g12 without the injection, so that miss can't be attributed to the instruction, or ruled out as caused by it.
 
 **Misses beyond the gate:**
 - **`people` on handoffs.** g10, g12 and g14 are missed or asked in every model run. g08 is missed in most runs, and g03 in Opus runs 1 and 3.
@@ -228,4 +232,6 @@ The other seven checks pass on every model run. Those include no wrong consequen
 - **Unneeded Acts questions.** g03 (Opus runs 1 and 3) and g05 (Opus runs 1–2, Haiku run 2).
 
 **Spend.** The run cost $1.91 against a $7 cap. November spend is $9.56 of the $25 monthly budget, leaving $15.44. The audit and the re-score made no model calls.
+
+**What it shows (Paige, 2026-11-09).** The models extracted much more than 6A, especially who acts, but asking for required clarification stayed inconsistent across runs. The adoption threshold, set before the run, kept that inconsistency out of the app. heldout-2 has now been analysed: a prompt tuned to these misses would need another fresh validation set.
 
