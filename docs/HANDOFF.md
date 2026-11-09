@@ -13,6 +13,7 @@ Read in this order:
 3. `docs/PRODUCT_PRINCIPLES.md`
 4. `docs/SETUP_FLOW.md`
 5. `docs/V1_SCOPE.md`
+   - `docs/V1_RECONCILIATION.md`: the v1 decisions (2026-11-09) and the remaining work, W1–W5, with acceptance criteria.
 6. `docs/TEMPLATES.md`
 7. `docs/AI_ASSISTANCE.md`
 8. `docs/GLOSSARY.md`
