@@ -18,13 +18,26 @@ import { fileURLToPath } from 'node:url';
 import { readDescription, CONTEXT_FIELDS } from '../../src/store/index.js';
 import { scoreCase, summarise, gate, CONSEQUENTIAL, SCORERS } from './score.mjs';
 import { loadCases } from './runner.mjs';
-import { loadAudit, resultFiles, SET_FILES } from './audit.mjs';
+import { loadAudit, resultFiles, auditSheet, SET_FILES } from './audit.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ALLOWED = CONTEXT_FIELDS.map((f) => f.key);
 const FIELDS = ['acts', 'sensitive', 'regulated', 'people'];
 
+// An audit must cover exactly the questions being judged: every one is looked
+// up (so none falls back to a reader's own `about`), and none is left over
+// from another run.
+export function auditCoverage({ cases, results, audit }) {
+  const asked = new Set(auditSheet({ cases, results }).map((q) => q.key));
+  const keys = new Set(Object.keys(audit));
+  return { missing: [...asked].filter((k) => !keys.has(k)), extra: [...keys].filter((k) => !asked.has(k)) };
+}
+
 export function rescore({ cases, results, scorer, audit = null }) {
+  if (audit) {
+    const { missing, extra } = auditCoverage({ cases, results, audit });
+    if (missing.length || extra.length) throw new Error(`The audit doesn't match these readings: ${missing.length} question(s) missing, ${extra.length} not asked here.`);
+  }
   const byId = Object.fromEntries(cases.map((c) => [c.id, c]));
   const score = (c, reading, s) => scoreCase(c, reading || { proposals: [], questions: [] }, { allowedFields: ALLOWED, scorer: s, audit: s === 'score-v1' ? null : audit });
   const readers = [{ name: '6A rules', runs: [cases.map((c) => ({ id: c.id, reading: readDescription(c.text) }))] }, ...results.map((r) => ({ name: r.model, runs: r.runs.filter((x) => !x.partial).map((x) => x.readings) }))];

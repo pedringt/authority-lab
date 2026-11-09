@@ -326,3 +326,20 @@ test('heldout-2 runs: the request, the planner and run.mjs accept only the froze
   assert.match(dry.stdout, /\*\*Provisional:\*\*/);
 });
 
+
+test('the audited re-score: the audit must cover exactly the questions judged; the heldout-2 audit does', async () => {
+  const { rescore, auditCoverage } = await import('./describe-eval/rescore.mjs');
+  const { loadAudit, resultFiles, SET_FILES } = await import('./describe-eval/audit.mjs');
+  const { readFileSync } = await import('node:fs');
+  const cases = loadCases(new URL(`./describe-eval/${SET_FILES['heldout-2']}`, import.meta.url));
+  const results = resultFiles('2026-11-08', 'heldout-2', 'describe-v2').map((f) => JSON.parse(readFileSync(new URL(`./describe-eval/results/${f}`, import.meta.url), 'utf8')));
+  assert.equal(results.length, 3);
+  const audit = loadAudit(new URL('./describe-eval/results/audit-2026-11-08-heldout-2-describe-v2-paige.json', import.meta.url));
+  assert.deepEqual(auditCoverage({ cases, results, audit }), { missing: [], extra: [] });
+  const [first] = Object.keys(audit);
+  const { [first]: _, ...short } = audit;
+  assert.throws(() => rescore({ cases, results, scorer: 'score-v2', audit: short }), /1 question\(s\) missing, 0 not asked here/);
+  assert.throws(() => rescore({ cases, results, scorer: 'score-v2', audit: { ...audit, ffffffffffffffff: 'acts' } }), /0 question\(s\) missing, 1 not asked here/);
+  // The blank sheet can't be used: every class is empty.
+  assert.throws(() => loadAudit(new URL('./describe-eval/results/audit-2026-11-08-heldout-2-describe-v2.json', import.meta.url)), /without a class/);
+});

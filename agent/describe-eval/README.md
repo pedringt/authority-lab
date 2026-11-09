@@ -161,13 +161,13 @@ The changes, and the describe-v1 failures each addresses. Tuned-set counts are s
 
 1. ~~**Paige approves the freeze and the audit policy.**~~ Done 2026-11-08. `freeze.mjs --set heldout-2 --write` marked the 15 labels reviewed and recorded the freeze in the same write. It covers the labels, the tags and paraphrase reasons, the 6A rules, `prompt-v2.mjs`, the `prompt.mjs` it imports (schema, settings and reply checks), the prompt and schema as sent, `score.mjs` (score-v2) and `AUDIT.md` (audit-v1). Every one of those fields is required: a heldout-2 freeze missing any of them, or with any changed, is refused. The first set is still checked against its own shorter list.
 2. ~~**Wire `--prompt` and `--set heldout-2`.**~~ Done. `run.mjs`, the runner, `plan-request.mjs` and the `model-run` workflow carry the prompt version. A heldout-2 run takes its prompt and scorer from the freeze and refuses any other, as does the request planner. A run summary scored with score-v2 is marked provisional. Request: `{"eval": "describe", "set": "heldout-2", "models": [...], "repeat": 3, "budget": N}` (the prompt defaults to the frozen one).
-3. **After the run, the questions are audited blind** (`audit.mjs sheet`), then re-scored with the audit (`rescore.mjs --audit`). The gate result is the audited one.
+3. ~~**Run, audit, re-score.**~~ Done. Run 2026-11-08 (Haiku, Sonnet, Opus 5.5 × 3, $1.91). Audit by Paige 2026-11-09, AI-assisted (see the limitation below). Re-scored with the audit. Results below.
 
 A v2 result on the tuned set or the first held-out set is development evidence only. The comparison that counts is on `heldout-2`.
 
 ## Scorer versions
 
-**For the gate: score-v2 with the question audit** (Paige, 2026-11-08). Each `aiActions` question is classified from its wording alone (`AUDIT.md`), blind to the label, the reader and the gate, the same way for 6A and every model. `audit.mjs sheet` writes the blind sheet; `rescore.mjs --audit <file>` applies it. The original readings are never edited, and classes are kept in their own file. Without an audit, score-v2 falls back to each reader's own `about` and is provisional. For scale: the saved 2026-11-08 readings hold 494 distinct questions on the tuned set and 156 on the first held-out set.
+**For the gate: score-v2 with the question audit** (Paige, 2026-11-08). Each `aiActions` question is classified from its wording alone (`AUDIT.md`), blind to the label, the reader and the gate, the same way for 6A and every model. `audit.mjs sheet` writes the blind sheet; `rescore.mjs --audit <file>` applies it, and refuses an audit that doesn't cover exactly the questions judged. `audit-detail.mjs --audit <file>` lists every miss and every gate check per run, with the provisional gate beside it. The original readings are never edited, and classes are kept in their own file. Without an audit, score-v2 falls back to each reader's own `about` and is provisional. For scale: the saved 2026-11-08 readings hold 494 distinct questions on the tuned set and 156 on the first held-out set.
 
 **score-v1** is the scorer every published result used. It is unchanged and still the default. It counts any question on `aiActions` (one about a work type too) as a question about Acts.
 
@@ -193,3 +193,39 @@ The same rubric applies, including "automated isn't AI". Four cases are labelled
 - The five-case minimum in the freeze check only catches missing coverage. It doesn't show that the subset is well chosen.
 
 **Caveat:** Claude wrote these after drafting v2, so the cases may lean toward situations v2's rules name: role titles (g03, g08, g13), conditions (g09), regulated areas, and an injection (g12). They are unseen by every reader, but having the same author as v2 limits how independent the test is. Paige may want to replace some or add her own.
+
+## Results (prompt describe-v2, heldout-2, 2026-11-08; audited 2026-11-09)
+
+**No model passes the gate.** The only exception is one Opus run out of three. This is a small held-out comparison, 15 cases × 3 runs per model, not a reliability measure.
+
+**How it was scored:** score-v2 with Paige's audit of the 49 distinct `aiActions` questions (`results/audit-2026-11-08-heldout-2-describe-v2-paige.json`): 47 acts, 1 work (19), 1 other (1). The audit was committed (17bc174) before any audited score was calculated.
+
+**The audit's limitation.** It is **not an independent blind audit**. Paige reviewed and accepted classifications recommended by ChatGPT, which had previously seen the cases and their labels. The file records this in `method` and `limitation`. AUDIT.md (audit-v1, frozen) asks for an auditor who sees only the sheet; this audit doesn't fully meet that.
+
+**Coverage check.** `rescore.mjs` refuses an audit that doesn't cover exactly the questions in the readings judged: no missing keys, no extra ones. With an audit, the scorer looks up every question and throws on a missing one. So no audited result falls back to a reader's own `about` tag.
+
+**Which results are provisional.** The run summary (`results/summary-2026-11-08-heldout-2-describe-v2.md`) used score-v2 on the readers' own tags and is provisional. The audited results are in `results/rescore-2026-11-08-heldout-2-describe-v2-score-v2-audited.md` (counts) and `results/detail-2026-11-08-heldout-2-describe-v2-score-v2-audited.md` (every miss and every gate check, per run).
+
+The audit changed one field result: Haiku run 1, g06 acts, unneeded-question → correct. No gate outcome changed.
+
+| Reader | acts | sensitive | regulated | people | Consequential right per run (of 27) | Gate per run |
+|---|---|---|---|---|---|---|
+| 6A rules | 5/15 | 0/6 | 1/6 | 5/11 | 6 | fail |
+| Haiku 5.5 | 44/45 | 9/18 | 12/18 | 19/33 | 22, 21, 22 | fail, fail, fail |
+| Sonnet 5.5 | 45/45 | 10/18 | 12/18 | 20/33 | 22, 23, 22 | fail, fail, fail |
+| Opus 5.5 | 41/45 | 14/18 | 16/18 | 21/33 | 24, 24, 23 | pass, fail, fail |
+
+**Why the runs fail.** Every model failure is one check: "every consequential case labelled ambiguous is asked." Each failure is a missed regulated question:
+- g09 (card dispute): Haiku and Sonnet, all 3 runs.
+- g14 (school attendance): Haiku and Sonnet all 3 runs, Opus runs 2 and 3.
+
+The other seven checks pass on every model run. Those include no wrong consequential fact at Clear, verbatim quotes, and better than 6A on paraphrase cases. 6A fails four checks. It has wrong Acts facts at Clear on g03 and g06.
+
+**Misses beyond the gate:**
+- **`people` on handoffs.** g10, g12 and g14 are missed or asked in every model run. g08 is missed in most runs, and g03 in Opus runs 1 and 3.
+- **g02 `people`.** It is a false fact for Haiku runs 1–2 and Sonnet run 2. `people` isn't a consequential field.
+- **`sensitive`.** g12 is missed or asked in every run. g14 is missed by Haiku and Sonnet in every run and by Opus in run 3. g07 is missed or asked by Haiku and Sonnet.
+- **Unneeded Acts questions.** g03 (Opus runs 1 and 3) and g05 (Opus runs 1–2, Haiku run 2).
+
+**Spend.** The run cost $1.91 against a $7 cap. November spend is $9.56 of the $25 monthly budget, leaving $15.44. The audit and the re-score made no model calls.
+

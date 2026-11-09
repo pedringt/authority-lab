@@ -96,6 +96,12 @@ No model passed the describe-v1 gate, so a v2 prompt was drafted (#180). Paige r
 - **heldout-2's labels** need no scored-field changes. There are **12 paraphrase cases**, each with a recorded reason: g01, g03, g04, g05, g07, g08, g09, g10, g12, g13, g14, g15.
 - **The freeze** records the scorer version and the audit policy, alongside the labels, tags, rules and prompt.
 
+**The heldout-2 question audit (Paige, 2026-11-09):**
+
+- **The classes.** Question 1 is other, question 19 is work, and the other 47 are acts. That includes 21, an open question about what the AI does, under audit-v1's open-question rule.
+- **How it was made.** It is recorded as Paige-reviewed with AI assistance, not as an independent blind audit. Paige accepted ChatGPT's recommendations, and ChatGPT had previously seen the cases and labels.
+- **What it decides.** It is the audit used for the heldout-2 gate result. It is kept in its own file. The readings, the labels, the prompt, the scorer and the policy are unchanged.
+
 ### Phase 6A.2: Context intake and description understanding (Paige, 2026-10-21, #167)
 
 Bounded to the deterministic path chosen in the Phase 6 scope: freeform-first Context, rule-based reading as suggestions only, Clear / Likely / Unsure, the quoted phrase always visible, confirmation for anything ambiguous or consequential, no network or model calls, the full manual form kept, and no change to governance rules. 6B (model-assisted reading) stays out.
