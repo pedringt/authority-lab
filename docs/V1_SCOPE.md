@@ -1,5 +1,7 @@
 # Authority Lab v1 scope
 
+Reconciled with what ships on 2026-11-09 (Paige). The decisions, the remaining work and its acceptance criteria are in `docs/V1_RECONCILIATION.md`.
+
 ## Required during initial setup
 
 - Context
@@ -10,13 +12,13 @@
 - Boundaries
 - Requirements
 
-Targets are required where a Requirement is meaningfully measurable.
+Targets are required where a Requirement is meaningfully measurable. A Target may stay undecided until a Requirement that depends on it needs a bar.
 
 ## Required before increasing Authority
 
 - relevant Targets;
 - Evidence;
-- sufficient Coverage;
+- sufficient Coverage (deterministic; evidence age blocks only when a configured Requirement makes recency mandatory);
 - required Reviewers, if configured;
 - a specific Proposal.
 
@@ -45,9 +47,9 @@ Targets are required where a Requirement is meaningfully measurable.
 
 - guided self-service and expert-led use;
 - templates plus Start from scratch;
-- Help/guidance;
-- AI-assisted Coverage suggestions;
-- generative UI for focus and clarity;
+- Help/guidance: "How this works" on each screen, plus a line on why it matters and an example at each consequential choice;
+- rule-based Coverage suggestions, each labelled with its basis (model assistance is deferred);
+- a rule-based adaptive presentation for focus and clarity;
 - deterministic authority rules;
 - human-confirmed consequential configuration;
 - provider-neutral data model;
@@ -56,18 +58,18 @@ Targets are required where a Requirement is meaningfully measurable.
 - native lightweight/manual paths for core evidence, incidents, monitoring, reviewer input and Impact tracking;
 - lightweight built-in eval configuration plus manual/file/external evidence paths;
 - residual-risk review during Proposal/Decision;
-- material-change detection/review that can invalidate or downgrade prior Evidence.
+- material-change review: the Owner records whether each affected piece of Evidence is still, partly or no longer applicable; unreviewed affected Evidence doesn't count and blocks expansion, and the original Evidence stays in History.
 
-## Generative UI in v1
+## Adaptive presentation in v1
 
-Generative UI may:
+The presentation is rule-based in v1. It may:
 - prioritize relevant evidence;
 - emphasize warnings;
 - collapse less relevant supporting detail;
 - choose which controls/actions to surface prominently;
 - summarize the current decision in plain language.
 
-Generative UI must always surface, when applicable:
+It must always surface, when applicable:
 - current Authority;
 - proposed Authority change;
 - failed high-severity checks;
@@ -81,6 +83,9 @@ A full-record path must always be available.
 
 ## Deliberately out of v1
 
+- model-assisted features (Context intake, Coverage suggestions, generated presentation): Phase 6B is paused;
+- the Phase 7 visual redesign;
+- automatic material-change detection, or invalidating Evidence by change category;
 - full regulatory compliance certification;
 - enterprise-wide shadow-AI discovery;
 - universal automatic enforcement across external systems;

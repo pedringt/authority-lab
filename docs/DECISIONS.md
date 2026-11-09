@@ -76,6 +76,44 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 9. **Provider.** Anthropic-only implementation in v1, behind a provider-neutral internal contract: the app sends one request shape and accepts only the schema in 3, so another provider is a server-side change plus an eval re-run. The model is chosen from the eval, not in advance.
 10. **Eval gate.** 6B doesn't ship for a surface because its outputs look better. It must pass a fixed test set covering the exact failures 6A struggled with, adversarial instructions, and ambiguous actor or action language. The bar for consequential facts (what the AI does, sensitive data, regulated work, what it can affect, reversibility): zero Acts where only a person acts or the action is negated; no fact without a verbatim quote; Unsure on every case labelled ambiguous; injected instructions change nothing; better than 6A on paraphrase cases with no new false consequential facts. Other facts need only be no worse than 6A. Each model is run three times for run-to-run variation. **False confidence is tracked separately from ordinary extraction errors:** a wrong fact labelled Clear is materially worse than the same wrong fact labelled Unsure, so calibration is part of quality. No model passing is a valid outcome: 6B then doesn't ship. Claude drafts the gold labels; Paige reviews and corrects every one before it counts. Labelling rule (Paige, 2026-10-22, on review): **automated isn't AI**. A sentence saying something automated acts ("the system emails…", "approved automatically") without naming the AI as the actor is labelled ask, never yes, so the gold set never teaches that "automatic" implies the AI's authority. A person who authorizes a step or receives the output counts as where people enter.
 
+### v1 scope reconciled (Paige, 2026-11-09)
+
+A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo. Paige settled each gap. The full record, with acceptance criteria for the remaining work, is in `docs/V1_RECONCILIATION.md`. V1_SCOPE.md now describes what ships.
+
+**Model assistance and design:**
+- Coverage suggestions stay rule-based, each labelled with its basis. Model assistance is deferred, and Coverage sufficiency stays deterministic.
+- The rule-based adaptive presentation (6A) counts toward v1. The model requirement is dropped.
+- The Phase 7 redesign is out of v1. Problems found in the final walkthrough are fixed one by one.
+
+**Evidence:**
+- **Material changes.** Historical evidence is kept, and nothing is invalidated automatically by change category.
+  - The Owner records whether each affected piece of evidence is still, partly or no longer applicable, with a reason. Reviewers may give input.
+  - Unreviewed affected evidence is excluded from current results and blocks expansion. Replacing the Proposal doesn't clear the block.
+  - Partly applicable evidence can't by itself satisfy a hard Requirement. No longer applicable evidence stops counting now, but past Decisions are unchanged.
+  - Completing the reviews clears only that block. Requirements and Coverage are recalculated before any expansion.
+- **Stale evidence and undecided Targets** get explanatory wording, not new blocks.
+
+**Manual monitoring readings:**
+- The Owner or a configured Reviewer records a reading. It goes through the existing restriction rules and must match the rule's units and window. The consequence is shown before saving.
+- Corrections are attributed, superseding records with a reason. A correction never restores Authority or erases a restriction or incident. Restoring Authority needs the existing post-incident review and a new authorized expansion, as applicable.
+
+**Changes since the Decision in force (C1).** This replaces the #147 question 2 mapping.
+- **Levels, most serious first:**
+  1. Restricted automatically.
+  2. Above approved Authority.
+  3. Safety concern, always pinned. Covers a critical incident, a safety limit crossed, or a rule over its limit.
+  4. May no longer be justified: a hard Requirement that supported the current Authority is now Not met.
+  5. Investigation needed: such a Requirement is now Conflicting.
+  6. Needs attention.
+  7. Value warning, kept separate. Covers missed rollout goals, shown under "Delivering value?". It doesn't set the headline.
+  8. Info.
+- **What counts toward levels 4 and 5.** Requirements for a future expansion never count there.
+- **Needs attention** includes considerations that are no longer met, review-quality adoption signals (oversight) and blocked never-allowed attempts, labelled "Blocked".
+
+**Contract edits (C2).** Sign-off for contract edits after the pilot starts stays on (decision 7 in `src/store/proposals.js` is confirmed). The tightening-only exception stays limited to Targets and Requirements. Extending it to Boundaries is out of v1.
+
+**Historical evals.** The 6B experiments stay attributed to the versions they tested. Expected product-code drift in a fingerprinted file is reported, not a failure, and a new run on that set is still refused. Changes to the archived labels, results or experiment files still fail. Old held-out data is never re-frozen.
+
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 
 - **No model passed all three runs** on heldout-2 (prompt describe-v2, score-v2 with the audit). Opus passed only its first run. So model-assisted intake stays out of the app, and the endpoint (6B.2) isn't built.
