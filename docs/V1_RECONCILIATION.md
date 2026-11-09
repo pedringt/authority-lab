@@ -1,6 +1,6 @@
 # Authority Lab v1: scope reconciliation
 
-**Status:** Scope approved by Paige on 2026-11-09. Implementation hasn't started: each work item below needs its own issue and PR.
+**Status:** Scope approved by Paige on 2026-11-09. Implementation hasn't started. Each work item has its own issue (#182–#187) and gets its own PR.
 
 **Sources:** `docs/V1_SCOPE.md`, `docs/SETUP_FLOW.md`, `docs/DECISIONS.md`, a read-only gap audit of `main` and the live demo (2026-11-09), and Paige's review of four drafts.
 
@@ -21,7 +21,7 @@ Parts of V1_SCOPE.md described things the app doesn't do. Most of these were mod
 
 ## 3. Work items and acceptance criteria (in priority order)
 
-### W1. Material-change applicability review (D3)
+### W1. Material-change applicability review (D3) — #182
 
 **The current gap.** A material change makes the open Proposal stale. But `replaceProposal` clears that block in one step, and evidence from before the change keeps counting with no review.
 
@@ -45,7 +45,7 @@ Parts of V1_SCOPE.md described things the app doesn't do. Most of these were mod
   - A "partly applicable" item can't be the only support for a hard Requirement.
   - Past Decision records are unchanged.
 
-### W2. Manual monitoring readings
+### W2. Manual monitoring readings — #183
 
 **Rules:**
 - **Who records.** The Owner or a configured Reviewer, attributed to the person recording. Being a Stakeholder doesn't grant this.
@@ -66,7 +66,7 @@ Parts of V1_SCOPE.md described things the app doesn't do. Most of these were mod
   - A reading over the limit triggers the restriction, and the warning shown before saving matches it.
   - A correction keeps the original, leaves the restriction and incident in place, and doesn't restore Authority.
 
-### W3. Decision and Status display contracts
+### W3. Decision and Status display contracts — #184
 
 **The current gap.** The invariants contract (`phase6a.test.mjs`) checks that the Decision view shows current and proposed Authority, what blocks, what needs a person, what stays prohibited, and disagreement. It doesn't check serious failures, stale or insufficient evidence, or the full-record path. The Status tab has no contract.
 
@@ -76,7 +76,7 @@ Parts of V1_SCOPE.md described things the app doesn't do. Most of these were mod
 - **The full-record path opens the complete record.** The test follows it and checks that the whole record renders. Presence alone doesn't pass.
 - **Failures name the item.** Removing any asserted item fails the test and names it.
 
-### W4. Minimum contextual Help
+### W4. Minimum contextual Help — #185
 
 **The current gap.** Each screen has a "How this works" panel. The per-step Help that SETUP_FLOW.md describes doesn't exist.
 
@@ -93,7 +93,7 @@ Parts of V1_SCOPE.md described things the app doesn't do. Most of these were mod
 - material-change applicability;
 - a monitoring reading.
 
-### W5. Small clarity fixes
+### W5. Small clarity fixes — #186
 
 - **#134.** A read-only summary of completed setup steps.
 - **No Reviewers named.** Decide stops saying "Every Reviewer has given a position" and says none are configured.
@@ -101,7 +101,7 @@ Parts of V1_SCOPE.md described things the app doesn't do. Most of these were mod
 
 ## 4. Rules
 
-### C1. How changes since the Decision in force are graded
+### C1. How changes since the Decision in force are graded — #187
 
 This replaces the mapping in `src/store/lifecycle.js` (`changesSinceDecision`) that was "documented for Paige to confirm" (#147, question 2). It is implemented with W3 or as its own issue.
 
