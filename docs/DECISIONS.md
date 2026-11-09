@@ -76,6 +76,42 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 9. **Provider.** Anthropic-only implementation in v1, behind a provider-neutral internal contract: the app sends one request shape and accepts only the schema in 3, so another provider is a server-side change plus an eval re-run. The model is chosen from the eval, not in advance.
 10. **Eval gate.** 6B doesn't ship for a surface because its outputs look better. It must pass a fixed test set covering the exact failures 6A struggled with, adversarial instructions, and ambiguous actor or action language. The bar for consequential facts (what the AI does, sensitive data, regulated work, what it can affect, reversibility): zero Acts where only a person acts or the action is negated; no fact without a verbatim quote; Unsure on every case labelled ambiguous; injected instructions change nothing; better than 6A on paraphrase cases with no new false consequential facts. Other facts need only be no worse than 6A. Each model is run three times for run-to-run variation. **False confidence is tracked separately from ordinary extraction errors:** a wrong fact labelled Clear is materially worse than the same wrong fact labelled Unsure, so calibration is part of quality. No model passing is a valid outcome: 6B then doesn't ship. Claude drafts the gold labels; Paige reviews and corrects every one before it counts. Labelling rule (Paige, 2026-10-22, on review): **automated isn't AI**. A sentence saying something automated acts ("the system emails…", "approved automatically") without naming the AI as the actor is labelled ask, never yes, so the gold set never teaches that "automatic" implies the AI's authority. A person who authorizes a step or receives the output counts as where people enter.
 
+### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
+
+- **No model passed all three runs** on heldout-2 (prompt describe-v2, score-v2 with the audit). Opus passed only its first run. So model-assisted intake stays out of the app, and the endpoint (6B.2) isn't built.
+- **What the run found:**
+  - The models substantially outperform 6A on this set, especially at identifying who acts. 6A also makes two wrong Acts claims at Clear (g03, g06), so keeping it doesn't establish reliability.
+  - Required clarification is inconsistent. Opus misses the school-attendance regulated question (g14) in two runs. Haiku and Sonnet miss both that and the card-dispute question (g09) in every run.
+  - Handoffs and sensitive data remain weak, beyond what blocks the gate.
+- **Reporting.** Adoption is stated as "no model passed all three runs". Passing the injection check means no wrong consequential fact was proposed on g12. It doesn't show that the injection had no effect: g12's sensitive-data fact was never correctly proposed. Without a matching version of g12 without the injection, that failure can't be attributed to the instruction.
+- **#180 is finished as a documented experiment,** with its results and limitations kept. There are no further paid iterations for now. Another prompt tuned to these misses would need another fresh validation set.
+
+### Phase 6B description reading: prompt v2 review (Paige, 2026-11-08, #180)
+
+No model passed the describe-v1 gate, so a v2 prompt was drafted (#180). Paige reviewed it, and the following are settled for this description-extraction step:
+
+- **The first held-out set is development data.** Its v1 misses were used to draft v2, so a result on it is not independent validation. A fresh set (`heldout-2.json`) is needed, and it is frozen before it is used.
+- **Silence.** When the description doesn't mention sensitive data, regulated work or review, the reader proposes nothing and doesn't ask. The field stays visibly missing. Silence never reads as a completed safety review.
+- **Denials.** A denial ("no personal data") is accepted as the writer's claim, without a routine challenge, unless the description itself contradicts it.
+- **Role titles** ("HR assistant", "pricing agent") may name a person: ask who acts. This follows the ambiguous-actor rule.
+- **"Tool" and "system".** "The tool" usually names the AI and "the system" names other automation. This is kept provisionally, as the labelling convention; the rest of the description governs.
+- **Regulated work.** A plainly regulated field (lending included) is proposed as a fact. A decision about people in an area that may be regulated is asked about. The first takes precedence.
+- **Work-type questions** are not suppressed to improve a metric. Any correction to how they are scored is versioned (score-v2), keeps score-v1 and its results, and scores 6A and the models the same way.
+- **Paraphrase tags** define the subset the gate compares with 6A. A held-out set needs them before it is frozen. They are chosen from the wording, not to make passing easier.
+
+**Second review (Paige, 2026-11-08):**
+
+- **Where people enter** (`humanInvolvement`) means review, authorization, decisions, or a handoff to someone taking part in the workflow. Merely receiving the final service or message doesn't count: a customer confirming a submission counts, a client receiving a reminder doesn't. Prompt v2's rule 21 follows this. No existing reviewed label conflicts with it, including k01's `people: no`.
+- **The gate's scorer** is score-v2 with a manual audit of question classification. Questions are classified from their wording only, blind to the expected label, the reader and the gate outcome. The same method applies to 6A and every model. The original outputs are preserved and the classes are recorded separately. A reader's own `about` tag is metadata, not enough to decide the gate. score-v1 stays as the historical comparison.
+- **heldout-2's labels** need no scored-field changes. There are **12 paraphrase cases**, each with a recorded reason: g01, g03, g04, g05, g07, g08, g09, g10, g12, g13, g14, g15.
+- **The freeze** records the scorer version and the audit policy, alongside the labels, tags, rules and prompt.
+
+**The heldout-2 question audit (Paige, 2026-11-09):**
+
+- **The classes.** Question 1 is other, question 19 is work, and the other 47 are acts. That includes 21, an open question about what the AI does, under audit-v1's open-question rule.
+- **How it was made.** It is recorded as Paige-reviewed with AI assistance, not as an independent blind audit. Paige accepted ChatGPT's recommendations, and ChatGPT had previously seen the cases and labels.
+- **What it decides.** It is the audit used for the heldout-2 gate result. It is kept in its own file. The readings, the labels, the prompt, the scorer and the policy are unchanged.
+
 ### Phase 6A.2: Context intake and description understanding (Paige, 2026-10-21, #167)
 
 Bounded to the deterministic path chosen in the Phase 6 scope: freeform-first Context, rule-based reading as suggestions only, Clear / Likely / Unsure, the quoted phrase always visible, confirmation for anything ambiguous or consequential, no network or model calls, the full manual form kept, and no change to governance rules. 6B (model-assisted reading) stays out.

@@ -28,6 +28,17 @@ export const REQUEST_CEILING = 25;
 // (agent/describe-eval) instead of the agent ticket runs. It has no ticket
 // sets and no shared session, and at most 10 runs per model.
 export const KNOWN_EVALS = ['describe'];
+// Kept in step with SET_FILES (audit.mjs) and PROMPTS (prompts.mjs); a test checks.
+export const KNOWN_DESCRIBE_SETS = ['tuned', 'heldout', 'heldout-2'];
+export const KNOWN_PROMPTS = ['describe-v1', 'describe-v2'];
+
+// A frozen set that records its prompt (heldout-2) is run with that prompt only.
+function frozenPrompt(set) {
+  const file = join(here, 'describe-eval', `${set}.json`);
+  if (set === 'tuned' || !existsSync(file)) return null;
+  const frozen = JSON.parse(readFileSync(file, 'utf8')).frozen;
+  return frozen && frozen.scorer ? frozen.promptVersion : null;
+}
 
 export function checkRequest(r) {
   if (r && r.eval != null) {
@@ -42,8 +53,12 @@ export function checkRequest(r) {
     if (r.tickets != null || r.shared != null) errors.push('an eval request takes no tickets or shared session.');
     // The case set travels as the "tickets" value, so the workflow needs no new output.
     const set = r.set == null ? 'tuned' : r.set;
-    if (!['tuned', 'heldout'].includes(set)) errors.push('set must be tuned or heldout.');
-    return { errors, request: { eval: r.eval, models, tickets: [set], repeat, budget, shared: false } };
+    if (!KNOWN_DESCRIBE_SETS.includes(set)) errors.push(`set must be one of: ${KNOWN_DESCRIBE_SETS.join(', ')}.`);
+    const required = KNOWN_DESCRIBE_SETS.includes(set) ? frozenPrompt(set) : null;
+    const prompt = r.prompt == null ? (required || 'describe-v1') : r.prompt;
+    if (!KNOWN_PROMPTS.includes(prompt)) errors.push(`prompt must be one of: ${KNOWN_PROMPTS.join(', ')}.`);
+    else if (required && prompt !== required) errors.push(`${set} is frozen with prompt ${required}.`);
+    return { errors, request: { eval: r.eval, models, tickets: [set], prompt, repeat, budget, shared: false } };
   }
   const errors = [];
   const models = Array.isArray(r.models) ? r.models : [];
@@ -63,7 +78,7 @@ export function planText({ request, sha, changed, room }) {
     '## Paid model run: the plan to approve',
     '',
     `- **Commit:** \`${sha || 'unknown'}\` (the run job checks out exactly this commit)`,
-    ...(request.eval ? [`- **Eval:** ${request.eval === 'describe' ? `6B description reading (agent/describe-eval, ${request.tickets[0] === 'heldout' ? 'the held-out set' : 'the tuned set'}, reviewed cases only)` : request.eval}`] : []),
+    ...(request.eval ? [`- **Eval:** ${request.eval === 'describe' ? `6B description reading (agent/describe-eval, set ${request.tickets[0]}, prompt ${request.prompt}, reviewed cases only)` : request.eval}`] : []),
     `- **Models:** ${request.models.join(', ')}`,
     ...(request.eval ? [] : [`- **Tickets:** ${request.tickets.join(', ')}`]),
     `- **Repeats:** ${request.repeat}`,
@@ -100,6 +115,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       `budget=${request.budget}`,
       `shared=${request.shared}`,
       `eval=${request.eval || ''}`,
+      `prompt=${request.prompt || ''}`,
     ].join('\n') + '\n');
   }
   if (!room.ok) { console.error(`Refused: ${room.text}`); process.exit(1); }

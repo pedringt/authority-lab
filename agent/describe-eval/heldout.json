@@ -2,6 +2,10 @@
   "schema": "authority-lab-describe-eval/1",
   "set": "heldout",
   "note": "Held-out descriptions, written 2026-11-08 after the 6A rules were tuned on cases.json and after the first model run. Labels reviewed by Paige on 2026-11-08 and frozen with the rules and prompt: neither may be changed on the strength of these cases.",
+  "development": {
+    "date": "2026-11-08",
+    "reason": "Paige, 2026-11-08: used to draft prompt describe-v2, so development data from now on. A v2 result here is not independent validation; that needs heldout-2.json."
+  },
   "cases": [
     {
       "id": "h01",
