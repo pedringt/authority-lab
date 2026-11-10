@@ -114,6 +114,21 @@ A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo.
 
 **Historical evals.** The 6B experiments stay attributed to the versions they tested. Expected product-code drift in a fingerprinted file is reported, not a failure, and a new run on that set is still refused. Changes to the archived labels, results or experiment files still fail. Old held-out data is never re-frozen.
 
+### v1 W2: manual monitoring readings (Paige, 2026-11-10, #183)
+
+Built as `docs/V1_RECONCILIATION.md` W2 sets out. Four readings of the scope were Paige's choice, made before the build ("Recommended" on each):
+
+- **Only rules nothing else measures take manual readings.** A rule counted from the gate log, or read from imported production results, refuses them, and the form says where its reading comes from. So a rule never has two competing current values.
+- **The period matches the rule's window exactly.** A 7-day rule needs a period of exactly 7 days, ending no later than today. A rolling 50-case rule needs exactly 50 cases. A rule with no number or no window can't take a manual reading.
+- **The period end decides staleness.** A new reading must end after the current one. Same or earlier is refused, and can enter only as a correction of a named reading, with a reason. A correction that crosses the limit restricts like any reading; one that lowers the value restores nothing.
+- **Check, then save.** "Check reading" validates and shows the limit, the value and what saving would do. "Save reading" appears only after a check of the same values, and saving runs the same check again, so a restriction can't be skipped.
+
+Mechanics (`src/store/readings.js`):
+- **Who records.** The Owner or a configured Reviewer (a Stakeholder entry with the Reviewer role), active, attributed with a snapshot of who they were. Being a Stakeholder doesn't grant it.
+- **Same enforcement.** The current reading is judged by the existing rule logic (`ruleCrossed`, active only above the fallback level). Over an active limit it goes through the shared breach flow (`applyBreach`), like the gate log and imports: once, and not again while a restriction is open or after one has happened, and an incident rule opens one incident.
+- **The warning matches the outcome.** The check and the save use the same consequence function: restrict, open an incident, already restricted, the limit doesn't apply at this level, or nothing changes.
+- **History.** Readings are append-only. A correction names the reading it replaces, and both stay listed on Monitor. A correction never changes authority, the review lock, the incident or any decision record.
+
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 
 - **No model passed all three runs** on heldout-2 (prompt describe-v2, score-v2 with the audit). Opus passed only its first run. So model-assisted intake stays out of the app, and the endpoint (6B.2) isn't built.

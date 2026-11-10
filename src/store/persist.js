@@ -18,6 +18,7 @@ import { advanceToday } from './workspaces.js';
 import { applyPublishedRecords } from './published.js';
 import { mapEvidence } from './configure.js';
 import { recordContext, suggestContext, reviewContextFact, recordBaseline, recordMaterialChange } from './context.js';
+import { recordReading } from './readings.js';
 import { assessRisk } from './risk.js';
 import { startCapability, editSetupCapability, saveSetupRisk, setStartingAuthority, confirmSetup } from './setup.js';
 import { suggestFromDescription, answerDescriptionQuestion } from './context.js';
@@ -111,6 +112,7 @@ export const ACTIONS = {
   reviewContextFact,
   recordBaseline,
   recordMaterialChange,
+  recordReading,
   assessRisk,
   setResidualRisk,
   startCapability,
