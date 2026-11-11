@@ -90,6 +90,11 @@ test('D5 and D6 show on Monitor, Decide step 2 and the setup Requirements step',
     assert.ok(page.includes(STALE_EVIDENCE_NOTE), `${where}: D5`);
     assert.ok(page.includes(UNDECIDED_TARGET_NOTE), `${where}: D6`);
   }
+  // Visible, not tucked inside a collapsed section.
+  const raw = String(criteriaEditorView(draft, id, q()));
+  const at = raw.indexOf('A Target can stay');
+  const before = raw.slice(0, at);
+  assert.equal((before.match(/<details\b/g) || []).length, (before.match(/<\/details>/g) || []).length, 'setup Requirements step: D5 and D6 are not inside a collapsed section');
 });
 
 test('no new block: stale evidence still lets the seeded expansion be recorded', () => {
