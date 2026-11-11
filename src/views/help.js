@@ -20,7 +20,7 @@ export const HELP = {
   startingAuthority: {
     label: 'starting Authority',
     why: 'This is how independently it works from the day setup is confirmed. More comes only later, one level at a time, with evidence.',
-    example: 'A new tool that sorts job applications starts at Recommend: it suggests a pile, and a person moves every application.',
+    example: 'A new tool that sorts job applications starts at Recommend: it suggests how to group applications, and a person reviews and applies each suggestion.',
   },
   boundaries: {
     label: 'Boundaries and how each is enforced',
@@ -35,29 +35,29 @@ export const HELP = {
   },
   people: {
     label: 'Owner and Reviewer assignment',
-    why: 'The Owner is accountable and records the decisions. A Reviewer\'s position is needed before any expansion; a Stakeholder\'s is advisory.',
+    why: 'The Owner is accountable and records the decisions. A Reviewer\'s assessment must be recorded before any expansion; a Stakeholder\'s assessment is advisory.',
     example: 'For a tool that drafts invoices: the finance lead owns it, the accountant who checks the drafts is a Reviewer, and sales is a Stakeholder.',
   },
   residualRisk: {
     label: 'Residual Risk',
     why: 'Residual Risk is your judgment of what is left once the limits and human review are in place. It is recorded with the decision, and software never scores it.',
-    example: 'A person still approves every outgoing letter, so a bad draft is caught before it is sent: someone might judge that Low. If nobody has looked at the failures yet, Unknown is the honest answer.',
+    example: 'A person still approves every outgoing letter, so a person has an opportunity to catch a bad draft before it is sent, though review can still miss errors: someone might judge that Low. If nobody has looked at the failures yet, Unknown is the honest answer.',
   },
   authorization: {
     label: 'the authorization choice',
-    why: 'This is the decision itself. Expanding grants more authority; keeping the limits holds it; reducing or pausing pulls it back as soon as it is recorded. The record keeps your reason and what was known.',
+    why: 'This is the decision itself. Recording it changes the authority recorded in Authority Lab: expanding grants more, keeping the limits holds it, and reducing or pausing pulls it back as soon as it is recorded. The tool itself changes only where its actions go through Authority Lab\'s gate or another integration enforces it. The record keeps your reason and what was known.',
     example: 'Accuracy meets the bar, but the evening shift hasn\'t been tested yet: keep the current limits, and say what evidence would change your mind.',
   },
   // Attached once #182 (material-change review) is merged.
   applicability: {
     label: 'material-change applicability',
     why: 'After a material change, earlier evidence may describe a system that no longer exists. Until you review it, it doesn\'t count.',
-    example: 'The model was upgraded. Accuracy results from the old model are no longer applicable; a check that the current price list is loaded still is.',
+    example: 'After a model upgrade, the Owner might judge earlier accuracy results no longer applicable, while a check of the unchanged price list may remain applicable.',
   },
   // Attached once #183 (manual readings) is merged.
   reading: {
     label: 'a monitoring reading',
-    why: 'A reading is checked against its safety limit as soon as it is saved, and over the limit autonomy is pulled back automatically, so the period and units must match the limit.',
+    why: 'The period and units must match the safety limit. Checking shows what saving would do; saving records the reading. Once the limit applies, which is while the capability is above the level the limit falls back to, a saved reading over the limit automatically reduces the authority recorded here. Before then, the reading is kept and nothing changes.',
     example: 'For the limit "Misfiled documents above 4% over 7 days": 3%, for Nov 1 to Nov 7, from the weekly filing audit.',
   },
 };
