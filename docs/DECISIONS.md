@@ -91,6 +91,20 @@ Mechanics:
 - **Records.** Reviews are append-only; the latest per change and row stands, and Activity and History list each one. Evidence records and past Decision records are never changed.
 - **Every material change is reviewed, recent or not.** Monitor lists all of them, no longer only those since the Decision in force.
 
+### v1 wording: evidence that doesn't count (Paige, 2026-11-11)
+
+These are display changes only. The rules for counting evidence, for applicability and for Authority are unchanged, and no new state is added: a row's status stays what it was, and only its label and an explanatory note change.
+
+- **"No evidence yet"** is kept for a Requirement with nothing recorded.
+- **When evidence exists but none counts,** the label is "No evidence currently counts toward this result", with the reason beneath it. Targets and Coverage keep their own terms: "No results currently count" replaces "No results yet" only where results exist but are set aside.
+- **Awaiting a material-change review:** "N earlier results await material-change review (MC-…) and are not counted." For several changes: "Earlier evidence needs review after a material change."
+- **Partly applicable** keeps the Owner's answer: "Partly applicable. Supporting context only; not counted toward this result." It is never described as wholly inapplicable.
+- **No longer applicable** says so.
+- **Mixed evidence.** The result comes from the evidence that counts, with the note beside it.
+- **Several changes on one row:** one count, then each change's state, with no double counting.
+- **Another configuration:** "N imported results were measured under another configuration and are set aside."
+- **Historical Decisions** keep the labels and calculations they froze. The wording applies to current views and to snapshots taken from now on.
+
 ### v1 scope reconciled (Paige, 2026-11-09)
 
 A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo. Paige settled each gap. The full record, with acceptance criteria for the remaining work, is in `docs/V1_RECONCILIATION.md`. V1_SCOPE.md now describes what ships.

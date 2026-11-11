@@ -10,7 +10,7 @@ import {
   startEmpty, setUpWorkspace, addPerson, addCapability, saveCriteria, saveStakeholders, mapEvidence, rowMetric, MANUAL_SOURCE,
   recordResult, recordJudgment, recordMaterialChange, advanceToday, proposeAuthority, selectDecision, setRationale, setOutcome,
   setRolloutField, setResidualRisk, canAuthorize, replaceProposal, requirementsNow, evidenceCoverage, people,
-  recordApplicability, unresolvedApplicability, applicabilityState, excludedBefore, materialChangeImpact,
+  recordApplicability, unresolvedApplicability, applicabilityState, excludedBefore, materialChangeImpact, NONE_COUNTS, RESULT_WORDS, setAsideNote,
 } from '../src/store/index.js';
 import { setPeople, setToday } from '../src/ui.js';
 import { capabilityView } from '../src/views/capability.js';
@@ -180,4 +180,66 @@ test('History shows the material change and each review: who, the answer and the
   assert.match(page, /Material change: Model, effective Oct 20 Moved to a newer model for drafting\. Recorded by Ana Ruiz \(MC-[^)]+-1\)\./);
   assert.match(page, /Evidence reviewed after MC-[^:]+-1: Overall accuracy ≥ 90%, partly applicable By Ana Ruiz\. Checked against the new model on ten emails\. Still supported: The tone checks\. Needs fresh evidence: Accuracy on the new model\./);
   assert.match(page, /Evidence reviewed after MC-[^:]+-1: The tax lead has approved the email templates, still applicable By Ana Ruiz\./);
+});
+
+// ---------------------------------------------------------------------------
+// Wording (Paige, 2026-11-11): the result keeps its status; a note says which
+// evidence doesn't count and why. Display only.
+// ---------------------------------------------------------------------------
+
+const req = (s, id, rid) => requirementsNow(s, id).find((r) => r.id === rid);
+
+test('wording: awaiting review reads "No evidence currently counts toward this result", with the count and the change; the status is unchanged', () => {
+  const [s, id] = changed();
+  const r = req(s, id, 'accuracy');
+  assert.equal(r.result.status, 'no-evidence', 'no new state');
+  assert.equal(r.result.label, NONE_COUNTS);
+  assert.match(r.aside, /^\d+ earlier results? awaits? material-change review \(MC-[^)]+-1\) and (is|are) not counted\.$/);
+  assert.equal(r.result.why, r.aside);
+});
+
+test('wording: "No evidence yet" stays for a Requirement with nothing recorded', () => {
+  let s = setUpWorkspace(startEmpty(), { workspace: { name: 'Ruiz Tax' }, workflow: { name: 'Client email' }, founder: { name: 'Ana Ruiz', title: 'Partner' } });
+  s = addCapability(s, { name: 'Draft deadline emails', summary: 'Drafts emails reminding clients of tax deadlines.', owner: ANA, risk: { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Customer-facing' }, today: 'recommends', by: ANA });
+  const id = s.capabilities.at(-1).id;
+  s = saveCriteria(s, id, { criteria: [], requirements: [{ id: 'min-cases', text: 'Minimum 20 cases', kind: 'coverage' }, { id: 'signoff', text: 'The partner signs off the templates', judgment: 'person' }], by: ANA, reason: 'Our own bar.' });
+  const r = req(s, id, 'signoff');
+  assert.equal(r.result.label, RESULT_WORDS['no-evidence']);
+  assert.equal(r.aside, undefined);
+});
+
+test('wording: partly applicable keeps the Owner\'s answer, "supporting context only; not counted"', () => {
+  let [s, id] = changed();
+  s = review(s, id, 'accuracy', 'partly', { stillSupported: 'The tone checks.', needsFresh: 'Accuracy on the new model.' });
+  const r = req(s, id, 'accuracy');
+  assert.equal(r.result.label, NONE_COUNTS);
+  assert.match(r.aside, /not counted after MC-[^:]+-1: Partly applicable\. Supporting context only; not counted toward this result\.$/);
+});
+
+test('wording: mixed evidence keeps the result from the evidence that counts, with the note beside it', () => {
+  let [s, id] = changed();
+  s = recordResult(s, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 19, total: 20, kind: 'eval', by: BEN });
+  const r = req(s, id, 'accuracy');
+  assert.notEqual(r.result.status, 'no-evidence', 'judged on the new result');
+  assert.notEqual(r.result.label, NONE_COUNTS);
+  assert.match(r.aside, /await(s)? material-change review/);
+});
+
+test('wording: two changes give one count, then each change\'s state', () => {
+  assert.equal(setAsideNote({ count: 3, changes: [{ changeId: 'MC-x-1', state: 'partly' }, { changeId: 'MC-x-2', state: 'pending' }], otherConfig: 0 }),
+    '3 earlier results are not counted: MC-x-1: Partly applicable. Supporting context only; not counted toward this result. MC-x-2: Earlier evidence needs review after a material change.');
+  assert.equal(setAsideNote({ count: 1, changes: [{ changeId: 'MC-x-1', state: 'not-applicable' }], otherConfig: 0 }), '1 earlier result is not counted after MC-x-1: No longer applicable.');
+  assert.equal(setAsideNote({ count: 0, changes: [], otherConfig: 2 }), '2 imported results were measured under another configuration and are set aside.');
+});
+
+test('wording: once reviewed as still applicable, nothing is set aside', () => {
+  let [s, id] = changed();
+  s = allApplicable(s, id);
+  for (const r of requirementsNow(s, id)) assert.equal(r.aside, undefined, r.id);
+});
+
+test('wording: frozen Decisions keep the labels they froze', () => {
+  const [s, id, s0] = changed();
+  const before = JSON.stringify(s0.decisionRecords);
+  assert.equal(JSON.stringify(s.decisionRecords), before);
 });
