@@ -114,6 +114,19 @@ A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo.
 
 **Historical evals.** The 6B experiments stay attributed to the versions they tested. Expected product-code drift in a fingerprinted file is reported, not a failure, and a new run on that set is still refused. Changes to the archived labels, results or experiment files still fail. Old held-out data is never re-frozen.
 
+### v1 W4: minimum contextual Help (Paige, 2026-11-11, #185)
+
+Built as `docs/V1_RECONCILIATION.md` W4 sets out. Three readings of the scope were Paige's choice, made before the build ("Recommended" on each):
+
+- **Built on main, with all nine pieces of copy.** Help is attached to the seven choices that exist on main. The copy for material-change applicability and monitoring readings is in the same file, and gets attached to their forms once #188 (W1) and #189 (W2) merge.
+- **Every place, same copy.** One entry per choice, shown wherever that choice is made: setup steps, the editors, proposed changes, Decide, Reduce or pause, and the guided demo.
+- **Generic, fixed examples.** Each is about a made-up case unrelated to the demo's own capabilities, so none reads as a suggested answer. The Requirements example has no number, because that page never shows a suggested bar.
+
+Mechanics (`src/views/help.js`):
+- **What each entry has.** A "Why this matters" line and an "Example:", inside a collapsed `<details>`. It has no inputs, buttons, links or actions, so opening it can't change a value.
+- **Not a full Help system.** The screens' "How this works" panels are unchanged.
+- **The copy is a draft for Paige's review before merge.**
+
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 
 - **No model passed all three runs** on heldout-2 (prompt describe-v2, score-v2 with the audit). Opus passed only its first run. So model-assisted intake stays out of the app, and the endpoint (6B.2) isn't built.

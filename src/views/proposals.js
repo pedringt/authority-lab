@@ -2,6 +2,7 @@ import * as seed from '../data/seed.js';
 import { DATA_FIELDS } from '../data/seed.js';
 import { judgmentField, weightField } from './criteria.js';
 import { html, raw, badge, notice, section, person, personAt, rightsNote, fmtDate, kv, warningNotice, lede } from '../ui.js';
+import { helpFor } from './help.js';
 import { getCapability, capData, current, versionList, actor, needsSignoff, signoffRequirements, requirementLabel, roleLabel, openProposal, getProposal, approvalEligibility, approvalsComplete, proposalReadiness, contractValueChecks, SECTION_KEYS, SECTION_LABELS, CORE_CRITERIA, CORE_REQUIREMENTS, KIND_LABELS, proposalWarning } from '../store/index.js';
 import { diffTable } from './activity.js';
 
@@ -36,6 +37,7 @@ export function proposeView(state, capabilityId, kind, query) {
           ? `These targets can't be changed directly now that results exist. Submit the change for review. ${requirementLabel(required)} You can't approve your own change.`
           : `The AI is already in use (a pilot has started), so rule changes need approval. ${requirementLabel(required)} You can't approve your own change.`
         : `No approval needed yet: ${kind === 'criteria' ? 'no results exist yet' : 'no pilot has started'}. Your change saves straight away. Changes are kept in history.`}</p>
+      ${helpFor(kind === 'criteria' ? 'requirements' : 'boundaries')}
     </div>
   </div>
   ${error ? (error.includes(' | ')

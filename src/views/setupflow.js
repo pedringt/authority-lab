@@ -8,6 +8,7 @@
 // called AI.
 
 import { html, raw, badge, notice, selectField, person, fmtDate, lede } from '../ui.js';
+import { helpFor } from './help.js';
 import {
   getCapability, capData, current, versionList, actor, activePeople, workflowOf, RISK_OPTIONS, levelName,
   CONTEXT_FIELDS, contextNow, confirmedContext, contextDescription, descriptionQuestions, LIFECYCLE, BASELINE_FIELDS, baselineNow, baselineVersions, authorityBaseline,
@@ -128,7 +129,7 @@ export function startView(state, query) {
       <label class="field field-stack"><span>What it does, who it helps, and what it produces</span><input name="summary" type="text" maxlength="160" placeholder="e.g. Reviews refund requests and recommends whether to issue one."></label>
     </div>
     <div class="onboard-group"><h2 class="onboard-q">Is it already in use?</h2>${lifecycleChoices('')}</div>
-    <div class="onboard-group"><h2 class="onboard-q">Who owns it?</h2>${selectField('owner', 'Owner', owners, actor(state), { action: 'choose-owner' })}<p class="muted small">One accountable person. Only the owner can confirm the setup.</p></div>
+    <div class="onboard-group"><h2 class="onboard-q">Who owns it?</h2>${selectField('owner', 'Owner', owners, actor(state), { action: 'choose-owner' })}<p class="muted small">One accountable person. Only the owner can confirm the setup.</p>${helpFor('people')}</div>
     <button class="btn btn-primary" type="submit">Start setup</button>
   </form>`;
 }
@@ -146,7 +147,7 @@ export function capabilityStepView(state, capabilityId, query) {
       <label class="field field-stack"><span>What it does, who it helps, and what it produces</span><input name="summary" type="text" value="${cap.summary}" maxlength="160"></label>
     </div>
     <div class="onboard-group"><h2 class="onboard-q">Is it already in use?</h2>${lifecycleChoices(cap.setup.lifecycle)}</div>
-    <div class="onboard-group">${selectField('owner', 'Owner', owners, cap.owner)}</div>
+    <div class="onboard-group">${selectField('owner', 'Owner', owners, cap.owner)}${helpFor('people')}</div>
     <button class="btn btn-primary" type="submit">Save</button>
   </form>`;
 }
@@ -209,7 +210,7 @@ export function riskStepView(state, capabilityId, query) {
   ${saved ? notice(v.overall === 'Unknown' ? 'watch' : 'neutral', `Overall Risk: ${v.overall}`, v.why) : ''}
   ${saved ? lowRiskNotice(state, capabilityId) : ''}
   <form class="setup-form onboard-form" data-form="setup-risk" data-capability="${cap.id}" novalidate>
-    <div class="onboard-group"><h2 class="onboard-q">Risk</h2>
+    <div class="onboard-group"><h2 class="onboard-q">Risk</h2>${helpFor('risk')}
       <div class="three-col">
         ${selectField('impact', 'Severity: how serious would a failure be?', SEVERITY_ANSWERS, r.impact || '', { placeholder: 'Choose' })}
         ${selectField('likelihood', 'Likelihood: how likely does a failure seem?', LIKELIHOODS.map((l) => [l, l === 'Unknown' ? 'Unknown: not enough to say yet' : l]), r.likelihood || '', { placeholder: 'Choose' })}
@@ -226,7 +227,7 @@ export function riskStepView(state, capabilityId, query) {
         <label class="field field-stack"><span>Note</span><input name="riskNote" type="text" value="${r.note || ''}" maxlength="200"></label>
       </details>
     </div>
-    <div class="onboard-group"><h2 class="onboard-q">Authority: how independently should it operate right now?</h2>
+    <div class="onboard-group"><h2 class="onboard-q">Authority: how independently should it operate right now?</h2>${helpFor('startingAuthority')}
       <p class="muted small">This is where it starts once the setup is confirmed: Level 0 or Level 1 at most. More authority is earned later, one level at a time, with evidence.${ab.effective.status === 'recorded' ? ` What it does today was recorded as Level ${ab.effective.level} — ${ab.effective.name}; formalizing that is a later, explicit authority decision.` : ''}</p>
       <div class="option-list" role="radiogroup" aria-label="Starting authority">${TODAY_CHOICES.map(([value, label, text]) => html`<label class="option"><input type="radio" name="today" value="${value}" ${cap.setup.today === value ? raw('checked') : ''}><span class="option-body"><strong>${label}</strong><span class="muted small">${text}</span></span></label>`)}</div>
       <label class="field field-stack"><span>Why? <span class="muted small">(required if it stays with people)</span></span><textarea name="rationale" rows="2">${cap.setup.rationale || ''}</textarea></label>
