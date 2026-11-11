@@ -170,3 +170,14 @@ test('screens: Monitor lists each unreviewed row with the Owner\'s form; Decide 
   assert.match(done, /Still applicable<\/span>/);
   assert.doesNotMatch(done, /that you haven&#39;t reviewed/);
 });
+
+test('History shows the material change and each review: who, the answer and the reason', () => {
+  let [s, id] = changed();
+  s = review(s, id, 'accuracy', 'partly', { stillSupported: 'The tone checks.', needsFresh: 'Accuracy on the new model.' });
+  s = review(s, id, 'templates', 'applicable');
+  setPeople(people(s)); setToday(s.today);
+  const page = String(capabilityView(s, id, new URLSearchParams('tab=history'))).replace(/<[^>]+>/g, ' ').replace(/&#39;/g, '\'').replace(/\s+/g, ' ');
+  assert.match(page, /Material change: Model, effective Oct 20 Moved to a newer model for drafting\. Recorded by Ana Ruiz \(MC-[^)]+-1\)\./);
+  assert.match(page, /Evidence reviewed after MC-[^:]+-1: Overall accuracy ≥ 90%, partly applicable By Ana Ruiz\. Checked against the new model on ten emails\. Still supported: The tone checks\. Needs fresh evidence: Accuracy on the new model\./);
+  assert.match(page, /Evidence reviewed after MC-[^:]+-1: The tax lead has approved the email templates, still applicable By Ana Ruiz\./);
+});
