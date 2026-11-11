@@ -243,3 +243,29 @@ test('wording: frozen Decisions keep the labels they froze', () => {
   const before = JSON.stringify(s0.decisionRecords);
   assert.equal(JSON.stringify(s.decisionRecords), before);
 });
+
+test('wording: a Requirement judged through its Target carries the Target\'s note, and never reads "No evidence yet" while results are set aside', () => {
+  let s = setUpWorkspace(startEmpty(), { workspace: { name: 'Ruiz Tax' }, workflow: { name: 'Client email' }, founder: { name: 'Ana Ruiz', title: 'Partner' } });
+  s = addCapability(s, { name: 'Draft deadline emails', summary: 'Drafts emails reminding clients of tax deadlines.', owner: ANA, risk: { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Customer-facing' }, today: 'recommends', by: ANA });
+  const id = s.capabilities.at(-1).id;
+  s = saveCriteria(s, id, {
+    criteria: [{ id: 'accuracy-t', name: 'Accuracy', target: '≥ 90%', requirement: 'acc' }],
+    requirements: [{ id: 'min-cases', text: 'Minimum 20 cases', kind: 'coverage' }, { id: 'acc', text: 'Overall accuracy ≥ 90%', judgment: 'evidence' }],
+    by: ANA, reason: 'Our own bar.',
+  });
+  s = mapEvidence(s, id, { rowKind: 'target', rowId: 'accuracy-t', measure: { source: MANUAL_SOURCE, metric: rowMetric('target', 'accuracy-t'), stat: 'rate' }, by: ANA });
+  s = recordResult(s, id, { rowKind: 'target', rowId: 'accuracy-t', type: 'rate', passed: 10, total: 20, kind: 'eval', by: ANA });
+  s = advanceToday(s, '2026-10-20');
+  s = recordMaterialChange(s, id, { areas: ['model'], description: 'Moved to a newer model.', effectiveOn: '2026-10-20', by: ANA });
+  let r = req(s, id, 'acc');
+  assert.match(r.result.why, /^Judged by its Target: Accuracy:/);
+  assert.equal(r.result.status, 'no-evidence', 'no new state');
+  assert.equal(r.result.label, NONE_COUNTS);
+  assert.match(r.aside, /^Through its Target Accuracy: 1 earlier result awaits material-change review \(MC-[^)]+-1\) and is not counted\.$/);
+  assert.doesNotMatch(r.result.why, /No evidence yet/);
+  // Mixed: a new result decides it; the earlier one stays visibly excluded.
+  s = recordResult(s, id, { rowKind: 'target', rowId: 'accuracy-t', type: 'rate', passed: 19, total: 20, kind: 'eval', by: ANA });
+  r = req(s, id, 'acc');
+  assert.equal(r.result.status, 'met');
+  assert.match(r.aside, /Through its Target Accuracy: 1 earlier result awaits material-change review/);
+});

@@ -277,6 +277,7 @@ function withResult(r, status, why) {
 function withAside(state, capabilityId, kind, r) {
   const info = setAside(state, capabilityId, kind, r.id, r.measure ? otherConfigCount(state, capabilityId, r.measure) : 0);
   if (!info) return r;
+  if (r.aside) return { ...r, aside: `${r.aside} ${setAsideNote(info)}` };
   const aside = setAsideNote(info);
   if (kind === 'target') return r.status === 'pending' ? { ...r, aside, current: NO_RESULTS_COUNT } : { ...r, aside };
   if (r.result && r.result.status === 'no-evidence') return { ...r, aside, gap: aside, result: { ...r.result, label: NONE_COUNTS, why: aside } };
@@ -318,8 +319,17 @@ function personJudged(state, capabilityId, row) {
     const st = (t) => RESULT_OF[t.status] || (t.status === 'pass' ? 'met' : 'no-evidence');
     const all = linked.map(st);
     const status = all.includes('not-met') ? 'not-met' : all.includes('conflicting') ? 'conflicting' : all.every((x) => x === 'met') ? 'met' : all.includes('not-enough') ? 'not-enough' : 'no-evidence';
-    const why = `Judged by its Target${linked.length === 1 ? '' : 's'}: ${linked.map((t) => `${t.name}: ${RESULT_WORDS[st(t)]}${t.current ? ` (${t.current})` : ''}`).join('; ')}.`;
-    return withResult({ ...row, met: status === 'met', current: RESULT_WORDS[status], gap: status === 'met' ? undefined : why, ...(status === 'conflicting' ? { conflicting: true } : {}) }, status, why);
+    // A Target whose results are set aside says so (v1 wording): the
+    // Requirement carries its note, and never reads "No evidence yet" then.
+    const word = (t) => (t.aside && t.status === 'pending' ? NO_RESULTS_COUNT : RESULT_WORDS[st(t)]);
+    const why = `Judged by its Target${linked.length === 1 ? '' : 's'}: ${linked.map((t) => `${t.name}: ${word(t)}${t.current && t.current !== word(t) ? ` (${t.current})` : ''}`).join('; ')}.`;
+    const asides = linked.filter((t) => t.aside).map((t) => `Through its Target ${t.name}: ${t.aside}`);
+    const judged = withResult({ ...row, met: status === 'met', current: RESULT_WORDS[status], gap: status === 'met' ? undefined : why, ...(status === 'conflicting' ? { conflicting: true } : {}) }, status, why);
+    if (!asides.length) return judged;
+    const aside = asides.join(' ');
+    return status === 'no-evidence'
+      ? { ...judged, aside, current: NONE_COUNTS, result: { ...judged.result, label: NONE_COUNTS } }
+      : { ...judged, aside };
   }
   // Judgments decide only a Requirement a person judges (by its structure).
   const all = judgedBy(state, capabilityId, row) === 'person' ? judgmentsFor(state, capabilityId, row.id) : { counting: [], input: [] };
