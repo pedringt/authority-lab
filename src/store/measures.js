@@ -407,9 +407,19 @@ export function rowCoverage(state, capabilityId, row) {
   // A coverage rule whose number nobody has set (#139) can't be sufficient.
   if (row.bar === 'needs-decision') return { status: 'needs-decision', mapped: false };
   if (!row.measure) {
+    // A Requirement judged through its linked Target(s) (#143 review) says
+    // so; its status is unchanged, so sufficiency counts are too.
+    const linked = row.text !== undefined ? targetsNow(state, capabilityId).filter((t) => t.requirement === row.id && t.bar !== 'needs-decision') : [];
+    const viaTarget = linked.length ? linked.map((t) => `${t.name}: ${t.current || MEASURE_WORDS[t.status] || t.status}`).join('; ') : null;
+    const via = viaTarget ? { viaTarget } : {};
     // A person's judgment, or an open critical incident, is the evidence for
     // a person-judged Requirement (#142).
     const st = row.result && row.result.status;
+    if (viaTarget && !row.incidentsOpen) {
+      if (st === 'met' || st === 'not-met') return { status: 'judged', mapped: false, ...via };
+      if (st === 'unknown' || st === 'conflicting') return { status: st, mapped: false, ...via };
+      return { status: 'no-source', mapped: false, ...via };
+    }
     if (row.incidentsOpen) return { status: 'incident', mapped: false };
     if (st === 'met' || st === 'not-met') return { status: 'judged', mapped: false };
     if (st === 'unknown' || st === 'conflicting') return { status: st, mapped: false };

@@ -23,6 +23,8 @@ function mappingText(state, m, row = null) {
 }
 
 function coverageCell(c) {
+  // Judged through its linked Target: say that, not "a person's judgment".
+  if (c.viaTarget) return html`${badge(TONE[c.status], c.status === 'judged' ? 'Judged by its Target' : c.status === 'no-source' ? COVERAGE_WORDS['no-data'] : COVERAGE_WORDS[c.status])}<div class="muted small">Through its Target: ${c.viaTarget}</div>`;
   const detail = c.status === 'covered' ? `${c.judged.text}${c.passing ? '' : ' (not met)'}`
     : c.status === 'stale' ? `${c.judged.text}, ${c.age} days old`
       : c.status === 'insufficient' ? c.judged.text
