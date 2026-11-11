@@ -7,7 +7,7 @@
 import { DATA_FIELDS } from '../data/seed.js';
 import { setupSequence } from './setupflow.js';
 import { html, badge, kv, fmtDate, person, personAt, notice, tabIntro, SWITCH_PERSON } from '../ui.js';
-import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText, authorityGap, actsThroughGate, boundaries, seriousFailures, proposalStaleness, reviewerInputMissing, people } from '../store/index.js';
+import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText, authorityGap, actsThroughGate, boundaries, seriousFailures, proposalStaleness, reviewerInputMissing, people, unresolvedApplicability } from '../store/index.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
 import { proposalsList, amendLink } from './proposals.js';
@@ -174,7 +174,8 @@ export function nextFor(state, cap, d) {
 }
 
 // Needs attention (v1 W3, Paige 2026-11-10): serious test failures and each
-// thing blocking a change, shown only when something applies. What still
+// thing blocking a change (including unreviewed evidence after a material
+// change, v1 W1), shown only when something applies. What still
 // needs a person is always on the page: the level sentence and the
 // Boundaries line ("Requires human review").
 function needsAttention(state, cap, d) {
@@ -186,6 +187,10 @@ function needsAttention(state, cap, d) {
   const review = reviewNeeded(state, cap.id);
   if (review.any) add('Blocked: a post-incident review is needed before authority expands.', `${base}?tab=monitor`, 'Record the review');
   const g = authorityGap(state, cap.id);
+  // v1 W1: evidence from before a material change that the Owner hasn't
+  // reviewed doesn't count, and blocks expansion (same wording as Decide).
+  const unreviewed = unresolvedApplicability(state, cap.id);
+  if (unreviewed.length) add(`Blocked: evidence from before a material change isn't reviewed yet, so it doesn't count: ${unreviewed.map((x) => x.label).join('; ')}.`, `${base}?tab=monitor`, 'Review it in Monitor');
   if (g.above) add(`Blocked: operating above approved Authority (observed at Level ${g.observed.level}, ${g.observed.name}). Expanding beyond it waits until this is resolved.`, `${base}?tab=monitor`, 'Resolve it in Monitor');
   if (decisionRequired(state, cap.id)) {
     const r = readiness(state, cap.id);
