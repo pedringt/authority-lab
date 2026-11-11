@@ -114,6 +114,25 @@ A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo.
 
 **Historical evals.** The 6B experiments stay attributed to the versions they tested. Expected product-code drift in a fingerprinted file is reported, not a failure, and a new run on that set is still refused. Changes to the archived labels, results or experiment files still fail. Old held-out data is never re-frozen.
 
+### v1 C1: how changes since the Decision in force are graded (Paige, 2026-11-09; built 2026-11-11, #187)
+
+Built as `docs/V1_RECONCILIATION.md` section 4 sets out, in `changesSinceDecision` and `justification` (`src/store/lifecycle.js`). Every example in its table is a test (`scripts/severity.test.mjs`).
+
+- **The levels, most serious first:** Restricted automatically, Above approved Authority, **Safety concern**, May no longer be justified, Investigation needed, Needs attention, then Info. **Value warning** sits apart and has no rank.
+- **Safety concern:** an open critical incident, a rule incident awaiting review, or a restriction rule reading over its limit. These were "Investigation needed" before.
+  - It is pinned at the top of Monitor whatever the headline, including "Restricted automatically".
+  - When it is the headline, any hard Requirement that no longer holds is shown directly beneath it.
+- **May no longer be justified / Investigation needed:** only a hard Requirement that was Met in the Decision's frozen snapshot, now Not met or now Conflicting.
+  - A consideration or a Target that slips is Needs attention.
+  - Before, a Target that went from Met to Not met also read "May no longer be justified".
+  - A Requirement added since the Decision, or one not Met when decided, is never graded here. It is the next bar, shown on Decide.
+- **Needs attention:** blocked attempts at something never allowed now read "Blocked: N attempts at something never allowed." They escalate only through an incident or a configured rule. Stale evidence uses the approved D5 wording.
+- **Value warning:** a rollout goal missed on real numbers.
+  - It never sets the "Still justified?" headline, and isn't listed there.
+  - Instead, a line points to "Delivering value?", where the goal is shown.
+- **Nothing here changes Authority.**
+- **Not built here:** an unresolved W1 applicability review as a "Needs attention" item. That review exists only on #188. When #188 merges, its own text on material changes covers it.
+
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 
 - **No model passed all three runs** on heldout-2 (prompt describe-v2, score-v2 with the audit). Opus passed only its first run. So model-assisted intake stays out of the app, and the endpoint (6B.2) isn't built.
@@ -268,7 +287,7 @@ As built:
   - **A plain-language state, no score:** Current Authority still supported / Needs attention / Investigation needed / Authority may no longer be justified / Restricted automatically. The state is the most serious change found, and each change says why.
 
   The automatic safety limits, the evidence signals and the gate summary follow, unchanged.
-- **Signal to state (the mapping used, for Paige to confirm):**
+- **Signal to state (the #147 mapping; replaced by v1 C1, Paige, 2026-11-09, #187: see "v1 scope reconciled" and "v1 C1"):**
   - "May no longer be justified": a result that was Met when decided is now Not met.
   - "Investigation needed": a result is now Conflicting, a critical incident is open, a rule incident awaits review, or a restriction rule reads over its limit.
   - "Needs attention": any other change for the worse, stale evidence, a material change, a position change or disagreement, an attempt at something never allowed, a rollout goal missed on real numbers, or an adoption warning.

@@ -68,7 +68,7 @@ test('right after a Decision, its Authority is still supported, and the record k
   assert.equal(j.legacy, false);
   assert.deepEqual(j.authority, { level: 2, limited: false, name: 'Draft' });
   assert.deepEqual(j.record.materialChangesAtDecision, []);
-  assert.deepEqual(Object.keys(JUSTIFICATION_STATES), ['supported', 'attention', 'investigate', 'unjustified', 'restricted', 'above', 'retired']);
+  assert.deepEqual(Object.keys(JUSTIFICATION_STATES), ['supported', 'attention', 'investigate', 'unjustified', 'safety', 'restricted', 'above', 'retired']);
 });
 
 test('more of the same evidence is information; a result that slips says the Authority may no longer be justified, and changes nothing', () => {
@@ -85,14 +85,14 @@ test('more of the same evidence is information; a result that slips says the Aut
   assert.equal(JSON.stringify(slipped.decisionRecords.at(-1)), JSON.stringify(s0.decisionRecords.at(-1)), 'the Decision in force is never rewritten');
 });
 
-test('a conflict, an open critical incident or a limit over its reading calls for investigation; a moved position or disagreement for attention', () => {
+test('a conflict calls for investigation; an open critical incident is a safety concern (v1 C1); a moved position or disagreement for attention', () => {
   const [s0, id] = decidedFirm();
   const conflict = recordJudgment(s0, id, 'templates', { verdict: 'not-met', rationale: 'Template 3 still has the old date.', by: ANA });
   assert.equal(justification(conflict, id).key, 'investigate');
   const incident = recordIncident(s0, id, { what: 'An email went out with last year\'s deadline.', severity: 'critical', by: CARA });
   const ji = justification(incident, id);
-  assert.equal(ji.key, 'investigate');
-  assert.ok(kinds(ji).includes('investigate:incident'));
+  assert.equal(ji.key, 'safety');
+  assert.ok(kinds(ji).includes('safety:incident'));
   const moved = saveStakeholders(s0, id, { stakeholders: current(s0, id, 'stakeholders').map((x) => (x.person === CARA ? { ...x, stance: 'hold', position: 'Clients are confused.' } : x)), by: ANA });
   const jm = justification(moved, id);
   assert.equal(jm.key, 'attention', 'disagreement stays a warning (#147 question 3)');
@@ -129,7 +129,7 @@ test('an attempt at something never allowed since the Decision needs attention; 
   let s = logGate(s0, { capabilityId: RR, tool: 'issue_refund', verdict: 'block', rule: { kind: 'must-never', text: 'Issue a refund to a different payment method.' } });
   s = logGate(s, { capabilityId: RR, tool: 'issue_refund', actor: 'person', outcome: 'rejected' });
   const j = changesSinceDecision(s, RR);
-  assert.ok(j.changes.some((c) => c.kind === 'boundary' && c.severity === 'attention' && /^1 attempt at something never allowed, all blocked\.$/.test(c.text)));
+  assert.ok(j.changes.some((c) => c.kind === 'boundary' && c.severity === 'attention' && /^Blocked: 1 attempt at something never allowed\.$/.test(c.text)));
   assert.ok(j.changes.some((c) => c.kind === 'operation' && c.severity === 'info' && /1 overridden \(rejected\) by a person/.test(c.text)));
 });
 
@@ -388,9 +388,9 @@ test('7. Monitor states never add an authorization block', () => {
   const holdOk = (s) => canAuthorize(setRationale(selectDecision(s, id, 'hold'), id, 'Keeping Draft while we look into it.'), id, { by: ANA });
   const backOk = (s) => canAuthorize(setRationale(selectDecision(s, id, 'restrict'), id, 'Back to Recommend while we look into it.'), id, { by: CARA });
   const unjustified = recordResult(s0, id, { rowKind: 'requirement', rowId: 'accuracy', type: 'rate', passed: 2, total: 10, kind: 'eval', by: BEN });
-  const investigate = recordIncident(s0, id, { what: 'An email went out with last year\'s deadline.', severity: 'critical', by: CARA });
+  const safety = recordIncident(s0, id, { what: 'An email went out with last year\'s deadline.', severity: 'critical', by: CARA });
   const attention = recordMaterialChange(advanceToday(s0, '2026-10-20'), id, { areas: ['model'], description: 'Moved to a newer model.', by: ANA });
-  for (const [s, key] of [[s0, 'supported'], [unjustified, 'unjustified'], [investigate, 'investigate'], [attention, 'attention']]) {
+  for (const [s, key] of [[s0, 'supported'], [unjustified, 'unjustified'], [safety, 'safety'], [attention, 'attention']]) {
     assert.equal(justification(s, id).key, key);
     assert.deepEqual(holdOk(s), { ok: true }, `hold under ${key}`);
     assert.deepEqual(backOk(s), { ok: true }, `reduce under ${key}`);
