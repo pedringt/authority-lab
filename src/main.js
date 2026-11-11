@@ -47,8 +47,9 @@ store.dispatch = (action, ...args) => {
   if (readOnly() && !READ_ONLY_OK.has(action)) { readOnlyTried = true; render(); return; }
   return dispatchAny(action, ...args);
 };
-// A client workspace runs on the real calendar, so freshness is real.
-if (isClient()) store.dispatch('advanceToday', realToday());
+// A client workspace, and an empty workspace started on the real date,
+// run on the real calendar, so freshness and reading periods are real.
+if (isClient() || store.get().realCalendar) store.dispatch('advanceToday', realToday());
 const app = document.getElementById('app');
 const nav = document.getElementById('nav');
 const acting = document.getElementById('acting');
@@ -548,7 +549,8 @@ document.addEventListener('click', (e) => {
   if (action === 'confirm-erase') {
     const kind = pendingErase;
     closeEraseConfirm(false);
-    store.dispatch(kind === 'start-empty' ? 'startEmpty' : 'reset');
+    if (kind === 'start-empty') store.dispatch('startEmpty', { today: realToday() });
+    else store.dispatch('reset');
     // Starting your own from Welcome (#149) counts as having been welcomed.
     if (kind === 'start-empty') { try { window.localStorage.setItem(WELCOMED, '1'); } catch { /* storage blocked */ } }
     applyExternalEvidence();

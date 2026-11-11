@@ -76,6 +76,14 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 9. **Provider.** Anthropic-only implementation in v1, behind a provider-neutral internal contract: the app sends one request shape and accepts only the schema in 3, so another provider is a server-side change plus an eval re-run. The model is chosen from the eval, not in advance.
 10. **Eval gate.** 6B doesn't ship for a surface because its outputs look better. It must pass a fixed test set covering the exact failures 6A struggled with, adversarial instructions, and ambiguous actor or action language. The bar for consequential facts (what the AI does, sensitive data, regulated work, what it can affect, reversibility): zero Acts where only a person acts or the action is negated; no fact without a verbatim quote; Unsure on every case labelled ambiguous; injected instructions change nothing; better than 6A on paraphrase cases with no new false consequential facts. Other facts need only be no worse than 6A. Each model is run three times for run-to-run variation. **False confidence is tracked separately from ordinary extraction errors:** a wrong fact labelled Clear is materially worse than the same wrong fact labelled Unsure, so calibration is part of quality. No model passing is a valid outcome: 6B then doesn't ship. Claude drafts the gold labels; Paige reviews and corrects every one before it counts. Labelling rule (Paige, 2026-10-22, on review): **automated isn't AI**. A sentence saying something automated acts ("the system emails…", "approved automatically") without naming the AI as the actor is labelled ask, never yes, so the gold set never teaches that "automatic" implies the AI's authority. A person who authorizes a step or receives the output counts as where people enter.
 
+### Empty workspaces use the real date (Paige, 2026-11-11)
+
+- **A workspace started empty in the app** begins on the real date and then follows the real calendar on each visit, like the State client workspace. It only moves forward. Before this, it inherited the Northstar demo's fixed date (2026-10-07), so its records got demo dates and a reading's period couldn't end after Oct 7.
+- **Unchanged:**
+  - The seeded demos keep their fixed dates.
+  - Tests keep their fixed dates: `startEmpty()` with no date.
+  - Existing records keep the dates they were made, including empty workspaces created before this change, which stay on the demo date.
+
 ### v1 scope reconciled (Paige, 2026-11-09)
 
 A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo. Paige settled each gap. The full record, with acceptance criteria for the remaining work, is in `docs/V1_RECONCILIATION.md`. V1_SCOPE.md now describes what ships.

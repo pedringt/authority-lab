@@ -135,3 +135,25 @@ test('nothing in the product knows State: its ids appear only in its configurati
   }
   assert.deepEqual(offenders, []);
 });
+
+// Paige, 2026-11-11: an empty workspace started in the app runs on the real
+// date; seeded demos and tests keep fixed dates; existing records keep theirs.
+test('an empty workspace started on a real date follows the real calendar; tests and the demo keep fixed dates', async () => {
+  const { startEmpty, setUpWorkspace, addPerson } = await import('../src/store/index.js');
+  const fixed = startEmpty();
+  assert.equal(fixed.today, initialState().today, 'without a date: the demo\'s fixed date');
+  assert.equal(fixed.realCalendar, undefined);
+  const real = startEmpty(initialState(), { today: '2026-11-11' });
+  assert.equal(real.today, '2026-11-11');
+  assert.equal(real.realCalendar, true);
+  // Records keep the date they were made; the calendar only moves forward.
+  let s = setUpWorkspace(real, { workspace: { name: 'Ruiz Tax' }, workflow: { name: 'Client email' }, founder: { name: 'Ana Ruiz', title: 'Partner' } });
+  s = addPerson(s, { name: 'Ben Okoro', title: 'Tax lead', team: 'Tax', by: 'ana-ruiz', reason: 'Reviews the drafts.' });
+  const made = JSON.stringify(s.roster);
+  const later = advanceToday(s, '2026-11-20');
+  assert.equal(later.today, '2026-11-20');
+  assert.equal(JSON.stringify(later.roster), made, 'existing records keep their dates');
+  assert.equal(advanceToday(later, '2026-11-12').today, '2026-11-20', 'never back');
+  // The seeded demo is unchanged.
+  assert.equal(initialState().realCalendar, undefined);
+});
