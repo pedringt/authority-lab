@@ -385,6 +385,11 @@ export function importedRuleReading(state, capabilityId, rule) {
 // evidence" is about coverage; "X of Y Requirements met" is readiness.
 // ---------------------------------------------------------------------------
 
+// v1 W5, D5 and D6 (Paige's wording, 2026-11-11). Explanations only: no
+// new blocking rule comes with them.
+export const STALE_EVIDENCE_NOTE = 'Stale evidence still counts. Its age blocks an expansion only when a Requirement makes recency mandatory, such as "Results from the last 30 days".';
+export const UNDECIDED_TARGET_NOTE = 'A Target can stay "Needs decision" until a Requirement that depends on it needs a bar. Until then it neither passes nor fails.';
+
 export const COVERAGE_WORDS = {
   covered: 'Sufficient evidence',
   stale: 'Stale',

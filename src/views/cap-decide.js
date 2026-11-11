@@ -5,7 +5,7 @@
 // requirements, pilot results) stay one link away, through `show=`.
 
 import { html, raw, section, badge, fmtDate, person, notice, empty, tabIntro } from '../ui.js';
-import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams, RESULT_WORDS, readinessText } from '../store/index.js';
+import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams, RESULT_WORDS, readinessText, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE } from '../store/index.js';
 import { AGENT_RUNS_CAPABILITY } from '../data/seed.js';
 import { testsView } from './tests.js';
 import { emptyState } from './setup.js';
@@ -87,6 +87,7 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
     ${criteria.length ? html`<table class="table decide-targets"><thead><tr><th>Target</th><th>Goal</th><th>Now</th><th>Status</th></tr></thead>
       <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}</td><td>${targetStatus(c)}</td></tr>`)}</tbody></table>` : ''}
     ${before === true ? html`<p class="muted small">Set before the pilot started, so the bar didn't move after the results came in.</p>` : before === false ? html`<p class="muted small">Changed after the pilot started. Every change is in <a href="#/capabilities/${cap.id}/versions?kind=criteria">history</a>.</p>` : ''}
+    <p class="muted small">${STALE_EVIDENCE_NOTE} ${UNDECIDED_TARGET_NOTE}</p>
     <p class="small"><a href="${base}&show=requirements">Requirements</a> · <a href="${base}&show=targets">Targets</a></p>`;
 
   const testsMeta = !t.total ? 'none yet'

@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
-import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule, JUDGMENTS, JUDGMENT_WORDS, effectiveJudgment } from '../store/index.js';
+import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule, JUDGMENTS, JUDGMENT_WORDS, effectiveJudgment, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE } from '../store/index.js';
 
 // How will you know this is true? (#143 review) Asked for every Requirement
 // and stored on it, never inferred from its wording. A coverage rule is
@@ -160,7 +160,7 @@ function setupChecksView(state, cap, { error, acting, saved, defaults, criteria,
         <tbody data-rows="criteria">${others.map(trow)}</tbody>
       </table>
       <button class="btn btn-sm" type="button" data-action="row-add" data-kind="criteria">Add a measure</button>
-      <p class="muted small">"Needs decision" is unresolved: never a pass, never a fail.</p>
+      <p class="muted small">"Needs decision" is unresolved: never a pass, never a fail. ${UNDECIDED_TARGET_NOTE} ${STALE_EVIDENCE_NOTE}</p>
     </details>
     <div class="card authorize">
       <p class="eyebrow">Save</p>

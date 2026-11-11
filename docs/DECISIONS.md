@@ -114,6 +114,19 @@ A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo.
 
 **Historical evals.** The 6B experiments stay attributed to the versions they tested. Expected product-code drift in a fingerprinted file is reported, not a failure, and a new run on that set is still refused. Changes to the archived labels, results or experiment files still fail. Old held-out data is never re-frozen.
 
+### v1 W5: small clarity fixes (Paige, 2026-11-11, #186)
+
+Built as `docs/V1_RECONCILIATION.md` W5 sets out. Paige approved the exact wording before the build ("Recommended" on each):
+
+- **No Reviewers named.** Decide's "Where this stands" says "No Reviewers are configured, so no position is required before an expansion.", as a neutral item linking to "Name a Reviewer". The record step's checklist says "No Reviewers are configured, so no position is required". With an active Reviewer named, the existing wording stays. Northstar names no Reviewers, so the demo shows the new line.
+- **D5, stale evidence:** "Stale evidence still counts. Its age blocks an expansion only when a Requirement makes recency mandatory, such as "Results from the last 30 days"."
+- **D6, undecided Targets:** "A Target can stay "Needs decision" until a Requirement that depends on it needs a bar. Until then it neither passes nor fails."
+- **Where D5 and D6 show:** Monitor's Evidence line, Decide step 2's Requirements line, and the setup Requirements step. They are explanations only: no new blocking rule. A recency Requirement blocks as any hard Requirement does.
+- **#134, on the Setup page.** Each completed step says what was configured, read-only:
+  - Boundaries: "N allowed · N require review · N never allowed · N safety limits".
+  - Requirements: "N Requirements configured (N hard). Targets: name bar; … and N more". Up to three Targets are listed.
+  - Evidence: "N of N Requirements mapped to evidence", followed by the coverage line.
+
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 
 - **No model passed all three runs** on heldout-2 (prompt describe-v2, score-v2 with the audit). Opus passed only its first run. So model-assisted intake stays out of the app, and the endpoint (6B.2) isn't built.
