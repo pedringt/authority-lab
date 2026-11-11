@@ -6,7 +6,7 @@ import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, residualRiskField, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, evidenceCoverage } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -376,6 +376,10 @@ export function statusBand(state, cap, proposed, live) {
   const count = (role) => { const n = against.filter((p) => p.role === role).length; return n ? (n === 1 ? `a ${role}` : `${n} ${role}s`) : null; };
   const opposers = [count('Reviewer'), count('Stakeholder')].filter(Boolean);
   const st = proposalStaleness(state, cap.id);
+  const cov = evidenceCoverage(state, cap.id);
+  const rows = [...cov.requirements, ...cov.targets];
+  const stale = rows.filter((x) => x.status === 'stale');
+  const thin = rows.filter((x) => x.status === 'insufficient');
   const MARK = { ok: '✓', block: '✗', warn: '!', info: '·' };
   const item = (kind, text, link = null, linkText = '') => html`<li class="check-item is-${kind}"><span class="check-mark" aria-hidden="true">${MARK[kind]}</span> ${text}${link ? html` <a class="small" href="${link}">${linkText}</a>` : ''}</li>`;
   const reqs = `#/capabilities/${cap.id}?tab=decide&show=requirements`;
@@ -399,9 +403,15 @@ export function statusBand(state, cap, proposed, live) {
     against.length ? item('warn', `Positions differ. ${upper(opposers.join(' and '))} ${against.length === 1 ? 'opposes' : 'oppose'} expansion.`)
       : positionsDiffer(live.positions) ? item('warn', 'Positions differ. Nothing averages them or picks one.') : '',
     st.stale ? item('block', `The Proposal is stale: ${st.reasons[0].text}`) : '',
+    // v1 W3: stale or insufficient evidence behind the Requirements and
+    // Targets this expansion is judged against. Warnings: age blocks only when
+    // a Requirement makes recency mandatory (D5), and too few cases already
+    // shows as a result above when it blocks.
+    stale.length ? item('warn', `Stale evidence: ${stale.map((x) => `${x.label} (${x.age} days old)`).join('; ')}. It still counts; age blocks only when a Requirement makes recency mandatory.`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
+    thin.length ? item('warn', `Not enough evidence yet: ${thin.map((x) => `${x.label}${x.judged && x.judged.text ? ` (${x.judged.text})` : ''}`).join('; ')}.`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
   ];
   return html`<section class="decide-status" aria-label="Where this decision stands"><p class="fact-label">Where this stands</p><ul class="checklist">${items}</ul>
-    <p class="muted small">For an expansion. Keeping the current limits, reducing, pausing and redesign are never blocked by these. Residual Risk and your reason are always yours to give.</p></section>`;
+    <p class="muted small">For an expansion. Keeping the current limits, reducing, pausing and redesign are never blocked by these. Residual Risk and your reason are always yours to give. <a href="#/capabilities/${cap.id}?tab=history">Full record</a></p></section>`;
 }
 
 const proposeButton = (cap, { restoreTo = null, governs = false } = {}) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">${governs ? `Propose Level ${cap.authority.level + 1}: govern the observed behavior` : restoreTo === null ? `Propose a move to Level ${cap.authority.level + 1}` : restoreTo === cap.authority.level + 1 ? `Propose: restore toward Level ${restoreTo}` : `Propose Level ${cap.authority.level + 1}: restoring toward Level ${restoreTo}`}</button>`;

@@ -114,6 +114,19 @@ A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo.
 
 **Historical evals.** The 6B experiments stay attributed to the versions they tested. Expected product-code drift in a fingerprinted file is reported, not a failure, and a new run on that set is still refused. Changes to the archived labels, results or experiment files still fail. Old held-out data is never re-frozen.
 
+### v1 W3: Decision and Status display contracts (Paige, 2026-11-10, #184)
+
+Built as `docs/V1_RECONCILIATION.md` W3 sets out. Three readings of the scope were Paige's choice, made before the build ("Recommended" on each):
+
+- **The full record is History.** Both Status and Decide link to it ("Full record"). The test follows the link and checks that every decision record (automatic restrictions too), post-incident review, incident, the latest test run, every decided change request, every version and every authority Proposal appears. Decide's "All evidence" stays an evidence link.
+- **Status gets a short "Needs attention" list,** shown only when something applies. It lists serious test failures by name, and each blocker: the review lock, operating above approved Authority, and, on an open decision, hard Requirements not Met, a stale Proposal and missing Reviewer positions. What still needs a person is already always on Status, in the level sentence and the Boundaries' "Requires human review" lines, so the list doesn't repeat it.
+- **Stale or insufficient evidence relevant to the proposed level** means the current Requirements and Targets, whose Coverage is Stale or Needs more cases. Rows carry no level of their own: the current ones are what the next expansion is judged against. They show in "Where this stands" as warnings, following D5.
+
+Mechanics:
+- **Serious test failures** are failed High-severity tests once the suite has a result (`seriousFailures` in `src/store/selectors.js`). Decide and Status use the same list.
+- **Failures name the item.** Each asserted item has a name, so removing one fails with "missing the full-record path", "Needs attention is missing the serious test failure", and so on.
+- **Northstar's seeded decision** predates frozen Proposals, so it has no Newly permitted / Still needs a person / Still prohibited lists. For that case the contract checks the Boundaries' Allowed, Needs human review and Not allowed sections instead.
+
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 
 - **No model passed all three runs** on heldout-2 (prompt describe-v2, score-v2 with the audit). Opus passed only its first run. So model-assisted intake stays out of the app, and the endpoint (6B.2) isn't built.

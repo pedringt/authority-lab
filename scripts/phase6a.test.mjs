@@ -237,6 +237,16 @@ function stateGap() {
   return [{ ...s, actingAs: PAIGE }, ID];
 }
 
+function northstar() { return [initialState(), RR]; }
+// Northstar's seeded decision predates frozen Proposals, so it has no
+// Newly permitted / Still needs a person / Still prohibited lists: the same
+// facts show as the Boundaries' sections, which the contract checks instead.
+const SEEDED = {
+  'newly permitted': /<p class="fact-label">Allowed<\/p>/,
+  'what still needs a person': /<p class="fact-label">Needs human review<\/p>/,
+  'what stays prohibited': /<p class="fact-label">Not allowed<\/p>/,
+};
+
 const CASES = {
   'hard Requirement not met': [() => firm({ accuracy: [15, 20] }), [/Overall accuracy ≥ 90%/, /Not met/, /Not approvable yet/]],
   'Unknown judgment': [() => firm({ templates: 'unknown' }), [/The tax lead has approved the templates/, /Unknown/]],
@@ -246,18 +256,44 @@ const CASES = {
   'Reviewer disagrees': [() => firm({ stance: 'hold' }), [/Ben Okoro \(Reviewer\) says Hold/]],
   'stale Proposal': [() => { const [s, id] = firm(); return [assessRisk(s, id, { likelihood: 'Low', scale: 'One case', by: ANA, reason: 'Few emails a week.' }), id]; }, [/This Proposal is stale/, /The Proposal is stale/]],
   'operating above approved Authority': [stateGap, [/Operating above approved Authority/]],
+  // v1 W3 (#184): serious test failures, and stale or insufficient evidence
+  // behind the rows this expansion is judged against. Northstar's open
+  // decision has all three: H-04 failed, Quality's evidence is 34 days old,
+  // and the high-value minimum has 18 of 40 cases.
+  'serious test failure': [northstar, SEEDED, [/Serious test failure: Fraud flag present/]],
+  'stale evidence': [northstar, SEEDED, [/Stale evidence: Quality \(34 days old\)\. It still counts; age blocks only when a Requirement makes recency mandatory\./]],
+  'insufficient evidence': [northstar, SEEDED, [/Not enough evidence yet: Minimum 40 high-value refund cases \(18 of 40 cases\)\./]],
 };
-// On every open decision, whatever the case.
-const ALWAYS = [/Newly permitted/, /Still needs a person/, /Still prohibited/, /Initial Risk/, /Controls<\/dt>/, /Boundaries and how each is enforced/, /What do we know\?/, /Who has said what\?/, /Where this stands/, /Approved:<\/strong> Level/, /Record decision as/, /Records can(&#39;|')t be edited/];
+// On every open decision, whatever the case. Each is named, so a failure says
+// which item went missing.
+const ALWAYS = {
+  'newly permitted': /Newly permitted/,
+  'what still needs a person': /Still needs a person/,
+  'what stays prohibited': /Still prohibited/,
+  'Initial Risk': /Initial Risk/,
+  'controls': /Controls<\/dt>/,
+  'Boundaries and their enforcement': /Boundaries and how each is enforced/,
+  'the evidence step': /What do we know\?/,
+  'positions': /Who has said what\?/,
+  'the status band': /Where this stands/,
+  'current and proposed Authority': /Approved:<\/strong> Level \d, [A-Za-z ]+\. <strong>Proposed:<\/strong> Level \d/,
+  'the record step': /Record decision as/,
+  'records are permanent': /Records can(&#39;|')t be edited/,
+  'the full-record path': /<a href="#\/capabilities\/[^"]+\?tab=history">Full record<\/a>/,
+};
 
-for (const [name, [build, expected]] of Object.entries(CASES)) {
+for (const [name, entry] of Object.entries(CASES)) {
+  const [build, seeded, expected] = entry.length === 3 ? entry : [entry[0], null, entry[1]];
+  const always = { ...ALWAYS, ...(seeded || {}) };
   test(`6A invariants: ${name} shows on every variant of the Decision workspace`, () => {
     const [s0, id] = build();
     for (const option of [null, 'hold', 'expand']) {
       const s = option ? selectDecision(s0, id, option) : s0;
       for (const q of ['', '&fields=all']) {
         const page = view(s, id, q);
-        for (const re of [...expected, ...ALWAYS]) assert.match(page, re, `${name}, ${option || 'nothing chosen'}${q ? ', every field' : ''}: ${re}`);
+        const where = `${name}, ${option || 'nothing chosen'}${q ? ', every field' : ''}`;
+        for (const re of expected) assert.match(page, re, `${where}: missing ${re}`);
+        for (const [item, re] of Object.entries(always)) assert.match(page, re, `${where}: missing ${item}`);
         // Residual Risk is asked wherever it could be needed, never prefilled.
         if (option === 'expand' || q) assert.match(page, /name="residual-risk" value="Unknown"/);
         assert.doesNotMatch(page, /name="residual-risk" value="[^"]+" data-action="set-residual-risk" data-capability="[^"]+" checked/);
