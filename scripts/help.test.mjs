@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  initialState, startEmpty, setUpWorkspace, addCapability, people, recordContext, startCapability, saveSetupRisk, setStartingAuthority, startContractDraft, selectDecision,
+  initialState, recordMaterialChange, advanceToday, startEmpty, setUpWorkspace, addCapability, people, recordContext, startCapability, saveSetupRisk, setStartingAuthority, startContractDraft, selectDecision,
 } from '../src/store/index.js';
 import { setPeople, setToday } from '../src/ui.js';
 import { HELP, helpFor } from '../src/views/help.js';
@@ -83,6 +83,13 @@ test('Help shows everywhere each choice is made', () => {
   has(decide(north), 'authorization', 'Decide');
   has(decide(selectDecision(north, RR, 'expand-limits')), 'residualRisk', 'Decide, expand');
   has(String(capabilityView(north, 'ticket-classification', q('tab=decide&reduce=1'))), 'authorization', 'Reduce or pause');
+  // Monitor: a material-change review and a reading (W1, W2).
+  const changed = recordMaterialChange(advanceToday(north, '2026-10-20'), RR, { areas: ['model'], description: 'Moved to a newer model.', effectiveOn: '2026-10-20', by: 'maya' });
+  setPeople(people(changed)); setToday(changed.today);
+  const mon = String(capabilityView(changed, RR, q('tab=monitor')));
+  has(mon, 'applicability', 'Monitor, material-change review');
+  has(mon, 'reading', 'Monitor, record a reading');
+  setPeople(people(north)); setToday(north.today);
   // The guided demo's decision step.
   has(String(guideView({ state: north, capabilityId: RR, role: 'maya', tested: true, decided: null, breached: false }, 6)), 'residualRisk', 'Guided demo, decision');
 });

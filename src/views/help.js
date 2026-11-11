@@ -48,13 +48,11 @@ export const HELP = {
     why: 'This is the decision itself. Recording it changes the authority recorded in Authority Lab: expanding grants more, keeping the limits holds it, and reducing or pausing pulls it back as soon as it is recorded. The tool itself changes only where its actions go through Authority Lab\'s gate or another integration enforces it. The record keeps your reason and what was known.',
     example: 'Accuracy meets the bar, but the evening shift hasn\'t been tested yet: keep the current limits, and say what evidence would change your mind.',
   },
-  // Attached once #182 (material-change review) is merged.
   applicability: {
     label: 'material-change applicability',
     why: 'After a material change, earlier evidence may describe a system that no longer exists. Until you review it, it doesn\'t count.',
     example: 'After a model upgrade, the Owner might judge earlier accuracy results no longer applicable, while a check of the unchanged price list may remain applicable.',
   },
-  // Attached once #183 (manual readings) is merged.
   reading: {
     label: 'a monitoring reading',
     why: 'The period and units must match the safety limit. Checking shows what saving would do; saving records the reading. Once the limit applies, which is while the capability is above the level the limit falls back to, a saved reading over the limit automatically reduces the authority recorded here. Before then, the reading is kept and nothing changes.',

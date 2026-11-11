@@ -7,7 +7,7 @@ import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, residualRiskField, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, isActivePerson, current, evidenceCoverage } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, isActivePerson, current, evidenceCoverage, STALE_EVIDENCE_NOTE } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -418,7 +418,7 @@ export function statusBand(state, cap, proposed, live) {
     // Targets this expansion is judged against. Warnings: age blocks only when
     // a Requirement makes recency mandatory (D5), and too few cases already
     // shows as a result above when it blocks.
-    stale.length ? item('warn', `Stale evidence: ${stale.map((x) => `${x.label} (${x.age} days old)`).join('; ')}. It still counts; age blocks only when a Requirement makes recency mandatory.`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
+    stale.length ? item('warn', `Stale evidence: ${stale.map((x) => `${x.label} (${x.age} days old)`).join('; ')}. ${STALE_EVIDENCE_NOTE}`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
     thin.length ? item('warn', `Not enough evidence yet: ${thin.map((x) => `${x.label}${x.judged && x.judged.text ? ` (${x.judged.text})` : ''}`).join('; ')}.`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
   ];
   return html`<section class="decide-status" aria-label="Where this decision stands"><p class="fact-label">Where this stands</p><ul class="checklist">${items}</ul>
