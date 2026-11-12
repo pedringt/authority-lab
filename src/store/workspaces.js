@@ -31,8 +31,13 @@ export const findWorkspace = (id) => BUILT_IN_WORKSPACES.find((w) => w.id === id
 // Where a workspace is saved in the browser. The demo keeps its old key.
 export const storageKeyFor = (id) => (id === DEMO_WORKSPACE ? STORAGE_KEY : `${STORAGE_KEY}:${id}`);
 
-// Today's date, as data (YYYY-MM-DD).
-export const realToday = () => new Date().toISOString().slice(0, 10);
+// Today's date, as data (YYYY-MM-DD). The real date is the calendar date where the person is (Paige,
+// 2026-11-11): the browser's local date, not the UTC date, which in Pacific
+// time turns over at 4 pm. Event timestamps elsewhere stay in UTC.
+export const realToday = (now = new Date()) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
 
 // Build a workspace from a client configuration. `today` defaults to the real
 // date: a client workspace isn't on the demo's clock.
