@@ -291,10 +291,10 @@ test('a material change is recorded, append-only and surfaced, and changes nothi
   assert.equal(materialChanges(a, RR).length, 1, 'the earlier state is unchanged');
   assert.equal(b.activity[0].kind, 'material-change');
   assert.equal(b.activity[0].surfaced, true);
-  assert.match(a.activity[0].body, /Evidence from before 2026-10-01 may apply less/);
-  // Phase 1 records only: authority, readiness and evidence are as they were.
+  assert.match(a.activity[0].body, /Evidence from before 2026-10-01 doesn't count until the Owner reviews whether it still applies/);
+  // Authority and the evidence records are as they were. Readiness isn't:
+  // since v1 W1 (#182) unreviewed earlier evidence doesn't count (applicability.test.mjs).
   assert.deepEqual(getCapability(b, RR).authority, getCapability(s, RR).authority);
-  assert.deepEqual(readiness(b, RR), readiness(s, RR));
   assert.deepEqual(capData(b, RR).evidence, capData(s, RR).evidence);
   assert.ok(Object.keys(MATERIAL_CHANGE_AREAS).includes('jurisdiction'));
   assert.throws(() => recordMaterialChange(s, RR, { areas: [], description: 'Something changed here.', by: owner }), /Say what changed/);

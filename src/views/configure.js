@@ -5,7 +5,7 @@
 
 import { html, notice, lede, badge, fmtDate } from '../ui.js';
 import {
-  getCapability, actor, people, criteriaLocked, evidenceSources, evidenceCoverage, coverageText, COVERAGE_WORDS, MEASURE_STAT_WORDS, barFromWords, SOURCE_KINDS, TESTS_SOURCE, MANUAL_SOURCE, findSource, isCoverageRule, isIncidentRequirement, judgedBy, rowMetric,
+  getCapability, actor, people, criteriaLocked, evidenceSources, evidenceCoverage, coverageText, COVERAGE_WORDS, NO_RESULTS_COUNT, MEASURE_STAT_WORDS, barFromWords, SOURCE_KINDS, TESTS_SOURCE, MANUAL_SOURCE, findSource, isCoverageRule, isIncidentRequirement, judgedBy, rowMetric,
   provisionalLink,
 } from '../store/index.js';
 import { RESULT_STATUS_TONE, unlinkedNotice } from './lightweight.js';
@@ -23,17 +23,22 @@ function mappingText(state, m, row = null) {
 }
 
 function coverageCell(c) {
+  // Evaluated against its linked Target (Paige's wording, 2026-11-11): name
+  // the Target; "Judged by a person" stays for human judgment.
+  if (c.viaTarget) return html`${badge(TONE[c.status], 'Evaluated against Target')}<div class="muted small">Target: ${c.viaTarget}</div>`;
   const detail = c.status === 'covered' ? `${c.judged.text}${c.passing ? '' : ' (not met)'}`
     : c.status === 'stale' ? `${c.judged.text}, ${c.age} days old`
       : c.status === 'insufficient' ? c.judged.text
-        : c.status === 'no-data' ? 'Waiting for results'
+        : c.status === 'no-data' ? (c.row.aside || 'Waiting for results')
           : c.status === 'judged' ? 'A person\'s judgment is on record'
           : c.status === 'incident' ? 'An open critical incident decides it'
             : c.status === 'unknown' ? 'Judged Unknown'
               : c.status === 'conflicting' ? 'The evidence disagrees'
                 : c.status === 'needs-decision' ? 'No number yet'
                   : 'Not mapped';
-  return html`${badge(TONE[c.status], COVERAGE_WORDS[c.status])}<div class="muted small">${detail}</div>`;
+  const label = c.status === 'no-data' && c.row.aside ? NO_RESULTS_COUNT : COVERAGE_WORDS[c.status];
+  const aside = c.row.aside && c.status !== 'no-data' ? html`<div class="muted small">${c.row.aside}</div>` : '';
+  return html`${badge(TONE[c.status], label)}<div class="muted small">${detail}</div>${aside}`;
 }
 
 // What to do about a gap: never "you must write tests". Tests are one way.
@@ -131,7 +136,9 @@ function rowActions(state, cap, c) {
 function resultCell(c) {
   const r = c.row.result || (c.row.status ? { status: { pass: 'met', fail: 'not-met', conflicting: 'conflicting', insufficient: 'not-enough', 'too-early': 'not-enough', pending: 'no-evidence', 'needs-decision': 'needs-decision' }[c.row.status] || 'no-evidence' } : { status: 'no-evidence' });
   const words = { met: 'Met', 'not-met': 'Not met', unknown: 'Unknown', conflicting: 'Conflicting', 'not-enough': 'Not enough evidence', 'no-evidence': 'No evidence yet', 'needs-decision': 'Needs decision' };
-  return html`${badge(RESULT_STATUS_TONE[r.status] || 'neutral', words[r.status])}${r.why ? html`<div class="muted small">${r.why}</div>` : ''}`;
+  // Evidence that exists but doesn't count never reads "No evidence yet".
+  const label = c.row.result ? c.row.result.label || words[r.status] : r.status === 'no-evidence' && c.row.aside ? NO_RESULTS_COUNT : words[r.status];
+  return html`${badge(RESULT_STATUS_TONE[r.status] || 'neutral', label)}${r.why ? html`<div class="muted small">${r.why}</div>` : ''}`;
 }
 
 export function configureEvidenceView(state, capabilityId, query) {

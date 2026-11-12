@@ -199,6 +199,15 @@ export function readiness(state, capabilityId) {
   };
 }
 
+// Serious test failures (v1 W3): failed High-severity tests, once the suite
+// has a result (a recorded run, or a run completed in this session). Decide
+// and Status show the same list.
+export function seriousFailures(state, capabilityId) {
+  const d = capData(state, capabilityId);
+  if (!d.testRun.lastRun && d.testRun.status !== 'complete') return [];
+  return d.scenarios.filter((x) => !x.pass && x.severity === 'High');
+}
+
 export function testSummary(state, capabilityId) {
   const d = capData(state, capabilityId);
   const total = d.scenarios.length;

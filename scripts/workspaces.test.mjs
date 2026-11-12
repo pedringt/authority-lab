@@ -135,3 +135,41 @@ test('nothing in the product knows State: its ids appear only in its configurati
   }
   assert.deepEqual(offenders, []);
 });
+
+// Paige, 2026-11-11: an empty workspace started in the app runs on the real
+// date; seeded demos and tests keep fixed dates; existing records keep theirs.
+test('an empty workspace started on a real date follows the real calendar; tests and the demo keep fixed dates', async () => {
+  const { startEmpty, setUpWorkspace, addPerson } = await import('../src/store/index.js');
+  const fixed = startEmpty();
+  assert.equal(fixed.today, initialState().today, 'without a date: the demo\'s fixed date');
+  assert.equal(fixed.realCalendar, undefined);
+  const real = startEmpty(initialState(), { today: '2026-11-11' });
+  assert.equal(real.today, '2026-11-11');
+  assert.equal(real.realCalendar, true);
+  // Records keep the date they were made; the calendar only moves forward.
+  let s = setUpWorkspace(real, { workspace: { name: 'Ruiz Tax' }, workflow: { name: 'Client email' }, founder: { name: 'Ana Ruiz', title: 'Partner' } });
+  s = addPerson(s, { name: 'Ben Okoro', title: 'Tax lead', team: 'Tax', by: 'ana-ruiz', reason: 'Reviews the drafts.' });
+  const made = JSON.stringify(s.roster);
+  const later = advanceToday(s, '2026-11-20');
+  assert.equal(later.today, '2026-11-20');
+  assert.equal(JSON.stringify(later.roster), made, 'existing records keep their dates');
+  assert.equal(advanceToday(later, '2026-11-12').today, '2026-11-20', 'never back');
+  // The seeded demo is unchanged.
+  assert.equal(initialState().realCalendar, undefined);
+});
+
+// The real date is the local calendar date (Paige, 2026-11-11). Run in
+// Pacific time, pinned, so the result doesn't depend on where the tests run.
+test('the real date is the local calendar date: Nov 11 in Pacific time while UTC is already Nov 12, and it advances after local midnight', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const script = `
+    const { realToday, advanceToday, startEmpty } = await import(${JSON.stringify(new URL('../src/store/index.js', import.meta.url).href)});
+    const evening = new Date('2026-11-12T00:30:00Z'); // 4:30 pm Nov 11 in Los Angeles
+    const afterMidnight = new Date('2026-11-12T08:30:00Z'); // 0:30 am Nov 12 in Los Angeles
+    const s = startEmpty(null, { today: realToday(evening) });
+    const reopened = advanceToday(s, realToday(afterMidnight));
+    console.log(JSON.stringify({ evening: realToday(evening), utc: evening.toISOString().slice(0, 10), created: s.today, reopened: reopened.today, after: realToday(afterMidnight) }));
+  `;
+  const out = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, TZ: 'America/Los_Angeles' } }).toString());
+  assert.deepEqual(out, { evening: '2026-11-11', utc: '2026-11-12', created: '2026-11-11', reopened: '2026-11-12', after: '2026-11-12' });
+});
