@@ -6,12 +6,16 @@ import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, residualRiskField, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, evidenceCoverage } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, isActivePerson, current, evidenceCoverage } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
 // What the AI acts on, e.g. "refunds" (the capability's own noun).
 const actionNoun = (cap) => (cap && cap.actionNoun) || 'actions';
+
+// v1 W5: whether any active Reviewer is named. With none, nothing is waited
+// for, and Decide says so instead of "Every Reviewer has given a position".
+const reviewersConfigured = (state, capId) => current(state, capId, 'stakeholders').some((st) => st.role === 'reviewer' && isActivePerson(state, st.person));
 
 export function decisionsListView(state) {
   const records = state.decisionRecords.slice().reverse();
@@ -60,7 +64,9 @@ export function checklist(state, cap, dec, check) {
       const rr = dec.residualRisk;
       return [
         { label: 'Proposal is current', ok: !st.stale, why: 'it is stale; replace it with a new Proposal (see the top of the page).' },
-        { label: 'Every Reviewer has given a position', ok: !missing.length, why: `still waiting for ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')}.` },
+        reviewersConfigured(state, cap.id)
+          ? { label: 'Every Reviewer has given a position', ok: !missing.length, why: `still waiting for ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')}.` }
+          : { label: 'No Reviewers are configured, so no position is required', ok: true },
         { label: 'Residual Risk', ok: Boolean(rr && RESIDUAL_RISK_LEVELS.includes(rr.level) && String(rr.note || '').trim().length >= RESIDUAL_REASON_MIN), why: rr ? 'say why, in a short sentence.' : 'choose Low, Moderate, High or Unknown, and say why.' },
       ];
     })() : []),
@@ -401,7 +407,8 @@ export function statusBand(state, cap, proposed, live) {
     noHardQuality(state, cap.id) ? item('warn', NO_HARD_QUALITY.title, reqs, 'See the Requirements') : '',
     missing.length
       ? item('block', `Waiting for a position from ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')} (Reviewer${missing.length === 1 ? '' : 's'}).`, `#/capabilities/${cap.id}/stakeholders/edit`, 'Record a position')
-      : item('ok', 'Every Reviewer has given a position.'),
+      : reviewersConfigured(state, cap.id) ? item('ok', 'Every Reviewer has given a position.')
+        : item('info', 'No Reviewers are configured, so no position is required before an expansion.', `#/capabilities/${cap.id}/stakeholders/edit`, 'Name a Reviewer'),
     ...against.map((p) => item('warn', `${p.role}: ${p.name} — ${p.stanceLabel}`)),
     against.length ? item('warn', `Positions differ. ${upper(opposers.join(' and '))} ${against.length === 1 ? 'opposes' : 'oppose'} expansion.`)
       : positionsDiffer(live.positions) ? item('warn', 'Positions differ. Nothing averages them or picks one.') : '',

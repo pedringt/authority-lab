@@ -7,7 +7,7 @@
 
 import { html, raw, badge, kv, fmtDate, person, personAt, rightsNote, subNav, SWITCH_PERSON } from '../ui.js';
 import { justifiedSection } from './cap-justified.js';
-import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES, evidenceSignals, readingRules, readingEligibility, manualReadings, READING_UNITS } from '../store/index.js';
+import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES, evidenceSignals, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE, readingRules, readingEligibility, manualReadings, READING_UNITS } from '../store/index.js';
 
 const PILOT = 'Demo data (pilot)';
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
@@ -231,8 +231,8 @@ function evidenceLine(state, cap) {
   const sig = evidenceSignals(state, cap.id);
   const meta = sig.length ? `${plural(sig.length, 'thing')} to look at` : 'nothing to look at';
   return line('Evidence', meta, sig.length
-    ? html`<ul class="plain-list mon-signals">${sig.map((x) => html`<li>${badge(SIGNAL_TONE[x.kind], SIGNAL_WORDS[x.kind])} ${x.what}${x.record ? ` (${x.record}, ${fmtDate(x.date)}).` : ''} <span class="muted">${x.why}</span> <a href="${x.link}">Look</a></li>`)}</ul><p class="muted small">Warnings only: none of these blocks anything or changes authority.</p>`
-    : html`<p>The evidence is current, every Requirement has enough of it, and nothing that was met has slipped.</p>`);
+    ? html`<ul class="plain-list mon-signals">${sig.map((x) => html`<li>${badge(SIGNAL_TONE[x.kind], SIGNAL_WORDS[x.kind])} ${x.what}${x.record ? ` (${x.record}, ${fmtDate(x.date)}).` : ''} <span class="muted">${x.why}</span> <a href="${x.link}">Look</a></li>`)}</ul><p class="muted small">Warnings only: none of these blocks anything or changes authority. ${STALE_EVIDENCE_NOTE} ${UNDECIDED_TARGET_NOTE}</p>`
+    : html`<p>The evidence is current, every Requirement has enough of it, and nothing that was met has slipped.</p><p class="muted small">${STALE_EVIDENCE_NOTE} ${UNDECIDED_TARGET_NOTE}</p>`);
 }
 
 function stillSafe(state, cap, d, check = null) {
