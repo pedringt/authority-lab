@@ -76,6 +76,35 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 9. **Provider.** Anthropic-only implementation in v1, behind a provider-neutral internal contract: the app sends one request shape and accepts only the schema in 3, so another provider is a server-side change plus an eval re-run. The model is chosen from the eval, not in advance.
 10. **Eval gate.** 6B doesn't ship for a surface because its outputs look better. It must pass a fixed test set covering the exact failures 6A struggled with, adversarial instructions, and ambiguous actor or action language. The bar for consequential facts (what the AI does, sensitive data, regulated work, what it can affect, reversibility): zero Acts where only a person acts or the action is negated; no fact without a verbatim quote; Unsure on every case labelled ambiguous; injected instructions change nothing; better than 6A on paraphrase cases with no new false consequential facts. Other facts need only be no worse than 6A. Each model is run three times for run-to-run variation. **False confidence is tracked separately from ordinary extraction errors:** a wrong fact labelled Clear is materially worse than the same wrong fact labelled Unsure, so calibration is part of quality. No model passing is a valid outcome: 6B then doesn't ship. Claude drafts the gold labels; Paige reviews and corrects every one before it counts. Labelling rule (Paige, 2026-10-22, on review): **automated isn't AI**. A sentence saying something automated acts ("the system emails…", "approved automatically") without naming the AI as the actor is labelled ask, never yes, so the gold set never teaches that "automatic" implies the AI's authority. A person who authorizes a step or receives the output counts as where people enter.
 
+### v1 W1: material-change applicability review (Paige, 2026-11-09, #182)
+
+Built as `docs/V1_RECONCILIATION.md` W1 sets out. Two readings of the scope were Paige's choice, made before the build ("Use recommendations"):
+
+- **The unit of review is a Requirement or Target row.** That is what `materialChangeImpact` lists: the row's evidence observed before the change took effect. It is not each piece of evidence. One piece of evidence can feed several rows, and it may still apply to one of them but not another.
+- **Partly applicable evidence never counts toward a result, for every row.** It is shown as supporting context, with what it still supports and what needs fresh evidence. In the calculation it is treated like no longer applicable evidence. The approved scope said only that it "can't independently satisfy a hard Requirement"; this is the stricter reading, and it is simpler.
+
+Mechanics:
+- **Where the exclusion applies** (`src/store/applicability.js`). A row's evidence dated before the change is left out of Requirement results, Target results and Coverage. That covers imported and hand-recorded results, uploads, tests, feedback and judgments. It applies while the row is unreviewed, partly applicable or no longer applicable, until the Owner reviews it as still applicable.
+- **No feedback loop.** The affected rows are worked out from the evidence as it stands before any review excludes it (`withoutMaterialChanges`). A review therefore never changes which rows a change affects.
+- **The block** (`canAuthorize`). It comes after the observed-behaviour gap and before the hard Requirements. Replacing the Proposal doesn't clear it.
+- **Who records.** Only the Owner records a review, with a reason of at least 10 characters. Partly applicable also needs what the evidence still supports and what needs fresh evidence.
+- **Records.** Reviews are append-only; the latest per change and row stands, and Activity and History list each one. Evidence records and past Decision records are never changed.
+- **Every material change is reviewed, recent or not.** Monitor lists all of them, no longer only those since the Decision in force.
+
+### v1 wording: evidence that doesn't count (Paige, 2026-11-11)
+
+These are display changes only. The rules for counting evidence, for applicability and for Authority are unchanged, and no new state is added: a row's status stays what it was, and only its label and an explanatory note change.
+
+- **"No evidence yet"** is kept for a Requirement with nothing recorded.
+- **When evidence exists but none counts,** the label is "No evidence currently counts toward this result", with the reason beneath it. Targets and Coverage keep their own terms: "No results currently count" replaces "No results yet" only where results exist but are set aside.
+- **Awaiting a material-change review:** "N earlier results await material-change review (MC-…) and are not counted." For several changes: "Earlier evidence needs review after a material change."
+- **Partly applicable** keeps the Owner's answer: "Partly applicable. Supporting context only; not counted toward this result." It is never described as wholly inapplicable.
+- **No longer applicable** says so.
+- **Mixed evidence.** The result comes from the evidence that counts, with the note beside it.
+- **Several changes on one row:** one count, then each change's state, with no double counting.
+- **Another configuration:** "N imported results were measured under another configuration and are set aside."
+- **Historical Decisions** keep the labels and calculations they froze. The wording applies to current views and to snapshots taken from now on.
+
 ### v1 scope reconciled (Paige, 2026-11-09)
 
 A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo. Paige settled each gap. The full record, with acceptance criteria for the remaining work, is in `docs/V1_RECONCILIATION.md`. V1_SCOPE.md now describes what ships.
@@ -126,6 +155,34 @@ Built as `docs/V1_RECONCILIATION.md` W5 sets out. Paige approved the exact wordi
   - Boundaries: "N allowed · N require review · N never allowed · N safety limits".
   - Requirements: "N Requirements configured (N hard). Targets: name bar; … and N more". Up to three Targets are listed.
   - Evidence: "N of N Requirements mapped to evidence", followed by the coverage line.
+
+### v1 W3: Decision and Status display contracts (Paige, 2026-11-10, #184)
+
+Built as `docs/V1_RECONCILIATION.md` W3 sets out. Three readings of the scope were Paige's choice, made before the build ("Recommended" on each):
+
+- **The full record is History.** Both Status and Decide link to it ("Full record"). The test follows the link and checks that every decision record (automatic restrictions too), post-incident review, incident, the latest test run, every decided change request, every version and every authority Proposal appears. Decide's "All evidence" stays an evidence link.
+- **Status gets a short "Needs attention" list,** shown only when something applies. It lists serious test failures by name, and each blocker: the review lock, operating above approved Authority, and, on an open decision, hard Requirements not Met, a stale Proposal and missing Reviewer positions. What still needs a person is already always on Status, in the level sentence and the Boundaries' "Requires human review" lines, so the list doesn't repeat it.
+- **Stale or insufficient evidence relevant to the proposed level** means the current Requirements and Targets, whose Coverage is Stale or Needs more cases. Rows carry no level of their own: the current ones are what the next expansion is judged against. They show in "Where this stands" as warnings, following D5.
+
+Mechanics:
+- **Serious test failures** are failed High-severity tests once the suite has a result (`seriousFailures` in `src/store/selectors.js`). Decide and Status use the same list.
+- **Failures name the item.** Each asserted item has a name, so removing one fails with "missing the full-record path", "Needs attention is missing the serious test failure", and so on.
+- **Northstar's seeded decision** predates frozen Proposals, so it has no Newly permitted / Still needs a person / Still prohibited lists. For that case the contract checks the Boundaries' Allowed, Needs human review and Not allowed sections instead.
+
+### v1 W2: manual monitoring readings (Paige, 2026-11-10, #183)
+
+Built as `docs/V1_RECONCILIATION.md` W2 sets out. Four readings of the scope were Paige's choice, made before the build ("Recommended" on each):
+
+- **Only rules nothing else measures take manual readings.** A rule counted from the gate log, or read from imported production results, refuses them, and the form says where its reading comes from. So a rule never has two competing current values.
+- **The period matches the rule's window exactly.** A 7-day rule needs a period of exactly 7 days, ending no later than today. A rolling 50-case rule needs exactly 50 cases. A rule with no number or no window can't take a manual reading.
+- **The period end decides staleness.** A new reading must end after the current one. Same or earlier is refused, and can enter only as a correction of a named reading, with a reason. A correction that crosses the limit restricts like any reading; one that lowers the value restores nothing.
+- **Check, then save.** "Check reading" validates and shows the limit, the value and what saving would do. "Save reading" appears only after a check of the same values, and saving runs the same check again, so a restriction can't be skipped.
+
+Mechanics (`src/store/readings.js`):
+- **Who records.** The Owner or a configured Reviewer (a Stakeholder entry with the Reviewer role), active, attributed with a snapshot of who they were. Being a Stakeholder doesn't grant it.
+- **Same enforcement.** The current reading is judged by the existing rule logic (`ruleCrossed`, active only above the fallback level). Over an active limit it goes through the shared breach flow (`applyBreach`), like the gate log and imports: once, and not again while a restriction is open or after one has happened, and an incident rule opens one incident.
+- **The warning matches the outcome.** The check and the save use the same consequence function: restrict, open an incident, already restricted, the limit doesn't apply at this level, or nothing changes.
+- **History.** Readings are append-only. A correction names the reading it replaces, and both stay listed on Monitor. A correction never changes authority, the review lock, the incident or any decision record.
 
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 

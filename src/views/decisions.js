@@ -1,12 +1,12 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished} from '../store/index.js';
+import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished, unresolvedApplicability } from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, residualRiskField, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, isActivePerson, current } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, isActivePerson, current, evidenceCoverage } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
@@ -382,6 +382,11 @@ export function statusBand(state, cap, proposed, live) {
   const count = (role) => { const n = against.filter((p) => p.role === role).length; return n ? (n === 1 ? `a ${role}` : `${n} ${role}s`) : null; };
   const opposers = [count('Reviewer'), count('Stakeholder')].filter(Boolean);
   const st = proposalStaleness(state, cap.id);
+  const cov = evidenceCoverage(state, cap.id);
+  const rows = [...cov.requirements, ...cov.targets];
+  const stale = rows.filter((x) => x.status === 'stale');
+  const thin = rows.filter((x) => x.status === 'insufficient');
+  const unreviewed = unresolvedApplicability(state, cap.id);
   const MARK = { ok: '✓', block: '✗', warn: '!', info: '·' };
   const item = (kind, text, link = null, linkText = '') => html`<li class="check-item is-${kind}"><span class="check-mark" aria-hidden="true">${MARK[kind]}</span> ${text}${link ? html` <a class="small" href="${link}">${linkText}</a>` : ''}</li>`;
   const reqs = `#/capabilities/${cap.id}?tab=decide&show=requirements`;
@@ -393,6 +398,8 @@ export function statusBand(state, cap, proposed, live) {
       ? item('block', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. Expanding beyond it is blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')
       : item('warn', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. This Proposal governs it; expanding beyond Level ${g.observed.level} stays blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')) : '',
     d.reviewRequired ? item('block', 'A post-incident review is needed before authority expands.', `#/capabilities/${cap.id}?tab=monitor`, 'Record the review') : '',
+    // v1 W1 (#182): earlier evidence the Owner hasn't reviewed after a material change.
+    unreviewed.length ? item('block', `Evidence from before a material change isn't reviewed yet, so it doesn't count: ${unreviewed.map((x) => x.label).join('; ')}.`, `#/capabilities/${cap.id}?tab=monitor`, 'Review it in Monitor') : '',
     r.hardUnmet.length
       ? item('block', `Hard Requirements not Met: ${r.hardUnmet.map((x) => `${x.text} (${x.result ? x.result.label : 'Not met'})`).join('; ')}.`, reqs, 'See the Requirements')
       : r.hardTotal ? item('ok', `Every hard Requirement is Met (${r.hardTotal}).`) : '',
@@ -406,9 +413,15 @@ export function statusBand(state, cap, proposed, live) {
     against.length ? item('warn', `Positions differ. ${upper(opposers.join(' and '))} ${against.length === 1 ? 'opposes' : 'oppose'} expansion.`)
       : positionsDiffer(live.positions) ? item('warn', 'Positions differ. Nothing averages them or picks one.') : '',
     st.stale ? item('block', `The Proposal is stale: ${st.reasons[0].text}`) : '',
+    // v1 W3: stale or insufficient evidence behind the Requirements and
+    // Targets this expansion is judged against. Warnings: age blocks only when
+    // a Requirement makes recency mandatory (D5), and too few cases already
+    // shows as a result above when it blocks.
+    stale.length ? item('warn', `Stale evidence: ${stale.map((x) => `${x.label} (${x.age} days old)`).join('; ')}. It still counts; age blocks only when a Requirement makes recency mandatory.`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
+    thin.length ? item('warn', `Not enough evidence yet: ${thin.map((x) => `${x.label}${x.judged && x.judged.text ? ` (${x.judged.text})` : ''}`).join('; ')}.`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
   ];
   return html`<section class="decide-status" aria-label="Where this decision stands"><p class="fact-label">Where this stands</p><ul class="checklist">${items}</ul>
-    <p class="muted small">For an expansion. Keeping the current limits, reducing, pausing and redesign are never blocked by these. Residual Risk and your reason are always yours to give.</p></section>`;
+    <p class="muted small">For an expansion. Keeping the current limits, reducing, pausing and redesign are never blocked by these. Residual Risk and your reason are always yours to give. <a href="#/capabilities/${cap.id}?tab=history">Full record</a></p></section>`;
 }
 
 const proposeButton = (cap, { restoreTo = null, governs = false } = {}) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">${governs ? `Propose Level ${cap.authority.level + 1}: govern the observed behavior` : restoreTo === null ? `Propose a move to Level ${cap.authority.level + 1}` : restoreTo === cap.authority.level + 1 ? `Propose: restore toward Level ${restoreTo}` : `Propose Level ${cap.authority.level + 1}: restoring toward Level ${restoreTo}`}</button>`;

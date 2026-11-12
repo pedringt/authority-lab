@@ -54,6 +54,10 @@
 .st-k { font-size: 13px; color: var(--muted); font-weight: 600; }
 .st-next { margin: 18px 0 0; font-weight: 600; }
 .st-meta { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); display: flex; gap: 6px 16px; flex-wrap: wrap; }
+/* Needs attention (v1 W3): serious failures and blocking items, when any */
+.st-attention { margin: 20px 0 0; padding: 10px 12px; border-left: 3px solid var(--restr); background: var(--surface-2, transparent); max-width: 72ch; }
+.st-attention .plain-list { margin: 4px 0 0; }
+.st-attention li { margin: 4px 0; font-size: 15px; }
 
 /* Actions waiting for a person: rows on dividers */
 .st-section { margin-top: 28px; }

@@ -5,7 +5,7 @@
 // requirements, pilot results) stay one link away, through `show=`.
 
 import { html, raw, section, badge, fmtDate, person, notice, empty, tabIntro } from '../ui.js';
-import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce , targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams, RESULT_WORDS, readinessText, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE } from '../store/index.js';
+import { capData, readiness, authorityLabel, testSummary, current, currentVersion, criteriaLocked, criteriaSaved, proposedAuthority, gateSummary, gateEvents, GATE_SOURCES, versionsInForce, targetsNow, requirementsNow, importedStanding, importedVerdicts, evidenceStreams, RESULT_WORDS, readinessText, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE, seriousFailures, NO_RESULTS_COUNT } from '../store/index.js';
 import { AGENT_RUNS_CAPABILITY } from '../data/seed.js';
 import { testsView } from './tests.js';
 import { emptyState } from './setup.js';
@@ -75,7 +75,7 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
   const t = testSummary(state, cap.id);
   const p = d.pilot;
   const gap = r.unmet[0];
-  const serious = t.lastRun || t.status === 'complete' ? d.scenarios.filter((x) => !x.pass && x.severity === 'High') : [];
+  const serious = seriousFailures(state, cap.id);
   const reqs = requirementsNow(state, cap.id);
   const criteria = targetsNow(state, cap.id);
   const before = setBeforePilot(state, cap, d);
@@ -85,7 +85,7 @@ export function whatWeKnow(state, cap, { runs = null } = {}) {
   const checks = html`<p class="decide-line-lead">What needs to be true first.</p>
     ${reqs.length ? requirementsList(state, cap.id) : html`<p class="muted">No Requirements set yet.${criteriaSaved(state, cap.id) ? '' : html` <a href="#/capabilities/${cap.id}/criteria/edit">Set them</a>`}</p>`}
     ${criteria.length ? html`<table class="table decide-targets"><thead><tr><th>Target</th><th>Goal</th><th>Now</th><th>Status</th></tr></thead>
-      <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}</td><td>${targetStatus(c)}</td></tr>`)}</tbody></table>` : ''}
+      <tbody>${criteria.map((c) => html`<tr><td>${c.name}</td><td>${c.target}</td><td>${c.current}${c.aside ? html`<div class="muted small">${c.aside}</div>` : ''}</td><td>${targetStatus(c)}</td></tr>`)}</tbody></table>` : ''}
     ${before === true ? html`<p class="muted small">Set before the pilot started, so the bar didn't move after the results came in.</p>` : before === false ? html`<p class="muted small">Changed after the pilot started. Every change is in <a href="#/capabilities/${cap.id}/versions?kind=criteria">history</a>.</p>` : ''}
     <p class="muted small">${STALE_EVIDENCE_NOTE} ${UNDECIDED_TARGET_NOTE}</p>
     <p class="small"><a href="${base}&show=requirements">Requirements</a> · <a href="${base}&show=targets">Targets</a></p>`;
@@ -175,7 +175,7 @@ export function gateActivityCard(state, cap) {
 // A Target's status in words (#149): never a raw key; no evidence is a gap,
 // not a failure, and a missing number needs a decision.
 function targetStatus(c) {
-  if (c.status === 'pending') return html`<span class="muted">No evidence yet</span>`;
+  if (c.status === 'pending') return html`<span class="muted">${c.aside ? NO_RESULTS_COUNT : 'No evidence yet'}</span>`;
   if (c.status === 'needs-decision') return html`<span class="muted">Needs decision</span>`;
   const words = TARGET_WORDS[c.status] || 'Unknown';
   return c.judged && ['fail', 'insufficient', 'too-early'].includes(c.status) ? html`<span class="decide-weak">${words}</span>` : words;
@@ -191,8 +191,8 @@ export function criteriaTab(state, cap) {
   const rows = criteria.map((c) => html`<tr>
     <td><strong>${c.name}</strong></td>
     <td>${c.target}</td>
-    <td>${c.current}</td>
-    <td>${c.status === 'pending' ? badge('neutral', c.judged ? 'No results yet' : 'Not measured yet') : c.status === 'needs-decision' ? badge('decision', 'Needs decision') : badge(c.status === 'too-early' ? 'insufficient' : c.status, TARGET_WORDS[c.status])}</td>
+    <td>${c.current}${c.aside ? html`<div class="muted small">${c.aside}</div>` : ''}</td>
+    <td>${c.status === 'pending' ? badge('neutral', c.aside ? NO_RESULTS_COUNT : c.judged ? 'No results yet' : 'Not measured yet') : c.status === 'needs-decision' ? badge('decision', 'Needs decision') : badge(c.status === 'too-early' ? 'insufficient' : c.status, TARGET_WORDS[c.status])}</td>
     <td class="muted">${c.note}</td>
   </tr>`);
   const defining = state.decisionRecords.find((x) => x.capabilityId === cap.id && x.number === 2);
@@ -238,13 +238,13 @@ export function requirementsList(state, capabilityId) {
   return html`<div class="card">
     <ul class="req-list">${reqs.map((q) => {
       const st = resultStatus(q);
-      const label = RESULT_WORDS[st];
+      const label = (q.result && q.result.label) || RESULT_WORDS[st];
       // A case count short of its minimum reads "18 of 40" (#151).
       const of = st === 'not-enough' && /^\d[\d,]*$/.test(String(q.current || '').trim()) && String(q.text).match(/^(?:minimum|at least)\s+([\d,]+)/i);
       const value = q.current && q.current !== label && !NO_VALUE.has(q.current) ? `: ${q.current}${of ? ` of ${of[1]}` : ''}` : '';
       return html`<li class="is-${st}">
       <span class="req-mark" aria-hidden="true">${RESULT_MARK[st]}</span>
-      <span class="req-text"><strong>${q.text}</strong>${q.consideration ? html` <span class="req-weight">Consideration</span>` : ''}<span class="muted"> · ${label}${value}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}</span>
+      <span class="req-text"><strong>${q.text}</strong>${q.consideration ? html` <span class="req-weight">Consideration</span>` : ''}<span class="muted"> · ${label}${value}</span>${q.gap ? html`<p class="req-gap">${q.gap}</p>` : ''}${q.aside && q.aside !== q.gap ? html`<p class="req-gap muted small">${q.aside}</p>` : ''}</span>
     </li>`;
     })}</ul>
     <p class="muted small">${readinessText(r)}${r.considerations.length ? ' A consideration is weighed by the person deciding; it never blocks.' : ''}</p>

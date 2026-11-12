@@ -333,3 +333,12 @@ test('a decision record keeps the imported evidence and configuration in force w
   // A record with no imported evidence doesn't mention it: Ticket classification has none.
   assert.equal(externalSnapshot(initialState(), TC).length, 0);
 });
+
+test('wording: results measured under another configuration are set aside by name, never "nothing recorded"', async () => {
+  const { otherConfigCount, setAsideNote } = await import('../src/store/index.js');
+  let s = importEvidence(initialState(), run(1, { observedAt: '2026-10-01' }));
+  s = importEvidence(s, run(2, { observedAt: '2026-10-05', config: { provider: 'Example', model: 'model-b', prompt: 'p-3', evalSet: 'es-2', implementation: 'abc1234' } }));
+  assert.equal(otherConfigCount(s, TC, { metric: 'quality', stat: 'rate' }), 1);
+  assert.equal(setAsideNote({ count: 0, changes: [], otherConfig: 1 }), '1 imported result was measured under another configuration and is set aside.');
+});
+
