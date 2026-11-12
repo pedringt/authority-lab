@@ -109,6 +109,7 @@ function materialChanges(state, cap, j) {
   };
   const reviewForm = (m, r) => html`<details class="mon-review-form"><summary>${r.review ? 'Review again' : 'Review this evidence'}</summary>
     <form data-form="record-applicability" data-capability="${cap.id}" data-change="${m.id}" data-row-kind="${r.kind}" data-row-id="${r.id}">
+      ${helpFor('applicability')}
       <fieldset class="field"><legend>Does the evidence from before ${fmtDate(m.effectiveOn)} still apply to "${r.label}"?</legend>
         ${Object.entries(APPLICABILITY).map(([k, label]) => html`<label class="check"><input type="radio" name="verdict" value="${k}" required><span>${label}</span></label>`)}
       </fieldset>

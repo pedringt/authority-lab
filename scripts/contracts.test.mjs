@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { decideWith } from './helpers.mjs';
 import {
   initialState, startEmpty, setUpWorkspace, addPerson, addCapability, capData, buildWorkspace, importEvidenceFiles, saveStakeholders, saveCriteria,
-  proposeAuthority, assessRisk, mapEvidence, rowMetric, MANUAL_SOURCE, recordResult, authorize, simulateBreach, recordReview, people, versionList, VERSIONED_KINDS, authorityProposals,
+  proposeAuthority, assessRisk, recordMaterialChange, advanceToday, mapEvidence, rowMetric, MANUAL_SOURCE, recordResult, authorize, simulateBreach, recordReview, people, versionList, VERSIONED_KINDS, authorityProposals,
 } from '../src/store/index.js';
 import { stateWorkspace } from '../src/data/workspaces/state.js';
 import { setPeople, setToday } from '../src/ui.js';
@@ -54,6 +54,9 @@ const CASES = {
   'stale Proposal, Reviewer position missing': [staleFirm, {
     'the stale Proposal': /Blocked: the Proposal is stale: /,
     'the missing Reviewer position': /Blocked: waiting for a position from Ben Okoro \(Reviewer\)\./,
+  }],
+  'material change with evidence not yet reviewed (v1 W1)': [() => [recordMaterialChange(advanceToday(initialState(), '2026-10-20'), RR, { areas: ['model'], description: 'Moved to a newer model.', effectiveOn: '2026-10-20', by: 'maya' }), RR], {
+    'the unreviewed-evidence block': /Blocked: evidence from before a material change isn(&#39;|')t reviewed yet, so it doesn(&#39;|')t count: [^<]+\. <a class="small" href="#\/capabilities\/refund-recommendation\?tab=monitor">Review it in Monitor<\/a>/,
   }],
   'restricted by a person, nothing open': [() => [initialState(), 'refund-execution-high-value'], null],
 };

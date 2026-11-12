@@ -261,7 +261,7 @@ const CASES = {
   // decision has all three: H-04 failed, Quality's evidence is 34 days old,
   // and the high-value minimum has 18 of 40 cases.
   'serious test failure': [northstar, SEEDED, [/Serious test failure: Fraud flag present/]],
-  'stale evidence': [northstar, SEEDED, [/Stale evidence: Quality \(34 days old\)\. It still counts; age blocks only when a Requirement makes recency mandatory\./]],
+  'stale evidence': [northstar, SEEDED, [/Stale evidence: Quality \(34 days old\)\. Stale evidence still counts\. Its age blocks an expansion only when a Requirement makes recency mandatory/]],
   'insufficient evidence': [northstar, SEEDED, [/Not enough evidence yet: Minimum 40 high-value refund cases \(18 of 40 cases\)\./]],
 };
 // On every open decision, whatever the case. Each is named, so a failure says

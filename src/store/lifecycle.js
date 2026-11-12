@@ -16,6 +16,7 @@ import { expectedVsActual } from './value.js';
 import { adoptionSignals } from './adoption.js';
 import { openCriticalIncidents, incidentsFor, incidentStatus } from './lightweight.js';
 import { levelName } from './selectors.js';
+import { STALE_EVIDENCE_NOTE } from './measures.js';
 import { authorityBaseline } from './context.js';
 
 // The plain-language states, from least to most serious. No score: the
@@ -152,7 +153,7 @@ export function changesSinceDecision(state, capabilityId) {
   // Authority on its own; only the signals below, which stand on their own,
   // are shown.
   for (const r of live.coverage.rows.filter((x) => x.state === 'stale')) {
-    if (!out.some((c) => c.kind === 'coverage' && c.id === r.id)) out.push(changeOf('attention', 'stale', `"${r.label}" rests on stale evidence. Stale evidence still counts. Its age blocks an expansion only when a Requirement makes recency mandatory, such as "Results from the last 30 days".`, { rowKind: r.kind, id: r.id }));
+    if (!out.some((c) => c.kind === 'coverage' && c.id === r.id)) out.push(changeOf('attention', 'stale', `"${r.label}" rests on stale evidence. ${STALE_EVIDENCE_NOTE}`, { rowKind: r.kind, id: r.id }));
   }
   if (new Set(live.positions.map((p) => p.stance).filter((s) => s && s !== 'undecided')).size > 1) out.push(changeOf('attention', 'disagreement', 'Reviewers and Stakeholders don\'t agree on how much autonomy is right.'));
   // v1 W1 (#182): a change's earlier evidence counts only once the Owner says

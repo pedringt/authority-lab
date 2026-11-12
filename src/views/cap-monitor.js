@@ -6,6 +6,7 @@
 // mechanisms open on demand, one line each.
 
 import { html, raw, badge, kv, fmtDate, person, personAt, rightsNote, subNav, SWITCH_PERSON } from '../ui.js';
+import { helpFor } from './help.js';
 import { justifiedSection } from './cap-justified.js';
 import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES, evidenceSignals, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE, readingRules, readingEligibility, manualReadings, READING_UNITS } from '../store/index.js';
 
@@ -170,6 +171,7 @@ function readingsLine(state, cap, check) {
   const who = person(by);
   const form = html`<form class="reading-form" data-form="record-reading" data-capability="${cap.id}">
     <p class="muted small">Recording as ${who.name}, ${who.role}. The reading goes through the same limits as any other: over the limit, the rule applies as written.</p>
+    ${helpFor('reading')}
     <label class="field field-stack"><span>Limit</span><select name="ruleId" required><option value="">Choose a limit</option>${open.map((r) => html`<option value="${r.id}">${r.text}</option>`)}</select></label>
     <div class="roi-fields">
       <label class="field field-stack"><span>Value</span><input type="number" name="value" step="any" min="0" required></label>
