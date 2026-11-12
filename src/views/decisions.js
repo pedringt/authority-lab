@@ -1,6 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished} from '../store/index.js';
+import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished, unresolvedApplicability } from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
@@ -380,6 +380,7 @@ export function statusBand(state, cap, proposed, live) {
   const rows = [...cov.requirements, ...cov.targets];
   const stale = rows.filter((x) => x.status === 'stale');
   const thin = rows.filter((x) => x.status === 'insufficient');
+  const unreviewed = unresolvedApplicability(state, cap.id);
   const MARK = { ok: '✓', block: '✗', warn: '!', info: '·' };
   const item = (kind, text, link = null, linkText = '') => html`<li class="check-item is-${kind}"><span class="check-mark" aria-hidden="true">${MARK[kind]}</span> ${text}${link ? html` <a class="small" href="${link}">${linkText}</a>` : ''}</li>`;
   const reqs = `#/capabilities/${cap.id}?tab=decide&show=requirements`;
@@ -391,6 +392,8 @@ export function statusBand(state, cap, proposed, live) {
       ? item('block', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. Expanding beyond it is blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')
       : item('warn', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. This Proposal governs it; expanding beyond Level ${g.observed.level} stays blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')) : '',
     d.reviewRequired ? item('block', 'A post-incident review is needed before authority expands.', `#/capabilities/${cap.id}?tab=monitor`, 'Record the review') : '',
+    // v1 W1 (#182): earlier evidence the Owner hasn't reviewed after a material change.
+    unreviewed.length ? item('block', `Evidence from before a material change isn't reviewed yet, so it doesn't count: ${unreviewed.map((x) => x.label).join('; ')}.`, `#/capabilities/${cap.id}?tab=monitor`, 'Review it in Monitor') : '',
     r.hardUnmet.length
       ? item('block', `Hard Requirements not Met: ${r.hardUnmet.map((x) => `${x.text} (${x.result ? x.result.label : 'Not met'})`).join('; ')}.`, reqs, 'See the Requirements')
       : r.hardTotal ? item('ok', `Every hard Requirement is Met (${r.hardTotal}).`) : '',

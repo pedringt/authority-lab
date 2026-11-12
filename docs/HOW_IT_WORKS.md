@@ -131,7 +131,7 @@ A move up starts with a **Proposal**: anyone active clicks **Propose a move to L
 
 **Who records it.** Only the Owner records more authority or keeping the current limits. Anyone named on the capability can record pulling it back (one level down, all the way to Observe, or redesign).
 
-**Before authority expands**, every Reviewer has given a position, a Residual Risk with a reason is given, and the Proposal is current. A Proposal goes **stale** when, since it was frozen, any of these happens:
+**Before authority expands**, every Reviewer has given a position, a Residual Risk with a reason is given, the Owner has reviewed the evidence from before any material change, and the Proposal is current. A Proposal goes **stale** when, since it was frozen, any of these happens:
 
 - the Rules, Targets, Requirements or Risk get a new version;
 - who is named on the capability, or their role (Reviewer or Stakeholder), changes;
@@ -163,7 +163,17 @@ Monitor's first view, **Still justified?**, starts with that question. It shows:
 
 There's no score. Each change has its own line saying how serious it is. A starting record, or a Decision made before Decisions froze what they were based on, has nothing to compare results with, and Monitor says so.
 
-**Material changes** (model, prompt, tools, permissions, workflow, scope, users, data, operating context, jurisdiction, Boundaries) can be recorded from Monitor by the Owner or anyone named. For each change since the Decision, Monitor lists the Requirements and Targets whose current result rests on evidence from before the change: it "may need new evidence". It hasn't failed, and Authority doesn't change.
+**Material changes** (model, prompt, tools, permissions, workflow, scope, users, data, operating context, jurisdiction, Boundaries) can be recorded from Monitor by the Owner or anyone named. For each change, Monitor lists the Requirements and Targets whose result rests on evidence from before the change. That evidence hasn't failed, and Authority doesn't change.
+
+**Reviewing the earlier evidence** (v1 W1, #182):
+- **Until it's reviewed,** the earlier evidence doesn't count toward Requirement results or Coverage, and authority can't expand.
+- **Only the Owner reviews it,** once per row: still applicable, partly applicable or no longer applicable, with a reason. Reviewers give their input to the Owner.
+- **Still applicable** evidence counts again.
+- **Partly applicable** evidence stays as supporting context, with what it still supports and what needs fresh evidence. It doesn't count toward any result.
+- **No longer applicable** evidence stops counting. Past Decisions keep what they froze, and the classification alone never changes Authority.
+- **Records.** Reviews are append-only: the latest stands, and History lists every one.
+- **Unreviewed rows show on Monitor and on Decide's "Where this stands",** with a link to Monitor.
+- **Replacing a stale Proposal doesn't clear the block.** Once every row is reviewed, the Requirements and Coverage are worked out again from the evidence that counts, and expansion waits on them as usual.
 
 **What you can do:**
 - **Investigate:** see the evidence, or record a result, a judgment or an incident. Nothing changes.
@@ -180,6 +190,8 @@ Apart from that one, none of Monitor's states blocks anything by itself. Excepti
 After authority expands, the capability enters a monitoring period. The product shows how many actions it has taken alone, how many it escalated, how many a person reversed, and how many incidents occurred.
 
 Its **Still justified?** view continues, under **Automatic safety limits**, with a verdict (Within limits, Over a safety limit, Autonomy reduced, Needs review, or Nothing to monitor yet), then a **Safety limits** line listing the **restriction rules**, read straight from the contract's automatic restriction conditions: the contract is the source of truth. Each line names a threshold, a window and the level the capability falls back to (one level down if the line names none). A rule applies while the capability is above that level, so "returns the capability to Draft" waits until the capability is above Draft; a line that says the capability "stays at" a level opens an incident instead. Monitoring runs whenever at least one rule applies, at any level, and each rule shows its latest reading against its limit (simulated for the seeded capabilities; a capability added in the demo shows "No measurements yet"). For Refund recommendation: if severe errors exceed 5% of the last 50 autonomous cases, authority returns to Draft. Software applies these rules on its own. When a reading crosses a rule, the capability moves to the level the line names, an automatic decision record quotes the rule and the reading, and an alert, an incident and activity events are written; an incident rule opens an incident and raises an alert but leaves authority alone. On screen, the verdict reads "Autonomy reduced": "<capability> was moved back to <level> after crossing a safety limit on <date>." Each seeded capability has a demo control on its Monitor tab, **Simulate a safety-limit breach** (**Simulate a safety-limit incident** for Account closure, whose rule opens an incident); capabilities added in the demo don't.
+
+**Manual readings (v1 W2, #183).** A team with no gate log or import records readings by hand: Monitor's **Record a reading** line, for the Owner or a configured Reviewer. A reading names the limit, the measurement period, the source, the value and its units. It must match the limit: a percentage limit takes %, a count limit takes a whole number, a 7-day limit takes a period of exactly 7 days ending by today, and a rolling 50-case limit takes exactly 50 cases. Limits measured from logged actions or imported production results don't take manual readings. **Check reading** shows the limit, the value and what saving would do (move back automatically, open an incident, nothing, or nothing because the limit doesn't apply yet); **Save reading** then records it, and the reading is judged by the same rules as any other. A new reading must cover a later period than the current one. An older or duplicate one can enter only as a correction of a named reading, with a reason. The original is kept, and a correction never restores autonomy or removes a restriction or incident: that still takes the post-incident review and a new decision.
 
 After a restriction or a rule incident, the owner or a Risk approver (a Risk approver for a High-impact or Financial capability), but not whoever authorized the expansion that was restricted, records a **post-incident review** on the Monitor tab (a form headed "Needs review" after a restriction, or "Review what happened" after a rule incident, then **Save review**): what happened, the cause and what changed. It clears the review lock and the alert and closes the incident, but authority stays where the rule left it; expanding again goes through a proposal and a named authorization like any expansion. The restriction record shows that it was reviewed. A person has to review before authority can expand again.
 

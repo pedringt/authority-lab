@@ -31,13 +31,14 @@ export { replayRecording } from './replay.js';
 export { grantingRecord, actionRates, METRICS, recogniseMetric, expectedVsActual, ROI_FIELDS, roiVersions, currentRoiAssumptions, roiEditEligibility, setRoiAssumptions, roi } from './value.js';
 export { ADOPTION_THRESHOLDS, adoptionSignals } from './adoption.js';
 export { barFromWords, MEASURE_STAT_WORDS, mapEvidence } from './configure.js';
-export { MIN_PRODUCTION_SAMPLE, MEASURE_STATS, MEASURE_OPS, MEASURE_WORDS, measureProblems, measuredEvidence, judgeMeasure, targetsNow, requirementsNow, importedVerdicts, ruleMeasureOf, importedRuleReading, COVERAGE_WORDS, RESULT_WORDS, rowCoverage, evidenceCoverage, coverageText, evidenceSignals } from './measures.js';
+export { MIN_PRODUCTION_SAMPLE, MEASURE_STATS, MEASURE_OPS, MEASURE_WORDS, measureProblems, measuredEvidence, judgeMeasure, targetsNow, requirementsNow, importedVerdicts, ruleMeasureOf, importedRuleReading, COVERAGE_WORDS, RESULT_WORDS, NONE_COUNTS, NO_RESULTS_COUNT, otherConfigCount, rowCoverage, evidenceCoverage, coverageText, evidenceSignals } from './measures.js';
 export { enforceImportedRules } from './monitoring.js';
 export { SOURCE_KINDS, FRESH_DAYS, CONNECTIONS, TESTS_SOURCE, MANUAL_SOURCE, BUILT_IN_SOURCES, sourceIdFor, sourceOfItem, evidenceSources, findSource, registerSource, manualEntryEligibility, recordManualEvidence } from './sources.js';
 export { EVIDENCE_SCHEMA, EVIDENCE_KINDS, MEASUREMENT_TYPES, SEVERITIES, CONFIG_KEYS, CONFIG_LABELS, MAX_MEASUREMENTS, checkEvidence, canonicalEvidence, evidenceImports, findImport, measurementText, measurementSample, importEvidence, importEvidenceFiles, FROM_LABELS, evidenceFrom, configChanges, changesText, evidenceStreams, importedStanding, externalSnapshot } from './external.js';
 export { LEVEL_PLAIN, readinessText, overviewTodos, stillNeeded, overviewApprovals, importantResults, authorityRows } from './overview.js';
 // Product reset, Phase 1 (#137).
 export { CONTEXT_FIELDS, FACT_STATUSES, FACT_SOURCES, contextVersions, contextNow, confirmedContext, recordContext, suggestContext, reviewContextFact, LIFECYCLE, BASELINE_FIELDS, baselineVersions, baselineNow, authorityBaseline, recordBaseline, MATERIAL_CHANGE_AREAS, materialChanges, recordMaterialChange, namedOn } from './context.js';
+export { READING_UNITS, READING_REASON_MIN, manualReadings, currentReading, manualReadingBlocked, readingRules, readingEligibility, checkReading, recordReading } from './readings.js';
 export { BOUNDARY_CATEGORIES, ENFORCEMENT, actsThroughGate, boundaries, peopleModel } from './boundaries.js';
 export { RISK_SEVERITIES, SEVERITY_LABELS, LIKELIHOODS, SCALES, OVERALL_RISKS, OVERALL_RISK_TABLE, overallRisk, riskView, assessRisk } from './risk.js';
 // Product reset, Phase 2: the setup flow (#139).
@@ -52,6 +53,7 @@ export { outcomeMeasurements } from './sources.js';
 // Product reset, Phase 4: the Proposal as a frozen review object (#144).
 export { authorityProposals, findAuthorityProposal, openAuthorityProposal, proposalStatus, proposalClosures, evidenceProvenance, coverageState, reviewConditions, freezeProposal, proposalStaleness, positionsDiffer, proposalGaps } from './proposal.js';
 // Product reset, Phase 5: is the current Authority still justified? (#147).
+export { APPLICABILITY, APPLICABILITY_REASON_MIN, setAside, setAsideNote, applicabilityReviews, applicabilityState, excludedBefore, unresolvedApplicability, applicabilityBlocks, recordApplicability } from './applicability.js';
 export { JUSTIFICATION_STATES, decisionInForce, materialChangesSince, materialChangeImpact, changesSinceDecision, justification, restorationContext, authorityGap, gapBlocks } from './lifecycle.js';
 export { exposureFacts, moneyAtStake, workTypes, lowRiskMismatch, suggestionContext, contextQuestions, CONTEXT_QUESTION_KEYS } from './exposure.js';
 export { withBarsAsTargets } from './evidence.js';

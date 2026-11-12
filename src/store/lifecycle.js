@@ -8,7 +8,8 @@
 
 import { getCapability, capData } from './state.js';
 import { reviewConditions, evidenceProvenance } from './proposal.js';
-import { materialChanges, MATERIAL_CHANGE_AREAS } from './context.js';
+import { materialChanges, MATERIAL_CHANGE_AREAS, withoutMaterialChanges } from './context.js';
+import { applicabilityState } from './applicability.js';
 import { monitoringStatus, reviewNeeded } from './monitoring.js';
 import { gateEvents, categoryOf } from './gatelog.js';
 import { expectedVsActual } from './value.js';
@@ -58,12 +59,14 @@ export function materialChangesSince(state, capabilityId, record) {
 // Which earlier evidence a material change may affect (#147). Deterministic
 // and date-based only: for every Requirement and Target, the evidence behind
 // its current result that was observed before the change took effect. That
-// evidence "may need new evidence", never "failed" or "invalid": which kinds
-// of change invalidate which sources isn't configured (an open question for
-// Paige), and imported evidence measured under another configuration is
-// already set aside by its own standing (external.js).
+// evidence is never "failed" or "invalid": nothing is invalidated by kind of
+// change (Paige, 2026-11-09, D3). The Owner reviews whether it still applies
+// (applicability.js, v1 W1); until then it doesn't count. The rows are worked
+// out from the evidence before any review excludes it, so a review never
+// changes which rows a change affects. Imported evidence measured under
+// another configuration is already set aside by its own standing (external.js).
 export function materialChangeImpact(state, capabilityId, change) {
-  const ev = evidenceProvenance(state, capabilityId);
+  const ev = evidenceProvenance(withoutMaterialChanges(state, capabilityId), capabilityId);
   const dated = (r) => [
     ...r.results.flatMap((x) => x.itemIds.map((id) => (ev.items.find((i) => i.id === id) || {}).date || x.date)),
     ...r.judgments.map((id) => (ev.judgments.find((j) => j.id === id) || {}).date),
@@ -136,8 +139,16 @@ export function changesSinceDecision(state, capabilityId) {
     if (!out.some((c) => c.kind === 'coverage' && c.id === r.id)) out.push(changeOf('attention', 'stale', `"${r.label}" rests on stale evidence: it still counts, but may no longer describe today.`, { rowKind: r.kind, id: r.id }));
   }
   if (new Set(live.positions.map((p) => p.stance).filter((s) => s && s !== 'undecided')).size > 1) out.push(changeOf('attention', 'disagreement', 'Reviewers and Stakeholders don\'t agree on how much autonomy is right.'));
-  for (const m of materialChangesSince(state, capabilityId, record)) {
-    out.push(changeOf('attention', 'material-change', `Material change (${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a].toLowerCase()).join(', ')}), effective ${m.effectiveOn}: ${m.description} Earlier evidence may need revalidating.`, { changeId: m.id }));
+  // v1 W1 (#182): a change's earlier evidence counts only once the Owner says
+  // it still applies; an unreviewed row is listed for every change, recent or not.
+  const open = applicabilityState(state, capabilityId).unresolved;
+  const openText = (id) => { const n = open.filter((r) => r.changeId === id).length; return n ? ` ${n} Requirement${n === 1 ? '' : 's'} or Target${n === 1 ? '' : 's'} rest on earlier evidence the Owner hasn't reviewed yet; until then it doesn't count.` : ''; };
+  const recent = materialChangesSince(state, capabilityId, record);
+  for (const m of recent) {
+    out.push(changeOf('attention', 'material-change', `Material change (${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a].toLowerCase()).join(', ')}), effective ${m.effectiveOn}: ${m.description}${openText(m.id) || ' Its earlier evidence has been reviewed.'}`, { changeId: m.id }));
+  }
+  for (const id of [...new Set(open.map((r) => r.changeId))].filter((x) => !recent.some((m) => m.id === x))) {
+    out.push(changeOf('attention', 'material-change', `Material change ${id}:${openText(id)}`, { changeId: id }));
   }
   for (const x of openCriticalIncidents(state, capabilityId)) out.push(changeOf('investigate', 'incident', `Open critical incident ${x.id}: ${x.what}`));
   for (const x of incidentsFor(state, capabilityId).filter((i) => i.severity !== 'critical' && incidentStatus(i) !== 'resolved' && since && i.recordedOn >= since)) out.push(changeOf('attention', 'incident', `Open ${x.severity} incident ${x.id}: ${x.what}`));
