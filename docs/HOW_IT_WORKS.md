@@ -159,9 +159,9 @@ Monitor's first view, **Still justified?**, starts with that question. It shows:
 - the Authority now and the Decision in force;
 - the Boundaries, and any automatic restriction or review lock;
 - **what changed since that Decision**, compared with what the Decision froze (its results, coverage, positions and the evidence behind each result);
-- an answer in plain words: Current Authority still supported, Needs attention, Investigation needed, Authority may no longer be justified, or Restricted automatically.
+- an answer in plain words: Current Authority still supported, Needs attention, Investigation needed, Authority may no longer be justified, Safety concern, or Restricted automatically.
 
-There's no score. Each change has its own line saying how serious it is. A starting record, or a Decision made before Decisions froze what they were based on, has nothing to compare results with, and Monitor says so.
+There's no score. Each change has its own line saying how serious it is (v1 C1). A **safety concern** (an open critical incident, a crossed safety limit awaiting review, or a limit reading over its threshold) is pinned at the top of Monitor whatever the answer, and when it is the answer, any hard Requirement that no longer holds is shown right beneath it. "May no longer be justified" and "Investigation needed" come only from a hard Requirement that was Met when the Decision was made and is now Not met or Conflicting. A consideration or Target that slips needs attention, and a Requirement added since is the next bar, shown on Decide, not graded here. Blocked attempts at something never allowed read "Blocked". A rollout goal missed on real numbers is a **value warning**: it shows under **Delivering value?** and doesn't change the answer. A starting record, or a Decision made before Decisions froze what they were based on, has nothing to compare results with, and Monitor says so.
 
 **Material changes** (model, prompt, tools, permissions, workflow, scope, users, data, operating context, jurisdiction, Boundaries) can be recorded from Monitor by the Owner or anyone named. For each change, Monitor lists the Requirements and Targets whose result rests on evidence from before the change. That evidence hasn't failed, and Authority doesn't change.
 

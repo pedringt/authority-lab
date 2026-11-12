@@ -10,8 +10,9 @@ import {
   applicabilityState, APPLICABILITY,
 } from '../store/index.js';
 
-const TONE = { supported: 'pass', attention: 'watch', investigate: 'bad', unjustified: 'bad', restricted: 'bad', above: 'bad', retired: 'neutral' };
+const TONE = { supported: 'pass', attention: 'watch', investigate: 'bad', unjustified: 'bad', safety: 'bad', restricted: 'bad', above: 'bad', retired: 'neutral' };
 const SEVERITY = {
+  safety: ['fail', 'Safety concern'],
   unjustified: ['fail', 'May no longer be justified'],
   investigate: ['fail', 'Investigate'],
   attention: ['watch', 'Needs attention'],
@@ -25,6 +26,7 @@ function verdict(j, cap) {
     attention: 'Something has changed that a person should look at. Authority hasn\'t changed.',
     investigate: 'Something needs looking into before relying on the current Authority. Authority hasn\'t changed.',
     unjustified: 'Something the current Authority rested on when it was decided no longer holds. Only a person can change Authority: look into it, and reduce or keep it in Decide.',
+    safety: 'A safety concern is open: a critical incident, a crossed safety limit, or a limit reading over its threshold. Look into it first. Only a person changes Authority, unless a limit agreed in advance pulls it back.',
     restricted: `A safety limit agreed in advance was crossed, so ${cap.name} was moved back to ${levelName(j.authority.level)} automatically. A review comes before any new expansion.`,
     above: `Observed behavior: Level ${j.gap.observed ? j.gap.observed.level : ''}, ${j.gap.observed ? j.gap.observed.name : ''}. Approved Authority: Level ${j.gap.approved.level}, ${j.gap.approved.name}. Further expansion is blocked until this is resolved. Authority Lab doesn't change either on its own.`,
     retired: `${cap.name} was retired on ${j.record ? fmtDate(j.record.date) : ''}. It no longer operates and gets no authority again; its history stays. To use it again, set up a new capability.`,
@@ -51,15 +53,31 @@ function currentState(state, cap, j) {
   ]);
 }
 
+// v1 C1 (#187): a safety concern is pinned at the top of Monitor whatever
+// the headline. When it is the headline, any hard Requirement that no longer
+// holds is shown directly beneath it.
+function pinnedSafety(j) {
+  const safety = j.changes.filter((c) => c.severity === 'safety');
+  if (!safety.length) return '';
+  const fallen = j.key === 'safety' ? j.changes.filter((c) => c.severity === 'unjustified') : [];
+  return html`<section class="mon-block mon-pinned" aria-label="Safety concerns"><h2>Safety concern${safety.length === 1 ? '' : 's'}</h2>
+    <ul class="plain-list mon-changes">${safety.map((c) => html`<li>${badge(...SEVERITY.safety)} ${c.text}</li>`)}${fallen.map((c) => html`<li>${badge(...SEVERITY.unjustified)} ${c.text}</li>`)}</ul></section>`;
+}
+
 function changesList(j) {
   const r = j.record;
   const head = r ? `What changed since ${r.id} (${fmtDate(r.date)})` : 'What changed';
   const note = j.legacy ? html`<p class="muted small">${r && (r.option === 'define' || r.option === 'not-delegated') ? 'The Decision in force is the starting record' : 'The Decision in force was recorded before Decisions froze what they were based on'}, so there are no results to compare with: a Requirement not met now is the bar for the next level, not a sign about this one. What follows stands on its own.</p>` : '';
-  if (!j.changes.length) return html`<section class="mon-block"><h2>${head}</h2>${note}<p>Nothing.</p></section>`;
+  // Value warnings live under "Delivering value?"; pinned items aren't repeated.
+  const pinned = (c) => c.severity === 'safety' || (j.key === 'safety' && c.severity === 'unjustified');
+  const listed = j.changes.filter((c) => c.severity !== 'value' && !pinned(c));
+  const value = j.changes.filter((c) => c.severity === 'value').length;
+  const valueNote = value ? html`<p class="muted small">${value} value warning${value === 1 ? '' : 's'}: a rollout goal missed on real numbers. <a href="#/capabilities/${j.capabilityId}?tab=monitor&show=value">Delivering value?</a> It doesn't change this answer.</p>` : '';
+  if (!listed.length) return html`<section class="mon-block"><h2>${head}</h2>${note}<p>${j.changes.some(pinned) ? 'Nothing else.' : 'Nothing.'}</p>${valueNote}</section>`;
   const order = ['unjustified', 'investigate', 'attention', 'info'];
-  const sorted = j.changes.slice().sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  const sorted = listed.slice().sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
   return html`<section class="mon-block"><h2>${head}</h2>${note}
-    <ul class="plain-list mon-changes">${sorted.map((c) => html`<li>${badge(...SEVERITY[c.severity])} ${c.text}</li>`)}</ul>
+    <ul class="plain-list mon-changes">${sorted.map((c) => html`<li>${badge(...SEVERITY[c.severity])} ${c.text}</li>`)}</ul>${valueNote}
     <p class="muted small">Compared with what the Decision in force froze, where it froze anything. Nothing here changes Authority: only an automatic restriction, agreed in advance, or a person's Decision does.</p></section>`;
 }
 
@@ -170,7 +188,7 @@ function gapSection(state, cap, j) {
 
 export function justifiedSection(state, cap) {
   const j = justification(state, cap.id);
-  return html`<section class="mon-justified"><h2 class="mon-question">Is the current Authority still justified?</h2>
+  return html`<section class="mon-justified">${pinnedSafety(j)}<h2 class="mon-question">Is the current Authority still justified?</h2>
     ${verdict(j, cap)}
     ${currentState(state, cap, j)}
     ${gapSection(state, cap, j)}
