@@ -76,6 +76,21 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 9. **Provider.** Anthropic-only implementation in v1, behind a provider-neutral internal contract: the app sends one request shape and accepts only the schema in 3, so another provider is a server-side change plus an eval re-run. The model is chosen from the eval, not in advance.
 10. **Eval gate.** 6B doesn't ship for a surface because its outputs look better. It must pass a fixed test set covering the exact failures 6A struggled with, adversarial instructions, and ambiguous actor or action language. The bar for consequential facts (what the AI does, sensitive data, regulated work, what it can affect, reversibility): zero Acts where only a person acts or the action is negated; no fact without a verbatim quote; Unsure on every case labelled ambiguous; injected instructions change nothing; better than 6A on paraphrase cases with no new false consequential facts. Other facts need only be no worse than 6A. Each model is run three times for run-to-run variation. **False confidence is tracked separately from ordinary extraction errors:** a wrong fact labelled Clear is materially worse than the same wrong fact labelled Unsure, so calibration is part of quality. No model passing is a valid outcome: 6B then doesn't ship. Claude drafts the gold labels; Paige reviews and corrects every one before it counts. Labelling rule (Paige, 2026-10-22, on review): **automated isn't AI**. A sentence saying something automated acts ("the system emails…", "approved automatically") without naming the AI as the actor is labelled ask, never yes, so the gold set never teaches that "automatic" implies the AI's authority. A person who authorizes a step or receives the output counts as where people enter.
 
+### v1 W1: material-change applicability review (Paige, 2026-11-09, #182)
+
+Built as `docs/V1_RECONCILIATION.md` W1 sets out. Two readings of the scope were Paige's choice, made before the build ("Use recommendations"):
+
+- **The unit of review is a Requirement or Target row.** That is what `materialChangeImpact` lists: the row's evidence observed before the change took effect. It is not each piece of evidence. One piece of evidence can feed several rows, and it may still apply to one of them but not another.
+- **Partly applicable evidence never counts toward a result, for every row.** It is shown as supporting context, with what it still supports and what needs fresh evidence. In the calculation it is treated like no longer applicable evidence. The approved scope said only that it "can't independently satisfy a hard Requirement"; this is the stricter reading, and it is simpler.
+
+Mechanics:
+- **Where the exclusion applies** (`src/store/applicability.js`). A row's evidence dated before the change is left out of Requirement results, Target results and Coverage. That covers imported and hand-recorded results, uploads, tests, feedback and judgments. It applies while the row is unreviewed, partly applicable or no longer applicable, until the Owner reviews it as still applicable.
+- **No feedback loop.** The affected rows are worked out from the evidence as it stands before any review excludes it (`withoutMaterialChanges`). A review therefore never changes which rows a change affects.
+- **The block** (`canAuthorize`). It comes after the observed-behaviour gap and before the hard Requirements. Replacing the Proposal doesn't clear it.
+- **Who records.** Only the Owner records a review, with a reason of at least 10 characters. Partly applicable also needs what the evidence still supports and what needs fresh evidence.
+- **Records.** Reviews are append-only; the latest per change and row stands, and Activity and History list each one. Evidence records and past Decision records are never changed.
+- **Every material change is reviewed, recent or not.** Monitor lists all of them, no longer only those since the Decision in force.
+
 ### v1 scope reconciled (Paige, 2026-11-09)
 
 A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo. Paige settled each gap. The full record, with acceptance criteria for the remaining work, is in `docs/V1_RECONCILIATION.md`. V1_SCOPE.md now describes what ships.

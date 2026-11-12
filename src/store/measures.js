@@ -20,6 +20,7 @@ import { sourceOfItem, findSource, testMeasurements, TESTS_SOURCE, FRESH_DAYS } 
 import { isCoverageRule } from './evidence.js';
 import { judgedBy } from './lightweight.js';
 import { feedbackMeasurements, FEEDBACK_SOURCE, judgmentsFor, openCriticalIncidents, isIncidentRequirement, VERDICTS } from './lightweight.js';
+import { excludedBefore } from './applicability.js';
 
 // The default minimum production sample before a production result is judged
 // (Paige, 2026-10-12): the same 20 cases as rollout goals. A measure's own
@@ -103,8 +104,10 @@ const newestOf = (list) => list.slice().sort((a, b) => (a.date < b.date ? 1 : a.
 // One exception to the sample rule: a ceiling on a count ("at most 0 severe
 // failures") that's already exceeded fails at once. More cases can't undo a
 // failure that happened, and one severe failure must be able to block.
-export function judgeMeasure(state, capabilityId, measure) {
-  const candidates = candidateResults(state, capabilityId, measure);
+// `before`: evidence dated before it doesn't count for this row (v1 W1, #182:
+// a material change whose earlier evidence isn't reviewed as still applicable).
+export function judgeMeasure(state, capabilityId, measure, { before = null } = {}) {
+  const candidates = candidateResults(state, capabilityId, measure, before);
   if (!candidates.length) return { status: 'pending', text: 'No results yet' };
   const judged = candidates.map((c) => judgeOne(state, measure, c));
   // A case count (#159): cases from different sources, test cases and real
@@ -137,14 +140,15 @@ export function judgeMeasure(state, capabilityId, measure) {
 // stream (its newest under the current configuration), Authority Lab's tests
 // or the feedback source when the measure names them, and the lightweight
 // results (recorded by hand or uploaded), combined where compatible.
-function candidateResults(state, capabilityId, measure) {
+function candidateResults(state, capabilityId, measure, before = null) {
+  const counts = (e) => !before || !e.date || e.date >= before;
   if (measure.source === TESTS_SOURCE) {
     const e = measuredEvidence(state, capabilityId, measure);
-    return e ? [{ ...e, label: 'Authority Lab tests', freshForDays: FRESH_DAYS.tests }] : [];
+    return e && counts(e) ? [{ ...e, label: 'Authority Lab tests', freshForDays: FRESH_DAYS.tests }] : [];
   }
   if (measure.source === FEEDBACK_SOURCE) {
     const m = feedbackMeasurements(state, capabilityId).find((x) => x.metric === measure.metric && !measure.segment);
-    if (!m) return [];
+    if (!m || !counts(m)) return [];
     const { date, label, ...measured } = m;
     return [{ id: `feedback:${capabilityId}#${m.metric}`, date, metric: label, sourceId: FEEDBACK_SOURCE, measure: measured, external: { importId: 'recorded feedback', kind: 'production' }, label: 'Feedback', freshForDays: FRESH_DAYS.feedback, itemIds: [] }];
   }
@@ -153,7 +157,8 @@ function candidateResults(state, capabilityId, measure) {
   const matching = capData(state, capabilityId).evidence.filter((e) => e.external && e.measure
     && e.measure.metric === measure.metric && (e.measure.segment || null) === seg
     && (!measure.kind || e.external.kind === measure.kind)
-    && (!measure.source || sourceOfItem(e) === measure.source));
+    && (!measure.source || sourceOfItem(e) === measure.source)
+    && counts(e));
   const lightweight = matching.filter(isLightweight);
   const imported = matching.filter((e) => !isLightweight(e) && (standing.get(e.id) || {}).standing === 'current');
   const src = (e) => findSource(state, sourceOfItem(e));
@@ -228,7 +233,7 @@ export function targetsNow(state, capabilityId) {
     // No bar yet (#137): unresolved, never pass or fail.
     if (c.bar === 'needs-decision') return { ...c, status: 'needs-decision', current: 'No bar set yet' };
     if (!c.measure) return c;
-    const j = judgeMeasure(state, capabilityId, c.measure);
+    const j = judgeMeasure(state, capabilityId, c.measure, { before: excludedBefore(state, capabilityId, 'target', c.id) });
     return { ...c, current: j.text, status: j.status, judged: j };
   });
 }
@@ -285,7 +290,12 @@ function personJudged(state, capabilityId, row) {
     return withResult({ ...row, met: status === 'met', current: RESULT_WORDS[status], gap: status === 'met' ? undefined : why, ...(status === 'conflicting' ? { conflicting: true } : {}) }, status, why);
   }
   // Judgments decide only a Requirement a person judges (by its structure).
-  const { counting, input } = judgedBy(state, capabilityId, row) === 'person' ? judgmentsFor(state, capabilityId, row.id) : { counting: [], input: [] };
+  const all = judgedBy(state, capabilityId, row) === 'person' ? judgmentsFor(state, capabilityId, row.id) : { counting: [], input: [] };
+  // v1 W1 (#182): a judgment from before an unreviewed material change doesn't count.
+  const before = excludedBefore(state, capabilityId, 'requirement', row.id);
+  const after = (j) => !before || !j.date || j.date >= before;
+  const counting = all.counting.filter(after);
+  const input = all.input.filter(after);
   const note = input.length ? ` Stakeholder input: ${input.map((j) => `${j.byAt.name} says ${VERDICTS[j.verdict].toLowerCase()}`).join('; ')} (input doesn't decide it).` : '';
   const decisive = counting.filter((j) => j.verdict !== 'unknown');
   const said = (j) => `${j.byAt.name} (${j.role}) judged it ${VERDICTS[j.verdict].toLowerCase()} on ${j.date}: ${j.rationale}`;
@@ -317,7 +327,7 @@ function personJudged(state, capabilityId, row) {
 function judgedRequirement(state, capabilityId, r) {
   if (!r.measure) return r;
   {
-    const raw = judgeMeasure(state, capabilityId, r.measure);
+    const raw = judgeMeasure(state, capabilityId, r.measure, { before: excludedBefore(state, capabilityId, 'requirement', r.id) });
     // A minimum number of cases that isn't reached yet is an evidence
     // sufficiency state, not a failure (Paige, 2026-10-20, #151): "Not enough
     // evidence: 18 of 40". Readiness is unchanged: only Met counts.
@@ -403,7 +413,7 @@ const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400
 // One row's coverage. A row with no measure has no source mapped: a person
 // judges it, as before. Stale evidence is older than its source's freshness
 // window; it still counts (Paige, 2026-10-13), it's only flagged.
-export function rowCoverage(state, capabilityId, row) {
+export function rowCoverage(state, capabilityId, row, kind = 'requirement') {
   // A coverage rule whose number nobody has set (#139) can't be sufficient.
   if (row.bar === 'needs-decision') return { status: 'needs-decision', mapped: false };
   if (!row.measure) {
@@ -415,7 +425,7 @@ export function rowCoverage(state, capabilityId, row) {
     if (st === 'unknown' || st === 'conflicting') return { status: st, mapped: false };
     return { status: 'no-source', mapped: false };
   }
-  const j = judgeMeasure(state, capabilityId, row.measure);
+  const j = judgeMeasure(state, capabilityId, row.measure, { before: excludedBefore(state, capabilityId, kind, row.id) });
   if (j.status === 'conflicting') return { status: 'conflicting', mapped: true, judged: j, source: row.measure.source ? findSource(state, row.measure.source) : null };
   const source = row.measure.source ? findSource(state, row.measure.source) : null;
   if (j.status === 'pending') return { status: 'no-data', mapped: true, judged: j, source };
@@ -433,7 +443,7 @@ export function rowCoverage(state, capabilityId, row) {
 
 export function evidenceCoverage(state, capabilityId) {
   const reqs = requirementsNow(state, capabilityId).map((r) => ({ kind: 'requirement', id: r.id, label: r.text, row: r, ...rowCoverage(state, capabilityId, r) }));
-  const targets = targetsNow(state, capabilityId).map((c) => ({ kind: 'target', id: c.id, label: c.name, row: c, ...rowCoverage(state, capabilityId, c) }));
+  const targets = targetsNow(state, capabilityId).map((c) => ({ kind: 'target', id: c.id, label: c.name, row: c, ...rowCoverage(state, capabilityId, c, 'target') }));
   const count = (list, ...st) => list.filter((x) => st.includes(x.status)).length;
   return {
     requirements: reqs,

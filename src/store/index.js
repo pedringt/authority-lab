@@ -52,6 +52,7 @@ export { outcomeMeasurements } from './sources.js';
 // Product reset, Phase 4: the Proposal as a frozen review object (#144).
 export { authorityProposals, findAuthorityProposal, openAuthorityProposal, proposalStatus, proposalClosures, evidenceProvenance, coverageState, reviewConditions, freezeProposal, proposalStaleness, positionsDiffer, proposalGaps } from './proposal.js';
 // Product reset, Phase 5: is the current Authority still justified? (#147).
+export { APPLICABILITY, APPLICABILITY_REASON_MIN, applicabilityReviews, applicabilityState, excludedBefore, unresolvedApplicability, applicabilityBlocks, recordApplicability } from './applicability.js';
 export { JUSTIFICATION_STATES, decisionInForce, materialChangesSince, materialChangeImpact, changesSinceDecision, justification, restorationContext, authorityGap, gapBlocks } from './lifecycle.js';
 export { exposureFacts, moneyAtStake, workTypes, lowRiskMismatch, suggestionContext, contextQuestions, CONTEXT_QUESTION_KEYS } from './exposure.js';
 export { withBarsAsTargets } from './evidence.js';
