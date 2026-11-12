@@ -1,6 +1,7 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished, unresolvedApplicability } from '../store/index.js';
+import { helpFor } from './help.js';
+import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN, performanceResultsSeen, publishableRecord, isPublished, unresolvedApplicability } from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
@@ -565,7 +566,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
       subs: html`${leaf('restrict', `One level down${cur > 1 ? `, to ${levelName(cur - 1)}` : ''}`)}${leaf('suspend', 'Pause: all the way back to Observe')}`,
       hint: cur === 1 ? 'Choose one. From Recommend, both end at Observe; the record keeps which you chose.' : 'Choose how far: one level down, or pause all the way back to Observe.',
     });
-  const choices = html`<div class="decide-choices">
+  const choices = html`${helpFor('authorization')}<div class="decide-choices">
     ${expandChoice}
     ${choice('hold', 'Keep current limits', `Stay at ${levelName(cur)} while more evidence comes in.`, { option: 'hold' })}
     ${reduceChoice}

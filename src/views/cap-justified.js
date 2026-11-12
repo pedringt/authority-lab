@@ -5,6 +5,7 @@
 // Nothing here changes Authority.
 
 import { html, raw, badge, kv, fmtDate, personAt } from '../ui.js';
+import { helpFor } from './help.js';
 import {
   justification, levelName, LEVEL_PLAIN, reviewConditions, MATERIAL_CHANGE_AREAS, actor, namedOn, people, decisionRequired, capData,
   applicabilityState, APPLICABILITY,
@@ -209,7 +210,7 @@ export function reductionView(state, cap, check) {
   const opt = (option, label, desc, disabled = false) => html`<label class="decide-leaf ${disabled ? 'is-disabled' : ''}"><input type="radio" name="decision-option" value="${option}" data-action="select-option" data-capability="${cap.id}" ${dec.option === option ? raw('checked') : ''} ${disabled ? raw('disabled') : ''}><span><strong>${label}</strong> <span class="muted small">${desc}</span></span></label>`;
   return html`<div class="decide-flow">
     <div class="decide-head"><h2>Reduce or pause</h2><p class="muted">${cap.name} is at Level ${cur}, ${levelName(cur)}. Pulling back takes effect when recorded, needs no Proposal, and can be recorded by anyone named on it. Getting authority back later needs a new Proposal and the Owner's Decision.</p></div>
-    <section class="decide-step"><h2>How far?</h2><div class="decide-choices">
+    <section class="decide-step"><h2>How far?</h2>${helpFor('authorization')}<div class="decide-choices">
       ${opt('restrict', cur > 0 ? `One level down, to ${levelName(cur - 1)}` : 'One level down', cur > 0 ? 'Recorded as Restrict.' : 'Already at Observe.', cur === 0)}
       ${opt('suspend', 'Pause: all the way to Observe', 'It sees requests but does nothing with them. Recorded as Suspend.', cur === 0)}
       ${opt('redesign', 'Send back for redesign', 'Back to Observe until it passes new tests. Recorded as Redesign.')}

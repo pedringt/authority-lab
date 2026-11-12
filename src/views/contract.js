@@ -1,5 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
+import { helpFor } from './help.js';
 import { getCapability, capData, current, versionList, actor, contractChecks, canFinalizeContract, draftValue, contractSummary, SECTION_KEYS, SECTION_LABELS, isSuggestion, suggestionOrigin, SUGGESTION_LABELS, setupState } from '../store/index.js';
 import { hasBlank } from '../data/templates.js';
 import { diffTable } from './activity.js';
@@ -30,7 +31,7 @@ export function contractBuilderView(state, capabilityId, query) {
   if (!draft) {
     return html`<div class="page-head"><div><p class="eyebrow"><a href="#/capabilities/${cap.id}${cap.setup ? '/setup' : ''}">${cap.name}${cap.setup ? ' · Setup' : ''}</a></p><h1>Boundaries</h1>${cap.setup
       ? lede(html`Where should the AI stop or involve a person?`, html`Authority Lab suggests Boundaries from the kind of work, your risk answers and confirmed Context. Each one says where it came from. Review every suggestion on its own: accept, edit or reject it. Where a number goes, the suggestion leaves a blank for you to fill in.`)
-      : lede(html`We'll start you with Boundaries suited to this risk level (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown exposure').toLowerCase()}).`, html`We also add suggestions based on the capability's name and summary, each marked <strong>Based on your answers</strong>. Review each one, confirm every section, fix anything the checks flag, and then a named person saves them.`)}</div></div>
+      : lede(html`We'll start you with Boundaries suited to this risk level (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown exposure').toLowerCase()}).`, html`We also add suggestions based on the capability's name and summary, each marked <strong>Based on your answers</strong>. Review each one, confirm every section, fix anything the checks flag, and then a named person saves them.`)}${helpFor('boundaries')}</div></div>
       ${error ? notice('fail', 'We couldn\'t start the Boundaries', error) : ''}
       ${lowRiskNotice(state, capabilityId)}
       <div class="card"><p>Starting as <strong>${acting.name}</strong>, ${acting.role}.</p><button class="btn btn-primary" data-action="contract-start" data-capability="${cap.id}">Start with suggested Boundaries</button></div>`;
@@ -79,6 +80,7 @@ export function contractBuilderView(state, capabilityId, query) {
       ${cap.setup
         ? lede(html`Starting point: <strong>${draft.templateName}</strong>. ${draft.lines.filter(isSuggestion).length} suggestions to review.`, html`Accept, edit or reject each one; there's no accept-all, on purpose. Suggestions with a blank need your number before they can be accepted. Rejected suggestions are kept in history.`)
         : lede(html`Starting Boundaries: <strong>${draft.templateName}</strong>, suited to this risk level.`, html`${draft.lines.filter((l) => l.source === 'ai').length} suggestions are based on the name and summary, marked "Based on your answers". Accept, edit or reject each one; there's no accept-all, on purpose. Rejected suggestions are kept in history.`)}
+      ${helpFor('boundaries')}
     </div>
   </div>
   ${error ? notice('fail', 'We couldn\'t make that change', error) : ''}
