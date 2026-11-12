@@ -7,6 +7,7 @@
 import { html, raw, badge, kv, fmtDate, personAt } from '../ui.js';
 import {
   justification, levelName, LEVEL_PLAIN, reviewConditions, MATERIAL_CHANGE_AREAS, actor, namedOn, people, decisionRequired, capData,
+  applicabilityState, APPLICABILITY,
 } from '../store/index.js';
 
 const TONE = { supported: 'pass', attention: 'watch', investigate: 'bad', unjustified: 'bad', safety: 'bad', restricted: 'bad', above: 'bad', retired: 'neutral' };
@@ -80,10 +81,14 @@ function changesList(j) {
     <p class="muted small">Compared with what the Decision in force froze, where it froze anything. Nothing here changes Authority: only an automatic restriction, agreed in advance, or a person's Decision does.</p></section>`;
 }
 
-// Material changes since the Decision in force and the earlier evidence each
-// may affect: "may need new evidence", never "failed".
+// Material changes and the earlier evidence each affects (v1 W1, #182). Every
+// change is listed, recent or not: its earlier evidence counts only once the
+// Owner has reviewed it as still applicable. Nothing here changes Authority.
 function materialChanges(state, cap, j) {
-  const named = namedOn(state, cap.id, actor(state, cap.id));
+  const by = actor(state, cap.id);
+  const named = namedOn(state, cap.id, by);
+  const isOwner = by === cap.owner;
+  const owner = (people(state)[cap.owner] || { name: cap.owner }).name;
   const form = html`<details class="mon-material-form"><summary>Record a material change</summary>
     <form data-form="record-material-change" data-capability="${cap.id}">
       <fieldset class="field"><legend>What changed</legend><div class="material-areas">${Object.entries(MATERIAL_CHANGE_AREAS).map(([k, label]) => html`<label class="check"><input type="checkbox" name="areas" value="${k}"><span>${label}</span></label>`)}</div></fieldset>
@@ -91,16 +96,39 @@ function materialChanges(state, cap, j) {
       <label class="field"><span>Took effect on</span><input type="date" name="effectiveOn" value="${state.today}"></label>
       ${named ? '' : html`<p class="form-error" role="status">Only the Owner or someone named on ${cap.name} can record a material change.</p>`}
       <button class="btn btn-primary" type="submit" ${named ? '' : raw('disabled')}>Record the change</button>
-      <p class="muted small">Recorded changes can't be edited. Recording one never changes Authority: it asks whether the evidence still applies.</p>
+      <p class="muted small">Recorded changes can't be edited. Recording one never changes Authority. Evidence from before it stops counting until ${owner} (the Owner) reviews whether it still applies.</p>
     </form></details>`;
-  const impacts = j.materialImpact;
-  return html`<section class="mon-block"><h2>Material changes</h2>
-    ${impacts.length ? impacts.map(({ change: m, rows }) => html`<div class="mon-material">
+  const ap = applicabilityState(state, cap.id);
+  const reviewed = (r) => {
+    const v = r.review;
+    const tone = v.verdict === 'applicable' ? 'pass' : v.verdict === 'partly' ? 'watch' : 'neutral';
+    const counts = v.verdict === 'applicable' ? 'It counts.' : v.verdict === 'partly' ? 'Kept as supporting context; it doesn\'t count toward the result.' : 'It doesn\'t count toward current results. Past Decisions keep what they froze.';
+    return html`${badge(tone, APPLICABILITY[v.verdict])} <span class="small">${counts} ${personAt(v.byAt, v.by).name}, ${fmtDate(v.date)}: ${v.reason}</span>
+      ${v.verdict === 'partly' ? html`<span class="small"> Still supports: ${v.stillSupported}. Needs fresh evidence: ${v.needsFresh}.</span>` : ''}`;
+  };
+  const reviewForm = (m, r) => html`<details class="mon-review-form"><summary>${r.review ? 'Review again' : 'Review this evidence'}</summary>
+    <form data-form="record-applicability" data-capability="${cap.id}" data-change="${m.id}" data-row-kind="${r.kind}" data-row-id="${r.id}">
+      <fieldset class="field"><legend>Does the evidence from before ${fmtDate(m.effectiveOn)} still apply to "${r.label}"?</legend>
+        ${Object.entries(APPLICABILITY).map(([k, label]) => html`<label class="check"><input type="radio" name="verdict" value="${k}" required><span>${label}</span></label>`)}
+      </fieldset>
+      <label class="field field-stack"><span>Why</span><textarea name="reason" rows="2" required></textarea></label>
+      <label class="field field-stack"><span>If partly applicable: what it still supports</span><input type="text" name="stillSupported" maxlength="300"></label>
+      <label class="field field-stack"><span>If partly applicable: what needs fresh evidence</span><input type="text" name="needsFresh" maxlength="300"></label>
+      <button class="btn btn-primary" type="submit">Record the review</button>
+    </form></details>`;
+  const rowItem = (m, r) => html`<li id="review-${m.id}-${r.kind}-${r.id}">
+    <strong>${r.label}</strong>${r.kind === 'target' ? ' (Target)' : ''}: ${r.onlyBefore ? `all ${r.before} piece${r.before === 1 ? '' : 's'} of its evidence came before the change` : `${r.before} before the change, ${r.after} after`}.
+    ${r.review ? reviewed(r) : html`${badge('watch', 'Not reviewed')} <span class="small">The earlier evidence doesn't count until ${owner} reviews it.</span>`}
+    ${isOwner ? reviewForm(m, r) : ''}</li>`;
+  const open = ap.unresolved.length;
+  return html`<section class="mon-block" id="material-changes"><h2>Material changes</h2>
+    ${open ? html`<p class="form-error" role="status">${open} Requirement${open === 1 ? '' : 's'} or Target${open === 1 ? '' : 's'} rest on evidence from before a material change that ${isOwner ? 'you haven\'t' : `${owner} hasn't`} reviewed. Until then that evidence doesn't count, and authority can't expand.${isOwner ? '' : ' Reviewers can give their input to the Owner.'}</p>` : ''}
+    ${ap.changes.length ? ap.changes.map(({ change: m, rows }) => html`<div class="mon-material">
       <p><strong>${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a]).join(', ')}</strong>, effective ${fmtDate(m.effectiveOn)}: ${m.description} <span class="muted small">(${m.id}, recorded by ${personAt(m.byAt, m.by).name})</span></p>
-      ${rows.length ? html`<p class="small">Evidence from before this change may no longer describe how ${cap.name} behaves. It still counts, and it hasn't failed; it may need new evidence:</p>
-        <ul class="plain-list">${rows.map((r) => html`<li>${badge(r.onlyBefore ? 'watch' : 'neutral', r.onlyBefore ? 'May need new evidence' : 'Partly after')} ${r.label}${r.kind === 'target' ? ' (Target)' : ''}: ${r.onlyBefore ? `all ${r.before} piece${r.before === 1 ? '' : 's'} of its evidence came before the change` : `${r.before} before the change, ${r.after} after`}.</li>`)}</ul>`
+      ${rows.length ? html`<p class="small">Evidence from before this change may no longer describe how ${cap.name} behaves. It hasn't failed. For each row, ${owner} says whether it is still, partly or no longer applicable:</p>
+        <ul class="plain-list mon-review-list">${rows.map((r) => rowItem(m, r))}</ul>`
         : html`<p class="small muted">No current result rests on evidence from before this change.</p>`}
-    </div>`) : html`<p>None recorded since the Decision in force.</p>`}
+    </div>`) : html`<p>None recorded.</p>`}
     ${form}</section>`;
 }
 
