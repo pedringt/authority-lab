@@ -20,7 +20,7 @@ import { sourceOfItem, findSource, testMeasurements, TESTS_SOURCE, FRESH_DAYS } 
 import { isCoverageRule } from './evidence.js';
 import { judgedBy } from './lightweight.js';
 import { feedbackMeasurements, FEEDBACK_SOURCE, judgmentsFor, openCriticalIncidents, isIncidentRequirement, VERDICTS } from './lightweight.js';
-import { excludedBefore } from './applicability.js';
+import { excludedBefore, setAside, setAsideNote } from './applicability.js';
 
 // The default minimum production sample before a production result is judged
 // (Paige, 2026-10-12): the same 20 cases as rollout goals. A measure's own
@@ -234,7 +234,7 @@ export function targetsNow(state, capabilityId) {
     if (c.bar === 'needs-decision') return { ...c, status: 'needs-decision', current: 'No bar set yet' };
     if (!c.measure) return c;
     const j = judgeMeasure(state, capabilityId, c.measure, { before: excludedBefore(state, capabilityId, 'target', c.id) });
-    return { ...c, current: j.text, status: j.status, judged: j };
+    return withAside(state, capabilityId, 'target', { ...c, current: j.text, status: j.status, judged: j });
   });
 }
 
@@ -247,7 +247,7 @@ export function requirementsNow(state, capabilityId) {
   return current(state, capabilityId, 'requirements').map((row) => {
     // A coverage rule waiting for its number (#139): unresolved, not failed.
     if (row.bar === 'needs-decision') return withResult({ ...row, current: 'No number set yet', met: false, unresolved: true, gap: 'Its number hasn\'t been set: it needs a decision. This isn\'t a failed result.' }, 'needs-decision');
-    const r = row.measure ? judgedRequirement(state, capabilityId, row) : personJudged(state, capabilityId, row);
+    const r = withAside(state, capabilityId, 'requirement', row.measure ? judgedRequirement(state, capabilityId, row) : personJudged(state, capabilityId, row));
     const open = unresolved.filter((c) => c.requirement === r.id);
     if (!open.length) return r;
     const gap = `${open.map((c) => `"${c.name}"`).join(' and ')} ${open.length === 1 ? 'has' : 'have'} no bar yet: it needs a decision. This isn't a failed result.`;
@@ -258,10 +258,43 @@ export function requirementsNow(state, capabilityId) {
 // Every Requirement's result and why (#142, J): Met, Not met, Unknown,
 // Conflicting, Not enough evidence, No evidence yet or Needs decision. Only
 // Met counts toward readiness; none of the others is ever a pass.
+// Evidence exists but none of it counts toward the result (v1 wording,
+// Paige, 2026-11-11): never "No evidence yet", which is kept for a row with
+// nothing recorded. Display only: the status stays what it is.
+export const NONE_COUNTS = 'No evidence currently counts toward this result';
+export const NO_RESULTS_COUNT = 'No results currently count';
+
 export const RESULT_WORDS = { met: 'Met', 'not-met': 'Not met', unknown: 'Unknown', conflicting: 'Conflicting', 'not-enough': 'Not enough evidence', 'no-evidence': 'No evidence yet', 'needs-decision': 'Needs decision' };
 const RESULT_OF = { pass: 'met', fail: 'not-met', conflicting: 'conflicting', insufficient: 'not-enough', 'too-early': 'not-enough', pending: 'no-evidence' };
 function withResult(r, status, why) {
   return { ...r, result: { status, label: RESULT_WORDS[status], why: why || r.gap || (status === 'met' ? `Met: ${r.current}.` : '') } };
+}
+
+// Which evidence is set aside for a row, and why, in words (v1 wording). A
+// result from the evidence that counts keeps its status; the note says what
+// doesn't count. With nothing counting, "No evidence yet" becomes
+// NONE_COUNTS and the note is the reason.
+function withAside(state, capabilityId, kind, r) {
+  const info = setAside(state, capabilityId, kind, r.id, r.measure ? otherConfigCount(state, capabilityId, r.measure) : 0);
+  if (!info) return r;
+  if (r.aside) return { ...r, aside: `${r.aside} ${setAsideNote(info)}` };
+  const aside = setAsideNote(info);
+  if (kind === 'target') return r.status === 'pending' ? { ...r, aside, current: NO_RESULTS_COUNT } : { ...r, aside };
+  if (r.result && r.result.status === 'no-evidence') return { ...r, aside, gap: aside, result: { ...r.result, label: NONE_COUNTS, why: aside } };
+  return { ...r, aside };
+}
+
+// Imported results for a measure that were set aside because they were
+// measured under another configuration (#121).
+export function otherConfigCount(state, capabilityId, measure) {
+  if (!measure || measure.source === TESTS_SOURCE || measure.source === FEEDBACK_SOURCE) return 0;
+  const standing = importedStanding(state, capabilityId);
+  const seg = measure.segment || null;
+  return capData(state, capabilityId).evidence.filter((e) => e.external && e.measure && !isLightweight(e)
+    && e.measure.metric === measure.metric && (e.measure.segment || null) === seg
+    && (!measure.kind || e.external.kind === measure.kind)
+    && (!measure.source || sourceOfItem(e) === measure.source)
+    && (standing.get(e.id) || {}).standing === 'other-config').length;
 }
 
 // A Requirement with no measure (#142): an open critical incident blocks the
@@ -286,8 +319,17 @@ function personJudged(state, capabilityId, row) {
     const st = (t) => RESULT_OF[t.status] || (t.status === 'pass' ? 'met' : 'no-evidence');
     const all = linked.map(st);
     const status = all.includes('not-met') ? 'not-met' : all.includes('conflicting') ? 'conflicting' : all.every((x) => x === 'met') ? 'met' : all.includes('not-enough') ? 'not-enough' : 'no-evidence';
-    const why = `Judged by its Target${linked.length === 1 ? '' : 's'}: ${linked.map((t) => `${t.name}: ${RESULT_WORDS[st(t)]}${t.current ? ` (${t.current})` : ''}`).join('; ')}.`;
-    return withResult({ ...row, met: status === 'met', current: RESULT_WORDS[status], gap: status === 'met' ? undefined : why, ...(status === 'conflicting' ? { conflicting: true } : {}) }, status, why);
+    // A Target whose results are set aside says so (v1 wording): the
+    // Requirement carries its note, and never reads "No evidence yet" then.
+    const word = (t) => (t.aside && t.status === 'pending' ? NO_RESULTS_COUNT : RESULT_WORDS[st(t)]);
+    const why = `Judged by its Target${linked.length === 1 ? '' : 's'}: ${linked.map((t) => `${t.name}: ${word(t)}${t.current && t.current !== word(t) ? ` (${t.current})` : ''}`).join('; ')}.`;
+    const asides = linked.filter((t) => t.aside).map((t) => `Through its Target ${t.name}: ${t.aside}`);
+    const judged = withResult({ ...row, met: status === 'met', current: RESULT_WORDS[status], gap: status === 'met' ? undefined : why, ...(status === 'conflicting' ? { conflicting: true } : {}) }, status, why);
+    if (!asides.length) return judged;
+    const aside = asides.join(' ');
+    return status === 'no-evidence'
+      ? { ...judged, aside, current: NONE_COUNTS, result: { ...judged.result, label: NONE_COUNTS } }
+      : { ...judged, aside };
   }
   // Judgments decide only a Requirement a person judges (by its structure).
   const all = judgedBy(state, capabilityId, row) === 'person' ? judgmentsFor(state, capabilityId, row.id) : { counting: [], input: [] };

@@ -119,3 +119,48 @@ export function recordApplicability(state, capabilityId, { changeId, rowKind, ro
     link: `#/capabilities/${capabilityId}?tab=monitor`,
   });
 }
+
+// What is set aside for one row, display only (v1 wording, Paige,
+// 2026-11-11): how many earlier results a material change keeps from
+// counting, each change's state (one count, each reason), and how many
+// imported results were measured under another configuration. null when
+// nothing is set aside.
+export function setAside(state, capabilityId, kind, id, otherConfig = 0) {
+  const st = applicabilityState(state, capabilityId);
+  const changes = [];
+  let cutoff = null;
+  let count = 0;
+  for (const { change, rows } of st.changes) {
+    const row = rows.find((r) => r.kind === kind && r.id === id);
+    if (!row || (row.review && row.review.verdict === 'applicable')) continue;
+    changes.push({ changeId: change.id, state: row.review ? row.review.verdict : 'pending' });
+    // Everything before the latest such change is set aside, once.
+    if (!cutoff || change.effectiveOn > cutoff) { cutoff = change.effectiveOn; count = row.before; }
+  }
+  if (!changes.length && !otherConfig) return null;
+  return { count, changes, otherConfig };
+}
+
+const ASIDE_STATE = {
+  pending: 'Earlier evidence needs review after a material change.',
+  partly: 'Partly applicable. Supporting context only; not counted toward this result.',
+  'not-applicable': 'No longer applicable.',
+};
+const results = (n) => `${n} earlier result${n === 1 ? '' : 's'}`;
+
+// The note in words. One change: "2 earlier results await material-change
+// review and are not counted." Several: one count, then each change's state.
+export function setAsideNote(info) {
+  const parts = [];
+  if (info.changes.length === 1) {
+    const c = info.changes[0];
+    parts.push(c.state === 'pending'
+      ? `${results(info.count)} await${info.count === 1 ? 's' : ''} material-change review (${c.changeId}) and ${info.count === 1 ? 'is' : 'are'} not counted.`
+      : `${results(info.count)} ${info.count === 1 ? 'is' : 'are'} not counted after ${c.changeId}: ${ASIDE_STATE[c.state]}`);
+  } else if (info.changes.length) {
+    parts.push(`${results(info.count)} ${info.count === 1 ? 'is' : 'are'} not counted: ${info.changes.map((c) => `${c.changeId}: ${ASIDE_STATE[c.state]}`).join(' ')}`);
+  }
+  if (info.otherConfig) parts.push(`${info.otherConfig} imported result${info.otherConfig === 1 ? ' was' : 's were'} measured under another configuration and ${info.otherConfig === 1 ? 'is' : 'are'} set aside.`);
+  return parts.join(' ');
+}
+
