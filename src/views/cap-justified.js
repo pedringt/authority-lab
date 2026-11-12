@@ -4,7 +4,7 @@
 // changes and the evidence they may affect, and what a person can do next.
 // Nothing here changes Authority.
 
-import { html, raw, badge, kv, fmtDate, personAt } from '../ui.js';
+import { html, raw, badge, kv, fmtDate, personAt, sentence } from '../ui.js';
 import { helpFor } from './help.js';
 import {
   justification, levelName, LEVEL_PLAIN, reviewConditions, MATERIAL_CHANGE_AREAS, actor, namedOn, people, decisionRequired, capData,
@@ -104,11 +104,11 @@ function materialChanges(state, cap, j) {
     const v = r.review;
     const tone = v.verdict === 'applicable' ? 'pass' : v.verdict === 'partly' ? 'watch' : 'neutral';
     const counts = v.verdict === 'applicable' ? 'It counts.' : v.verdict === 'partly' ? 'Kept as supporting context; it doesn\'t count toward the result.' : 'It doesn\'t count toward current results. Past Decisions keep what they froze.';
-    return html`${badge(tone, APPLICABILITY[v.verdict])} <span class="small">${counts} ${personAt(v.byAt, v.by).name}, ${fmtDate(v.date)}: ${v.reason}</span>
-      ${v.verdict === 'partly' ? html`<span class="small"> Still supports: ${v.stillSupported}. Needs fresh evidence: ${v.needsFresh}.</span>` : ''}`;
+    return html`${badge(tone, APPLICABILITY[v.verdict])} <span class="small">${counts} ${personAt(v.byAt, v.by).name}, ${fmtDate(v.date)}: ${sentence(v.reason)}</span>
+      ${v.verdict === 'partly' ? html`<span class="small"> Still supports: ${sentence(v.stillSupported)} Needs fresh evidence: ${sentence(v.needsFresh)}</span>` : ''}`;
   };
   const reviewForm = (m, r) => html`<details class="mon-review-form"><summary>${r.review ? 'Review again' : 'Review this evidence'}</summary>
-    <form data-form="record-applicability" data-capability="${cap.id}" data-change="${m.id}" data-row-kind="${r.kind}" data-row-id="${r.id}">
+    <form data-form="record-applicability" data-key="${m.id}:${r.kind}:${r.id}" data-capability="${cap.id}" data-change="${m.id}" data-row-kind="${r.kind}" data-row-id="${r.id}">
       ${helpFor('applicability')}
       <fieldset class="field"><legend>Does the evidence from before ${fmtDate(m.effectiveOn)} still apply to "${r.label}"?</legend>
         ${Object.entries(APPLICABILITY).map(([k, label]) => html`<label class="check"><input type="radio" name="verdict" value="${k}" required><span>${label}</span></label>`)}

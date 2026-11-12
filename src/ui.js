@@ -4,6 +4,12 @@
 import { STATUS_LABELS, AUTHORITY_LEVELS, TODAY, people as seedPeople } from './data/seed.js';
 import { authorityLabel } from './store/index.js';
 
+// A note someone typed, ended with one full stop (QA, 2026-11-12: "design..").
+export const sentence = (text) => {
+  const t = String(text || '').trim();
+  return !t || /[.!?…]["')\]]?$/.test(t) ? t : `${t}.`;
+};
+
 export function esc(value) {
   return String(value)
     .replace(/&/g, '&amp;')

@@ -127,7 +127,8 @@ export function changesSinceDecision(state, capabilityId) {
           : supported && (n.status === 'not-met' || n.status === 'fail') ? 'unjustified'
             : supported && n.status === 'conflicting' ? 'investigate'
               : 'attention';
-        out.push(changeOf(sev, 'result', `${kind === 'target' ? 'Target' : 'Requirement'} "${name(r)}": ${r.label} when decided, ${n.label} now.`, { rowKind: kind, id: r.id }));
+        // Results set aside by a material change say so (QA, 2026-11-12).
+        out.push(changeOf(sev, 'result', `${kind === 'target' ? 'Target' : 'Requirement'} "${name(r)}": ${r.label} when decided, ${n.label} now.${n.aside ? ` ${n.aside}` : ''}`, { rowKind: kind, id: r.id }));
       }
     };
     results('requirement', then.requirementResults, live.requirementResults, (r) => r.text, (s) => s === 'met');

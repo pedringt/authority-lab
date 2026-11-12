@@ -17,7 +17,7 @@
 import { getCapability, capData } from './state.js';
 import { current, versionsInForce, readiness, levelName } from './selectors.js';
 import { VERSIONED_KINDS } from './state.js';
-import { requirementsNow, targetsNow, evidenceCoverage, coverageText, MEASURE_WORDS, RESULT_WORDS } from './measures.js';
+import { requirementsNow, targetsNow, evidenceCoverage, coverageText, MEASURE_WORDS, RESULT_WORDS, NO_RESULTS_COUNT } from './measures.js';
 import { boundaries, peopleModel } from './boundaries.js';
 import { riskView } from './risk.js';
 import { materialChanges, baselineNow, contextVersions } from './context.js';
@@ -79,6 +79,7 @@ export function reviewConditions(state, capabilityId) {
     label: r.result ? r.result.label : (r.met ? RESULT_WORDS.met : RESULT_WORDS['no-evidence']),
     why: (r.result && r.result.why) || r.gap || '',
     current: r.current || '',
+    ...(r.aside ? { aside: r.aside } : {}),
     ...(r.consideration ? { consideration: true } : {}),
   }));
   const targets = targetsNow(state, capabilityId).map((t) => ({
@@ -86,7 +87,9 @@ export function reviewConditions(state, capabilityId) {
     name: t.name,
     goal: t.bar === 'needs-decision' ? 'No bar set yet' : t.target || '',
     status: t.status || 'pending',
-    label: MEASURE_WORDS[t.status] || t.status || MEASURE_WORDS.pending,
+    // Results that exist but are set aside never read "No results yet" (QA, 2026-11-12).
+    label: t.aside && t.status === 'pending' ? NO_RESULTS_COUNT : MEASURE_WORDS[t.status] || t.status || MEASURE_WORDS.pending,
+    ...(t.aside ? { aside: t.aside } : {}),
     current: t.current || '',
     ...(t.requirement ? { requirement: t.requirement } : {}),
   }));
