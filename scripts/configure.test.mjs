@@ -238,33 +238,41 @@ test('Monitor lists what to look at in the evidence; warnings never block', () =
   assert.match(h, /Warnings only: none of these blocks anything or changes authority\./);
 });
 
-// A Requirement judged through its linked Target says so on Configure
-// evidence, never "a person's judgment"; its Coverage status, and so the
-// sufficiency counts, are unchanged (Paige, 2026-11-11).
-test('Configure evidence: a Requirement judged through its Target is labelled by its Target', async () => {
-  const { startEmpty, setUpWorkspace, recordResult, rowMetric, MANUAL_SOURCE } = await import('../src/store/index.js');
+// A Requirement evaluated against its linked Target says so on Configure
+// evidence and names the Target; "Judged by a person" stays for human
+// judgment. Coverage statuses, and so sufficiency counts, are unchanged
+// (Paige, 2026-11-11).
+test('Configure evidence: a Target-linked Requirement reads "Evaluated against Target"; a person-judged one keeps "Judged by a person"', async () => {
+  const { startEmpty, setUpWorkspace, recordResult, recordJudgment, rowMetric, MANUAL_SOURCE } = await import('../src/store/index.js');
   const ANA = 'ana-ruiz';
   let s = setUpWorkspace(startEmpty(), { workspace: { name: 'Ruiz Tax' }, workflow: { name: 'Client email' }, founder: { name: 'Ana Ruiz', title: 'Partner' } });
   s = addCapability(s, { name: 'Draft deadline emails', summary: 'Drafts emails reminding clients of tax deadlines.', owner: ANA, risk: { impact: 'Medium', reversibility: 'Easy to reverse', exposure: 'Customer-facing' }, today: 'recommends', by: ANA });
   const id = s.capabilities.at(-1).id;
   s = saveCriteria(s, id, {
     criteria: [{ id: 'accuracy-t', name: 'Accuracy', target: '≥ 90%', requirement: 'acc' }],
-    requirements: [{ id: 'min-cases', text: 'Minimum 20 cases', kind: 'coverage' }, { id: 'acc', text: 'Overall accuracy ≥ 90%', judgment: 'evidence' }],
+    requirements: [{ id: 'min-cases', text: 'Minimum 20 cases', kind: 'coverage' }, { id: 'acc', text: 'Overall accuracy ≥ 90%', judgment: 'evidence' }, { id: 'tpl', text: 'The tax lead has approved the templates', judgment: 'person' }],
     by: ANA, reason: 'Our own bar.',
   });
   s = mapEvidence(s, id, { rowKind: 'target', rowId: 'accuracy-t', measure: { source: MANUAL_SOURCE, metric: rowMetric('target', 'accuracy-t'), stat: 'rate' }, by: ANA });
   setPeople(people(s));
-  const cell = (st) => {
+  const cell = (st, label = 'Overall accuracy ≥ 90%') => {
     const page = String(configureEvidenceView(st, id, new URLSearchParams())).replace(/<[^>]+>/g, ' ').replace(/&#39;/g, '\'').replace(/\s+/g, ' ');
-    return page.slice(page.indexOf('Overall accuracy ≥ 90%'), page.indexOf('Overall accuracy ≥ 90%') + 260);
+    const at = page.indexOf(label);
+    const next = ['Overall accuracy ≥ 90%', 'The tax lead has approved the templates', 'Minimum 20 cases'].filter((x) => x !== label).map((x) => page.indexOf(x, at + 1)).filter((i) => i > at);
+    return page.slice(at, Math.min(at + 260, ...next));
   };
-  // No results yet: not "No source mapped".
-  assert.match(cell(s), /No results yet Through its Target: Accuracy:/);
+  // Before any result: evaluated against the Target, not "No source mapped".
+  assert.match(cell(s), /Evaluated against Target Target: Accuracy \(/);
+  assert.doesNotMatch(cell(s), /No source mapped/);
   const before = evidenceCoverage(s, id).sufficient;
   s = recordResult(s, id, { rowKind: 'target', rowId: 'accuracy-t', type: 'rate', passed: 19, total: 20, kind: 'eval', by: ANA });
-  assert.match(cell(s), /Judged by its Target Through its Target: Accuracy: 95% across 20 cases/);
-  assert.doesNotMatch(cell(s), /Judged by a person|A person's judgment is on record/);
+  assert.match(cell(s), /Evaluated against Target Target: Accuracy \(95% across 20 cases\)/);
   // Sufficiency is counted exactly as before the label fix: judged counts.
   assert.equal(evidenceCoverage(s, id).requirements.find((r) => r.id === 'acc').status, 'judged');
   assert.equal(evidenceCoverage(s, id).sufficient, before + 1);
+  assert.doesNotMatch(cell(s), /Judged by a person|A person's judgment is on record/);
+  // Human judgment keeps its label.
+  s = recordJudgment(s, id, 'tpl', { verdict: 'met', rationale: 'All four templates approved.', by: ANA });
+  setPeople(people(s));
+  assert.match(cell(s, 'The tax lead has approved the templates'), /Judged by a person A person's judgment is on record/);
 });

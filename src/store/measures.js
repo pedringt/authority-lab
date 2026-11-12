@@ -410,7 +410,7 @@ export function rowCoverage(state, capabilityId, row) {
     // A Requirement judged through its linked Target(s) (#143 review) says
     // so; its status is unchanged, so sufficiency counts are too.
     const linked = row.text !== undefined ? targetsNow(state, capabilityId).filter((t) => t.requirement === row.id && t.bar !== 'needs-decision') : [];
-    const viaTarget = linked.length ? linked.map((t) => `${t.name}: ${t.current || MEASURE_WORDS[t.status] || t.status}`).join('; ') : null;
+    const viaTarget = linked.length ? linked.map((t) => `${t.name} (${t.current || MEASURE_WORDS[t.status] || t.status})`).join('; ') : null;
     const via = viaTarget ? { viaTarget } : {};
     // A person's judgment, or an open critical incident, is the evidence for
     // a person-judged Requirement (#142).
