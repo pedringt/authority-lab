@@ -22,7 +22,7 @@ export const TABS = [
   ['history', 'History'],
 ];
 
-export function capabilityView(state, id, query, { runs = null } = {}) {
+export function capabilityView(state, id, query, { runs = null, readingCheck = null } = {}) {
   const cap = getCapability(state, id);
   if (!cap) return html`<div class="page-head"><h1>We couldn't find that capability.</h1></div>`;
   const d = capData(state, id);
@@ -38,7 +38,7 @@ export function capabilityView(state, id, query, { runs = null } = {}) {
   switch (tab) {
     // One vertical flow; the full evidence views open through show=.
     case 'decide': body = decideTab(state, cap, query, show, { runs }); break;
-    case 'monitor': body = monitoringTab(state, cap, d, show); break;
+    case 'monitor': body = monitoringTab(state, cap, d, show, { readingCheck }); break;
     case 'history': body = historyTab(state, cap); break;
     default:
       body = show === 'rules' ? contractTab(state, cap, d)

@@ -276,6 +276,14 @@ export function materialChanges(state, capabilityId) {
   return capData(state, capabilityId).materialChanges || [];
 }
 
+// The state as if no material change had been recorded for a capability: the
+// evidence as it stands before any applicability review excludes some of it
+// (v1 W1, #182). Only for working out which evidence a change affects.
+export function withoutMaterialChanges(state, capabilityId) {
+  if (!materialChanges(state, capabilityId).length) return state;
+  return { ...state, capabilityData: { ...state.capabilityData, [capabilityId]: { ...state.capabilityData[capabilityId], materialChanges: [] } } };
+}
+
 // Record a material change. Append-only; it says which areas changed and
 // when, so later phases can tell which Evidence came before it.
 export function recordMaterialChange(state, capabilityId, { areas = [], description, effectiveOn, by } = {}) {
@@ -297,7 +305,7 @@ export function recordMaterialChange(state, capabilityId, { areas = [], descript
     kind: 'material-change',
     surfaced: true,
     title: `Material change: ${list.map((a) => MATERIAL_CHANGE_AREAS[a].toLowerCase()).join(', ')}`,
-    body: `${cap.name}: ${what} Recorded by ${people(state)[by].name}. Evidence from before ${on} may apply less.`,
+    body: `${cap.name}: ${what} Recorded by ${people(state)[by].name}. Evidence from before ${on} doesn't count until the Owner reviews whether it still applies.`,
     capabilityId,
     link: `#/capabilities/${capabilityId}`,
   });

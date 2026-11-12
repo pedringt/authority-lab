@@ -8,7 +8,8 @@
 
 import { getCapability, capData } from './state.js';
 import { reviewConditions, evidenceProvenance } from './proposal.js';
-import { materialChanges, MATERIAL_CHANGE_AREAS } from './context.js';
+import { materialChanges, MATERIAL_CHANGE_AREAS, withoutMaterialChanges } from './context.js';
+import { applicabilityState } from './applicability.js';
 import { monitoringStatus, reviewNeeded } from './monitoring.js';
 import { gateEvents, categoryOf } from './gatelog.js';
 import { expectedVsActual } from './value.js';
@@ -24,13 +25,19 @@ export const JUSTIFICATION_STATES = {
   attention: 'Needs attention',
   investigate: 'Investigation needed',
   unjustified: 'Authority may no longer be justified',
+  // v1 C1 (#187): a critical incident, a crossed safety limit, or a rule
+  // over its limit. Always pinned at the top of Monitor.
+  safety: 'Safety concern',
   restricted: 'Restricted automatically',
   // Remediation 1 (#149, R1-B): observed behavior above approved Authority.
   above: 'Operating above approved Authority',
   // Not a judgment: retired is terminal (#147, Q6).
   retired: 'Retired',
 };
-const RANK = { info: 0, attention: 1, investigate: 2, unjustified: 3 };
+// v1 C1 (Paige, 2026-11-09, #187), most serious last. A value warning (a
+// rollout goal missed on real numbers) has no rank: it shows under
+// "Delivering value?" and never sets the "Still justified?" headline.
+const RANK = { info: 0, attention: 1, investigate: 2, unjustified: 3, safety: 4 };
 
 // The Decision in force: the newest record for the capability (a person's, or
 // an automatic restriction). `basis` is the newest person's Decision with a
@@ -58,12 +65,14 @@ export function materialChangesSince(state, capabilityId, record) {
 // Which earlier evidence a material change may affect (#147). Deterministic
 // and date-based only: for every Requirement and Target, the evidence behind
 // its current result that was observed before the change took effect. That
-// evidence "may need new evidence", never "failed" or "invalid": which kinds
-// of change invalidate which sources isn't configured (an open question for
-// Paige), and imported evidence measured under another configuration is
-// already set aside by its own standing (external.js).
+// evidence is never "failed" or "invalid": nothing is invalidated by kind of
+// change (Paige, 2026-11-09, D3). The Owner reviews whether it still applies
+// (applicability.js, v1 W1); until then it doesn't count. The rows are worked
+// out from the evidence before any review excludes it, so a review never
+// changes which rows a change affects. Imported evidence measured under
+// another configuration is already set aside by its own standing (external.js).
 export function materialChangeImpact(state, capabilityId, change) {
-  const ev = evidenceProvenance(state, capabilityId);
+  const ev = evidenceProvenance(withoutMaterialChanges(state, capabilityId), capabilityId);
   const dated = (r) => [
     ...r.results.flatMap((x) => x.itemIds.map((id) => (ev.items.find((i) => i.id === id) || {}).date || x.date)),
     ...r.judgments.map((id) => (ev.judgments.find((j) => j.id === id) || {}).date),
@@ -82,16 +91,22 @@ export function materialChangeImpact(state, capabilityId, change) {
 const changeOf = (severity, kind, text, extra = {}) => ({ severity, kind, text, ...extra });
 
 // What changed since the Decision in force, compared with its frozen snapshot
-// where there is one. Each change carries a severity:
-// - unjustified: a Requirement or Target that was Met is now Not met;
-// - investigate: a result is now Conflicting, a critical incident is open, a
-//   rule incident awaits review, or a restriction rule reads over its limit;
-// - attention: any other result or coverage change for the worse, stale
-//   evidence, a material change, a position change or disagreement, an
-//   attempt at something never allowed, a rollout goal missed on real
-//   numbers, an adoption warning;
+// where there is one. Each change carries a severity (v1 C1, Paige,
+// 2026-11-09, #187; it replaces the #147 question 2 mapping):
+// - safety: an open critical incident, a rule incident awaiting review, or a
+//   restriction rule reading over its limit;
+// - unjustified: a hard Requirement that was Met in the Decision's frozen
+//   snapshot (so supported the current Authority) is now Not met;
+// - investigate: such a hard Requirement is now Conflicting;
+// - attention: a consideration that went Met to Not met, any other result or
+//   coverage change for the worse, stale evidence, a material change, a
+//   position change or disagreement, an open non-critical incident,
+//   review-quality adoption signals, and blocked attempts at something never
+//   allowed ("Blocked");
+// - value: a rollout goal missed on real numbers (never the headline);
 // - info: new evidence, improvements, people's approvals and overrides.
-// (The mapping is documented for Paige to confirm, #147 question 2.)
+// Requirements for a future expansion (not Met when decided, or added
+// since) are never graded here: they are the next bar, shown on Decide.
 export function changesSinceDecision(state, capabilityId) {
   const { record, basis, legacy } = decisionInForce(state, capabilityId);
   const since = record ? record.date : null;
@@ -104,9 +119,13 @@ export function changesSinceDecision(state, capabilityId) {
       for (const r of thenRows) {
         const n = now.get(r.id);
         if (!n || n.status === r.status) continue;
-        const sev = met(r.status) && (n.status === 'not-met' || n.status === 'fail') ? 'unjustified'
-          : n.status === 'conflicting' ? 'investigate'
-            : met(n.status) ? 'info' : 'attention';
+        // Only a hard Requirement that was Met when decided supported the
+        // current Authority; a consideration or a Target never reaches 4 or 5.
+        const supported = kind === 'requirement' && !r.consideration && met(r.status);
+        const sev = met(n.status) ? 'info'
+          : supported && (n.status === 'not-met' || n.status === 'fail') ? 'unjustified'
+            : supported && n.status === 'conflicting' ? 'investigate'
+              : 'attention';
         out.push(changeOf(sev, 'result', `${kind === 'target' ? 'Target' : 'Requirement'} "${name(r)}": ${r.label} when decided, ${n.label} now.`, { rowKind: kind, id: r.id }));
       }
     };
@@ -133,28 +152,38 @@ export function changesSinceDecision(state, capabilityId) {
   // Authority on its own; only the signals below, which stand on their own,
   // are shown.
   for (const r of live.coverage.rows.filter((x) => x.state === 'stale')) {
-    if (!out.some((c) => c.kind === 'coverage' && c.id === r.id)) out.push(changeOf('attention', 'stale', `"${r.label}" rests on stale evidence: it still counts, but may no longer describe today.`, { rowKind: r.kind, id: r.id }));
+    if (!out.some((c) => c.kind === 'coverage' && c.id === r.id)) out.push(changeOf('attention', 'stale', `"${r.label}" rests on stale evidence. Stale evidence still counts. Its age blocks an expansion only when a Requirement makes recency mandatory, such as "Results from the last 30 days".`, { rowKind: r.kind, id: r.id }));
   }
   if (new Set(live.positions.map((p) => p.stance).filter((s) => s && s !== 'undecided')).size > 1) out.push(changeOf('attention', 'disagreement', 'Reviewers and Stakeholders don\'t agree on how much autonomy is right.'));
-  for (const m of materialChangesSince(state, capabilityId, record)) {
-    out.push(changeOf('attention', 'material-change', `Material change (${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a].toLowerCase()).join(', ')}), effective ${m.effectiveOn}: ${m.description} Earlier evidence may need revalidating.`, { changeId: m.id }));
+  // v1 W1 (#182): a change's earlier evidence counts only once the Owner says
+  // it still applies; an unreviewed row is listed for every change, recent or not.
+  const open = applicabilityState(state, capabilityId).unresolved;
+  const openText = (id) => { const n = open.filter((r) => r.changeId === id).length; return n ? ` ${n} Requirement${n === 1 ? '' : 's'} or Target${n === 1 ? '' : 's'} rest on earlier evidence the Owner hasn't reviewed yet; until then it doesn't count.` : ''; };
+  const recent = materialChangesSince(state, capabilityId, record);
+  for (const m of recent) {
+    out.push(changeOf('attention', 'material-change', `Material change (${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a].toLowerCase()).join(', ')}), effective ${m.effectiveOn}: ${m.description}${openText(m.id) || ' Its earlier evidence has been reviewed.'}`, { changeId: m.id }));
   }
-  for (const x of openCriticalIncidents(state, capabilityId)) out.push(changeOf('investigate', 'incident', `Open critical incident ${x.id}: ${x.what}`));
+  for (const id of [...new Set(open.map((r) => r.changeId))].filter((x) => !recent.some((m) => m.id === x))) {
+    out.push(changeOf('attention', 'material-change', `Material change ${id}:${openText(id)}`, { changeId: id }));
+  }
+  for (const x of openCriticalIncidents(state, capabilityId)) out.push(changeOf('safety', 'incident', `Open critical incident ${x.id}: ${x.what}`));
   for (const x of incidentsFor(state, capabilityId).filter((i) => i.severity !== 'critical' && incidentStatus(i) !== 'resolved' && since && i.recordedOn >= since)) out.push(changeOf('attention', 'incident', `Open ${x.severity} incident ${x.id}: ${x.what}`));
   const need = reviewNeeded(state, capabilityId);
-  for (const x of need.incidents) out.push(changeOf('investigate', 'rule-incident', `A safety limit was crossed on ${x.date} ("${x.rule}"), awaiting review.`));
+  for (const x of need.incidents) out.push(changeOf('safety', 'rule-incident', `A safety limit was crossed on ${x.date} ("${x.rule}"), awaiting review.`));
   const st = monitoringStatus(state, capabilityId);
-  for (const r of st.rules.filter((x) => x.crossed)) out.push(changeOf('investigate', 'limit', `"${r.text}" reads over its limit.`));
+  for (const r of st.rules.filter((x) => x.crossed)) out.push(changeOf('safety', 'limit', `"${r.text}" reads over its limit.`));
   const events = since ? gateEvents(state, capabilityId).filter((e) => e.date >= since && e.source !== 'seed') : [];
   const never = events.filter((e) => e.actor === 'ai' && e.rule && e.rule.kind === 'must-never').length;
-  if (never) out.push(changeOf('attention', 'boundary', `${never} attempt${never === 1 ? '' : 's'} at something never allowed, all blocked.`));
+  // Blocked never-allowed attempts are an oversight item: they escalate only
+  // through an incident or a configured rule, never by count here.
+  if (never) out.push(changeOf('attention', 'boundary', `Blocked: ${never} attempt${never === 1 ? '' : 's'} at something never allowed.`, { label: 'Blocked' }));
   const count = (c) => events.filter((e) => categoryOf(e) === c).length;
   const overridden = count('overridden');
   const approved = count('approved');
   const blocked = count('blocked') - never;
   if (overridden || approved || blocked) out.push(changeOf('info', 'operation', [approved ? `${approved} needs-a-person action${approved === 1 ? '' : 's'} approved by a person` : null, overridden ? `${overridden} overridden (rejected) by a person` : null, blocked ? `${blocked} other action${blocked === 1 ? '' : 's'} blocked by the rules` : null].filter(Boolean).join('; ') + '.'));
   const v = expectedVsActual(state, capabilityId);
-  for (const r of (v.rows || []).filter((x) => x.status === 'not-met' && x.judged)) out.push(changeOf('attention', 'impact', `Rollout goal "${r.metric}" not met on real numbers: ${r.actualText} against ${r.target}.`));
+  for (const r of (v.rows || []).filter((x) => x.status === 'not-met' && x.judged)) out.push(changeOf('value', 'impact', `Rollout goal "${r.metric}" not met on real numbers: ${r.actualText} against ${r.target}.`));
   for (const a of adoptionSignals(state, capabilityId)) out.push(changeOf('attention', 'adoption', `${a.title}${a.simulated ? ' (simulated)' : ''}.`));
   return { record, basis, legacy, changes: out };
 }
@@ -187,11 +216,13 @@ export function justification(state, capabilityId) {
   const d = capData(state, capabilityId);
   const { record, basis, legacy, changes } = changesSinceDecision(state, capabilityId);
   const restricted = Boolean(d.reviewRequired && d.monitoring && d.monitoring.breached);
-  const worst = changes.reduce((w, c) => (RANK[c.severity] > RANK[w] ? c.severity : w), 'info');
+  // The headline is the most serious level present; value warnings don't count.
+  const worst = changes.filter((c) => c.severity in RANK).reduce((w, c) => (RANK[c.severity] > RANK[w] ? c.severity : w), 'info');
   const gap = authorityGap(state, capabilityId);
   const key = cap.status === 'retired' ? 'retired' : restricted ? 'restricted' : gap.above ? 'above' : worst === 'info' ? 'supported' : worst;
   return {
     key,
+    capabilityId,
     label: JUSTIFICATION_STATES[key],
     authority: { ...cap.authority, name: levelName(cap.authority.level) },
     record,
