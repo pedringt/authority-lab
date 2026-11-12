@@ -35,7 +35,7 @@ export const HELP = {
   },
   people: {
     label: 'Owner and Reviewer assignment',
-    why: 'The Owner is accountable and records the decisions. A Reviewer\'s assessment must be recorded before any expansion; a Stakeholder\'s assessment is advisory.',
+    why: 'The Owner is accountable and records the decisions. Every active Reviewer\'s assessment must be recorded before any expansion; a Stakeholder\'s assessment is advisory.',
     example: 'For a tool that drafts invoices: the finance lead owns it, the accountant who checks the drafts is a Reviewer, and sales is a Stakeholder.',
   },
   residualRisk: {
