@@ -1,6 +1,7 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, notice, section, person, fmtDate, lede } from '../ui.js';
-import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule, JUDGMENTS, JUDGMENT_WORDS, effectiveJudgment } from '../store/index.js';
+import { helpFor } from './help.js';
+import { getCapability, current, versionList, actor, criteriaSaved, criteriaLocked, defaultsFor, versionsInForce, CORE_CRITERIA, CORE_REQUIREMENTS, resultsLockWarning, isCoverageRule, JUDGMENTS, JUDGMENT_WORDS, effectiveJudgment, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE } from '../store/index.js';
 
 // How will you know this is true? (#143 review) Asked for every Requirement
 // and stored on it, never inferred from its wording. A coverage rule is
@@ -64,6 +65,7 @@ export function criteriaEditorView(state, capabilityId, query) {
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 3</p>
       <h1>Targets and Requirements</h1>
       ${lede('What good looks like, in numbers, and what we need before giving the AI any authority.', html`${saved ? 'Saved. Changes are kept in history.' : `Starting values come from the risk profile (${risk.impact || 'unknown'} impact, ${(risk.exposure || 'unknown').toLowerCase()}${risk.reversibility === 'Difficult to reverse' ? ', difficult to reverse' : ''}). Each row shows where it came from.`} Once the first test runs, these can only be changed with approval.`)}
+      ${helpFor('requirements')}
     </div>
   </div>
   ${error ? notice('fail', 'Couldn\'t save', error) : ''}
@@ -143,6 +145,8 @@ function setupChecksView(state, cap, { error, acting, saved, defaults, criteria,
     <p class="eyebrow"><a href="#/capabilities/${cap.id}/setup">${cap.name} · Setup</a></p>
     <h1>Requirements</h1>
     ${lede('What must be true before we\'d consider giving it more authority, how you\'ll know, and the bar where it can be measured.', 'Suggestions say where they came from and never set a number: a measurable one comes with its bar as Needs decision until you choose it. Tick each suggestion you want; nothing is added for you. Each Requirement is hard (it blocks expansion until met) unless you make it a consideration.')}
+    ${helpFor('requirements')}
+    <p class="muted small">${UNDECIDED_TARGET_NOTE} ${STALE_EVIDENCE_NOTE}</p>
   </div></div>
   ${error ? notice('fail', 'Couldn\'t save', error) : ''}
   ${warn ? notice('watch', 'Before you record results', warn) : ''}

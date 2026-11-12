@@ -7,7 +7,7 @@
 import { DATA_FIELDS } from '../data/seed.js';
 import { setupSequence } from './setupflow.js';
 import { html, badge, kv, fmtDate, person, personAt, notice, tabIntro, SWITCH_PERSON } from '../ui.js';
-import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText, authorityGap, actsThroughGate, boundaries } from '../store/index.js';
+import { setupState, STANCES, readiness, current, versionList, criteriaSaved, needsSignoff, decisionRequired, proposedAuthority, levelName, reviewNeeded, reviewEligibility, activePeople, actor, queueApprovers, queueEligibility, QUEUE_LIMIT, readinessText, authorityGap, actsThroughGate, boundaries, seriousFailures, proposalStaleness, reviewerInputMissing, people, unresolvedApplicability } from '../store/index.js';
 import { emptyState, nextStep } from './setup.js';
 import { contractReviewView } from './contract.js';
 import { proposalsList, amendLink } from './proposals.js';
@@ -173,6 +173,36 @@ export function nextFor(state, cap, d) {
   return { kind: 'none', text: 'Nothing is open. It keeps working inside its boundaries.', then: null, link: { href: `${base}?tab=monitor`, text: 'Next: check it\'s still safe' } };
 }
 
+// Needs attention (v1 W3, Paige 2026-11-10): serious test failures and each
+// thing blocking a change (including unreviewed evidence after a material
+// change, v1 W1), shown only when something applies. What still
+// needs a person is always on the page: the level sentence and the
+// Boundaries line ("Requires human review").
+function needsAttention(state, cap, d) {
+  const base = `#/capabilities/${cap.id}`;
+  const items = [];
+  const add = (text, href, linkText) => items.push(html`<li>${text}${href ? html` <a class="small" href="${href}">${linkText}</a>` : ''}</li>`);
+  const serious = seriousFailures(state, cap.id);
+  if (serious.length) add(`Serious test failure${serious.length === 1 ? '' : 's'}: ${serious.map((x) => `${x.name} (${x.id})`).join('; ')}.`, `${base}?tab=decide&show=tests`, 'See the tests');
+  const review = reviewNeeded(state, cap.id);
+  if (review.any) add('Blocked: a post-incident review is needed before authority expands.', `${base}?tab=monitor`, 'Record the review');
+  const g = authorityGap(state, cap.id);
+  // v1 W1: evidence from before a material change that the Owner hasn't
+  // reviewed doesn't count, and blocks expansion (same wording as Decide).
+  const unreviewed = unresolvedApplicability(state, cap.id);
+  if (unreviewed.length) add(`Blocked: evidence from before a material change isn't reviewed yet, so it doesn't count: ${unreviewed.map((x) => x.label).join('; ')}.`, `${base}?tab=monitor`, 'Review it in Monitor');
+  if (g.above) add(`Blocked: operating above approved Authority (observed at Level ${g.observed.level}, ${g.observed.name}). Expanding beyond it waits until this is resolved.`, `${base}?tab=monitor`, 'Resolve it in Monitor');
+  if (decisionRequired(state, cap.id)) {
+    const r = readiness(state, cap.id);
+    if (r.hardUnmet.length) add(`Blocked: hard Requirements not Met: ${r.hardUnmet.map((x) => `${x.text} (${x.result ? x.result.label : 'Not met'})`).join('; ')}.`, `${base}?tab=decide&show=requirements`, 'See the Requirements');
+    const st = proposalStaleness(state, cap.id);
+    if (st.stale) add(`Blocked: the Proposal is stale: ${st.reasons[0].text}`, `${base}?tab=decide`, 'Replace it in Decide');
+    const missing = reviewerInputMissing(state, cap.id);
+    if (missing.length) add(`Blocked: waiting for a position from ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')} (Reviewer${missing.length === 1 ? '' : 's'}).`, `${base}/stakeholders/edit`, 'Record a position');
+  }
+  return items.length ? html`<section class="st-attention" aria-label="Needs attention"><p class="st-k">Needs attention</p><ul class="plain-list">${items}</ul></section>` : '';
+}
+
 // The page's title, its state badge and the sentence of what it does now.
 function story(state, cap, d) {
   const review = reviewNeeded(state, cap.id);
@@ -197,8 +227,9 @@ function story(state, cap, d) {
       ${next.then ? chapter('Then', next.then) : ''}
     </div>
     ${next.link ? html`<p class="st-next"><a href="${next.link.href}">${next.link.text} →</a></p>` : ''}
-    <p class="st-meta"><span>Owner: ${person(cap.owner).name}</span>${pulledBack ? html`<a href="${base}?tab=status&show=rules">View boundaries</a><a href="${base}?tab=history">View history</a>` : ''}</p>
-  </section>`;
+    <p class="st-meta"><span>Owner: ${person(cap.owner).name}</span>${pulledBack ? html`<a href="${base}?tab=status&show=rules">View boundaries</a>` : ''}<a href="${base}?tab=history">Full record</a></p>
+  </section>
+  ${needsAttention(state, cap, d)}`;
 }
 
 // The status page itself (capability.js calls it summaryTab).

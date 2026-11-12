@@ -12,11 +12,15 @@ import { workspaceOf, workflowOf } from './selectors.js';
 const slug = (text, fallback) => (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
 
 // A blank workspace waiting for setup: no capabilities, records, people or
-// activity. Demo date and settings are unchanged.
-export function startEmpty() {
+// activity. Settings are the demo's. `today`, when given (the app passes the
+// real date, Paige 2026-11-11), starts it on the real calendar, which it then
+// follows like a client workspace; without it (tests), it keeps the demo's
+// fixed date. The first argument is the store's current state, unused.
+export function startEmpty(_previous, { today = null } = {}) {
   const base = initialState();
   return {
     ...base,
+    ...(today ? { today, realCalendar: true } : {}),
     setupPending: true,
     // A workspace set up from scratch, not the seeded Northstar demo.
     startedEmpty: true,

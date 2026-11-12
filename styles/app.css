@@ -626,6 +626,11 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong
 .how { margin: 4px 0 0; max-width: 70ch; font-size: 14px; color: var(--text-2); }
 .how summary { cursor: pointer; color: var(--link); font-size: 13px; width: max-content; }
 .how p { margin: 6px 0 0; }
+/* Contextual Help at a consequential choice (v1 W4): collapsed, read-only */
+.help { margin: 6px 0 8px; max-width: 70ch; font-size: 14px; color: var(--text-2); }
+.help summary { cursor: pointer; color: var(--link); font-size: 13px; width: max-content; }
+.help p { margin: 6px 0 0; }
+.help-k { font-weight: 600; }
 
 /* Header: the Settings menu (simplification pass) */
 .settings-menu > summary.gear { list-style: none; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 999px; color: var(--text-2); border: 1px solid var(--border); background: var(--surface); }

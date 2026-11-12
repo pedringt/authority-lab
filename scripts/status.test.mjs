@@ -102,7 +102,7 @@ test('Status, Refund execution > $50 (restricted by a person): Recommend only, w
   assert.match(st, /Then<\/span><p>It can be reconsidered for Draft\./);
   assert.equal(count(h, 'idempotency check and 100 clean'), 1, 'the condition is stated once');
   assert.deepEqual(nextLinks(h), [], 'nothing to do on another tab until the condition is met');
-  assert.match(st, new RegExp(`Owner: Daniel Okafor</span><a href="#/capabilities/${RX}\\?tab=status&show=rules">View boundaries</a><a href="#/capabilities/${RX}\\?tab=history">View history</a>`));
+  assert.match(st, new RegExp(`Owner: Daniel Okafor</span><a href="#/capabilities/${RX}\\?tab=status&show=rules">View boundaries</a><a href="#/capabilities/${RX}\\?tab=history">Full record</a>`));
 });
 
 test('Status, Account closure (not delegated): says so once, with what would reopen it, and no link onward', () => {

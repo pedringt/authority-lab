@@ -1,5 +1,6 @@
 import * as seed from '../data/seed.js';
 import { html, raw, notice, section, person, fmtDate, selectField, lede } from '../ui.js';
+import { helpFor } from './help.js';
 import { getCapability, current, versionList, actor, STANCES, versionsInForce, needsSignoff, openProposal, activePeople, people } from '../store/index.js';
 
 export function stakeholdersEditorView(state, capabilityId, query) {
@@ -24,6 +25,7 @@ export function stakeholdersEditorView(state, capabilityId, query) {
       <p class="eyebrow"><a href="#/capabilities/${cap.id}/setup">${cap.name} · Setup</a></p>
       <h1>People</h1>
       ${lede(html`Owner: <strong>${people(state)[cap.owner].name}</strong>, the one accountable person. Only the owner confirms the setup and records authority decisions.`, 'Reviewers are people whose input is required; Stakeholders are involved or consulted. Who may approve changes, and when a Risk approver is needed, follows the approval rules underneath, which don\'t change here. The Risk approver right is set on People.')}
+      ${helpFor('people')}
     </div></div>
     ${error ? notice('fail', 'Couldn\'t save', error) : ''}
     ${needsSignoff(state, capabilityId, 'stakeholders') ? notice('watch', 'Results are in', 'Adding or removing someone, changing their team, or changing whether they are a Reviewer is now submitted for approval.') : notice('neutral', 'Before results', 'Once results are recorded, changing who is involved needs sign-off, even while setup is unconfirmed.')}
@@ -49,6 +51,7 @@ export function stakeholdersEditorView(state, capabilityId, query) {
       <p class="eyebrow"><a href="#/capabilities/${cap.id}">${cap.name}</a> · Setup step 4</p>
       <h1>Stakeholders</h1>
       ${lede('The people whose view counts when this AI\'s authority changes.', 'Add them now and fill in positions when you know them. Positions are shown side by side, never averaged into a score. For high-impact or financial AI, changes need two approvals, one of them from a stakeholder with the Risk approver right. That right is set on People; the team typed here doesn\'t make anyone a Risk approver.')}
+      ${helpFor('people')}
     </div>
   </div>
   ${error ? notice('fail', 'Couldn\'t save', error) : ''}

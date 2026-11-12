@@ -4058,7 +4058,7 @@ test('#96: the decision flow numbers its steps and the checklist says exactly wh
   assert.match(none, /data-action="authorize"[^>]*disabled/);
   // The seeded expansion: every step done, recording enabled.
   const ready = String(decisionWorkspaceView(pendingRR(), RR));
-  assert.deepEqual(marks(ready), ['Decision: Expand autonomy, within limits:✓', 'Limits:✓', 'What should improve:✓', 'Rollout plan:✓', 'Proposal is current:✓', 'Every Reviewer has given a position:✓', 'Residual Risk:✓', 'Your reason:✓', 'Recorded by the Owner:✓']);
+  assert.deepEqual(marks(ready), ['Decision: Expand autonomy, within limits:✓', 'Limits:✓', 'What should improve:✓', 'Rollout plan:✓', 'Proposal is current:✓', 'No Reviewers are configured, so no position is required:✓', 'Residual Risk:✓', 'Your reason:✓', 'Recorded by the Owner:✓']);
   // #144: without a Residual Risk, or as someone other than the Owner, it says so.
   const noRisk = String(decisionWorkspaceView(setResidualRisk(pendingRR(), RR, { level: null }), RR));
   assert.match(noRisk, /Residual Risk<\/strong><span class="muted small">: choose Low, Moderate, High or Unknown, and say why\./);

@@ -6,8 +6,9 @@
 // mechanisms open on demand, one line each.
 
 import { html, raw, badge, kv, fmtDate, person, personAt, rightsNote, subNav, SWITCH_PERSON } from '../ui.js';
+import { helpFor } from './help.js';
 import { justifiedSection } from './cap-justified.js';
-import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES, evidenceSignals } from '../store/index.js';
+import { authorityLabel, monitoringStatus, breachRule, levelName, reviewNeeded, reviewEligibility, restrictedExpansion, actor, isHighOrFinancial, activePeople, expectedVsActual, roi, roiVersions, currentRoiAssumptions, roiEditEligibility, ROI_FIELDS, grantingRecord, adoptionSignals, gateSummary, GATE_SOURCES, evidenceSignals, STALE_EVIDENCE_NOTE, UNDECIDED_TARGET_NOTE, readingRules, readingEligibility, manualReadings, READING_UNITS } from '../store/index.js';
 
 const PILOT = 'Demo data (pilot)';
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
@@ -116,6 +117,8 @@ function reviewSection(state, cap) {
 
 function safetyLimitsLine(state, cap, st) {
   if (!st.rules.length) return '';
+  const manual = new Map(readingRules(state, cap.id).filter((r) => r.current).map((r) => [r.text, r.current]));
+  const manualFor = (r) => (manual.has(r.text) && manual.get(r.text).value === r.value ? manual.get(r.text) : null);
   const unit = (r) => (r.threshold && r.threshold.type === 'pct' ? '%' : '');
   const span = (r) => (!r.window ? '' : r.window.cases ? `, last ${r.window.cases} cases` : `, ${r.window.days} days`);
   const reading = (r) => {
@@ -125,7 +128,10 @@ function safetyLimitsLine(state, cap, st) {
     // Imported production results (#120) name their run; a percentage on too
     // few cases is shown as too early, never as over the limit.
     if (r.imported) return html`${r.crossed ? badge('fail', 'Over the limit') : r.imported.early ? badge('insufficient', 'Too early to judge') : ''} ${r.value}${unit(r)}${r.imported.sample !== null ? ` across ${r.imported.sample} cases` : ''} · limit ${r.threshold.value}${unit(r)} <span class="muted small">(imported, ${r.imported.importId}${r.imported.early ? `; ${r.imported.needed} cases needed` : ''})</span>`;
-    return html`${r.crossed ? badge('fail', 'Over the limit') : ''} ${r.value}${unit(r)}${span(r)} · limit ${r.threshold.value}${unit(r)} <span class="muted small">(${r.fromGate ? 'counted from logged actions' : 'simulated'})</span>`;
+    // A manual reading (W2) names who recorded it and where it came from.
+    const manual = !r.fromGate && manualFor(r);
+    const origin = r.fromGate ? 'counted from logged actions' : manual ? `recorded by ${personAt(manual.byAt, manual.by).name}, ${manual.source}` : 'simulated';
+    return html`${r.crossed ? badge('fail', 'Over the limit') : ''} ${r.value}${unit(r)}${span(r)} · limit ${r.threshold.value}${unit(r)} <span class="muted small">(${origin})</span>`;
   };
   const effect = (r) => (r.kind === 'incident' ? 'If crossed: an incident opens; autonomy doesn\'t change.' : `If crossed: back to ${levelName(r.fallback)}${r.defaulted ? ' (one level down: the rule names no level)' : ''}.`);
   const active = st.rules.filter((r) => r.active);
@@ -133,6 +139,56 @@ function safetyLimitsLine(state, cap, st) {
   const meta = over ? `${over} over the limit` : active.length ? `${plural(active.length, 'limit')}, all within range` : `none apply at ${levelName(cap.authority.level)} yet`;
   return line('Safety limits', meta, html`<table class="table mon-limits"><tbody>${st.rules.map((r) => html`<tr><td>${r.text}<div class="muted small">${effect(r)}</div></td><td class="mon-reading">${reading(r)}</td></tr>`)}</tbody></table>
     <p class="muted small">From the rules, under "Automation is pulled back if". Checked automatically, so a problem is caught even if nobody is watching.</p>`);
+}
+
+// Manual readings (v1 W2, #183): the Owner or a configured Reviewer records a
+// reading for a limit nothing else measures. "Check reading" shows the limit,
+// the value and what saving would do; "Save reading" appears only after a
+// check of the same values, and saving runs the same check again.
+function readingsLine(state, cap, check) {
+  const rules = readingRules(state, cap.id);
+  if (!rules.length) return '';
+  const open = rules.filter((r) => !r.blocked);
+  const list = manualReadings(state, cap.id);
+  const replaced = new Map(list.filter((r) => r.correctsId).map((r) => [r.correctsId, r.id]));
+  const by = actor(state, cap.id);
+  const e = readingEligibility(state, cap.id, by);
+  const mine = check && check.capabilityId === cap.id ? check.result : null;
+  const fmt = (r) => `${r.value}${r.units === '%' ? '%' : ''}`;
+  const history = list.length ? html`<p class="mon-sub">Recorded readings</p><ul class="plain-list mon-readings">${list.slice().reverse().map((r) => html`<li><strong>${r.id}</strong> ${fmt(r)}${r.cases ? ` across ${r.cases} cases` : ''}, ${fmtDate(r.periodStart)} to ${fmtDate(r.periodEnd)}: ${r.rule} <span class="muted small">From ${r.source}. Recorded by ${personAt(r.byAt, r.by).name}, ${fmtDate(r.date)}.${r.correctsId ? ` Corrects ${r.correctsId}: ${r.reason}` : ''}${replaced.has(r.id) ? ` Corrected by ${replaced.get(r.id)}.` : ''}</span></li>`)}</ul>` : '';
+  const closed = rules.filter((r) => r.blocked);
+  const closedNote = closed.length ? html`<p class="muted small">Not recorded by hand: ${closed.map((r) => html`"${r.text}" ${r.blocked}`)}</p>` : '';
+  if (!open.length) return line('Record a reading', 'no limit takes manual readings', html`${closedNote}${history}`);
+  if (!e.ok) {
+    return line('Record a reading', list.length ? `${plural(list.length, 'reading')} recorded` : 'the Owner or a Reviewer records them', html`<p>${e.reason} ${SWITCH_PERSON}</p>${closedNote}${history}`);
+  }
+  const standing = list.filter((r) => !replaced.has(r.id));
+  const preview = mine
+    ? mine.ok
+      ? html`<div class="mon-reading-check" role="status"><p><strong>Limit ${mine.limit} · Reading ${mine.reading}</strong></p>${verdict(['restrict', 'incident'].includes(mine.consequence.kind) ? 'bad' : mine.consequence.kind === 'held' ? 'watch' : 'pass', mine.consequence.kind === 'restrict' ? 'Saving restricts autonomy' : mine.consequence.kind === 'incident' ? 'Saving opens an incident' : mine.consequence.kind === 'held' ? 'Over the limit' : mine.consequence.kind === 'inactive' ? 'This limit doesn\'t apply yet' : 'Nothing changes', mine.consequence.text)}${mine.becomesCurrent ? '' : html`<p class="muted small">A newer reading stays current for this limit.</p>`}${mine.input.correctsId ? html`<p class="muted small">A correction keeps the original, and never restores autonomy or removes a restriction or incident.</p>` : ''}</div>`
+      : html`<div class="form-error" role="status"><p>This reading can't be saved:</p><ul class="plain-list">${mine.errors.map((x) => html`<li>${x}</li>`)}</ul></div>`
+    : '';
+  const who = person(by);
+  const form = html`<form class="reading-form" data-form="record-reading" data-capability="${cap.id}">
+    <p class="muted small">Recording as ${who.name}, ${who.role}. The reading goes through the same limits as any other: over the limit, the rule applies as written.</p>
+    ${helpFor('reading')}
+    <label class="field field-stack"><span>Limit</span><select name="ruleId" required><option value="">Choose a limit</option>${open.map((r) => html`<option value="${r.id}">${r.text}</option>`)}</select></label>
+    <div class="roi-fields">
+      <label class="field field-stack"><span>Value</span><input type="number" name="value" step="any" min="0" required></label>
+      <label class="field field-stack"><span>Units</span><select name="units" required><option value="">Choose</option><option value="${READING_UNITS.pct}">%</option><option value="${READING_UNITS.count}">Count</option></select></label>
+      <label class="field field-stack"><span>Period starts</span><input type="date" name="periodStart" max="${state.today}" required></label>
+      <label class="field field-stack"><span>Period ends</span><input type="date" name="periodEnd" max="${state.today}" required></label>
+      ${open.some((r) => r.window && r.window.cases) ? html`<label class="field field-stack"><span>Cases covered (rolling-case limits)</span><input type="number" name="cases" min="1" step="1"></label>` : ''}
+    </div>
+    <label class="field field-stack"><span>Source</span><input type="text" name="source" placeholder="The report, export or check the number comes from" required></label>
+    ${standing.length ? html`<details class="reading-correct"><summary>Correcting an earlier reading?</summary>
+      <label class="field field-stack"><span>Reading to correct</span><select name="correctsId"><option value="">Not a correction</option>${standing.map((r) => html`<option value="${r.id}">${r.id}: ${fmt(r)}, ${r.periodStart} to ${r.periodEnd}</option>`)}</select></label>
+      <label class="field field-stack"><span>Why it's being corrected</span><textarea name="reason" rows="2"></textarea></label>
+      <p class="muted small">The original is kept. A correction never restores autonomy or removes a restriction or incident.</p></details>` : ''}
+    ${preview}
+    <div class="form-actions"><button class="btn${mine && mine.ok ? '' : ' btn-primary'}" type="submit" name="check" value="1">Check reading</button>${mine && mine.ok ? html` <button class="btn btn-primary" type="submit" name="save" value="1">Save reading</button>` : ''}</div>
+  </form>`;
+  return line('Record a reading', list.length ? `${plural(list.length, 'reading')} recorded` : 'for limits nothing else measures', html`${form}${closedNote}${history}`, { open: Boolean(mine) });
 }
 
 // A compact summary of the gate log: what the automation tried to do.
@@ -177,11 +233,11 @@ function evidenceLine(state, cap) {
   const sig = evidenceSignals(state, cap.id);
   const meta = sig.length ? `${plural(sig.length, 'thing')} to look at` : 'nothing to look at';
   return line('Evidence', meta, sig.length
-    ? html`<ul class="plain-list mon-signals">${sig.map((x) => html`<li>${badge(SIGNAL_TONE[x.kind], SIGNAL_WORDS[x.kind])} ${x.what}${x.record ? ` (${x.record}, ${fmtDate(x.date)}).` : ''} <span class="muted">${x.why}</span> <a href="${x.link}">Look</a></li>`)}</ul><p class="muted small">Warnings only: none of these blocks anything or changes authority.</p>`
-    : html`<p>The evidence is current, every Requirement has enough of it, and nothing that was met has slipped.</p>`);
+    ? html`<ul class="plain-list mon-signals">${sig.map((x) => html`<li>${badge(SIGNAL_TONE[x.kind], SIGNAL_WORDS[x.kind])} ${x.what}${x.record ? ` (${x.record}, ${fmtDate(x.date)}).` : ''} <span class="muted">${x.why}</span> <a href="${x.link}">Look</a></li>`)}</ul><p class="muted small">Warnings only: none of these blocks anything or changes authority. ${STALE_EVIDENCE_NOTE} ${UNDECIDED_TARGET_NOTE}</p>`
+    : html`<p>The evidence is current, every Requirement has enough of it, and nothing that was met has slipped.</p><p class="muted small">${STALE_EVIDENCE_NOTE} ${UNDECIDED_TARGET_NOTE}</p>`);
 }
 
-function stillSafe(state, cap, d) {
+function stillSafe(state, cap, d, check = null) {
   const st = monitoringStatus(state, cap.id);
   // #147: the first question is whether the current Authority is still
   // justified; the automatic safety limits follow as one part of it.
@@ -191,7 +247,7 @@ function stillSafe(state, cap, d) {
     ${outcomeStats(d.monitoring)}
     ${whatHappened(state, cap, d)}
     ${reviewSection(state, cap)}
-    ${lines(safetyLimitsLine(state, cap, st), evidenceLine(state, cap), triedLine(state, cap), reviewsLine(d))}
+    ${lines(safetyLimitsLine(state, cap, st), readingsLine(state, cap, check), evidenceLine(state, cap), triedLine(state, cap), reviewsLine(d))}
     ${rolloutLine(state, cap)}
     ${demoControl(state, cap)}`;
 }
@@ -299,7 +355,7 @@ function deliveringValue(state, cap, d, v) {
   return html`${valueVerdict(cap, d, v)}${goalsTable(v)}${extra}`;
 }
 
-export function monitoringTab(state, cap, d, show = null) {
+export function monitoringTab(state, cap, d, show = null, { readingCheck = null } = {}) {
   const base = `#/capabilities/${cap.id}?tab=monitor`;
   const v = valueJudgement(state, cap);
   const value = show === 'value';
@@ -307,5 +363,5 @@ export function monitoringTab(state, cap, d, show = null) {
   // adoption warnings. Goals judged on pilot numbers don't count yet.
   const look = v.notMet + adoptionSignals(state, cap.id).length;
   const views = subNav([{ href: base, label: 'Still justified?', active: !value }, { href: `${base}&show=value`, label: 'Delivering value?', active: value, count: look }], 'Monitoring views');
-  return html`${views}<div class="mon">${value ? deliveringValue(state, cap, d, v) : stillSafe(state, cap, d)}</div>`;
+  return html`${views}<div class="mon">${value ? deliveringValue(state, cap, d, v) : stillSafe(state, cap, d, readingCheck)}</div>`;
 }

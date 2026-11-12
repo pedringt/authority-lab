@@ -1,17 +1,22 @@
 import * as seed from '../data/seed.js';
 import { html, raw, badge, section, notice, kv, authorityBadge, fmtDate, person, personAt, rightsNote, authorityText, lede } from '../ui.js';
-import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN , performanceResultsSeen, publishableRecord, isPublished} from '../store/index.js';
+import { helpFor } from './help.js';
+import { people, getCapability, capData, readiness, authorityLabel, canAuthorize, conditionsPreview, scopeText, nextAuthority, amendmentsAfterEvidenceFor, KIND_LABELS, VERSIONED_KINDS, actor, requirementLabel, decisionRequired, proposedAuthority, reviewForRecord, workspaceOf, workflowOf, namesAtRecord, barChangesSinceDecisionOpened, isExpansion, outcomeChecks, OUTCOMES_MIN, OUTCOMES_MAX, rolloutChecks, ROLLOUT_REVIEW_WITHIN_DAYS, activePeople, rationaleOk, levelName, reviewNeeded, LEVEL_PLAIN, performanceResultsSeen, publishableRecord, isPublished, unresolvedApplicability } from '../store/index.js';
 import { whatWeKnow } from './cap-decide.js';
 import { optionLabel } from './cap-history.js';
 import { externalRecordList } from './provenance.js';
 import { reductionView, retireView, retiredView } from './cap-justified.js';
 import { openProposalState, proposalBanner, changeStep, frozenResults, positionsStep, riskStep, residualRiskField, recordReviewed, provenanceList } from './proposal.js';
-import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL } from '../store/index.js';
+import { reviewConditions, reviewerInputMissing, decisionEligibility, RESIDUAL_RISK_LEVELS, RESIDUAL_REASON_MIN, proposalStaleness, OWNER_DECIDES, restorationContext, authorityGap, gapBlocks, realUseEvidence, actsThroughGate, readyToPropose, realUseCases, MIN_PRODUCTION_SAMPLE, noHardQuality, NO_HARD_QUALITY, positionsDiffer, decisionSuggestions, suggestionInPlace, acceptedUnchanged, DECISION_SUGGESTION_LABEL, isActivePerson, current, evidenceCoverage, STALE_EVIDENCE_NOTE } from '../store/index.js';
 
 // What a proposed change is about, in a sentence: "a target change".
 const KIND_NOUN = { contract: 'rule', criteria: 'target', stakeholders: 'stakeholder' };
 // What the AI acts on, e.g. "refunds" (the capability's own noun).
 const actionNoun = (cap) => (cap && cap.actionNoun) || 'actions';
+
+// v1 W5: whether any active Reviewer is named. With none, nothing is waited
+// for, and Decide says so instead of "Every Reviewer has given a position".
+const reviewersConfigured = (state, capId) => current(state, capId, 'stakeholders').some((st) => st.role === 'reviewer' && isActivePerson(state, st.person));
 
 export function decisionsListView(state) {
   const records = state.decisionRecords.slice().reverse();
@@ -60,7 +65,9 @@ export function checklist(state, cap, dec, check) {
       const rr = dec.residualRisk;
       return [
         { label: 'Proposal is current', ok: !st.stale, why: 'it is stale; replace it with a new Proposal (see the top of the page).' },
-        { label: 'Every Reviewer has given a position', ok: !missing.length, why: `still waiting for ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')}.` },
+        reviewersConfigured(state, cap.id)
+          ? { label: 'Every Reviewer has given a position', ok: !missing.length, why: `still waiting for ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')}.` }
+          : { label: 'No Reviewers are configured, so no position is required', ok: true },
         { label: 'Residual Risk', ok: Boolean(rr && RESIDUAL_RISK_LEVELS.includes(rr.level) && String(rr.note || '').trim().length >= RESIDUAL_REASON_MIN), why: rr ? 'say why, in a short sentence.' : 'choose Low, Moderate, High or Unknown, and say why.' },
       ];
     })() : []),
@@ -376,6 +383,11 @@ export function statusBand(state, cap, proposed, live) {
   const count = (role) => { const n = against.filter((p) => p.role === role).length; return n ? (n === 1 ? `a ${role}` : `${n} ${role}s`) : null; };
   const opposers = [count('Reviewer'), count('Stakeholder')].filter(Boolean);
   const st = proposalStaleness(state, cap.id);
+  const cov = evidenceCoverage(state, cap.id);
+  const rows = [...cov.requirements, ...cov.targets];
+  const stale = rows.filter((x) => x.status === 'stale');
+  const thin = rows.filter((x) => x.status === 'insufficient');
+  const unreviewed = unresolvedApplicability(state, cap.id);
   const MARK = { ok: '✓', block: '✗', warn: '!', info: '·' };
   const item = (kind, text, link = null, linkText = '') => html`<li class="check-item is-${kind}"><span class="check-mark" aria-hidden="true">${MARK[kind]}</span> ${text}${link ? html` <a class="small" href="${link}">${linkText}</a>` : ''}</li>`;
   const reqs = `#/capabilities/${cap.id}?tab=decide&show=requirements`;
@@ -387,6 +399,8 @@ export function statusBand(state, cap, proposed, live) {
       ? item('block', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. Expanding beyond it is blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')
       : item('warn', `Operating above approved Authority: observed at Level ${g.observed.level}, ${g.observed.name}. This Proposal governs it; expanding beyond Level ${g.observed.level} stays blocked.`, `#/capabilities/${cap.id}?tab=monitor`, 'See it in Monitor')) : '',
     d.reviewRequired ? item('block', 'A post-incident review is needed before authority expands.', `#/capabilities/${cap.id}?tab=monitor`, 'Record the review') : '',
+    // v1 W1 (#182): earlier evidence the Owner hasn't reviewed after a material change.
+    unreviewed.length ? item('block', `Evidence from before a material change isn't reviewed yet, so it doesn't count: ${unreviewed.map((x) => x.label).join('; ')}.`, `#/capabilities/${cap.id}?tab=monitor`, 'Review it in Monitor') : '',
     r.hardUnmet.length
       ? item('block', `Hard Requirements not Met: ${r.hardUnmet.map((x) => `${x.text} (${x.result ? x.result.label : 'Not met'})`).join('; ')}.`, reqs, 'See the Requirements')
       : r.hardTotal ? item('ok', `Every hard Requirement is Met (${r.hardTotal}).`) : '',
@@ -394,14 +408,21 @@ export function statusBand(state, cap, proposed, live) {
     noHardQuality(state, cap.id) ? item('warn', NO_HARD_QUALITY.title, reqs, 'See the Requirements') : '',
     missing.length
       ? item('block', `Waiting for a position from ${missing.map((k) => (people(state)[k] || { name: k }).name).join(', ')} (Reviewer${missing.length === 1 ? '' : 's'}).`, `#/capabilities/${cap.id}/stakeholders/edit`, 'Record a position')
-      : item('ok', 'Every Reviewer has given a position.'),
+      : reviewersConfigured(state, cap.id) ? item('ok', 'Every Reviewer has given a position.')
+        : item('info', 'No Reviewers are configured, so no position is required before an expansion.', `#/capabilities/${cap.id}/stakeholders/edit`, 'Name a Reviewer'),
     ...against.map((p) => item('warn', `${p.role}: ${p.name} — ${p.stanceLabel}`)),
     against.length ? item('warn', `Positions differ. ${upper(opposers.join(' and '))} ${against.length === 1 ? 'opposes' : 'oppose'} expansion.`)
       : positionsDiffer(live.positions) ? item('warn', 'Positions differ. Nothing averages them or picks one.') : '',
     st.stale ? item('block', `The Proposal is stale: ${st.reasons[0].text}`) : '',
+    // v1 W3: stale or insufficient evidence behind the Requirements and
+    // Targets this expansion is judged against. Warnings: age blocks only when
+    // a Requirement makes recency mandatory (D5), and too few cases already
+    // shows as a result above when it blocks.
+    stale.length ? item('warn', `Stale evidence: ${stale.map((x) => `${x.label} (${x.age} days old)`).join('; ')}. ${STALE_EVIDENCE_NOTE}`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
+    thin.length ? item('warn', `Not enough evidence yet: ${thin.map((x) => `${x.label}${x.judged && x.judged.text ? ` (${x.judged.text})` : ''}`).join('; ')}.`, `#/capabilities/${cap.id}/evidence/configure`, 'See Coverage') : '',
   ];
   return html`<section class="decide-status" aria-label="Where this decision stands"><p class="fact-label">Where this stands</p><ul class="checklist">${items}</ul>
-    <p class="muted small">For an expansion. Keeping the current limits, reducing, pausing and redesign are never blocked by these. Residual Risk and your reason are always yours to give.</p></section>`;
+    <p class="muted small">For an expansion. Keeping the current limits, reducing, pausing and redesign are never blocked by these. Residual Risk and your reason are always yours to give. <a href="#/capabilities/${cap.id}?tab=history">Full record</a></p></section>`;
 }
 
 const proposeButton = (cap, { restoreTo = null, governs = false } = {}) => html`<button class="btn btn-primary" data-action="propose-authority" data-capability="${cap.id}" data-level="${cap.authority.level + 1}">${governs ? `Propose Level ${cap.authority.level + 1}: govern the observed behavior` : restoreTo === null ? `Propose a move to Level ${cap.authority.level + 1}` : restoreTo === cap.authority.level + 1 ? `Propose: restore toward Level ${restoreTo}` : `Propose Level ${cap.authority.level + 1}: restoring toward Level ${restoreTo}`}</button>`;
@@ -545,7 +566,7 @@ export function decisionWorkspaceView(state, capabilityId, query = new URLSearch
       subs: html`${leaf('restrict', `One level down${cur > 1 ? `, to ${levelName(cur - 1)}` : ''}`)}${leaf('suspend', 'Pause: all the way back to Observe')}`,
       hint: cur === 1 ? 'Choose one. From Recommend, both end at Observe; the record keeps which you chose.' : 'Choose how far: one level down, or pause all the way back to Observe.',
     });
-  const choices = html`<div class="decide-choices">
+  const choices = html`${helpFor('authorization')}<div class="decide-choices">
     ${expandChoice}
     ${choice('hold', 'Keep current limits', `Stay at ${levelName(cur)} while more evidence comes in.`, { option: 'hold' })}
     ${reduceChoice}
