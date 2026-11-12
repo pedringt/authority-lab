@@ -6,7 +6,7 @@
 // underneath, one line each.
 
 import * as seed from '../data/seed.js';
-import { html, fmtDate, personAt, empty } from '../ui.js';
+import { html, fmtDate, personAt, empty, sentence } from '../ui.js';
 import { capData, versionList, VERSIONED_KINDS, KIND_LABELS, levelName, testSummary, activityEvents, decisionRequired, authorityProposals, materialChanges, MATERIAL_CHANGE_AREAS, applicabilityReviews, APPLICABILITY } from '../store/index.js';
 import { proposalHistory } from './proposal.js';
 import { proposalsList } from './proposals.js';
@@ -47,10 +47,10 @@ export function historyEvents(state, cap) {
   // evidence itself is never edited.
   const link = html` · <a href="#/capabilities/${cap.id}?tab=monitor">Monitor</a>`;
   for (const m of materialChanges(state, cap.id)) {
-    add(m.recordedOn || m.effectiveOn, 25, { key: 'key', kind: 'material-change', title: `Material change: ${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a]).join(', ')}, effective ${fmtDate(m.effectiveOn)}`, sub: html`${m.description} Recorded by ${personAt(m.byAt, m.by).name} (${m.id}).${link}` });
+    add(m.recordedOn || m.effectiveOn, 25, { key: 'key', kind: 'material-change', title: `Material change: ${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a]).join(', ')}, effective ${fmtDate(m.effectiveOn)}`, sub: html`${sentence(m.description)} Recorded by ${personAt(m.byAt, m.by).name} (${m.id}).${link}` });
   }
   for (const r of applicabilityReviews(state, cap.id)) {
-    add(r.date, 26, { kind: 'applicability', title: `Evidence reviewed after ${r.changeId}: ${r.rowLabel}, ${APPLICABILITY[r.verdict].toLowerCase()}`, sub: html`By ${personAt(r.byAt, r.by).name}. ${r.reason}${r.verdict === 'partly' ? ` Still supported: ${r.stillSupported} Needs fresh evidence: ${r.needsFresh}` : ''}${link}` });
+    add(r.date, 26, { kind: 'applicability', title: `Evidence reviewed after ${r.changeId}: ${r.rowLabel}, ${APPLICABILITY[r.verdict].toLowerCase()}`, sub: html`By ${personAt(r.byAt, r.by).name}. ${sentence(r.reason)}${r.verdict === 'partly' ? ` Still supported: ${sentence(r.stillSupported)} Needs fresh evidence: ${sentence(r.needsFresh)}` : ''}${link}` });
   }
 
   // Incidents.

@@ -340,7 +340,8 @@ function personJudged(state, capabilityId, row) {
   const input = all.input.filter(after);
   const note = input.length ? ` Stakeholder input: ${input.map((j) => `${j.byAt.name} says ${VERDICTS[j.verdict].toLowerCase()}`).join('; ')} (input doesn't decide it).` : '';
   const decisive = counting.filter((j) => j.verdict !== 'unknown');
-  const said = (j) => `${j.byAt.name} (${j.role}) judged it ${VERDICTS[j.verdict].toLowerCase()} on ${j.date}: ${j.rationale}`;
+  // The rationale without its own final full stop: the sentence adds one.
+  const said = (j) => `${j.byAt.name} (${j.role}) judged it ${VERDICTS[j.verdict].toLowerCase()} on ${j.date}: ${String(j.rationale || '').trim().replace(/\.+$/, '')}`;
   if (decisive.some((j) => j.verdict === 'met') && decisive.some((j) => j.verdict === 'not-met')) {
     const why = `Judgments disagree: ${decisive.map(said).join(' / ')}. Look into it, or collect more evidence.${note}`;
     return withResult({ ...row, met: false, conflicting: true, current: 'Judgments disagree', gap: why, judgments: decisive.map((j) => j.id) }, 'conflicting', why);

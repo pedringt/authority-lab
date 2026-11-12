@@ -360,12 +360,21 @@ function captureForms() {
   }
   return out;
 }
+// After a save, the store re-renders the page at once, restoring what was
+// typed; this clears that saved form (and closes its details) instead.
+function resetLive(form, key) {
+  const live = app.querySelector(`[data-form="${form}"][data-${form === 'record-reading' ? 'capability' : 'key'}="${key}"]`);
+  if (!live) return;
+  live.reset();
+  const box = live.closest('details');
+  if (box && form === 'record-applicability') box.open = false;
+}
 function restoreForms(saved) {
   for (const form of app.querySelectorAll('[data-form]')) {
     const values = saved[formId(form)];
     // Ticked suggestions (#139) survive a refused save; the rows re-render from state.
     if (values && form.dataset.form === 'save-criteria') for (const el of form.querySelectorAll('[name="use-suggestion"]')) { if (`use-suggestion=${el.value}` in values) el.checked = values[`use-suggestion=${el.value}`]; }
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change' || form.dataset.form === 'record-applicability' || form.dataset.form === 'retire-capability' || form.dataset.form === 'record-observed') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change' || form.dataset.form === 'retire-capability' || form.dataset.form === 'record-observed') continue;
     for (const el of form.elements) {
       if (!el.name || el.type === 'file') continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -373,6 +382,12 @@ function restoreForms(saved) {
     }
     const nameEl = form.querySelector('[data-action="check-name"]');
     if (nameEl) nameEl.dispatchEvent(new Event('input', { bubbles: true }));
+    // A review refused for a missing field stays open with what was typed
+    // (QA, 2026-11-12); a saved one is cleared before the re-render.
+    if (form.dataset.form === 'record-applicability' && Object.values(values).some((v) => v === true || (typeof v === 'string' && v.trim()))) {
+      const box = form.closest('details');
+      if (box) box.open = true;
+    }
   }
 }
 
@@ -842,7 +857,8 @@ document.addEventListener('submit', (e) => {
       dispatchOr(here(), () => {
         store.dispatch('recordReading', capId, input);
         readingCheck = null;
-        readingForm.reset();
+        // The dispatch re-rendered: clear the form now on the page.
+        resetLive('record-reading', capId);
         clearErrorOn(here(), 'error');
         render();
       });
@@ -860,6 +876,8 @@ document.addEventListener('submit', (e) => {
     const f = new FormData(apForm);
     dispatchOr(here(), () => {
       store.dispatch('recordApplicability', capId, { changeId: apForm.dataset.change, rowKind: apForm.dataset.rowKind, rowId: apForm.dataset.rowId, verdict: f.get('verdict'), reason: f.get('reason'), stillSupported: f.get('stillSupported'), needsFresh: f.get('needsFresh'), by: actor(store.get(), capId) });
+      // The dispatch re-rendered: clear and close the form now on the page.
+      resetLive('record-applicability', apForm.dataset.key);
       clearErrorOn(here(), 'error');
       render();
     });
