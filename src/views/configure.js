@@ -23,6 +23,9 @@ function mappingText(state, m, row = null) {
 }
 
 function coverageCell(c) {
+  // Evaluated against its linked Target (Paige's wording, 2026-11-11): name
+  // the Target; "Judged by a person" stays for human judgment.
+  if (c.viaTarget) return html`${badge(TONE[c.status], 'Evaluated against Target')}<div class="muted small">Target: ${c.viaTarget}</div>`;
   const detail = c.status === 'covered' ? `${c.judged.text}${c.passing ? '' : ' (not met)'}`
     : c.status === 'stale' ? `${c.judged.text}, ${c.age} days old`
       : c.status === 'insufficient' ? c.judged.text
