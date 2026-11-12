@@ -11,6 +11,7 @@ import { DECISION_OPTIONS } from '../data/seed.js';
 import { externalSnapshot } from './external.js';
 import { freezeProposal, reviewConditions, openAuthorityProposal, proposalStaleness } from './proposal.js';
 import { gapBlocks } from './lifecycle.js';
+import { applicabilityBlocks } from './applicability.js';
 import { reviewNeeded } from './monitoring.js';
 import { peopleModel, actsThroughGate } from './boundaries.js';
 import { namedOn, materialChanges } from './context.js';
@@ -333,6 +334,12 @@ export function canAuthorize(state, capabilityId, { by } = {}) {
     // #149 (R1-B): never expand beyond observed behavior while above it.
     const gap = gapBlocks(state, capabilityId, nextAuthority(d.option, getCapability(state, capabilityId).authority, d.proposed).level);
     if (gap) return { ok: false, reason: gap, gap: true };
+    // v1 W1 (#182): evidence from before a material change counts only once
+    // the Owner has reviewed it. Said before the Requirements, which are
+    // recalculated from eligible evidence once the reviews are done, and
+    // before staleness: replacing a Proposal doesn't clear it.
+    const unreviewed = applicabilityBlocks(state, capabilityId);
+    if (unreviewed) return { ok: false, reason: unreviewed, applicability: true };
     // #151 (D3, R4-A): the Proposal may be open, but expanding waits until
     // every hard Requirement is Met. Considerations never block. Said before
     // staleness: replacing a Proposal wouldn't make it approvable.

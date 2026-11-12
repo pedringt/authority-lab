@@ -7,7 +7,7 @@
 
 import * as seed from '../data/seed.js';
 import { html, fmtDate, personAt, empty } from '../ui.js';
-import { capData, versionList, VERSIONED_KINDS, KIND_LABELS, levelName, testSummary, activityEvents, decisionRequired, authorityProposals } from '../store/index.js';
+import { capData, versionList, VERSIONED_KINDS, KIND_LABELS, levelName, testSummary, activityEvents, decisionRequired, authorityProposals, materialChanges, MATERIAL_CHANGE_AREAS, applicabilityReviews, APPLICABILITY } from '../store/index.js';
 import { proposalHistory } from './proposal.js';
 import { proposalsList } from './proposals.js';
 import { line } from './cap-monitor.js';
@@ -40,6 +40,17 @@ export function historyEvents(state, cap) {
   // Post-incident reviews.
   for (const rv of d.reviews || []) {
     add(rv.date, 60, { key: 'key', kind: 'review', title: `Post-incident review by ${personAt(rv.byAt, rv.by).name}`, sub: html`Cause: ${rv.cause} Autonomy stayed at ${levelWords(rv.authorityAt)}.${rv.restrictionRecordId ? html` · <a href="#/records/${rv.restrictionRecordId}">Decision record</a>` : ''}` });
+  }
+
+  // Material changes, and each review of whether the evidence from before a
+  // change still applies (v1 W1, #182): who, the answer and the reason. The
+  // evidence itself is never edited.
+  const link = html` · <a href="#/capabilities/${cap.id}?tab=monitor">Monitor</a>`;
+  for (const m of materialChanges(state, cap.id)) {
+    add(m.recordedOn || m.effectiveOn, 25, { key: 'key', kind: 'material-change', title: `Material change: ${m.areas.map((a) => MATERIAL_CHANGE_AREAS[a]).join(', ')}, effective ${fmtDate(m.effectiveOn)}`, sub: html`${m.description} Recorded by ${personAt(m.byAt, m.by).name} (${m.id}).${link}` });
+  }
+  for (const r of applicabilityReviews(state, cap.id)) {
+    add(r.date, 26, { kind: 'applicability', title: `Evidence reviewed after ${r.changeId}: ${r.rowLabel}, ${APPLICABILITY[r.verdict].toLowerCase()}`, sub: html`By ${personAt(r.byAt, r.by).name}. ${r.reason}${r.verdict === 'partly' ? ` Still supported: ${r.stillSupported} Needs fresh evidence: ${r.needsFresh}` : ''}${link}` });
   }
 
   // Incidents.

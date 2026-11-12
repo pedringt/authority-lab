@@ -76,6 +76,48 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 9. **Provider.** Anthropic-only implementation in v1, behind a provider-neutral internal contract: the app sends one request shape and accepts only the schema in 3, so another provider is a server-side change plus an eval re-run. The model is chosen from the eval, not in advance.
 10. **Eval gate.** 6B doesn't ship for a surface because its outputs look better. It must pass a fixed test set covering the exact failures 6A struggled with, adversarial instructions, and ambiguous actor or action language. The bar for consequential facts (what the AI does, sensitive data, regulated work, what it can affect, reversibility): zero Acts where only a person acts or the action is negated; no fact without a verbatim quote; Unsure on every case labelled ambiguous; injected instructions change nothing; better than 6A on paraphrase cases with no new false consequential facts. Other facts need only be no worse than 6A. Each model is run three times for run-to-run variation. **False confidence is tracked separately from ordinary extraction errors:** a wrong fact labelled Clear is materially worse than the same wrong fact labelled Unsure, so calibration is part of quality. No model passing is a valid outcome: 6B then doesn't ship. Claude drafts the gold labels; Paige reviews and corrects every one before it counts. Labelling rule (Paige, 2026-10-22, on review): **automated isn't AI**. A sentence saying something automated acts ("the system emails…", "approved automatically") without naming the AI as the actor is labelled ask, never yes, so the gold set never teaches that "automatic" implies the AI's authority. A person who authorizes a step or receives the output counts as where people enter.
 
+### Empty workspaces use the real date (Paige, 2026-11-11)
+
+- **A workspace started empty in the app** begins on the real date and then follows the real calendar on each visit, like the State client workspace. It only moves forward. Before this, it inherited the Northstar demo's fixed date (2026-10-07), so its records got demo dates and a reading's period couldn't end after Oct 7.
+- **The real date is the browser's local calendar date** (`realToday`; Paige, 2026-11-11). This replaces the UTC date, which in Pacific time turned over at 4 pm.
+  - It applies to the State workspace and to new empty workspaces.
+  - Everything that uses the workspace's date follows it, including reading-date validation and the evidence age behind Coverage.
+  - The date advances after local midnight when a saved workspace is reopened.
+  - Event timestamps stay in UTC.
+- **Unchanged:**
+  - The seeded demos keep their fixed dates.
+  - Tests keep their fixed dates: `startEmpty()` with no date.
+  - Existing records keep the dates they were made, including empty workspaces created before this change, which stay on the demo date.
+
+### v1 W1: material-change applicability review (Paige, 2026-11-09, #182)
+
+Built as `docs/V1_RECONCILIATION.md` W1 sets out. Two readings of the scope were Paige's choice, made before the build ("Use recommendations"):
+
+- **The unit of review is a Requirement or Target row.** That is what `materialChangeImpact` lists: the row's evidence observed before the change took effect. It is not each piece of evidence. One piece of evidence can feed several rows, and it may still apply to one of them but not another.
+- **Partly applicable evidence never counts toward a result, for every row.** It is shown as supporting context, with what it still supports and what needs fresh evidence. In the calculation it is treated like no longer applicable evidence. The approved scope said only that it "can't independently satisfy a hard Requirement"; this is the stricter reading, and it is simpler.
+
+Mechanics:
+- **Where the exclusion applies** (`src/store/applicability.js`). A row's evidence dated before the change is left out of Requirement results, Target results and Coverage. That covers imported and hand-recorded results, uploads, tests, feedback and judgments. It applies while the row is unreviewed, partly applicable or no longer applicable, until the Owner reviews it as still applicable.
+- **No feedback loop.** The affected rows are worked out from the evidence as it stands before any review excludes it (`withoutMaterialChanges`). A review therefore never changes which rows a change affects.
+- **The block** (`canAuthorize`). It comes after the observed-behaviour gap and before the hard Requirements. Replacing the Proposal doesn't clear it.
+- **Who records.** Only the Owner records a review, with a reason of at least 10 characters. Partly applicable also needs what the evidence still supports and what needs fresh evidence.
+- **Records.** Reviews are append-only; the latest per change and row stands, and Activity and History list each one. Evidence records and past Decision records are never changed.
+- **Every material change is reviewed, recent or not.** Monitor lists all of them, no longer only those since the Decision in force.
+
+### v1 wording: evidence that doesn't count (Paige, 2026-11-11)
+
+These are display changes only. The rules for counting evidence, for applicability and for Authority are unchanged, and no new state is added: a row's status stays what it was, and only its label and an explanatory note change.
+
+- **"No evidence yet"** is kept for a Requirement with nothing recorded.
+- **When evidence exists but none counts,** the label is "No evidence currently counts toward this result", with the reason beneath it. Targets and Coverage keep their own terms: "No results currently count" replaces "No results yet" only where results exist but are set aside.
+- **Awaiting a material-change review:** "N earlier results await material-change review (MC-…) and are not counted." For several changes: "Earlier evidence needs review after a material change."
+- **Partly applicable** keeps the Owner's answer: "Partly applicable. Supporting context only; not counted toward this result." It is never described as wholly inapplicable.
+- **No longer applicable** says so.
+- **Mixed evidence.** The result comes from the evidence that counts, with the note beside it.
+- **Several changes on one row:** one count, then each change's state, with no double counting.
+- **Another configuration:** "N imported results were measured under another configuration and are set aside."
+- **Historical Decisions** keep the labels and calculations they froze. The wording applies to current views and to snapshots taken from now on.
+
 ### v1 scope reconciled (Paige, 2026-11-09)
 
 A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo. Paige settled each gap. The full record, with acceptance criteria for the remaining work, is in `docs/V1_RECONCILIATION.md`. V1_SCOPE.md now describes what ships.
@@ -113,6 +155,66 @@ A read-only gap audit compared `docs/V1_SCOPE.md` with `main` and the live demo.
 **Contract edits (C2).** Sign-off for contract edits after the pilot starts stays on (decision 7 in `src/store/proposals.js` is confirmed). The tightening-only exception stays limited to Targets and Requirements. Extending it to Boundaries is out of v1.
 
 **Historical evals.** The 6B experiments stay attributed to the versions they tested. Expected product-code drift in a fingerprinted file is reported, not a failure, and a new run on that set is still refused. Changes to the archived labels, results or experiment files still fail. Old held-out data is never re-frozen.
+
+### v1 C1: how changes since the Decision in force are graded (Paige, 2026-11-09; built 2026-11-11, #187)
+
+Built as `docs/V1_RECONCILIATION.md` section 4 sets out, in `changesSinceDecision` and `justification` (`src/store/lifecycle.js`). Every example in its table is a test (`scripts/severity.test.mjs`).
+
+- **The levels, most serious first:** Restricted automatically, Above approved Authority, **Safety concern**, May no longer be justified, Investigation needed, Needs attention, then Info. **Value warning** sits apart and has no rank.
+- **Safety concern:** an open critical incident, a rule incident awaiting review, or a restriction rule reading over its limit. These were "Investigation needed" before.
+  - It is pinned at the top of Monitor whatever the headline, including "Restricted automatically".
+  - When it is the headline, any hard Requirement that no longer holds is shown directly beneath it.
+- **May no longer be justified / Investigation needed:** only a hard Requirement that was Met in the Decision's frozen snapshot, now Not met or now Conflicting.
+  - A consideration or a Target that slips is Needs attention.
+  - Before, a Target that went from Met to Not met also read "May no longer be justified".
+  - A Requirement added since the Decision, or one not Met when decided, is never graded here. It is the next bar, shown on Decide.
+- **Needs attention:** blocked attempts at something never allowed now read "Blocked: N attempts at something never allowed." They escalate only through an incident or a configured rule. Stale evidence uses the approved D5 wording.
+- **Value warning:** a rollout goal missed on real numbers.
+  - It never sets the "Still justified?" headline, and isn't listed there.
+  - Instead, a line points to "Delivering value?", where the goal is shown.
+- **Nothing here changes Authority.**
+- **Not built here:** an unresolved W1 applicability review as a "Needs attention" item. That review exists only on #188. When #188 merges, its own text on material changes covers it.
+
+### v1 W5: small clarity fixes (Paige, 2026-11-11, #186)
+
+Built as `docs/V1_RECONCILIATION.md` W5 sets out. Paige approved the exact wording before the build ("Recommended" on each):
+
+- **No Reviewers named.** Decide's "Where this stands" says "No Reviewers are configured, so no position is required before an expansion.", as a neutral item linking to "Name a Reviewer". The record step's checklist says "No Reviewers are configured, so no position is required". With an active Reviewer named, the existing wording stays. Northstar names no Reviewers, so the demo shows the new line.
+- **D5, stale evidence:** "Stale evidence still counts. Its age blocks an expansion only when a Requirement makes recency mandatory, such as "Results from the last 30 days"."
+- **D6, undecided Targets:** "A Target can stay "Needs decision" until a Requirement that depends on it needs a bar. Until then it neither passes nor fails."
+- **Where D5 and D6 show:** Monitor's Evidence line, Decide step 2's Requirements line, and the setup Requirements step. They are explanations only: no new blocking rule. A recency Requirement blocks as any hard Requirement does.
+- **#134, on the Setup page.** Each completed step says what was configured, read-only:
+  - Boundaries: "N allowed · N require review · N never allowed · N safety limits".
+  - Requirements: "N Requirements configured (N hard). Targets: name bar; … and N more". Up to three Targets are listed.
+  - Evidence: "N of N Requirements mapped to evidence", followed by the coverage line.
+
+### v1 W3: Decision and Status display contracts (Paige, 2026-11-10, #184)
+
+Built as `docs/V1_RECONCILIATION.md` W3 sets out. Three readings of the scope were Paige's choice, made before the build ("Recommended" on each):
+
+- **The full record is History.** Both Status and Decide link to it ("Full record"). The test follows the link and checks that every decision record (automatic restrictions too), post-incident review, incident, the latest test run, every decided change request, every version and every authority Proposal appears. Decide's "All evidence" stays an evidence link.
+- **Status gets a short "Needs attention" list,** shown only when something applies. It lists serious test failures by name, and each blocker: the review lock, operating above approved Authority, and, on an open decision, hard Requirements not Met, a stale Proposal and missing Reviewer positions. What still needs a person is already always on Status, in the level sentence and the Boundaries' "Requires human review" lines, so the list doesn't repeat it.
+- **Stale or insufficient evidence relevant to the proposed level** means the current Requirements and Targets, whose Coverage is Stale or Needs more cases. Rows carry no level of their own: the current ones are what the next expansion is judged against. They show in "Where this stands" as warnings, following D5.
+
+Mechanics:
+- **Serious test failures** are failed High-severity tests once the suite has a result (`seriousFailures` in `src/store/selectors.js`). Decide and Status use the same list.
+- **Failures name the item.** Each asserted item has a name, so removing one fails with "missing the full-record path", "Needs attention is missing the serious test failure", and so on.
+- **Northstar's seeded decision** predates frozen Proposals, so it has no Newly permitted / Still needs a person / Still prohibited lists. For that case the contract checks the Boundaries' Allowed, Needs human review and Not allowed sections instead.
+
+### v1 W2: manual monitoring readings (Paige, 2026-11-10, #183)
+
+Built as `docs/V1_RECONCILIATION.md` W2 sets out. Four readings of the scope were Paige's choice, made before the build ("Recommended" on each):
+
+- **Only rules nothing else measures take manual readings.** A rule counted from the gate log, or read from imported production results, refuses them, and the form says where its reading comes from. So a rule never has two competing current values.
+- **The period matches the rule's window exactly.** A 7-day rule needs a period of exactly 7 days, ending no later than today. A rolling 50-case rule needs exactly 50 cases. A rule with no number or no window can't take a manual reading.
+- **The period end decides staleness.** A new reading must end after the current one. Same or earlier is refused, and can enter only as a correction of a named reading, with a reason. A correction that crosses the limit restricts like any reading; one that lowers the value restores nothing.
+- **Check, then save.** "Check reading" validates and shows the limit, the value and what saving would do. "Save reading" appears only after a check of the same values, and saving runs the same check again, so a restriction can't be skipped.
+
+Mechanics (`src/store/readings.js`):
+- **Who records.** The Owner or a configured Reviewer (a Stakeholder entry with the Reviewer role), active, attributed with a snapshot of who they were. Being a Stakeholder doesn't grant it.
+- **Same enforcement.** The current reading is judged by the existing rule logic (`ruleCrossed`, active only above the fallback level). Over an active limit it goes through the shared breach flow (`applyBreach`), like the gate log and imports: once, and not again while a restriction is open or after one has happened, and an incident rule opens one incident.
+- **The warning matches the outcome.** The check and the save use the same consequence function: restrict, open an incident, already restricted, the limit doesn't apply at this level, or nothing changes.
+- **History.** Readings are append-only. A correction names the reading it replaces, and both stay listed on Monitor. A correction never changes authority, the review lock, the incident or any decision record.
 
 ### Phase 6B paused: no model for Context intake for now (Paige, 2026-11-09, #180)
 
@@ -268,7 +370,7 @@ As built:
   - **A plain-language state, no score:** Current Authority still supported / Needs attention / Investigation needed / Authority may no longer be justified / Restricted automatically. The state is the most serious change found, and each change says why.
 
   The automatic safety limits, the evidence signals and the gate summary follow, unchanged.
-- **Signal to state (the mapping used, for Paige to confirm):**
+- **Signal to state (the #147 mapping; replaced by v1 C1, Paige, 2026-11-09, #187: see "v1 scope reconciled" and "v1 C1"):**
   - "May no longer be justified": a result that was Met when decided is now Not met.
   - "Investigation needed": a result is now Conflicting, a critical incident is open, a rule incident awaits review, or a restriction rule reads over its limit.
   - "Needs attention": any other change for the worse, stale evidence, a material change, a position change or disagreement, an attempt at something never allowed, a rollout goal missed on real numbers, or an adoption warning.

@@ -239,6 +239,20 @@ export function riskStepView(state, capabilityId, query) {
 // The hub: the sequence, where each step stands
 // ---------------------------------------------------------------------------
 
+// #134 (v1 W5): a completed step says what was configured, read-only.
+function boundariesSummaryLine(state, capabilityId) {
+  const c = current(state, capabilityId, 'contract');
+  return `${c.may.length} allowed · ${c.mustAsk.length + c.escalation.length} require review · ${c.mustNever.length} never allowed${c.autoRestriction.length ? ` · ${c.autoRestriction.length} safety limit${c.autoRestriction.length === 1 ? '' : 's'}` : ''}.`;
+}
+function requirementsSummaryLine(state, capabilityId) {
+  const reqs = current(state, capabilityId, 'requirements');
+  const hard = reqs.filter((r) => !r.consideration).length;
+  const targets = current(state, capabilityId, 'criteria');
+  const shown = targets.slice(0, 3).map((t) => `${t.name} ${t.target}`);
+  const more = targets.length > 3 ? ` and ${targets.length - 3} more` : '';
+  return `${reqs.length} Requirement${reqs.length === 1 ? '' : 's'} configured (${hard} hard).${targets.length ? ` Targets: ${shown.join('; ')}${more}.` : ' No Targets.'}`;
+}
+
 export function setupSequence(state, capabilityId) {
   const cap = getCapability(state, capabilityId);
   const base = `#/capabilities/${cap.id}`;
@@ -259,9 +273,9 @@ export function setupSequence(state, capabilityId) {
     ...(cap.setup.lifecycle === 'in-use' ? [{ id: 'today', title: 'What it does today', done: !setupReview(state, capabilityId).missing.some((m) => m.step === 'today'), text: baselineVersions(state, capabilityId).length ? `Effective authority: ${authorityBaseline(state, capabilityId).effective.status === 'recorded' ? `Level ${authorityBaseline(state, capabilityId).effective.level} — ${authorityBaseline(state, capabilityId).effective.name}` : authorityBaseline(state, capabilityId).effective.status === 'unknown' ? 'not sure' : 'not recorded'}` : 'It is already in use: record what it really does today.', link: `${base}/setup/today` }] : []),
     { id: 'risk', title: 'Risk and authority', done: riskSaved && Boolean(cap.setup.today), text: riskSaved ? `Overall Risk ${v.overall} (Severity ${v.severityLabel}, Likelihood ${v.likelihood}).${cap.setup.today ? ` Starts at ${notDelegated ? 'Level 0, not delegated' : `Level ${cap.setup.today === 'nothing' ? 0 : 1}`} once confirmed.` : ' Choose the starting authority.'}` : 'Severity, Likelihood, Scale, who is affected, and where it starts.', link: `${base}/setup/risk` },
     ...(notDelegated ? [] : [
-      { id: 'boundaries', title: 'Boundaries', done: boundariesSaved, text: boundariesSaved ? 'Saved.' : draftLines ? `${draftLines.lines.filter((l) => l.status === 'pending').length} suggestions still to review.` : 'Where it must stop or involve a person. Every suggestion is reviewed one at a time.', link: `${base}/contract/build`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },
-      { id: 'requirements', title: 'Requirements', done: reqs, text: reqs ? `${current(state, capabilityId, 'requirements').length} Requirements, ${new Set(current(state, capabilityId, 'criteria').filter((t) => t.requirement).map((t) => t.requirement)).size} with a measured bar.` : 'What must be true before it gets more authority, and a measurable bar only where one is needed.', link: `${base}/criteria/edit`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },
-      { id: 'evidence', title: 'Evidence', optional: true, done: reqs && cov.total > 0 && cov.mapped === cov.total, text: reqs ? coverageText(cov) : 'Which evidence will judge each Requirement.', link: `${base}/evidence/configure`, needs: reqs, needsText: 'Save the Requirements first.' },
+      { id: 'boundaries', title: 'Boundaries', done: boundariesSaved, text: boundariesSaved ? boundariesSummaryLine(state, capabilityId) : draftLines ? `${draftLines.lines.filter((l) => l.status === 'pending').length} suggestions still to review.` : 'Where it must stop or involve a person. Every suggestion is reviewed one at a time.', link: `${base}/contract/build`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },
+      { id: 'requirements', title: 'Requirements', done: reqs, text: reqs ? requirementsSummaryLine(state, capabilityId) : 'What must be true before it gets more authority, and a measurable bar only where one is needed.', link: `${base}/criteria/edit`, needs: riskSaved, needsText: 'Answer the Risk questions first.' },
+      { id: 'evidence', title: 'Evidence', optional: true, done: reqs && cov.total > 0 && cov.mapped === cov.total, text: reqs ? `${cov.mapped} of ${cov.total} Requirements mapped to evidence. ${coverageText(cov)}` : 'Which evidence will judge each Requirement.', link: `${base}/evidence/configure`, needs: reqs, needsText: 'Save the Requirements first.' },
     ]),
     { id: 'people', title: 'People', optional: true, done: current(state, capabilityId, 'stakeholders').length > 0, text: `Owner: ${person(pm.owner).name}. ${pm.reviewers.length} Reviewer${pm.reviewers.length === 1 ? '' : 's'}, ${others.length} Stakeholder${others.length === 1 ? '' : 's'}.`, link: `${base}/stakeholders/edit` },
     { id: 'review', title: 'Review and confirm', done: setupState(state, capabilityId) === 'confirmed', text: setupState(state, capabilityId) === 'confirmed' ? `Confirmed by ${person(cap.setup.confirmedBy).name} on ${fmtDate(cap.setup.confirmedOn)}.` : 'See the whole setup in plain language. The owner confirms it; that grants the starting authority.', link: `${base}/setup/review` },
