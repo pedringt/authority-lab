@@ -1,5 +1,5 @@
 import * as seed from './data/seed.js';
-import { initialState, startTestRun, advanceTestRun, selectDecision, setResidualRisk, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS, withBarsAsTargets } from './store/index.js';
+import { initialState, startTestRun, advanceTestRun, selectDecision, setResidualRisk, authorize, simulateBreach, recordReview, setTicketDefinitions, workspaceOf, setupPending, createStore, getCapability, focusCapability, capData, actor, vagueNameWarning, decisionRequired, people, activePeople, currentVersion, importEvidenceFiles , findWorkspace, storageKeyFor, realToday, BUILT_IN_WORKSPACES, DEMO_WORKSPACE, applyPublishedRecords, publishableRecord, contextNow, CONTEXT_FIELDS, BASELINE_FIELDS, withBarsAsTargets, checkReading } from './store/index.js';
 import { html, setPeople, setToday, fmtDate, subNav, notice } from './ui.js';
 import { canonicalHash } from './routes.js';
 import { overviewView } from './views/overview.js';
@@ -155,6 +155,9 @@ const focusId = () => { const f = focusCapability(store.get()); return f ? f.id 
 // The guided demo (redesign) runs on its own copy of the demo state, in
 // memory only, so it never touches the workspace. Its "Demo as" is its own.
 let guide = null;
+// The last "Check reading" result on Monitor (v1 W2): the form shows it, and
+// "Save reading" saves only the values that were checked.
+let readingCheck = null;
 function newGuide() {
   const state = initialState();
   return { state, capabilityId: focusCapability(state).id, role: focusCapability(state).owner, tested: false, decided: null, breached: false, residual: { level: null, note: '' } };
@@ -239,7 +242,7 @@ function render() {
       else if (sub) {
         // Decide summarizes the recorded model runs; its runs view lists them.
         if (query.get('tab') === 'decide' && (!query.get('show') || query.get('show') === 'runs')) loadAgentRuns();
-        view = capabilityView(state, sub, query, { runs: agentRuns });
+        view = capabilityView(state, sub, query, { runs: agentRuns, readingCheck: readingCheck && { ...readingCheck, result: checkReading(state, readingCheck.capabilityId, JSON.parse(readingCheck.key)) } });
         title = getCapability(state, sub)?.name || 'Capability';
       }
       else { view = capabilitiesView(state); title = 'Capabilities'; }
@@ -820,6 +823,31 @@ document.addEventListener('submit', (e) => {
       clearErrorOn(here(), 'error');
       render();
     });
+    return;
+  }
+  // v1 W2: a manual reading. "Check reading" shows the limit, the value and
+  // what saving would do; "Save reading" saves only the values just checked,
+  // and the store runs the same check again.
+  const readingForm = e.target.closest('[data-form="record-reading"]');
+  if (readingForm) {
+    e.preventDefault();
+    const capId = readingForm.dataset.capability;
+    const f = new FormData(readingForm);
+    const input = { by: actor(store.get(), capId), ...Object.fromEntries(['ruleId', 'value', 'units', 'periodStart', 'periodEnd', 'cases', 'source', 'correctsId', 'reason'].map((k) => [k, f.get(k) || ''])) };
+    const key = JSON.stringify(input);
+    const saving = e.submitter && e.submitter.name === 'save';
+    if (saving && readingCheck && readingCheck.capabilityId === capId && readingCheck.key === key && readingCheck.result.ok) {
+      dispatchOr(here(), () => {
+        store.dispatch('recordReading', capId, input);
+        readingCheck = null;
+        readingForm.reset();
+        clearErrorOn(here(), 'error');
+        render();
+      });
+      return;
+    }
+    readingCheck = { capabilityId: capId, key, result: checkReading(store.get(), capId, input) };
+    render();
     return;
   }
   // v1 W1 (#182): the Owner reviews whether earlier evidence still applies.

@@ -38,6 +38,7 @@ export { EVIDENCE_SCHEMA, EVIDENCE_KINDS, MEASUREMENT_TYPES, SEVERITIES, CONFIG_
 export { LEVEL_PLAIN, readinessText, overviewTodos, stillNeeded, overviewApprovals, importantResults, authorityRows } from './overview.js';
 // Product reset, Phase 1 (#137).
 export { CONTEXT_FIELDS, FACT_STATUSES, FACT_SOURCES, contextVersions, contextNow, confirmedContext, recordContext, suggestContext, reviewContextFact, LIFECYCLE, BASELINE_FIELDS, baselineVersions, baselineNow, authorityBaseline, recordBaseline, MATERIAL_CHANGE_AREAS, materialChanges, recordMaterialChange, namedOn } from './context.js';
+export { READING_UNITS, READING_REASON_MIN, manualReadings, currentReading, manualReadingBlocked, readingRules, readingEligibility, checkReading, recordReading } from './readings.js';
 export { BOUNDARY_CATEGORIES, ENFORCEMENT, actsThroughGate, boundaries, peopleModel } from './boundaries.js';
 export { RISK_SEVERITIES, SEVERITY_LABELS, LIKELIHOODS, SCALES, OVERALL_RISKS, OVERALL_RISK_TABLE, overallRisk, riskView, assessRisk } from './risk.js';
 // Product reset, Phase 2: the setup flow (#139).
