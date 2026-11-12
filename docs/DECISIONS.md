@@ -79,6 +79,7 @@ Scoped read-only (decision sheet, Oct 21) and decided Oct 22. 6A stays the deter
 ### Empty workspaces use the real date (Paige, 2026-11-11)
 
 - **A workspace started empty in the app** begins on the real date and then follows the real calendar on each visit, like the State client workspace. It only moves forward. Before this, it inherited the Northstar demo's fixed date (2026-10-07), so its records got demo dates and a reading's period couldn't end after Oct 7.
+- **The real date is the UTC date** (`realToday`). This is a known limit Paige chose to keep on 2026-11-11: in Pacific time the app's date turns over at 4 pm, so evening records carry the next day's date. It applies to the State workspace too.
 - **Unchanged:**
   - The seeded demos keep their fixed dates.
   - Tests keep their fixed dates: `startEmpty()` with no date.
