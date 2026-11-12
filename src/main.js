@@ -364,7 +364,7 @@ function restoreForms(saved) {
     const values = saved[formId(form)];
     // Ticked suggestions (#139) survive a refused save; the rows re-render from state.
     if (values && form.dataset.form === 'save-criteria') for (const el of form.querySelectorAll('[name="use-suggestion"]')) { if (`use-suggestion=${el.value}` in values) el.checked = values[`use-suggestion=${el.value}`]; }
-    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change' || form.dataset.form === 'retire-capability' || form.dataset.form === 'record-observed') continue;
+    if (!values || form.dataset.form.startsWith('add-line-') || form.dataset.form === 'edit-line' || form.dataset.form === 'save-criteria' || form.dataset.form.startsWith('propose-') || form.dataset.form === 'reject-proposal' || form.dataset.form === 'withdraw-proposal' || form.dataset.form === 'save-stakeholders' || form.dataset.form.endsWith('-person') || form.dataset.form.endsWith('-roster') || form.dataset.form === 'save-scenarios' || form.dataset.form === 'setup-workspace' || form.dataset.form === 'roi-assumptions' || form.dataset.form === 'context-facts' || form.dataset.form === 'record-material-change' || form.dataset.form === 'record-applicability' || form.dataset.form === 'retire-capability' || form.dataset.form === 'record-observed') continue;
     for (const el of form.elements) {
       if (!el.name || el.type === 'file') continue;
       if (el.type === 'checkbox' || el.type === 'radio') { if (`${el.name}=${el.value}` in values) el.checked = values[`${el.name}=${el.value}`]; }
@@ -848,6 +848,19 @@ document.addEventListener('submit', (e) => {
     }
     readingCheck = { capabilityId: capId, key, result: checkReading(store.get(), capId, input) };
     render();
+    return;
+  }
+  // v1 W1 (#182): the Owner reviews whether earlier evidence still applies.
+  const apForm = e.target.closest('[data-form="record-applicability"]');
+  if (apForm) {
+    e.preventDefault();
+    const capId = apForm.dataset.capability;
+    const f = new FormData(apForm);
+    dispatchOr(here(), () => {
+      store.dispatch('recordApplicability', capId, { changeId: apForm.dataset.change, rowKind: apForm.dataset.rowKind, rowId: apForm.dataset.rowId, verdict: f.get('verdict'), reason: f.get('reason'), stillSupported: f.get('stillSupported'), needsFresh: f.get('needsFresh'), by: actor(store.get(), capId) });
+      clearErrorOn(here(), 'error');
+      render();
+    });
     return;
   }
   const reviewForm = e.target.closest('[data-form="record-review"]');

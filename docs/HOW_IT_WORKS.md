@@ -131,7 +131,7 @@ A move up starts with a **Proposal**: anyone active clicks **Propose a move to L
 
 **Who records it.** Only the Owner records more authority or keeping the current limits. Anyone named on the capability can record pulling it back (one level down, all the way to Observe, or redesign).
 
-**Before authority expands**, every Reviewer has given a position, a Residual Risk with a reason is given, and the Proposal is current. A Proposal goes **stale** when, since it was frozen, any of these happens:
+**Before authority expands**, every Reviewer has given a position, a Residual Risk with a reason is given, the Owner has reviewed the evidence from before any material change, and the Proposal is current. A Proposal goes **stale** when, since it was frozen, any of these happens:
 
 - the Rules, Targets, Requirements or Risk get a new version;
 - who is named on the capability, or their role (Reviewer or Stakeholder), changes;
@@ -163,7 +163,17 @@ Monitor's first view, **Still justified?**, starts with that question. It shows:
 
 There's no score. Each change has its own line saying how serious it is. A starting record, or a Decision made before Decisions froze what they were based on, has nothing to compare results with, and Monitor says so.
 
-**Material changes** (model, prompt, tools, permissions, workflow, scope, users, data, operating context, jurisdiction, Boundaries) can be recorded from Monitor by the Owner or anyone named. For each change since the Decision, Monitor lists the Requirements and Targets whose current result rests on evidence from before the change: it "may need new evidence". It hasn't failed, and Authority doesn't change.
+**Material changes** (model, prompt, tools, permissions, workflow, scope, users, data, operating context, jurisdiction, Boundaries) can be recorded from Monitor by the Owner or anyone named. For each change, Monitor lists the Requirements and Targets whose result rests on evidence from before the change. That evidence hasn't failed, and Authority doesn't change.
+
+**Reviewing the earlier evidence** (v1 W1, #182):
+- **Until it's reviewed,** the earlier evidence doesn't count toward Requirement results or Coverage, and authority can't expand.
+- **Only the Owner reviews it,** once per row: still applicable, partly applicable or no longer applicable, with a reason. Reviewers give their input to the Owner.
+- **Still applicable** evidence counts again.
+- **Partly applicable** evidence stays as supporting context, with what it still supports and what needs fresh evidence. It doesn't count toward any result.
+- **No longer applicable** evidence stops counting. Past Decisions keep what they froze, and the classification alone never changes Authority.
+- **Records.** Reviews are append-only: the latest stands, and History lists every one.
+- **Unreviewed rows show on Monitor and on Decide's "Where this stands",** with a link to Monitor.
+- **Replacing a stale Proposal doesn't clear the block.** Once every row is reviewed, the Requirements and Coverage are worked out again from the evidence that counts, and expansion waits on them as usual.
 
 **What you can do:**
 - **Investigate:** see the evidence, or record a result, a judgment or an incident. Nothing changes.

@@ -107,7 +107,7 @@ test('a material change asks whether earlier evidence still applies: "may need n
   s = recordMaterialChange(s, id, { areas: ['model', 'prompt'], description: 'Moved to a newer model and rewrote the prompt.', effectiveOn: '2026-10-20', by: ANA });
   const j = justification(s, id);
   assert.equal(j.key, 'attention');
-  assert.ok(j.changes.some((c) => c.kind === 'material-change' && /^Material change \(model, prompt\), effective 2026-10-20: Moved to a newer model and rewrote the prompt\. Earlier evidence may need revalidating\.$/.test(c.text)));
+  assert.ok(j.changes.some((c) => c.kind === 'material-change' && /^Material change \(model, prompt\), effective 2026-10-20: Moved to a newer model and rewrote the prompt\. 3 Requirements or Targets rest on earlier evidence the Owner hasn't reviewed yet; until then it doesn't count\.$/.test(c.text)));
   assert.equal(j.materialImpact.length, 1);
   const rows = j.materialImpact[0].rows;
   assert.deepEqual(rows.map((r) => [r.id, r.onlyBefore]), [['min-cases', true], ['accuracy', true], ['templates', true]]);
@@ -214,8 +214,10 @@ test('screen: a material change shows which evidence it may affect, and the form
   setToday(s.today);
   const page = monitor({ ...s, actingAs: ANA }, id);
   assert.match(page, /<strong>Tools<\/strong>, effective Oct 20: Added a tool that reads the client calendar\./);
-  assert.match(page, /It still counts, and it hasn't failed; it may need new evidence:/);
-  assert.match(page, /May need new evidence<\/span> Overall accuracy ≥ 90%: all 1 piece of its evidence came before the change\./);
+  assert.match(page, /It hasn't failed\. For each row, Ana Ruiz says whether it is still, partly or no longer applicable:/);
+  assert.match(page, /<strong>Overall accuracy ≥ 90%<\/strong>: all 1 piece of its evidence came before the change\./);
+  assert.match(page, /Not reviewed<\/span> <span class="small">The earlier evidence doesn't count until Ana Ruiz reviews it\./);
+  assert.match(page, /data-form="record-applicability"/, 'the Owner can review it');
   assert.match(page, /data-form="record-material-change"/);
   assert.doesNotMatch(page, /Only the Owner or someone named/);
   const dee = addPerson(s, { name: 'Dee Park', title: 'Intern', team: 'Office', by: ANA, reason: 'Helps with filing.' });
